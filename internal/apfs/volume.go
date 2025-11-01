@@ -271,7 +271,8 @@ func (v *Volume) OpenRead(fileHandle io.ReaderAt, fileOffset int64) error {
 		encryptionContext,
 		objectMapBTree,
 		fileSystemRootObjectID,
-		true, // Use case folding
+		v.Superblock.ObjectTransactionIdentifier, // Volume's transaction ID
+		true,                                     // Use case folding
 	)
 	v.FileSystemBTree = fileSystemBTree
 
@@ -544,8 +545,9 @@ func (v *Volume) GetRootDirectory() (*FileEntry, error) {
 		return nil, fmt.Errorf("invalid volume - missing file system B-tree")
 	}
 
-	// Root directory inode is always 1
-	return v.GetFileEntryByIdentifier(1)
+	// Root directory inode is always 2 in APFS
+	// (Inode 1 is the private directory and may not exist)
+	return v.GetFileEntryByIdentifier(2)
 }
 
 // GetFileEntryByIdentifier retrieves a file entry by inode number
@@ -807,10 +809,9 @@ func (v *Volume) GetSize() (uint64, error) {
 		return 0, fmt.Errorf("invalid volume - missing IO handle")
 	}
 
-	// Calculate volume size from reserved blocks and quota blocks
-	// Total volume size = (NumberOfReservedBlocks + NumberOfQuotaBlocks) * BlockSize
-	totalBlocks := v.Superblock.NumberOfReservedBlocks + v.Superblock.NumberOfQuotaBlocks
-	volumeSize := totalBlocks * uint64(v.IOHandle.BlockSize)
+	// Calculate volume size from allocated blocks (apfs_fs_alloc_count field)
+	// This represents the number of blocks currently allocated on this volume
+	volumeSize := v.Superblock.NumberOfAllocatedBlocks * uint64(v.IOHandle.BlockSize)
 
 	return volumeSize, nil
 }

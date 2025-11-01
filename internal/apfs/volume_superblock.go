@@ -35,9 +35,9 @@ type VolumeSuperblock struct {
 	// Contains: "APSB"
 	Signature [4]byte
 
-	// Unknown
+	// The file system index (apfs_fs_index)
 	// Consists of 4 bytes
-	Unknown1 uint32
+	FileSystemIndex uint32
 
 	// Compatible features flags
 	// Consists of 8 bytes
@@ -51,9 +51,9 @@ type VolumeSuperblock struct {
 	// Consists of 8 bytes
 	IncompatibleFeaturesFlags uint64
 
-	// Unknown
+	// Last unmount time (apfs_unmount_time) - nanoseconds since Unix epoch
 	// Consists of 8 bytes
-	Unknown5 uint64
+	UnmountTime uint64
 
 	// The number of reserved blocks
 	// Consists of 8 bytes
@@ -63,24 +63,16 @@ type VolumeSuperblock struct {
 	// Consists of 8 bytes
 	NumberOfQuotaBlocks uint64
 
-	// Unknown
+	// The number of allocated blocks (apfs_fs_alloc_count)
 	// Consists of 8 bytes
-	Unknown8 uint64
+	NumberOfAllocatedBlocks uint64
 
-	// Unknown
-	// Consists of 8 bytes
-	Unknown9 uint64
-
-	// Unknown
-	// Consists of 4 bytes
+	// Unknown fields between allocated blocks and tree types
+	// This region may contain wrapped_meta_crypto_state_t
+	// Total: 8 + 4 + 4 + 4 = 20 bytes
+	Unknown9  uint64
 	Unknown10 uint32
-
-	// Unknown
-	// Consists of 4 bytes
 	Unknown11 uint32
-
-	// Unknown
-	// Consists of 4 bytes
 	Unknown12 uint32
 
 	// The file system root tree object type
@@ -111,45 +103,45 @@ type VolumeSuperblock struct {
 	// Consists of 8 bytes
 	SnapshotMetadataTreeBlockNumber uint64
 
-	// Unknown
+	// Revert to transaction identifier (apfs_revert_to_xid)
 	// Consists of 8 bytes
-	Unknown20 uint64
+	RevertToTransactionIdentifier uint64
 
-	// Unknown
+	// Revert to superblock object identifier (apfs_revert_to_sblock_oid)
 	// Consists of 8 bytes
-	Unknown21 uint64
+	RevertToSuperblockObjectIdentifier uint64
 
 	// The next file system object identifier
 	// Consists of 8 bytes
 	NextFileSystemObjectIdentifier uint64
 
-	// Unknown
+	// Number of regular files (apfs_num_files)
 	// Consists of 8 bytes
-	Unknown23 uint64
+	NumberOfFiles uint64
 
-	// Unknown
+	// Number of directories (apfs_num_directories)
 	// Consists of 8 bytes
-	Unknown24 uint64
+	NumberOfDirectories uint64
 
-	// Unknown
+	// Number of symbolic links (apfs_num_symlinks)
 	// Consists of 8 bytes
-	Unknown25 uint64
+	NumberOfSymlinks uint64
 
-	// Unknown
+	// Number of other file system objects (apfs_num_other_fsobjects)
 	// Consists of 8 bytes
-	Unknown26 uint64
+	NumberOfOtherFileSystemObjects uint64
 
-	// Unknown
+	// Number of snapshots (apfs_num_snapshots)
 	// Consists of 8 bytes
-	Unknown27 uint64
+	NumberOfSnapshots uint64
 
-	// Unknown
+	// Total blocks allocated ever (apfs_total_block_alloced)
 	// Consists of 8 bytes
-	Unknown28 uint64
+	TotalBlocksAllocated uint64
 
-	// Unknown
+	// Total blocks freed ever (apfs_total_blocks_freed)
 	// Consists of 8 bytes
-	Unknown29 uint64
+	TotalBlocksFreed uint64
 
 	// The volume identifier
 	// Consists of 16 bytes
@@ -394,14 +386,14 @@ func (vs *VolumeSuperblock) ReadData(data []byte, isSnapshot bool) error {
 	}
 
 	// Parse remaining fields
-	vs.Unknown1 = binary.LittleEndian.Uint32(data[36:40])
+	vs.FileSystemIndex = binary.LittleEndian.Uint32(data[36:40])
 	vs.CompatibleFeaturesFlags = binary.LittleEndian.Uint64(data[40:48])
 	vs.ReadOnlyCompatibleFeaturesFlags = binary.LittleEndian.Uint64(data[48:56])
 	vs.IncompatibleFeaturesFlags = binary.LittleEndian.Uint64(data[56:64])
-	vs.Unknown5 = binary.LittleEndian.Uint64(data[64:72])
+	vs.UnmountTime = binary.LittleEndian.Uint64(data[64:72])
 	vs.NumberOfReservedBlocks = binary.LittleEndian.Uint64(data[72:80])
 	vs.NumberOfQuotaBlocks = binary.LittleEndian.Uint64(data[80:88])
-	vs.Unknown8 = binary.LittleEndian.Uint64(data[88:96])
+	vs.NumberOfAllocatedBlocks = binary.LittleEndian.Uint64(data[88:96])
 	vs.Unknown9 = binary.LittleEndian.Uint64(data[96:104])
 	vs.Unknown10 = binary.LittleEndian.Uint32(data[104:108])
 	vs.Unknown11 = binary.LittleEndian.Uint32(data[108:112])
@@ -413,16 +405,16 @@ func (vs *VolumeSuperblock) ReadData(data []byte, isSnapshot bool) error {
 	vs.FileSystemRootObjectIdentifier = binary.LittleEndian.Uint64(data[136:144])
 	vs.ExtentReferenceTreeBlockNumber = binary.LittleEndian.Uint64(data[144:152])
 	vs.SnapshotMetadataTreeBlockNumber = binary.LittleEndian.Uint64(data[152:160])
-	vs.Unknown20 = binary.LittleEndian.Uint64(data[160:168])
-	vs.Unknown21 = binary.LittleEndian.Uint64(data[168:176])
+	vs.RevertToTransactionIdentifier = binary.LittleEndian.Uint64(data[160:168])
+	vs.RevertToSuperblockObjectIdentifier = binary.LittleEndian.Uint64(data[168:176])
 	vs.NextFileSystemObjectIdentifier = binary.LittleEndian.Uint64(data[176:184])
-	vs.Unknown23 = binary.LittleEndian.Uint64(data[184:192])
-	vs.Unknown24 = binary.LittleEndian.Uint64(data[192:200])
-	vs.Unknown25 = binary.LittleEndian.Uint64(data[200:208])
-	vs.Unknown26 = binary.LittleEndian.Uint64(data[208:216])
-	vs.Unknown27 = binary.LittleEndian.Uint64(data[216:224])
-	vs.Unknown28 = binary.LittleEndian.Uint64(data[224:232])
-	vs.Unknown29 = binary.LittleEndian.Uint64(data[232:240])
+	vs.NumberOfFiles = binary.LittleEndian.Uint64(data[184:192])
+	vs.NumberOfDirectories = binary.LittleEndian.Uint64(data[192:200])
+	vs.NumberOfSymlinks = binary.LittleEndian.Uint64(data[200:208])
+	vs.NumberOfOtherFileSystemObjects = binary.LittleEndian.Uint64(data[208:216])
+	vs.NumberOfSnapshots = binary.LittleEndian.Uint64(data[216:224])
+	vs.TotalBlocksAllocated = binary.LittleEndian.Uint64(data[224:232])
+	vs.TotalBlocksFreed = binary.LittleEndian.Uint64(data[232:240])
 
 	// Volume identifier (offset 240, 16 bytes UUID)
 	copy(vs.VolumeIdentifier[:], data[240:256])
@@ -492,6 +484,94 @@ func (vs *VolumeSuperblock) GetVolumeIdentifier() ([16]byte, error) {
 		return [16]byte{}, fmt.Errorf("invalid volume superblock")
 	}
 	return vs.VolumeIdentifier, nil
+}
+
+// GetFileSystemIndex retrieves the file system index
+func (vs *VolumeSuperblock) GetFileSystemIndex() (uint32, error) {
+	if vs == nil {
+		return 0, fmt.Errorf("invalid volume superblock")
+	}
+	return vs.FileSystemIndex, nil
+}
+
+// GetUnmountTime retrieves the last unmount time (nanoseconds since Unix epoch)
+func (vs *VolumeSuperblock) GetUnmountTime() (uint64, error) {
+	if vs == nil {
+		return 0, fmt.Errorf("invalid volume superblock")
+	}
+	return vs.UnmountTime, nil
+}
+
+// GetRevertToTransactionIdentifier retrieves the revert-to transaction identifier
+func (vs *VolumeSuperblock) GetRevertToTransactionIdentifier() (uint64, error) {
+	if vs == nil {
+		return 0, fmt.Errorf("invalid volume superblock")
+	}
+	return vs.RevertToTransactionIdentifier, nil
+}
+
+// GetRevertToSuperblockObjectIdentifier retrieves the revert-to superblock object identifier
+func (vs *VolumeSuperblock) GetRevertToSuperblockObjectIdentifier() (uint64, error) {
+	if vs == nil {
+		return 0, fmt.Errorf("invalid volume superblock")
+	}
+	return vs.RevertToSuperblockObjectIdentifier, nil
+}
+
+// GetNumberOfFiles retrieves the number of regular files
+func (vs *VolumeSuperblock) GetNumberOfFiles() (uint64, error) {
+	if vs == nil {
+		return 0, fmt.Errorf("invalid volume superblock")
+	}
+	return vs.NumberOfFiles, nil
+}
+
+// GetNumberOfDirectories retrieves the number of directories
+func (vs *VolumeSuperblock) GetNumberOfDirectories() (uint64, error) {
+	if vs == nil {
+		return 0, fmt.Errorf("invalid volume superblock")
+	}
+	return vs.NumberOfDirectories, nil
+}
+
+// GetNumberOfSymlinks retrieves the number of symbolic links
+func (vs *VolumeSuperblock) GetNumberOfSymlinks() (uint64, error) {
+	if vs == nil {
+		return 0, fmt.Errorf("invalid volume superblock")
+	}
+	return vs.NumberOfSymlinks, nil
+}
+
+// GetNumberOfOtherFileSystemObjects retrieves the number of other file system objects
+func (vs *VolumeSuperblock) GetNumberOfOtherFileSystemObjects() (uint64, error) {
+	if vs == nil {
+		return 0, fmt.Errorf("invalid volume superblock")
+	}
+	return vs.NumberOfOtherFileSystemObjects, nil
+}
+
+// GetNumberOfSnapshots retrieves the number of snapshots
+func (vs *VolumeSuperblock) GetNumberOfSnapshots() (uint64, error) {
+	if vs == nil {
+		return 0, fmt.Errorf("invalid volume superblock")
+	}
+	return vs.NumberOfSnapshots, nil
+}
+
+// GetTotalBlocksAllocated retrieves the total blocks ever allocated
+func (vs *VolumeSuperblock) GetTotalBlocksAllocated() (uint64, error) {
+	if vs == nil {
+		return 0, fmt.Errorf("invalid volume superblock")
+	}
+	return vs.TotalBlocksAllocated, nil
+}
+
+// GetTotalBlocksFreed retrieves the total blocks ever freed
+func (vs *VolumeSuperblock) GetTotalBlocksFreed() (uint64, error) {
+	if vs == nil {
+		return 0, fmt.Errorf("invalid volume superblock")
+	}
+	return vs.TotalBlocksFreed, nil
 }
 
 // GetUTF8VolumeNameSize retrieves the size of the UTF-8 encoded volume name

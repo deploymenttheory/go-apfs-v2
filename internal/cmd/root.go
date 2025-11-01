@@ -20,6 +20,8 @@ var (
 
 Provides commands for:
   - Inspecting containers and volumes (info)
+  - Reading and analyzing specific blocks (read)
+  - Listing directory contents (list)
   - Mounting APFS filesystems via FUSE (mount)`,
 		Version:           version,
 		SilenceUsage:      true,
@@ -40,6 +42,8 @@ func init() {
 
 	// Add subcommands
 	rootCmd.AddCommand(infoCmd)
+	rootCmd.AddCommand(readCmd)
+	rootCmd.AddCommand(listCmd)
 	rootCmd.AddCommand(mountCmd)
 }
 

@@ -18,8 +18,11 @@ type FileSystemBTree struct {
 	// The object map B-tree (for transaction identifier mapping)
 	ObjectMapBTree *ObjectMapBTree
 
-	// The block number of B-tree root node
+	// The block number of B-tree root node (actually a virtual OID)
 	RootNodeBlockNumber uint64
+
+	// The volume's transaction identifier (used for object map lookups)
+	VolumeTransactionID uint64
 
 	// Flag to indicate case folding should be used
 	UseCaseFolding bool
@@ -37,6 +40,7 @@ func NewFileSystemBTree(
 	encryptionContext *EncryptionContext,
 	objectMapBTree *ObjectMapBTree,
 	rootNodeBlockNumber uint64,
+	volumeTransactionID uint64,
 	useCaseFolding bool,
 ) *FileSystemBTree {
 	return &FileSystemBTree{
@@ -44,6 +48,7 @@ func NewFileSystemBTree(
 		EncryptionContext:   encryptionContext,
 		ObjectMapBTree:      objectMapBTree,
 		RootNodeBlockNumber: rootNodeBlockNumber,
+		VolumeTransactionID: volumeTransactionID,
 		UseCaseFolding:      useCaseFolding,
 	}
 }
@@ -56,10 +61,28 @@ func (bt *FileSystemBTree) GetRootNode(
 		return nil, fmt.Errorf("invalid file system B-tree")
 	}
 
-	// Read the root node using the ReadBTreeNode convenience function
-	node, err := ReadBTreeNode(fileHandle, bt.IOHandle, bt.EncryptionContext, bt.RootNodeBlockNumber)
+	// RootNodeBlockNumber is actually a virtual OID that needs to be resolved
+	// through the volume's object map B-tree to get the physical block address
+	// Per drat: get_btree_phys_omap_entry(vol_omap_root_node, apfs_root_tree_oid, apfs_o.o_xid)
+	descriptor, err := bt.ObjectMapBTree.GetDescriptorByObjectIdentifier(
+		fileHandle,
+		bt.RootNodeBlockNumber, // This is a virtual OID
+		bt.VolumeTransactionID, // Use the volume's transaction ID per drat
+	)
 	if err != nil {
-		return nil, fmt.Errorf("unable to read root node at block %d: %w", bt.RootNodeBlockNumber, err)
+		return nil, fmt.Errorf("unable to resolve filesystem root tree OID %d: %w", bt.RootNodeBlockNumber, err)
+	}
+
+	if descriptor == nil {
+		return nil, fmt.Errorf("filesystem root tree OID %d not found in object map", bt.RootNodeBlockNumber)
+	}
+
+	physicalBlockNumber := descriptor.Value.ObjectPhysicalAddress
+
+	// Read the root node using the resolved physical block address
+	node, err := ReadBTreeNode(fileHandle, bt.IOHandle, bt.EncryptionContext, physicalBlockNumber)
+	if err != nil {
+		return nil, fmt.Errorf("unable to read root node at block %d (virtual OID %d): %w", physicalBlockNumber, bt.RootNodeBlockNumber, err)
 	}
 
 	return node, nil
@@ -86,6 +109,7 @@ func (bt *FileSystemBTree) GetSubNode(
 // GetSubNodeBlockNumberFromEntry extracts the sub-node block number from a branch entry
 // In branch nodes, the value data contains the block number of the child node
 func (bt *FileSystemBTree) GetSubNodeBlockNumberFromEntry(
+	fileHandle io.ReaderAt,
 	entry *BTreeEntry,
 ) (uint64, error) {
 	if bt == nil {
@@ -101,28 +125,30 @@ func (bt *FileSystemBTree) GetSubNodeBlockNumberFromEntry(
 		return 0, fmt.Errorf("invalid value data size for branch entry: %d", len(entry.ValueData))
 	}
 
-	// Read the block number (little-endian)
-	blockNumber := binary.LittleEndian.Uint64(entry.ValueData[0:8])
+	// Read the OID (little-endian)
+	// Per drat (btree.c:377-378), in filesystem B-trees, child node references
+	// are ALWAYS virtual OIDs that must be resolved through the volume's object map
+	// (unlike container object map B-trees which use bit 63 to indicate virtual vs physical)
+	virtualOID := binary.LittleEndian.Uint64(entry.ValueData[0:8])
 
-	// Check if this is a virtual block number (bit 63 is set)
-	// Virtual block numbers need to be resolved through the object map B-tree
-	if (blockNumber & 0x8000000000000000) != 0 {
-		// This is a virtual block number
-		virtualBlockNumber := blockNumber & 0x7fffffffffffffff
-
-		// If we have an object map B-tree, resolve to physical block number
-		if bt.ObjectMapBTree != nil {
-			// Object map resolution would happen here
-			// For now, return an error indicating this needs object map support
-			return 0, fmt.Errorf("virtual block number resolution requires object map B-tree implementation: virtual block %d", virtualBlockNumber)
-		}
-
-		// Without object map, treat as physical (this may not work for all cases)
-		return virtualBlockNumber, nil
+	// Resolve through the volume's object map B-tree
+	if bt.ObjectMapBTree == nil {
+		return 0, fmt.Errorf("no object map B-tree available to resolve virtual OID %d", virtualOID)
 	}
 
-	// This is a physical block number, return it directly
-	return blockNumber, nil
+	descriptor, err := bt.ObjectMapBTree.GetDescriptorByObjectIdentifier(
+		fileHandle,
+		virtualOID,
+		bt.VolumeTransactionID,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("unable to resolve virtual OID %d: %w", virtualOID, err)
+	}
+	if descriptor == nil {
+		return 0, fmt.Errorf("virtual OID %d not found in object map", virtualOID)
+	}
+
+	return descriptor.Value.ObjectPhysicalAddress, nil
 }
 
 // GetFileExtents retrieves file extents for a given identifier
@@ -212,6 +238,10 @@ func (bt *FileSystemBTree) GetInodeByIdentifier(
 	}
 
 	// Find the inode entry in the leaf node
+	if DebugOutput {
+		fmt.Printf("GetInodeByIdentifier: searching for inode %d, leaf node has %d entries\n", identifier, len(leafNode.Entries))
+	}
+
 	for _, entry := range leafNode.Entries {
 		// Check if this entry is an inode
 		dataType, err := ExtractDataTypeFromKey(entry.KeyData)
@@ -219,12 +249,12 @@ func (bt *FileSystemBTree) GetInodeByIdentifier(
 			continue
 		}
 
-		if dataType != FileSystemDataTypeInode {
+		entryID, err := ExtractIdentifierFromKey(entry.KeyData)
+		if err != nil {
 			continue
 		}
 
-		entryID, err := ExtractIdentifierFromKey(entry.KeyData)
-		if err != nil {
+		if dataType != FileSystemDataTypeInode {
 			continue
 		}
 
@@ -246,10 +276,9 @@ func (bt *FileSystemBTree) GetInodeByIdentifier(
 			return inode, nil
 		}
 
-		// If we've passed our identifier, it doesn't exist
-		if entryID > identifier {
-			break
-		}
+		// NOTE: Do NOT break early based on entryID > identifier
+		// B-tree entries are sorted by (type, id) not just (id)
+		// so we must check all entries in the leaf node
 	}
 
 	return nil, fmt.Errorf("inode not found: %d", identifier)
@@ -284,44 +313,65 @@ func (bt *FileSystemBTree) GetDirectoryEntries(
 	}
 
 	// Collect all directory entries for this parent identifier
+	// Note: Entries may span multiple leaf nodes, so we need to check
+	// the current leaf and potentially traverse to next leaf nodes
 	entries := make([]*DirectoryRecord, 0)
+	currentNode := leafNode
+	done := false
 
-	for _, entry := range leafNode.Entries {
-		// Check if this entry is a directory record
-		dataType, err := ExtractDataTypeFromKey(entry.KeyData)
-		if err != nil {
-			continue
-		}
+	// Keep traversing leaf nodes until we've found all entries with this parent ID
+	for !done && currentNode != nil {
+		foundInThisNode := false
 
-		if dataType != FileSystemDataTypeDirectoryRecord {
-			continue
-		}
+		for _, entry := range currentNode.Entries {
+			// Check if this entry is a directory record
+			dataType, err := ExtractDataTypeFromKey(entry.KeyData)
+			if err != nil {
+				continue
+			}
 
-		entryParentID, err := ExtractIdentifierFromKey(entry.KeyData)
-		if err != nil {
-			continue
-		}
+			if dataType != FileSystemDataTypeDirectoryRecord {
+				continue
+			}
 
-		if entryParentID != parentIdentifier {
-			// If we've passed our parent identifier, we're done
-			if entryParentID > parentIdentifier {
+			entryParentID, err := ExtractIdentifierFromKey(entry.KeyData)
+			if err != nil {
+				continue
+			}
+
+			if entryParentID == parentIdentifier {
+				// Parse the directory record
+				dirRecord := NewDirectoryRecord()
+
+				if err := dirRecord.ReadKeyData(entry.KeyData); err != nil {
+					return nil, fmt.Errorf("unable to parse directory record key: %w", err)
+				}
+
+				if err := dirRecord.ReadValueData(entry.ValueData); err != nil {
+					return nil, fmt.Errorf("unable to parse directory record value: %w", err)
+				}
+
+				entries = append(entries, dirRecord)
+				foundInThisNode = true
+			} else if entryParentID > parentIdentifier {
+				// We've passed our parent identifier, we're done
+				done = true
 				break
 			}
-			continue
 		}
 
-		// Parse the directory record
-		dirRecord := NewDirectoryRecord()
-
-		if err := dirRecord.ReadKeyData(entry.KeyData); err != nil {
-			return nil, fmt.Errorf("unable to parse directory record key: %w", err)
+		// If we didn't find any entries with our parent ID in this node,
+		// and we already found some, we're done
+		if !foundInThisNode && len(entries) > 0 {
+			done = true
+			break
 		}
 
-		if err := dirRecord.ReadValueData(entry.ValueData); err != nil {
-			return nil, fmt.Errorf("unable to parse directory record value: %w", err)
-		}
-
-		entries = append(entries, dirRecord)
+		// Try to get the next leaf node (sibling)
+		// In APFS B-trees, we need to traverse back up and get the next sibling
+		// For now, we'll break if there are no more entries in this node
+		// TODO: Implement proper sibling traversal if needed
+		done = true
 	}
 
 	return entries, nil
@@ -485,7 +535,7 @@ func (bt *FileSystemBTree) GetEntryByIdentifier(
 		}
 
 		// Get child block number
-		childBlockNumber, err := bt.GetSubNodeBlockNumberFromEntry(entry)
+		childBlockNumber, err := bt.GetSubNodeBlockNumberFromEntry(fileHandle, entry)
 		if err != nil {
 			return nil, nil, fmt.Errorf("unable to get child block number: %w", err)
 		}
@@ -531,8 +581,20 @@ func (bt *FileSystemBTree) GetDirectoryRecordByUTF8Name(
 		return nil, fmt.Errorf("unable to read root node: %w", err)
 	}
 
-	// Navigate to find directory record
-	return bt.getDirectoryRecordFromNode(fileHandle, rootNode, parentIdentifier, name, nameHash, transactionIdentifier)
+	// Construct search key: parent ID + type + name length
+	searchKey := make([]byte, 10)
+	fsid := CreateFileSystemKey(parentIdentifier, FileSystemDataTypeDirectoryRecord)
+	binary.LittleEndian.PutUint64(searchKey[0:8], fsid)
+	binary.LittleEndian.PutUint16(searchKey[8:10], uint16(len(name)))
+
+	// Navigate to the leaf node using B-tree search
+	leafNode, err := bt.findLeafNodeForKey(fileHandle, rootNode, searchKey)
+	if err != nil {
+		return nil, fmt.Errorf("unable to find leaf node: %w", err)
+	}
+
+	// Search for the directory record in the leaf node
+	return bt.getDirectoryRecordFromLeafNode(leafNode, parentIdentifier, name, nameHash)
 }
 
 // GetDirectoryRecordByUTF16Name retrieves a directory record by UTF-16 name
@@ -561,8 +623,20 @@ func (bt *FileSystemBTree) GetDirectoryRecordByUTF16Name(
 		return nil, fmt.Errorf("unable to read root node: %w", err)
 	}
 
-	// Navigate to find directory record
-	return bt.getDirectoryRecordFromNode(fileHandle, rootNode, parentIdentifier, utf8Name, nameHash, transactionIdentifier)
+	// Construct search key: parent ID + type + name length
+	searchKey := make([]byte, 10)
+	fsid := CreateFileSystemKey(parentIdentifier, FileSystemDataTypeDirectoryRecord)
+	binary.LittleEndian.PutUint64(searchKey[0:8], fsid)
+	binary.LittleEndian.PutUint16(searchKey[8:10], uint16(len(utf8Name)))
+
+	// Navigate to the leaf node using B-tree search
+	leafNode, err := bt.findLeafNodeForKey(fileHandle, rootNode, searchKey)
+	if err != nil {
+		return nil, fmt.Errorf("unable to find leaf node: %w", err)
+	}
+
+	// Search for the directory record in the leaf node
+	return bt.getDirectoryRecordFromLeafNode(leafNode, parentIdentifier, utf8Name, nameHash)
 }
 
 // GetInodeByUTF8Name retrieves an inode and directory record by UTF-8 name
@@ -758,7 +832,7 @@ func (bt *FileSystemBTree) getDirectoryRecordFromBranchNode(
 		return nil, fmt.Errorf("unable to get entry from branch node: %w", err)
 	}
 
-	childBlockNumber, err := bt.GetSubNodeBlockNumberFromEntry(entry)
+	childBlockNumber, err := bt.GetSubNodeBlockNumberFromEntry(fileHandle, entry)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get child block number: %w", err)
 	}
@@ -806,21 +880,39 @@ func (bt *FileSystemBTree) findLeafNodeForKey(
 	}
 
 	// This is a branch node - find the appropriate child
-	// In branch nodes, entries contain (key, child_block_number) pairs
-	// We need to find the entry with the largest key that is <= searchKey
+	// Per drat's get_fs_records (btree.c:304-334):
+	// - Scan entries until finding entry.key >= searchKey
+	// - Then descend the PREVIOUS entry (or current if it's the first and matches)
+	// - If no entry >= searchKey is found, descend the LAST entry
 
 	var childBlockNumber uint64
 	found := false
 
 	for i, entry := range node.Entries {
-		// Compare keys
-		cmp := CompareFileSystemKeys(searchKey, entry.KeyData, FileSystemDataTypeAny)
+		// Extract the OID from this entry's key
+		entryID, err := ExtractIdentifierFromKey(entry.KeyData)
+		if err != nil {
+			return nil, fmt.Errorf("unable to extract entry ID: %w", err)
+		}
 
-		if cmp <= 0 {
-			// searchKey <= entry.KeyData
-			// Use this entry
-			var err error
-			childBlockNumber, err = bt.GetSubNodeBlockNumberFromEntry(entry)
+		// Extract the OID from our search key
+		searchID, err := ExtractIdentifierFromKey(searchKey)
+		if err != nil {
+			return nil, fmt.Errorf("unable to extract search ID: %w", err)
+		}
+
+		if entryID >= searchID {
+			// Found first entry where entryID >= searchID
+			// Descend the previous entry, or this entry if it's the first
+			descendIndex := i
+			if i > 0 {
+				descendIndex = i - 1
+			} else if entryID != searchID {
+				// First entry and it's > searchID, so target doesn't exist
+				return nil, fmt.Errorf("key not found in tree")
+			}
+
+			childBlockNumber, err = bt.GetSubNodeBlockNumberFromEntry(fileHandle, node.Entries[descendIndex])
 			if err != nil {
 				return nil, fmt.Errorf("unable to get child block number: %w", err)
 			}
@@ -828,10 +920,9 @@ func (bt *FileSystemBTree) findLeafNodeForKey(
 			break
 		}
 
-		// If this is the last entry and searchKey > entry.KeyData, use the last entry
+		// If this is the last entry and entryID < searchID, descend the last entry
 		if i == len(node.Entries)-1 {
-			var err error
-			childBlockNumber, err = bt.GetSubNodeBlockNumberFromEntry(entry)
+			childBlockNumber, err = bt.GetSubNodeBlockNumberFromEntry(fileHandle, entry)
 			if err != nil {
 				return nil, fmt.Errorf("unable to get child block number: %w", err)
 			}
@@ -843,7 +934,7 @@ func (bt *FileSystemBTree) findLeafNodeForKey(
 		// If no suitable entry found, use the first entry
 		if len(node.Entries) > 0 {
 			var err error
-			childBlockNumber, err = bt.GetSubNodeBlockNumberFromEntry(node.Entries[0])
+			childBlockNumber, err = bt.GetSubNodeBlockNumberFromEntry(fileHandle, node.Entries[0])
 			if err != nil {
 				return nil, fmt.Errorf("unable to get child block number: %w", err)
 			}

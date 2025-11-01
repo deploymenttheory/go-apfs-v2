@@ -7,9 +7,80 @@ import (
 	"io"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/apfs"
 )
+
+// formatUUID formats a 16-byte UUID as a string in standard format
+// e.g., "550e8400-e29b-41d4-a716-446655440000"
+func formatUUID(uuid []byte) string {
+	if len(uuid) != 16 {
+		return fmt.Sprintf("%x", uuid)
+	}
+	return fmt.Sprintf("%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
+		uuid[0], uuid[1], uuid[2], uuid[3],
+		uuid[4], uuid[5],
+		uuid[6], uuid[7],
+		uuid[8], uuid[9],
+		uuid[10], uuid[11], uuid[12], uuid[13], uuid[14], uuid[15])
+}
+
+// formatUUIDArray formats a 16-byte UUID array as a string in standard format
+func formatUUIDArray(uuid [16]byte) string {
+	return formatUUID(uuid[:])
+}
+
+// formatBytes converts bytes to human-readable format
+func formatBytes(bytes uint64) string {
+	const unit = 1024
+	if bytes < unit {
+		return fmt.Sprintf("%d B", bytes)
+	}
+	div, exp := uint64(unit), 0
+	for n := bytes / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	units := []string{"KB", "MB", "GB", "TB", "PB"}
+	return fmt.Sprintf("%.1f %s", float64(bytes)/float64(div), units[exp])
+}
+
+// formatNumber formats a number with comma separators
+func formatNumber(n uint64) string {
+	s := fmt.Sprintf("%d", n)
+	if len(s) <= 3 {
+		return s
+	}
+	var result []byte
+	for i, digit := range []byte(s) {
+		if i > 0 && (len(s)-i)%3 == 0 {
+			result = append(result, ',')
+		}
+		result = append(result, digit)
+	}
+	return string(result)
+}
+
+// repeatChar repeats a character n times
+func repeatChar(char rune, n int) string {
+	if n <= 0 {
+		return ""
+	}
+	result := make([]rune, n)
+	for i := range result {
+		result[i] = char
+	}
+	return string(result)
+}
+
+// max returns the maximum of two integers
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
 
 // InfoHandle provides functionality for displaying APFS information
 // Corresponds to info_handle_t
@@ -290,7 +361,7 @@ func (ih *InfoHandle) PrintContainerInfo() error {
 	// Print container identifier
 	identifier, err := ih.InputContainer.GetIdentifier()
 	if err == nil {
-		fmt.Fprintf(ih.NotifyStream, "Container identifier:\t\t%s\n", identifier)
+		fmt.Fprintf(ih.NotifyStream, "Container identifier:\t\t%s\n", formatUUID(identifier))
 	}
 
 	// Print number of volumes
@@ -351,42 +422,79 @@ func (ih *InfoHandle) PrintVolumeInfo(volumeIndex int, volume *apfs.Volume) erro
 		return fmt.Errorf("invalid volume")
 	}
 
-	fmt.Fprintf(ih.NotifyStream, "Volume: %d\n", volumeIndex+1)
+	// Get volume name and identifier
+	name, _ := volume.GetUTF8Name()
+	identifier, _ := volume.GetIdentifier()
 
-	// Print volume name
-	name, err := volume.GetUTF8Name()
-	if err == nil && name != "" {
-		fmt.Fprintf(ih.NotifyStream, "\tName:\t\t\t%s\n", name)
+	// Print boxed header
+	headerText := fmt.Sprintf("Volume %d", volumeIndex+1)
+	if name != "" {
+		headerText += fmt.Sprintf(": %s", name)
 	}
 
-	// Print volume identifier
-	identifier, err := volume.GetIdentifier()
-	if err == nil {
-		fmt.Fprintf(ih.NotifyStream, "\tIdentifier:\t\t%s\n", identifier)
-	}
+	boxWidth := max(len(headerText), len(formatUUIDArray(identifier))) + 10
+	fmt.Fprintf(ih.NotifyStream, "╭─%s─╮\n", repeatChar('─', boxWidth))
+	fmt.Fprintf(ih.NotifyStream, "│ %-*s │\n", boxWidth, headerText)
+	fmt.Fprintf(ih.NotifyStream, "│ %-*s │\n", boxWidth, "UUID: "+formatUUIDArray(identifier))
+	fmt.Fprintf(ih.NotifyStream, "╰─%s─╯\n\n", repeatChar('─', boxWidth))
 
-	// Check if volume is locked
-	isLocked, err := volume.IsLocked()
-	if err == nil {
+	// Storage section
+	fmt.Fprintf(ih.NotifyStream, "  Storage\n")
+	if size, err := volume.GetSize(); err == nil {
+		fmt.Fprintf(ih.NotifyStream, "    %-20s  %s (%s bytes)\n", "Size", formatBytes(size), formatNumber(size))
+	}
+	if isLocked, err := volume.IsLocked(); err == nil {
+		lockedStr := "No"
 		if isLocked {
-			fmt.Fprintf(ih.NotifyStream, "\tIs locked:\t\tyes\n")
-		} else {
-			fmt.Fprintf(ih.NotifyStream, "\tIs locked:\t\tno\n")
+			lockedStr = "Yes"
+		}
+		fmt.Fprintf(ih.NotifyStream, "    %-20s  %s\n", "Locked", lockedStr)
+	}
+	if volume.Superblock != nil {
+		if unmountTime, err := volume.Superblock.GetUnmountTime(); err == nil && unmountTime != 0 {
+			t := time.Unix(0, int64(unmountTime))
+			fmt.Fprintf(ih.NotifyStream, "    %-20s  %s\n", "Last unmounted", t.Format("2006-01-02 15:04:05"))
 		}
 	}
+	fmt.Fprintf(ih.NotifyStream, "\n")
 
-	// Print volume size
-	size, err := volume.GetSize()
-	if err == nil {
-		fmt.Fprintf(ih.NotifyStream, "\tSize:\t\t\t%d bytes\n", size)
+	// Contents section
+	fmt.Fprintf(ih.NotifyStream, "  Contents\n")
+	if volume.Superblock != nil {
+		if numFiles, err := volume.Superblock.GetNumberOfFiles(); err == nil {
+			fmt.Fprintf(ih.NotifyStream, "    %-20s  %s\n", "Files", formatNumber(numFiles))
+		}
+		if numDirs, err := volume.Superblock.GetNumberOfDirectories(); err == nil {
+			fmt.Fprintf(ih.NotifyStream, "    %-20s  %s\n", "Directories", formatNumber(numDirs))
+		}
+		if numSymlinks, err := volume.Superblock.GetNumberOfSymlinks(); err == nil {
+			fmt.Fprintf(ih.NotifyStream, "    %-20s  %s\n", "Symlinks", formatNumber(numSymlinks))
+		}
+		if numOther, err := volume.Superblock.GetNumberOfOtherFileSystemObjects(); err == nil && numOther > 0 {
+			fmt.Fprintf(ih.NotifyStream, "    %-20s  %s\n", "Other objects", formatNumber(numOther))
+		}
+		if numSnapshots, err := volume.Superblock.GetNumberOfSnapshots(); err == nil && numSnapshots > 0 {
+			fmt.Fprintf(ih.NotifyStream, "    %-20s  %s\n", "Snapshots", formatNumber(numSnapshots))
+		}
 	}
+	fmt.Fprintf(ih.NotifyStream, "\n")
 
-	// Print feature flags
-	compatible, incompatible, readOnlyCompatible, err := volume.GetFeaturesFlags()
-	if err == nil {
-		fmt.Fprintf(ih.NotifyStream, "\tCompatible features:\t0x%08x\n", compatible)
-		fmt.Fprintf(ih.NotifyStream, "\tIncompatible features:\t0x%08x\n", incompatible)
-		fmt.Fprintf(ih.NotifyStream, "\tRead-only compatible:\t0x%08x\n", readOnlyCompatible)
+	// Features section
+	fmt.Fprintf(ih.NotifyStream, "  Features\n")
+	if compatibleNames, err := volume.GetCompatibleFeatureNames(); err == nil && len(compatibleNames) > 0 {
+		for _, name := range compatibleNames {
+			fmt.Fprintf(ih.NotifyStream, "    ✓ %s\n", name)
+		}
+	}
+	if incompatibleNames, err := volume.GetIncompatibleFeatureNames(); err == nil && len(incompatibleNames) > 0 {
+		for _, name := range incompatibleNames {
+			fmt.Fprintf(ih.NotifyStream, "    ✓ %s\n", name)
+		}
+	}
+	if readOnlyNames, err := volume.GetReadOnlyCompatibleFeatureNames(); err == nil && len(readOnlyNames) > 0 {
+		for _, name := range readOnlyNames {
+			fmt.Fprintf(ih.NotifyStream, "    ✓ %s\n", name)
+		}
 	}
 
 	return nil
@@ -424,29 +532,72 @@ func (ih *InfoHandle) PrintFileSystemHierarchy() error {
 	return ih.printFileEntryRecursive(rootEntry, "/", 0)
 }
 
-// printFileEntryRecursive recursively prints file entries
+// printFileEntryRecursive recursively prints file entries with tree-style visualization
 func (ih *InfoHandle) printFileEntryRecursive(entry *apfs.FileEntry, path string, depth int) error {
+	return ih.printFileEntryRecursiveWithPrefix(entry, path, depth, "", true)
+}
+
+// printFileEntryRecursiveWithPrefix helper with tree prefix tracking
+func (ih *InfoHandle) printFileEntryRecursiveWithPrefix(entry *apfs.FileEntry, path string, depth int, prefix string, isLast bool) error {
 	if ih.Abort {
 		return fmt.Errorf("aborted")
 	}
 
-	// Print current entry
-	indent := ""
-	for i := 0; i < depth; i++ {
-		indent += "  "
-	}
+	// ANSI color codes
+	const (
+		colorReset      = "\033[0m"
+		colorBrightBlue = "\033[1;34m" // Directories
+		colorCyan       = "\033[36m"   // Symlinks
+		colorGreen      = "\033[32m"   // Executables
+	)
 
+	// Get file name and mode
 	name, _ := entry.GetUTF8Name()
-	fmt.Fprintf(ih.NotifyStream, "%s%s\n", indent, name)
-
-	// Check if this is a directory by checking file mode
 	fileMode, err := entry.GetFileMode()
 	if err != nil {
 		return err
 	}
 
-	isDirectory := (fileMode & 0x4000) != 0 // S_IFDIR equivalent
+	// Determine file type and color
+	fileType := fileMode & 0xf000
+	permissions := fileMode & 0x01ff
+	color := ""
 
+	switch fileType {
+	case 0x4000: // Directory
+		color = colorBrightBlue
+	case 0xa000: // Symlink
+		color = colorCyan
+	case 0x8000: // Regular file
+		if permissions&0111 != 0 { // Executable
+			color = colorGreen
+		}
+	}
+
+	// Print current entry with tree characters
+	if depth == 0 {
+		// Root entry
+		if color != "" {
+			fmt.Fprintf(ih.NotifyStream, "%s%s%s\n", color, name, colorReset)
+		} else {
+			fmt.Fprintf(ih.NotifyStream, "%s\n", name)
+		}
+	} else {
+		// Non-root: use tree characters
+		connector := "├── "
+		if isLast {
+			connector = "└── "
+		}
+
+		if color != "" {
+			fmt.Fprintf(ih.NotifyStream, "%s%s%s%s%s\n", prefix, connector, color, name, colorReset)
+		} else {
+			fmt.Fprintf(ih.NotifyStream, "%s%s%s\n", prefix, connector, name)
+		}
+	}
+
+	// Process children if directory
+	isDirectory := (fileMode & 0x4000) != 0
 	if isDirectory {
 		numberOfSubEntries, err := entry.GetNumberOfSubFileEntries()
 		if err != nil {
@@ -466,7 +617,20 @@ func (ih *InfoHandle) printFileEntryRecursive(entry *apfs.FileEntry, path string
 			}
 			subPath += subName
 
-			if err := ih.printFileEntryRecursive(subEntry, subPath, depth+1); err != nil {
+			// Determine if this is the last child
+			isLastChild := (i == numberOfSubEntries-1)
+
+			// Build prefix for children
+			var childPrefix string
+			if depth == 0 {
+				childPrefix = ""
+			} else if isLast {
+				childPrefix = prefix + "    " // 4 spaces for finished branches
+			} else {
+				childPrefix = prefix + "│   " // vertical line + 3 spaces
+			}
+
+			if err := ih.printFileEntryRecursiveWithPrefix(subEntry, subPath, depth+1, childPrefix, isLastChild); err != nil {
 				return err
 			}
 		}

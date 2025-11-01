@@ -137,10 +137,7 @@ func (n *BTreeNode) parseEntries(data []byte, dataOffset int, footerOffset int) 
 		return fmt.Errorf("invalid number of keys: %d", n.NodeHeader.NumberOfKeys)
 	}
 
-	// Calculate entries data offset in the block
-	entriesDataOffset := int(n.NodeHeader.EntriesDataOffset) + ObjectSize + BTreeNodeHeaderSize
-
-	// Current position in the entry table
+	// Current position in the entry table (TOC starts at btn_data + EntriesDataOffset)
 	currentOffset := dataOffset + int(n.NodeHeader.EntriesDataOffset)
 
 	// Parse each entry
@@ -184,7 +181,13 @@ func (n *BTreeNode) parseEntries(data []byte, dataOffset int, footerOffset int) 
 		currentOffset += entryDataSize
 
 		// Calculate absolute offsets for key and value data
-		absoluteKeyOffset := keyDataOffset + uint16(entriesDataOffset) + n.NodeHeader.EntriesDataSize
+		// Per drat implementation (include/drat/func/btree.c lines 60-62, 83, 123):
+		// - toc_start = btn_data + table_space.off
+		// - key_start = toc_start + table_space.len  (keys start AFTER the TOC)
+		// - keyDataOffset is relative to key_start
+		// - valueDataOffset is relative to val_end (grows backward from footerOffset)
+		keyStart := uint16(dataOffset) + n.NodeHeader.EntriesDataOffset + n.NodeHeader.EntriesDataSize
+		absoluteKeyOffset := keyStart + keyDataOffset
 		absoluteValueOffset := uint16(footerOffset) - valueDataOffset
 
 		// Validate offsets

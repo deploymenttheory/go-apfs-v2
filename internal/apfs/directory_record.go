@@ -104,6 +104,12 @@ func (dr *DirectoryRecord) ReadKeyData(data []byte) error {
 	// Copy name data
 	dr.Name = make([]byte, nameSize)
 	copy(dr.Name, data[dataOffset:dataOffset+int(nameSize)])
+
+	// Strip null terminator if present
+	if len(dr.Name) > 0 && dr.Name[len(dr.Name)-1] == 0 {
+		dr.Name = dr.Name[:len(dr.Name)-1]
+	}
+
 	dr.NameSize = uint16(nameSize)
 
 	return nil

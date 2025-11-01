@@ -141,6 +141,9 @@ func (c *Container) OpenRead(fileHandle io.ReaderAt, fileOffset int64) error {
 		return fmt.Errorf("invalid container - space manager already set")
 	}
 
+	// Store the file handle for later use
+	c.FileIOHandle = fileHandle
+
 	// Read the container superblock at the given offset
 	superblock, err := NewContainerSuperblock()
 	if err != nil {
@@ -191,7 +194,8 @@ func (c *Container) OpenRead(fileHandle io.ReaderAt, fileOffset int64) error {
 
 	scanOffset := int64(superblock.CheckpointDescriptorAreaBlockNumber) * int64(c.IOHandle.BlockSize)
 
-	for metadataBlockIndex := uint32(0); metadataBlockIndex <= superblock.CheckpointDescriptorAreaNumberOfBlocks; metadataBlockIndex++ {
+	// NOTE: Using < not <= based on drat implementation (libfsapfs uses <= which appears to be a bug)
+	for metadataBlockIndex := uint32(0); metadataBlockIndex < superblock.CheckpointDescriptorAreaNumberOfBlocks; metadataBlockIndex++ {
 		if err := object.ReadFileIOHandle(fileHandle, scanOffset); err != nil {
 			return fmt.Errorf("unable to read object at offset %d: %w", scanOffset, err)
 		}
@@ -444,13 +448,35 @@ func (c *Container) GetVolume(index int) (*Volume, error) {
 
 	volumeObjectID := volumeIDs[index]
 
-	// Get volume superblock block number from checkpoint map
-	blockNumber, err := c.CheckpointMap.GetPhysicalAddressByObjectIdentifier(volumeObjectID)
-	if err != nil {
-		return nil, fmt.Errorf("unable to find volume object %d in checkpoint map: %w", volumeObjectID, err)
+	// Try checkpoint map first (for recent transactions), then object map B-tree
+	// The checkpoint map contains mappings from the checkpoint descriptor area scan
+	var physicalAddress uint64
+
+	// First try the checkpoint map
+	checkpointAddr, checkpointErr := c.CheckpointMap.GetPhysicalAddressByObjectIdentifier(volumeObjectID)
+	if checkpointErr == nil && checkpointAddr != 0 {
+		physicalAddress = checkpointAddr
+	} else {
+		// Fall back to object map B-tree for older transactions
+		descriptor, err := c.ObjectMapBTree.GetDescriptorByObjectIdentifier(
+			c.FileIOHandle,
+			volumeObjectID,
+			c.Superblock.ObjectTransactionIdentifier,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("unable to retrieve object map descriptor for volume object %d (transaction: %d): %w",
+				volumeObjectID, c.Superblock.ObjectTransactionIdentifier, err)
+		}
+
+		if descriptor == nil {
+			return nil, fmt.Errorf("object map descriptor not found for volume object %d (transaction: %d)",
+				volumeObjectID, c.Superblock.ObjectTransactionIdentifier)
+		}
+
+		physicalAddress = descriptor.Value.ObjectPhysicalAddress
 	}
 
-	offset := int64(blockNumber) * int64(c.IOHandle.BlockSize)
+	offset := int64(physicalAddress) * int64(c.IOHandle.BlockSize)
 
 	if DebugOutput {
 		fmt.Printf("Opening volume %d at offset %d (0x%08x)\n", index, offset, offset)

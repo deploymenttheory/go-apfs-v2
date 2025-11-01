@@ -121,10 +121,14 @@ func (i *Inode) ReadValueData(data []byte) error {
 	}
 
 	// FileSystemBTreeValueInode is variable size, minimum is the fixed part
-	const minInodeValueSize = 100
+	// Per drat's j_inode_val_t: parent_id(8) + private_id(8) + create_time(8) + mod_time(8) +
+	// change_time(8) + access_time(8) + internal_flags(8) + nchildren/nlink(4) +
+	// default_protection_class(4) + write_generation_counter(4) + bsd_flags(4) +
+	// owner(4) + group(4) + mode(2) + pad1(2) + uncompressed_size(8) = 92 bytes
+	const minInodeValueSize = 92
 
 	if len(data) < minInodeValueSize || len(data) > common.Int32Max {
-		return fmt.Errorf("invalid value data size value out of bounds")
+		return fmt.Errorf("invalid value data size value out of bounds (len=%d, min=%d, max=%d)", len(data), minInodeValueSize, common.Int32Max)
 	}
 
 	// Debug output
@@ -133,20 +137,21 @@ func (i *Inode) ReadValueData(data []byte) error {
 		PrintData(data, true)
 	}
 
-	// Read fixed fields
-	i.ParentIdentifier = binary.LittleEndian.Uint64(data[0:8])
-	i.DataStreamIdentifier = binary.LittleEndian.Uint64(data[8:16])
-	i.ModificationTime = binary.LittleEndian.Uint64(data[16:24])
-	i.CreationTime = binary.LittleEndian.Uint64(data[24:32])
-	i.InodeChangeTime = binary.LittleEndian.Uint64(data[32:40])
-	i.AccessTime = binary.LittleEndian.Uint64(data[40:48])
-	i.Flags = binary.LittleEndian.Uint64(data[48:56])
-	i.NumberOfLinks = binary.LittleEndian.Uint32(data[56:60])
-
-	// Skip unknown1 (60:64), unknown2 (64:68), BSD flags (68:72)
-	i.OwnerIdentifier = binary.LittleEndian.Uint32(data[72:76])
-	i.GroupIdentifier = binary.LittleEndian.Uint32(data[76:80])
-	i.FileMode = binary.LittleEndian.Uint16(data[80:82])
+	// Read fixed fields (per drat's j_inode_val_t)
+	i.ParentIdentifier = binary.LittleEndian.Uint64(data[0:8])      // parent_id
+	i.DataStreamIdentifier = binary.LittleEndian.Uint64(data[8:16]) // private_id
+	i.CreationTime = binary.LittleEndian.Uint64(data[16:24])        // create_time
+	i.ModificationTime = binary.LittleEndian.Uint64(data[24:32])    // mod_time
+	i.InodeChangeTime = binary.LittleEndian.Uint64(data[32:40])     // change_time
+	i.AccessTime = binary.LittleEndian.Uint64(data[40:48])          // access_time
+	i.Flags = binary.LittleEndian.Uint64(data[48:56])               // internal_flags
+	i.NumberOfLinks = binary.LittleEndian.Uint32(data[56:60])       // nchildren/nlink
+	// Skip: default_protection_class (60:64), write_generation_counter (64:68), bsd_flags (68:72)
+	i.OwnerIdentifier = binary.LittleEndian.Uint32(data[72:76]) // owner
+	i.GroupIdentifier = binary.LittleEndian.Uint32(data[76:80]) // group
+	i.FileMode = binary.LittleEndian.Uint16(data[80:82])        // mode
+	// Skip: pad1 (82-84), uncompressed_size (84-92)
+	// Extended fields (xfields[]) start at offset 92
 
 	// Debug output
 	if IsVerbose() {
@@ -182,6 +187,7 @@ func (i *Inode) ReadValueData(data []byte) error {
 	}
 
 	// Parse extended fields if present
+	// Per drat's xf.h: xf_num_exts (2 bytes), xf_used_data (2 bytes), then xf_data[]
 	if len(data) > minInodeValueSize {
 		dataOffset := minInodeValueSize
 
@@ -190,10 +196,11 @@ func (i *Inode) ReadValueData(data []byte) error {
 		}
 
 		numberOfExtendedFields := binary.LittleEndian.Uint16(data[dataOffset : dataOffset+2])
+		extendedFieldValueDataSize := binary.LittleEndian.Uint16(data[dataOffset+2 : dataOffset+4])
 
 		if IsVerbose() {
 			Printf("number of extended fields\t\t: %d\n", numberOfExtendedFields)
-			Printf("extended field value data size\t\t: %d\n", binary.LittleEndian.Uint16(data[dataOffset+2:dataOffset+4]))
+			Printf("extended field value data size\t\t: %d\n", extendedFieldValueDataSize)
 		}
 
 		dataOffset += 4
@@ -219,11 +226,12 @@ func (i *Inode) ReadValueData(data []byte) error {
 			dataOffset += 4
 
 			if valueDataOffset > len(data) {
-				return fmt.Errorf("invalid data size value out of bounds")
+				return fmt.Errorf("invalid data size value out of bounds (offset=%d, len=%d)", valueDataOffset, len(data))
 			}
 
 			if valueDataSize == 0 || int(valueDataSize) > (len(data)-valueDataOffset) {
-				return fmt.Errorf("invalid value data size value out of bounds")
+				return fmt.Errorf("invalid value data size value out of bounds (field %d: type=%d, size=%d, offset=%d, data_len=%d, remaining=%d)",
+					extendedFieldIndex, extendedFieldType, valueDataSize, valueDataOffset, len(data), len(data)-valueDataOffset)
 			}
 
 			valueData := data[valueDataOffset : valueDataOffset+int(valueDataSize)]
@@ -253,9 +261,11 @@ func (i *Inode) ReadValueData(data []byte) error {
 
 			case 8: // INO_EXT_TYPE_DSTREAM
 				// Data stream attribute
-				const dataStreamAttrSize = 48
+				// j_dstream_t: size(8) + alloced_size(8) + default_crypto_id(8) +
+				// total_bytes_written(8) + total_bytes_read(8) = 40 bytes
+				const dataStreamAttrSize = 40
 				if valueDataSize < dataStreamAttrSize {
-					return fmt.Errorf("invalid value data size value out of bounds")
+					return fmt.Errorf("invalid value data size value out of bounds (DSTREAM: size=%d, expected_min=%d)", valueDataSize, dataStreamAttrSize)
 				}
 
 				i.DataStreamSize = binary.LittleEndian.Uint64(valueData[0:8])
@@ -276,7 +286,7 @@ func (i *Inode) ReadValueData(data []byte) error {
 			case 14: // INO_EXT_TYPE_RDEV
 				// Device identifier
 				if valueDataSize != 4 {
-					return fmt.Errorf("invalid value data size value out of bounds")
+					return fmt.Errorf("invalid value data size value out of bounds (RDEV: size=%d, expected=4)", valueDataSize)
 				}
 
 				i.DeviceIdentifier = binary.LittleEndian.Uint32(valueData[0:4])
