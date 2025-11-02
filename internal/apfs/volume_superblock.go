@@ -8,6 +8,17 @@ import (
 	"unicode/utf16"
 )
 
+// ModifiedByInfo represents who last formatted or modified the volume
+// Corresponds to apfs_modified_by_t in APFS spec
+type ModifiedByInfo struct {
+	// ID/name of the software (32 bytes)
+	ID [32]byte
+	// Timestamp when modified (8 bytes)
+	Timestamp uint64
+	// Last transaction ID (8 bytes)
+	LastTransactionID uint64
+}
+
 // VolumeSuperblock represents the APFS volume superblock structure
 type VolumeSuperblock struct {
 	// The object checksum
@@ -156,113 +167,13 @@ type VolumeSuperblock struct {
 	// Consists of 8 bytes
 	VolumeFlags uint64
 
-	// Unknown
-	// Consists of 32 bytes
-	Unknown32 [32]byte
+	// Who formatted the volume (apfs_formatted_by)
+	// Offset 272-320, consists of 48 bytes (32 + 8 + 8)
+	FormattedBy ModifiedByInfo
 
-	// Unknown
-	// Consists of 8 bytes
-	Unknown33 uint64
-
-	// Unknown
-	// Consists of 8 bytes
-	Unknown34 uint64
-
-	// Unknown
-	// Consists of 32 bytes
-	Unknown35 [32]byte
-
-	// Unknown
-	// Consists of 8 bytes
-	Unknown36 uint64
-
-	// Unknown
-	// Consists of 8 bytes
-	Unknown37 uint64
-
-	// Unknown
-	// Consists of 32 bytes
-	Unknown38 [32]byte
-
-	// Unknown
-	// Consists of 8 bytes
-	Unknown39 uint64
-
-	// Unknown
-	// Consists of 8 bytes
-	Unknown40 uint64
-
-	// Unknown
-	// Consists of 32 bytes
-	Unknown41 [32]byte
-
-	// Unknown
-	// Consists of 8 bytes
-	Unknown42 uint64
-
-	// Unknown
-	// Consists of 8 bytes
-	Unknown43 uint64
-
-	// Unknown
-	// Consists of 32 bytes
-	Unknown44 [32]byte
-
-	// Unknown
-	// Consists of 8 bytes
-	Unknown45 uint64
-
-	// Unknown
-	// Consists of 8 bytes
-	Unknown46 uint64
-
-	// Unknown
-	// Consists of 32 bytes
-	Unknown47 [32]byte
-
-	// Unknown
-	// Consists of 8 bytes
-	Unknown48 uint64
-
-	// Unknown
-	// Consists of 8 bytes
-	Unknown49 uint64
-
-	// Unknown
-	// Consists of 32 bytes
-	Unknown50 [32]byte
-
-	// Unknown
-	// Consists of 8 bytes
-	Unknown51 uint64
-
-	// Unknown
-	// Consists of 8 bytes
-	Unknown52 uint64
-
-	// Unknown
-	// Consists of 32 bytes
-	Unknown53 [32]byte
-
-	// Unknown
-	// Consists of 8 bytes
-	Unknown54 uint64
-
-	// Unknown
-	// Consists of 8 bytes
-	Unknown55 uint64
-
-	// Unknown
-	// Consists of 32 bytes
-	Unknown56 [32]byte
-
-	// Unknown
-	// Consists of 8 bytes
-	Unknown57 uint64
-
-	// Unknown
-	// Consists of 8 bytes
-	Unknown58 uint64
+	// History of who modified the volume (apfs_modified_by)
+	// Offset 320-704, consists of 8 * 48 = 384 bytes
+	ModifiedBy [8]ModifiedByInfo
 
 	// The volume name
 	// Consists of 256 bytes
@@ -425,34 +336,18 @@ func (vs *VolumeSuperblock) ReadData(data []byte, isSnapshot bool) error {
 	// Volume flags (offset 264, 8 bytes)
 	vs.VolumeFlags = binary.LittleEndian.Uint64(data[264:272])
 
-	// Parse unknown fields
-	copy(vs.Unknown32[:], data[272:304])
-	vs.Unknown33 = binary.LittleEndian.Uint64(data[304:312])
-	vs.Unknown34 = binary.LittleEndian.Uint64(data[312:320])
-	copy(vs.Unknown35[:], data[320:352])
-	vs.Unknown36 = binary.LittleEndian.Uint64(data[352:360])
-	vs.Unknown37 = binary.LittleEndian.Uint64(data[360:368])
-	copy(vs.Unknown38[:], data[368:400])
-	vs.Unknown39 = binary.LittleEndian.Uint64(data[400:408])
-	vs.Unknown40 = binary.LittleEndian.Uint64(data[408:416])
-	copy(vs.Unknown41[:], data[416:448])
-	vs.Unknown42 = binary.LittleEndian.Uint64(data[448:456])
-	vs.Unknown43 = binary.LittleEndian.Uint64(data[456:464])
-	copy(vs.Unknown44[:], data[464:496])
-	vs.Unknown45 = binary.LittleEndian.Uint64(data[496:504])
-	vs.Unknown46 = binary.LittleEndian.Uint64(data[504:512])
-	copy(vs.Unknown47[:], data[512:544])
-	vs.Unknown48 = binary.LittleEndian.Uint64(data[544:552])
-	vs.Unknown49 = binary.LittleEndian.Uint64(data[552:560])
-	copy(vs.Unknown50[:], data[560:592])
-	vs.Unknown51 = binary.LittleEndian.Uint64(data[592:600])
-	vs.Unknown52 = binary.LittleEndian.Uint64(data[600:608])
-	copy(vs.Unknown53[:], data[608:640])
-	vs.Unknown54 = binary.LittleEndian.Uint64(data[640:648])
-	vs.Unknown55 = binary.LittleEndian.Uint64(data[648:656])
-	copy(vs.Unknown56[:], data[656:688])
-	vs.Unknown57 = binary.LittleEndian.Uint64(data[688:696])
-	vs.Unknown58 = binary.LittleEndian.Uint64(data[696:704])
+	// FormattedBy (offset 272-320, 48 bytes)
+	copy(vs.FormattedBy.ID[:], data[272:304])
+	vs.FormattedBy.Timestamp = binary.LittleEndian.Uint64(data[304:312])
+	vs.FormattedBy.LastTransactionID = binary.LittleEndian.Uint64(data[312:320])
+
+	// ModifiedBy[8] (offset 320-704, 384 bytes = 8 * 48 bytes)
+	for i := 0; i < 8; i++ {
+		offset := 320 + (i * 48)
+		copy(vs.ModifiedBy[i].ID[:], data[offset:offset+32])
+		vs.ModifiedBy[i].Timestamp = binary.LittleEndian.Uint64(data[offset+32 : offset+40])
+		vs.ModifiedBy[i].LastTransactionID = binary.LittleEndian.Uint64(data[offset+40 : offset+48])
+	}
 
 	// Volume name (offset 704, 256 bytes - UTF-8 string)
 	copy(vs.VolumeName[:], data[704:960])
@@ -627,4 +522,85 @@ func (vs *VolumeSuperblock) GetUTF16VolumeName() ([]uint16, error) {
 	result[len(utf16Data)] = 0
 
 	return result, nil
+}
+
+// GetFormattedBy retrieves who formatted this volume
+func (vs *VolumeSuperblock) GetFormattedBy() string {
+	if vs == nil {
+		return ""
+	}
+	// Find the null terminator
+	for i, b := range vs.FormattedBy.ID {
+		if b == 0 {
+			return string(vs.FormattedBy.ID[:i])
+		}
+	}
+	return string(vs.FormattedBy.ID[:])
+}
+
+// GetLastModifiedBy retrieves who last modified this volume (most recent entry)
+func (vs *VolumeSuperblock) GetLastModifiedBy() string {
+	if vs == nil {
+		return ""
+	}
+	// Find the most recent non-empty entry
+	for i := 7; i >= 0; i-- {
+		// Check if this entry has data
+		hasData := false
+		for _, b := range vs.ModifiedBy[i].ID {
+			if b != 0 {
+				hasData = true
+				break
+			}
+		}
+		if hasData {
+			// Find the null terminator
+			for j, b := range vs.ModifiedBy[i].ID {
+				if b == 0 {
+					return string(vs.ModifiedBy[i].ID[:j])
+				}
+			}
+			return string(vs.ModifiedBy[i].ID[:])
+		}
+	}
+	return ""
+}
+
+// GetModifiedByHistory retrieves the full modification history
+// Returns a slice of strings from most recent to oldest, excluding empty entries
+func (vs *VolumeSuperblock) GetModifiedByHistory() []string {
+	if vs == nil {
+		return nil
+	}
+
+	history := make([]string, 0, 8)
+
+	// Iterate from most recent (7) to oldest (0)
+	for i := 7; i >= 0; i-- {
+		// Check if this entry has data
+		hasData := false
+		for _, b := range vs.ModifiedBy[i].ID {
+			if b != 0 {
+				hasData = true
+				break
+			}
+		}
+
+		if hasData {
+			// Find the null terminator and extract the string
+			var modifiedBy string
+			for j, b := range vs.ModifiedBy[i].ID {
+				if b == 0 {
+					modifiedBy = string(vs.ModifiedBy[i].ID[:j])
+					break
+				}
+			}
+			if modifiedBy == "" {
+				modifiedBy = string(vs.ModifiedBy[i].ID[:])
+			}
+			history = append(history, modifiedBy)
+		}
+	}
+
+	return history
 }
