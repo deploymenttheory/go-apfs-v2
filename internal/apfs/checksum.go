@@ -94,3 +94,27 @@ func CalculateFletcher64(buffer []byte, initialValue uint64) (uint64, error) {
 
 	return (upper32bit << 32) | value32bit, nil
 }
+
+// ValidateChecksum validates the Fletcher-64 checksum of an APFS object
+// Returns true if the checksum is valid (non-zero and correct)
+func ValidateChecksum(data []byte) bool {
+	if len(data) < 8 {
+		return false
+	}
+
+	// Extract stored checksum
+	storedChecksum := binary.LittleEndian.Uint64(data[0:8])
+
+	// Zero checksum is invalid
+	if storedChecksum == 0 {
+		return false
+	}
+
+	// Calculate checksum of data (excluding the checksum field itself)
+	calculated, err := CalculateFletcher64(data[8:], 0)
+	if err != nil {
+		return false
+	}
+
+	return calculated == storedChecksum
+}

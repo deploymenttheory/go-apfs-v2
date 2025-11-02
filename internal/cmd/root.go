@@ -23,6 +23,7 @@ Provides commands for:
   - Detailed container inspection (inspect)
   - Reading and analyzing specific blocks (read)
   - Listing directory contents (list)
+  - Interactively exploring filesystem B-tree (explore-fs-tree)
   - Mounting APFS filesystems via FUSE (mount)`,
 		Version:           version,
 		SilenceUsage:      true,
@@ -46,6 +47,7 @@ func init() {
 	rootCmd.AddCommand(inspectCmd)
 	rootCmd.AddCommand(readCmd)
 	rootCmd.AddCommand(listCmd)
+	rootCmd.AddCommand(exploreFSTreeCmd)
 	rootCmd.AddCommand(mountCmd)
 }
 

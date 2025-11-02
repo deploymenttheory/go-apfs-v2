@@ -265,6 +265,14 @@ func displayBTreeNode(blockData []byte, verbose bool) error {
 	}
 
 	fmt.Println()
+
+	// If verbose, parse and display the entries
+	if verbose {
+		if err := displayBTreeEntries(blockData); err != nil {
+			fmt.Printf("    Warning: Unable to parse B-tree entries: %v\n", err)
+		}
+	}
+
 	return nil
 }
 
@@ -328,6 +336,7 @@ func displayBTreeEntries(blockData []byte) error {
 	}
 
 	// Parse header
+	subtype := binary.LittleEndian.Uint32(blockData[28:32])
 	flags := binary.LittleEndian.Uint16(blockData[32:34])
 	keyCount := binary.LittleEndian.Uint32(blockData[36:40])
 	tableSpaceOff := binary.LittleEndian.Uint16(blockData[40:42])
@@ -337,7 +346,8 @@ func displayBTreeEntries(blockData []byte) error {
 		return nil
 	}
 
-	fmt.Println("\n  B-Tree Entries:")
+	fmt.Println()
+	fmt.Println("  B-Tree Entries:")
 	fmt.Printf("    Entry count: %d\n", keyCount)
 	fmt.Printf("    Table space: offset %d, length %d\n", tableSpaceOff, tableSpaceLen)
 
@@ -351,14 +361,42 @@ func displayBTreeEntries(blockData []byte) error {
 
 	if hasFixedKV {
 		fmt.Println("    Format: Fixed key-value size")
-		// For fixed size, TOC contains offsets (kvoff_t) relative to btn_data
+		// For fixed size OMAP: keys grow forward from after TOC, values grow backward from end
+		// Keys start at: btn_data + table_space.off + table_space.len
+		keysStart := btnDataStart + int(tableSpaceOff) + int(tableSpaceLen)
+
+		// Values grow backward from the end of the block
+		// For ROOT nodes, there's a 40-byte footer, otherwise values end at block end
+		valuesEnd := len(blockData)
+		if flags&0x0001 != 0 { // ROOT node
+			valuesEnd -= 40 // sizeof(btree_info_t)
+		}
+
 		for i := uint32(0); i < keyCount && tocOffset+4 <= len(blockData); i++ {
 			keyOff := binary.LittleEndian.Uint16(blockData[tocOffset : tocOffset+2])
 			valOff := binary.LittleEndian.Uint16(blockData[tocOffset+2 : tocOffset+4])
-			keyAbsoluteOff := btnDataStart + int(keyOff)
-			valAbsoluteOff := btnDataStart + int(valOff)
+
+			// Key offset is relative to keysStart
+			keyAbsoluteOff := keysStart + int(keyOff)
+			// Value offset grows backward from valuesEnd
+			valAbsoluteOff := valuesEnd - int(valOff) - 16 // 16 bytes per OMAP value
+
 			fmt.Printf("      Entry %d: key offset=%d (abs: %d), val offset=%d (abs: %d)\n",
 				i, keyOff, keyAbsoluteOff, valOff, valAbsoluteOff)
+
+			// Parse object map entry (subtype 0x0b)
+			if subtype == 0x0b && keyAbsoluteOff+16 <= len(blockData) && valAbsoluteOff+16 <= len(blockData) {
+				// Key: OID (8 bytes) + XID (8 bytes)
+				oid := binary.LittleEndian.Uint64(blockData[keyAbsoluteOff : keyAbsoluteOff+8])
+				xid := binary.LittleEndian.Uint64(blockData[keyAbsoluteOff+8 : keyAbsoluteOff+16])
+				// Value: flags (4 bytes) + size (4 bytes) + paddr (8 bytes)
+				oflags := binary.LittleEndian.Uint32(blockData[valAbsoluteOff : valAbsoluteOff+4])
+				osize := binary.LittleEndian.Uint32(blockData[valAbsoluteOff+4 : valAbsoluteOff+8])
+				paddr := binary.LittleEndian.Uint64(blockData[valAbsoluteOff+8 : valAbsoluteOff+16])
+				fmt.Printf("        OMAP: OID 0x%x @ XID %d -> Physical block 0x%x (flags=0x%x, size=%d)\n",
+					oid, xid, paddr, oflags, osize)
+			}
+
 			tocOffset += 4
 		}
 	} else {
@@ -388,7 +426,7 @@ func displayBTreeEntries(blockData []byte) error {
 				objIDAndType := binary.LittleEndian.Uint64(blockData[keyAbsoluteOff : keyAbsoluteOff+8])
 				objID := objIDAndType & 0x0FFFFFFFFFFFFFFF
 				objType := (objIDAndType >> 60) & 0xF
-				fmt.Printf("        Key: FSOID=%d, type=0x%x (%s)\n", objID, objType, getFSObjectTypeName(objType))
+				fmt.Printf("        Key: FSOID=%d, type=0x%x (%s)\n", objID, objType, apfs.GetFSObjectTypeName(uint8(objType)))
 			}
 
 			// For leaf nodes, show value data
@@ -406,42 +444,6 @@ func displayBTreeEntries(blockData []byte) error {
 	}
 
 	return nil
-}
-
-// getFSObjectTypeName returns the name of a filesystem object type
-func getFSObjectTypeName(objType uint64) string {
-	switch objType {
-	case 0x0:
-		return "ANY"
-	case 0x1:
-		return "SNAP_METADATA"
-	case 0x2:
-		return "EXTENT"
-	case 0x3:
-		return "INODE"
-	case 0x4:
-		return "XATTR"
-	case 0x5:
-		return "SIBLING_LINK"
-	case 0x6:
-		return "DSTREAM_ID"
-	case 0x7:
-		return "CRYPTO_STATE"
-	case 0x8:
-		return "FILE_EXTENT"
-	case 0x9:
-		return "DIR_REC"
-	case 0xA:
-		return "DIR_STATS"
-	case 0xB:
-		return "SNAP_NAME"
-	case 0xC:
-		return "SIBLING_MAP"
-	case 0xD:
-		return "FILE_INFO"
-	default:
-		return fmt.Sprintf("UNKNOWN_0x%x", objType)
-	}
 }
 
 // formatList formats a string slice as a comma-separated list
