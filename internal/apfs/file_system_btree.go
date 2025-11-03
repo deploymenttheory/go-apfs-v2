@@ -89,6 +89,7 @@ func (bt *FileSystemBTree) GetRootNode(
 }
 
 // GetSubNode retrieves a sub-node (child node) by block number
+// The blockNumber can be either a physical block or virtual OID depending on the B-tree type
 func (bt *FileSystemBTree) GetSubNode(
 	fileHandle io.ReaderAt,
 	blockNumber uint64,
@@ -97,13 +98,32 @@ func (bt *FileSystemBTree) GetSubNode(
 		return nil, fmt.Errorf("invalid file system B-tree")
 	}
 
-	// Read the sub-node using the ReadBTreeNode convenience function
+	// Try to read directly first (assume it's a physical block number)
 	node, err := ReadBTreeNode(fileHandle, bt.IOHandle, bt.EncryptionContext, blockNumber)
-	if err != nil {
-		return nil, fmt.Errorf("unable to read sub-node at block %d: %w", blockNumber, err)
+	if err == nil {
+		// Successfully read, it was a physical block
+		return node, nil
 	}
 
-	return node, nil
+	// If direct read failed and we have an ObjectMap, try resolving as virtual OID
+	if bt.ObjectMapBTree != nil {
+		physicalBlockNumber, omapErr := bt.ObjectMapBTree.GetPhysicalBlockNumber(
+			fileHandle,
+			blockNumber,
+			bt.VolumeTransactionID,
+		)
+		if omapErr == nil {
+			// Successfully resolved via OMap
+			node, readErr := ReadBTreeNode(fileHandle, bt.IOHandle, bt.EncryptionContext, physicalBlockNumber)
+			if readErr == nil {
+				return node, nil
+			}
+			return nil, fmt.Errorf("unable to read sub-node at resolved physical block %d (virtual OID %d): %w", physicalBlockNumber, blockNumber, readErr)
+		}
+	}
+
+	// Both attempts failed, return original error
+	return nil, fmt.Errorf("unable to read sub-node at block %d: %w", blockNumber, err)
 }
 
 // GetSubNodeBlockNumberFromEntry extracts the sub-node block number from a branch entry
@@ -161,58 +181,336 @@ func (bt *FileSystemBTree) GetFileExtents(
 		return nil, fmt.Errorf("invalid file system B-tree")
 	}
 
-	// Read root node
-	node, err := bt.GetRootNode(fileHandle)
+	// Use comprehensive tree traversal to get ALL records for this OID
+	allRecords, err := bt.GetAllRecordsForOID(fileHandle, identifier)
 	if err != nil {
-		return nil, fmt.Errorf("unable to read root node: %w", err)
+		return nil, fmt.Errorf("unable to get records for OID %d: %w", identifier, err)
 	}
 
-	// Navigate to leaf node
-	leafNode, err := bt.findLeafNodeForKey(fileHandle, node, CreateFileExtentKey(identifier, 0))
-	if err != nil {
-		return nil, fmt.Errorf("unable to find leaf node: %w", err)
-	}
-
-	// Collect all file extents for this identifier from the leaf node
+	// Filter for file extent records only
 	extents := make([]*FileExtent, 0)
 
-	for _, entry := range leafNode.Entries {
-		// Check if this entry is a file extent for our identifier
+	for _, entry := range allRecords {
 		dataType, err := ExtractDataTypeFromKey(entry.KeyData)
 		if err != nil {
 			continue
 		}
 
-		if dataType != FileSystemDataTypeFileExtent {
-			continue
-		}
-
-		entryID, logicalAddr, err := ParseFileExtentKey(entry.KeyData)
-		if err != nil {
-			continue
-		}
-
-		if entryID != identifier {
-			// If we've passed our identifier, we're done
-			if entryID > identifier {
-				break
+		if dataType == FileSystemDataTypeFileExtent {
+			entryID, logicalAddr, err := ParseFileExtentKey(entry.KeyData)
+			if err != nil {
+				continue
 			}
-			continue
+
+			if entryID == identifier {
+				// Parse the file extent value
+				extent, err := ParseFileExtentValue(entry.ValueData)
+				if err != nil {
+					return nil, fmt.Errorf("unable to parse file extent value: %w", err)
+				}
+
+				// Set the logical offset from the key
+				extent.LogicalOffset = logicalAddr
+
+				extents = append(extents, extent)
+			}
 		}
-
-		// Parse the file extent value
-		extent, err := ParseFileExtentValue(entry.ValueData)
-		if err != nil {
-			return nil, fmt.Errorf("unable to parse file extent value: %w", err)
-		}
-
-		// Set the logical offset from the key
-		extent.LogicalOffset = logicalAddr
-
-		extents = append(extents, extent)
 	}
 
 	return extents, nil
+}
+
+// GetAllRecordsForOID retrieves ALL filesystem records for a given OID
+// Implements the algorithm from go-apfs GetFSRecordsForOid with descent and walk phases
+func (bt *FileSystemBTree) GetAllRecordsForOID(
+	fileHandle io.ReaderAt,
+	objectID uint64,
+) ([]*BTreeEntry, error) {
+	if bt == nil {
+		return nil, fmt.Errorf("invalid file system B-tree")
+	}
+
+	rootNode, err := bt.GetRootNode(fileHandle)
+	if err != nil {
+		return nil, fmt.Errorf("unable to get root node: %w", err)
+	}
+
+	// Calculate tree height
+	treeHeight := int(rootNode.NodeHeader.Level) + 1
+	descPath := make([]int, treeHeight)
+
+	records := make([]*BTreeEntry, 0)
+
+	// PHASE 1: Descent - find first record with matching OID
+	node := rootNode
+	var firstLeafNode *BTreeNode
+	for level := 0; level < treeHeight; level++ {
+		if node.IsLeafNode() {
+			firstLeafNode = node
+			// Found leaf level - now position descPath at first matching record
+			for idx, entry := range node.Entries {
+				entryID, _ := ExtractIdentifierFromKey(entry.KeyData)
+				if entryID == objectID {
+					descPath[level] = idx
+					break
+				}
+				if entryID > objectID {
+					// No matching records exist
+					return records, nil
+				}
+				descPath[level]++
+			}
+			break
+		}
+
+		// Find which child to descend
+		foundChild := false
+		for idx, entry := range node.Entries {
+			entryID, _ := ExtractIdentifierFromKey(entry.KeyData)
+
+			if entryID >= objectID {
+				// Descend previous entry (or current if first)
+				if idx > 0 {
+					descPath[level] = idx - 1
+				} else {
+					descPath[level] = idx
+				}
+
+				childOID, err := bt.GetSubNodeBlockNumberFromEntry(fileHandle, node.Entries[descPath[level]])
+				if err != nil {
+					return nil, err
+				}
+				node, err = bt.GetSubNode(fileHandle, childOID)
+				if err != nil {
+					return nil, err
+				}
+				foundChild = true
+				break
+			}
+			descPath[level] = idx + 1
+		}
+
+		if !foundChild {
+			// Descend last entry
+			descPath[level] = len(node.Entries) - 1
+			childOID, err := bt.GetSubNodeBlockNumberFromEntry(fileHandle, node.Entries[descPath[level]])
+			if err != nil {
+				return nil, err
+			}
+			node, err = bt.GetSubNode(fileHandle, childOID)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	// FAST PATH: Check if all records are in the first leaf (common case)
+	// Collect all matching records from first leaf
+	leafLevel := treeHeight - 1
+	allInFirstLeaf := true
+	for idx := descPath[leafLevel]; idx < len(firstLeafNode.Entries); idx++ {
+		entry := firstLeafNode.Entries[idx]
+		entryID, err := ExtractIdentifierFromKey(entry.KeyData)
+		if err != nil {
+			continue
+		}
+		if entryID != objectID {
+			// Hit end of matching records
+			return records, nil
+		}
+		records = append(records, entry)
+		descPath[leafLevel]++
+	}
+
+	// If we exhausted the leaf, check if there might be more in next leaf
+	if descPath[leafLevel] >= len(firstLeafNode.Entries) {
+		allInFirstLeaf = false
+	}
+
+	// If all records were in first leaf, we're done (common case)
+	if allInFirstLeaf {
+		return records, nil
+	}
+
+	// PHASE 2: Walk - collect remaining records from other leaves (rare)
+	for {
+		// Re-descend from root using descPath
+		node = rootNode
+		for level := 0; level < treeHeight-1; level++ {
+			if descPath[level] >= len(node.Entries) {
+				// Exhausted this level, move to next node at parent level
+				if level == 0 {
+					// Root level exhausted, done
+					return records, nil
+				}
+				descPath[level-1]++
+				for j := level; j < treeHeight; j++ {
+					descPath[j] = 0
+				}
+				break
+			}
+
+			childOID, err := bt.GetSubNodeBlockNumberFromEntry(fileHandle, node.Entries[descPath[level]])
+			if err != nil {
+				return nil, err
+			}
+			node, err = bt.GetSubNode(fileHandle, childOID)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		// At leaf node - collect matching records
+		if node.IsLeafNode() {
+			leafLevel := treeHeight - 1
+			for idx := descPath[leafLevel]; idx < len(node.Entries); idx++ {
+				entry := node.Entries[idx]
+				entryID, err := ExtractIdentifierFromKey(entry.KeyData)
+				if err != nil {
+					continue
+				}
+
+				if entryID != objectID {
+					// No more matching records
+					return records, nil
+				}
+
+				records = append(records, entry)
+				descPath[leafLevel]++
+			}
+			// Exhausted this leaf, continue to next
+		}
+	}
+}
+
+// descendToFirstMatch descends the B-tree to find the first leaf containing the target OID
+// Returns the leaf node and the path taken (indices at each level)
+func (bt *FileSystemBTree) descendToFirstMatch(
+	fileHandle io.ReaderAt,
+	node *BTreeNode,
+	targetID uint64,
+) (*BTreeNode, []int, error) {
+	path := make([]int, 0)
+
+	for {
+		if node.IsLeafNode() {
+			// Check if this leaf has our target
+			for _, entry := range node.Entries {
+				entryID, _ := ExtractIdentifierFromKey(entry.KeyData)
+				if entryID >= targetID {
+					return node, path, nil
+				}
+			}
+			return nil, nil, fmt.Errorf("target OID not found")
+		}
+
+		// Branch node - find which child to descend
+		childIndex := -1
+		for i, entry := range node.Entries {
+			entryID, _ := ExtractIdentifierFromKey(entry.KeyData)
+
+			if entryID >= targetID {
+				childIndex = i
+				if i > 0 {
+					childIndex = i - 1
+				}
+				break
+			}
+		}
+
+		if childIndex == -1 {
+			// Target is greater than all entries, use last child
+			childIndex = len(node.Entries) - 1
+		}
+
+		if childIndex < 0 || childIndex >= len(node.Entries) {
+			return nil, nil, fmt.Errorf("invalid child index")
+		}
+
+		path = append(path, childIndex)
+
+		// Get child virtual OID
+		childOID, err := bt.GetSubNodeBlockNumberFromEntry(fileHandle, node.Entries[childIndex])
+		if err != nil {
+			return nil, nil, err
+		}
+
+		// Read child node
+		node, err = bt.GetSubNode(fileHandle, childOID)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+}
+
+// moveToNextLeaf moves to the next leaf node in the B-tree
+func (bt *FileSystemBTree) moveToNextLeaf(
+	fileHandle io.ReaderAt,
+	rootNode *BTreeNode,
+	currentPath []int,
+) (*BTreeNode, []int, error) {
+	// Increment the path to point to the next leaf
+	newPath := make([]int, len(currentPath))
+	copy(newPath, currentPath)
+
+	// Walk up the path incrementing indices
+	for i := len(newPath) - 1; i >= 0; i-- {
+		newPath[i]++
+
+		// Check if this is valid by descending with the new path
+		node := rootNode
+		valid := true
+
+		for j := 0; j <= i && valid; j++ {
+			if newPath[j] >= len(node.Entries) {
+				valid = false
+				break
+			}
+
+			if j < i {
+				// Descend to next level
+				childOID, err := bt.GetSubNodeBlockNumberFromEntry(fileHandle, node.Entries[newPath[j]])
+				if err != nil {
+					return nil, nil, err
+				}
+				node, err = bt.GetSubNode(fileHandle, childOID)
+				if err != nil {
+					return nil, nil, err
+				}
+			}
+		}
+
+		if valid {
+			// This path level is valid, now descend to leftmost leaf
+			for !node.IsLeafNode() {
+				childOID, err := bt.GetSubNodeBlockNumberFromEntry(fileHandle, node.Entries[newPath[len(newPath)-1]])
+				if err != nil {
+					return nil, nil, err
+				}
+				node, err = bt.GetSubNode(fileHandle, childOID)
+				if err != nil {
+					return nil, nil, err
+				}
+				newPath = append(newPath, 0)
+			}
+			return node, newPath, nil
+		}
+
+		// This level exhausted, try parent level
+		if i > 0 {
+			newPath = newPath[:i]
+		}
+	}
+
+	// Exhausted all paths
+	return nil, nil, fmt.Errorf("no more leaves")
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 // GetInodeByIdentifier retrieves an inode by identifier
@@ -225,36 +523,34 @@ func (bt *FileSystemBTree) GetInodeByIdentifier(
 		return nil, fmt.Errorf("invalid file system B-tree")
 	}
 
-	// Read root node
-	node, err := bt.GetRootNode(fileHandle)
-	if err != nil {
-		return nil, fmt.Errorf("unable to read root node: %w", err)
-	}
-
-	// Navigate to leaf node
-	leafNode, err := bt.findLeafNodeForKey(fileHandle, node, CreateInodeKey(identifier))
-	if err != nil {
-		return nil, fmt.Errorf("unable to find leaf node: %w", err)
-	}
-
-	// Find the inode entry in the leaf node
 	if DebugOutput {
-		fmt.Printf("GetInodeByIdentifier: searching for inode %d, leaf node has %d entries\n", identifier, len(leafNode.Entries))
+		fmt.Printf("GetInodeByIdentifier: searching for inode %d\n", identifier)
 	}
 
-	for _, entry := range leafNode.Entries {
+	// Use comprehensive tree traversal to get ALL records for this OID
+	allRecords, err := bt.GetAllRecordsForOID(fileHandle, identifier)
+	if err != nil {
+		return nil, fmt.Errorf("unable to get records for OID %d: %w", identifier, err)
+	}
+
+	if DebugOutput {
+		fmt.Printf("GetInodeByIdentifier: found %d total records for inode %d\n", len(allRecords), identifier)
+	}
+
+	// Find the inode entry
+	for _, entry := range allRecords {
 		// Check if this entry is an inode
 		dataType, err := ExtractDataTypeFromKey(entry.KeyData)
 		if err != nil {
 			continue
 		}
 
-		entryID, err := ExtractIdentifierFromKey(entry.KeyData)
-		if err != nil {
+		if dataType != FileSystemDataTypeInode {
 			continue
 		}
 
-		if dataType != FileSystemDataTypeInode {
+		entryID, err := ExtractIdentifierFromKey(entry.KeyData)
+		if err != nil {
 			continue
 		}
 
@@ -885,33 +1181,38 @@ func (bt *FileSystemBTree) findLeafNodeForKey(
 	// - Then descend the PREVIOUS entry (or current if it's the first and matches)
 	// - If no entry >= searchKey is found, descend the LAST entry
 
+	// Extract the filesystem key from the search key (first 8 bytes)
+	// This is a 64-bit value with type in upper 4 bits and identifier in lower 60 bits
+	if len(searchKey) < 8 {
+		return nil, fmt.Errorf("search key too short: %d bytes", len(searchKey))
+	}
+	searchFSKey := binary.LittleEndian.Uint64(searchKey[0:8])
+
 	var childBlockNumber uint64
 	found := false
 
 	for i, entry := range node.Entries {
-		// Extract the OID from this entry's key
-		entryID, err := ExtractIdentifierFromKey(entry.KeyData)
-		if err != nil {
-			return nil, fmt.Errorf("unable to extract entry ID: %w", err)
+		// Extract the filesystem key from this entry's key
+		if len(entry.KeyData) < 8 {
+			continue
 		}
+		entryFSKey := binary.LittleEndian.Uint64(entry.KeyData[0:8])
 
-		// Extract the OID from our search key
-		searchID, err := ExtractIdentifierFromKey(searchKey)
-		if err != nil {
-			return nil, fmt.Errorf("unable to extract search ID: %w", err)
-		}
+		// Extract identifier (lower 60 bits) for comparison
+		// Per drat and go-apfs: APFS B-trees compare identifiers only, not full keys
+		entryID := entryFSKey & 0x0FFFFFFFFFFFFFFF
+		searchID := searchFSKey & 0x0FFFFFFFFFFFFFFF
 
+		// Compare identifiers only (APFS B-tree navigation rule)
 		if entryID >= searchID {
 			// Found first entry where entryID >= searchID
 			// Descend the previous entry, or this entry if it's the first
 			descendIndex := i
 			if i > 0 {
 				descendIndex = i - 1
-			} else if entryID != searchID {
-				// First entry and it's > searchID, so target doesn't exist
-				return nil, fmt.Errorf("key not found in tree")
 			}
 
+			var err error
 			childBlockNumber, err = bt.GetSubNodeBlockNumberFromEntry(fileHandle, node.Entries[descendIndex])
 			if err != nil {
 				return nil, fmt.Errorf("unable to get child block number: %w", err)
@@ -922,6 +1223,7 @@ func (bt *FileSystemBTree) findLeafNodeForKey(
 
 		// If this is the last entry and entryID < searchID, descend the last entry
 		if i == len(node.Entries)-1 {
+			var err error
 			childBlockNumber, err = bt.GetSubNodeBlockNumberFromEntry(fileHandle, entry)
 			if err != nil {
 				return nil, fmt.Errorf("unable to get child block number: %w", err)

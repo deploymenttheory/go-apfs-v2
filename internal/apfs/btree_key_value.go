@@ -6,20 +6,22 @@ import (
 )
 
 // File system B-tree data types
+// Based on APFS specification and verified against go-apfs implementation
 const (
-	FileSystemDataTypeAny              uint8 = 0x00
-	FileSystemDataTypeSnapMetadata     uint8 = 0x01
-	FileSystemDataTypeFileExtent       uint8 = 0x02
-	FileSystemDataTypeInode            uint8 = 0x03
+	FileSystemDataTypeAny               uint8 = 0x00
+	FileSystemDataTypeSnapMetadata      uint8 = 0x01
+	FileSystemDataTypeExtent            uint8 = 0x02 // Physical extent (not file extent!)
+	FileSystemDataTypeInode             uint8 = 0x03
 	FileSystemDataTypeExtendedAttribute uint8 = 0x04
-	FileSystemDataTypeSiblingLink      uint8 = 0x05
-	FileSystemDataTypeDStreamID        uint8 = 0x06
-	FileSystemDataTypeCryptoState      uint8 = 0x07
-	FileSystemDataTypeFileInfo         uint8 = 0x08
-	FileSystemDataTypeDirectoryRecord  uint8 = 0x09
-	FileSystemDataTypeDirectoryStats   uint8 = 0x0a
-	FileSystemDataTypeSnapshotName     uint8 = 0x0b
-	FileSystemDataTypeSiblingMap       uint8 = 0x0c
+	FileSystemDataTypeSiblingLink       uint8 = 0x05
+	FileSystemDataTypeDStreamID         uint8 = 0x06
+	FileSystemDataTypeCryptoState       uint8 = 0x07
+	FileSystemDataTypeFileExtent        uint8 = 0x08 // File data extent (was incorrectly 0x02!)
+	FileSystemDataTypeDirectoryRecord   uint8 = 0x09
+	FileSystemDataTypeDirectoryStats    uint8 = 0x0a
+	FileSystemDataTypeSnapshotName      uint8 = 0x0b
+	FileSystemDataTypeSiblingMap        uint8 = 0x0c
+	FileSystemDataTypeFileInfo          uint8 = 0x0d // Was incorrectly at 0x08!
 )
 
 // ExtractDataTypeFromKey extracts the data type from a file system B-tree key
@@ -104,8 +106,8 @@ func CompareFileSystemKeys(key1Data []byte, key2Data []byte, dataType uint8) int
 
 // ParseFileExtentValue parses a file extent value from binary data
 func ParseFileExtentValue(data []byte) (*FileExtent, error) {
-	// FileSystemBTreeValueFileExtent structure
-	const fileExtentValueSize = 32
+	// j_file_extent_val_t structure: len_and_flags (8) + phys_block_num (8) + crypto_id (8) = 24 bytes
+	const fileExtentValueSize = 24
 
 	if len(data) < fileExtentValueSize {
 		return nil, fmt.Errorf("invalid file extent value size: expected at least %d bytes, got %d", fileExtentValueSize, len(data))

@@ -3,6 +3,7 @@ package apfs
 import (
 	"fmt"
 	"io"
+	"strings"
 	"unicode/utf16"
 	"unicode/utf8"
 )
@@ -651,7 +652,12 @@ func (fe *FileEntry) GetSymbolicLinkTarget() (string, error) {
 		return "", fmt.Errorf("unable to retrieve symbolic link data: %w", err)
 	}
 
-	return string(fe.SymbolicLinkData), nil
+	// Trim trailing null bytes and spaces to prevent "invalid argument" errors
+	// when creating symlinks on the filesystem
+	target := string(fe.SymbolicLinkData)
+	target = strings.TrimRight(target, "\x00 \t\r\n")
+
+	return target, nil
 }
 
 // GetSymbolicLinkTargetUTF16Size retrieves the size of the UTF-16 encoded symbolic link target
@@ -860,13 +866,27 @@ func (fe *FileEntry) getFileExtents() error {
 	}
 
 	// Get file extents from the file system B-tree
+	// First try using the inode identifier (most common case)
 	extents, err := fe.FileSystemBTree.GetFileExtents(
 		fe.FileHandle,
-		fe.Inode.DataStreamIdentifier,
+		fe.Inode.Identifier,
 		fe.TransactionIdentifier,
 	)
 	if err != nil {
 		return fmt.Errorf("unable to retrieve file extents: %w", err)
+	}
+
+	// If no extents found and DataStreamIdentifier is set, try using that
+	// This handles files where data is stored via a separate data stream
+	if len(extents) == 0 && fe.Inode.DataStreamIdentifier != 0 {
+		extents, err = fe.FileSystemBTree.GetFileExtents(
+			fe.FileHandle,
+			fe.Inode.DataStreamIdentifier,
+			fe.TransactionIdentifier,
+		)
+		if err != nil {
+			return fmt.Errorf("unable to retrieve file extents via data stream ID: %w", err)
+		}
 	}
 
 	fe.FileExtents = extents
@@ -880,13 +900,107 @@ func (fe *FileEntry) getDataStream() error {
 		return nil
 	}
 
-	// Ensure file extents are loaded
+	// Check for compressed data attribute first
+	// Files with com.apple.decmpfs may not have file extents
+	if err := fe.getExtendedAttributes(); err == nil {
+
+		if fe.CompressedDataAttributeValues != nil {
+
+			// Parse compressed data header from attribute
+			if len(fe.CompressedDataAttributeValues.ValueData) >= 16 {
+				header, err := ParseCompressedDataHeader(fe.CompressedDataAttributeValues.ValueData)
+				if err != nil {
+					return fmt.Errorf("unable to parse compressed data header: %w", err)
+				}
+
+				if header != nil {
+					fe.CompressedDataHeader = header
+
+					// Check if data is embedded in the attribute (inline compression)
+					if len(fe.CompressedDataAttributeValues.ValueData) > 16 {
+						// Data is embedded in the attribute after the header
+						compressedData := fe.CompressedDataAttributeValues.ValueData[16:]
+
+						// Create data stream from embedded compressed data
+						compressedDataStream, err := NewDataStreamFromData(compressedData)
+						if err != nil {
+							return fmt.Errorf("unable to create compressed data stream from embedded data: %w", err)
+						}
+
+						// Create decompressed data stream
+						dataStream, err := NewDataStreamFromCompressedDataStream(
+							compressedDataStream,
+							header.UncompressedDataSize,
+							int(header.CompressionMethod),
+						)
+						if err != nil {
+							return fmt.Errorf("unable to create decompressed data stream: %w", err)
+						}
+
+						fe.DataStream = dataStream
+						return nil
+					} else {
+						// Compressed data is stored in resource fork
+						if fe.ResourceForkAttributeValues != nil {
+							resourceForkStream, err := fe.ResourceForkAttributeValues.GetDataStream(
+								fe.IOHandle,
+								fe.FileHandle,
+								fe.EncryptionContext,
+								fe.FileSystemBTree,
+								fe.TransactionIdentifier,
+							)
+							if err != nil {
+								return fmt.Errorf("unable to get resource fork data stream: %w", err)
+							}
+
+							if resourceForkStream != nil {
+								// Create decompressed data stream from resource fork
+								dataStream, err := NewDataStreamFromCompressedDataStream(
+									resourceForkStream,
+									header.UncompressedDataSize,
+									int(header.CompressionMethod),
+								)
+								if err != nil {
+									return fmt.Errorf("unable to create decompressed data stream from resource fork: %w", err)
+								}
+
+								fe.DataStream = dataStream
+								return nil
+							}
+						}
+					}
+				}
+			}
+		} else {
+		}
+	} else {
+	}
+
+	// Try to get file extents for normal files
 	if err := fe.getFileExtents(); err != nil {
 		return fmt.Errorf("unable to retrieve file extents: %w", err)
 	}
 
 	if len(fe.FileExtents) == 0 {
-		return fmt.Errorf("no file extents")
+		// Check if this is a zero-length file
+		size, err := fe.GetDataSize()
+		if err == nil && size == 0 {
+			// Create empty data stream for zero-length files
+			dataStream, err := NewDataStreamFromData([]byte{})
+			if err != nil {
+				return fmt.Errorf("unable to create empty data stream: %w", err)
+			}
+			fe.DataStream = dataStream
+			return nil
+		}
+
+		// If DataStreamIdentifier is 0, the data might be inline in the inode
+		if fe.Inode.DataStreamIdentifier == 0 {
+			// TODO: Check if inode has inline data
+			// For now, this is an unsupported case
+		}
+
+		return fmt.Errorf("no file extents and no compressed data")
 	}
 
 	// Get data size
@@ -905,6 +1019,11 @@ func (fe *FileEntry) getDataStream() error {
 	)
 	if err != nil {
 		return fmt.Errorf("unable to create data stream from file extents: %w", err)
+	}
+
+	// Set the file handle for the data stream reader
+	if dbReader, ok := dataStream.readerAt.(*dataBlockReader); ok {
+		dbReader.SetFileHandle(fe.FileHandle)
 	}
 
 	fe.DataStream = dataStream

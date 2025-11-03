@@ -63,12 +63,14 @@ func NewDataStreamFromFileExtents(
 		return nil, fmt.Errorf("unable to create data block data handle: %w", err)
 	}
 
-	// Verify size matches
-	if size != dataHandle.DataSize {
-		return nil, fmt.Errorf("data stream size mismatch: expected %d, got %d", size, dataHandle.DataSize)
-	}
+	// Use the actual file size from the inode, not the allocated extent size
+	// File extents are block-aligned, so they're always >= actual file size
+	// The dataHandle.DataSize is the sum of allocated extent sizes (block-aligned)
+	// We want to use the actual file size from the inode for reading
+	dataHandle.DataSize = size
 
 	// Create a reader wrapper around the data handle
+	// Note: fileHandle needs to be set by the caller via SetFileHandle
 	reader := &dataBlockReader{
 		dataHandle: dataHandle,
 	}
