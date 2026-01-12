@@ -9,7 +9,7 @@ require (
 	github.com/schollz/progressbar/v3 v3.18.0
 	github.com/spf13/cobra v1.10.1
 	golang.org/x/crypto v0.45.0
-	golang.org/x/text v0.31.0
+	golang.org/x/text v0.33.0
 	howett.net/plist v1.0.1
 )
 
