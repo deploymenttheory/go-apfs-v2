@@ -2,7 +2,23 @@
 // Corresponds to libfsapfs_io_handle.c and libfsapfs_io_handle.h
 package apfs
 
-import "fmt"
+import (
+	"container/list"
+	"fmt"
+	"sync"
+)
+
+// nodeCacheMaxEntries bounds the parsed B-tree node LRU cache. Traversals
+// re-descend from the root for every lookup, so without a cache the same
+// omap and fs-tree nodes are re-read and re-parsed from disk thousands of
+// times. 512 nodes is ~2 MB of block data at the default 4 KB block size.
+const nodeCacheMaxEntries = 512
+
+// nodeCacheEntry is one cached parsed B-tree node
+type nodeCacheEntry struct {
+	blockNumber uint64
+	node        *BTreeNode
+}
 
 // Container and volume signatures
 // Corresponds to fsapfs_container_signature and fsapfs_volume_signature
@@ -28,6 +44,55 @@ type IOHandle struct {
 
 	// The profiler (only available when built with profiler tag)
 	Profiler *Profiler
+
+	// LRU cache of parsed B-tree nodes keyed by physical block number.
+	// Cached nodes are shared and must be treated as read-only by callers.
+	nodeCacheMu sync.Mutex
+	nodeCache   map[uint64]*list.Element
+	nodeLRU     *list.List // front = most recently used; values are *nodeCacheEntry
+}
+
+// getCachedNode returns the cached parsed node for a physical block, if any
+func (io *IOHandle) getCachedNode(blockNumber uint64) *BTreeNode {
+	io.nodeCacheMu.Lock()
+	defer io.nodeCacheMu.Unlock()
+
+	if io.nodeCache == nil {
+		return nil
+	}
+
+	element, ok := io.nodeCache[blockNumber]
+	if !ok {
+		return nil
+	}
+
+	io.nodeLRU.MoveToFront(element)
+	return element.Value.(*nodeCacheEntry).node
+}
+
+// putCachedNode stores a parsed node in the LRU cache
+func (io *IOHandle) putCachedNode(blockNumber uint64, node *BTreeNode) {
+	io.nodeCacheMu.Lock()
+	defer io.nodeCacheMu.Unlock()
+
+	if io.nodeCache == nil {
+		io.nodeCache = make(map[uint64]*list.Element)
+		io.nodeLRU = list.New()
+	}
+
+	if element, ok := io.nodeCache[blockNumber]; ok {
+		io.nodeLRU.MoveToFront(element)
+		element.Value.(*nodeCacheEntry).node = node
+		return
+	}
+
+	io.nodeCache[blockNumber] = io.nodeLRU.PushFront(&nodeCacheEntry{blockNumber: blockNumber, node: node})
+
+	for io.nodeLRU.Len() > nodeCacheMaxEntries {
+		oldest := io.nodeLRU.Back()
+		delete(io.nodeCache, oldest.Value.(*nodeCacheEntry).blockNumber)
+		io.nodeLRU.Remove(oldest)
+	}
 }
 
 // NewIOHandle creates a new IO handle with default values

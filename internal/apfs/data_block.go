@@ -168,6 +168,13 @@ func ReadBTreeNode(
 		return nil, fmt.Errorf("invalid IO handle")
 	}
 
+	// Serve repeated reads of the same node from the cache. Traversals
+	// re-descend from the root constantly, so this avoids re-reading and
+	// re-parsing the same blocks from disk. Cached nodes are read-only.
+	if node := ioHandle.getCachedNode(blockNumber); node != nil {
+		return node, nil
+	}
+
 	// Calculate offset
 	offset := int64(blockNumber * uint64(ioHandle.BlockSize))
 
@@ -189,6 +196,8 @@ func ReadBTreeNode(
 	if err != nil {
 		return nil, fmt.Errorf("unable to read B-tree node: %w", err)
 	}
+
+	ioHandle.putCachedNode(blockNumber, node)
 
 	return node, nil
 }
