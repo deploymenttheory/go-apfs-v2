@@ -6,10 +6,12 @@ import (
 	"bytes"
 	"compress/bzip2"
 	"compress/zlib"
+	"container/list"
 	"encoding/binary"
 	"fmt"
 	"io"
 	"os"
+	"sync"
 
 	"github.com/blacktop/ipsw/pkg/lzfse"
 	"howett.net/plist"
@@ -98,6 +100,11 @@ type DMGPartition struct {
 	Chunks      []DMGChunk
 }
 
+// chunkCacheMaxBytes bounds the decompressed-chunk LRU cache. Without the
+// cache every 4 KB read from the APFS layer re-decompresses an entire chunk
+// (typically ~1 MB), which makes extraction unusably slow.
+const chunkCacheMaxBytes = 128 << 20
+
 // DMGReader implements io.ReaderAt for reading from compressed DMG files
 type DMGReader struct {
 	file             *os.File
@@ -107,6 +114,13 @@ type DMGReader struct {
 	apfsOffset       uint64
 	apfsSize         uint64
 	maxChunkSize     int
+
+	// LRU cache of decompressed chunks, keyed by chunk index
+	cacheMu   sync.Mutex
+	cache     map[int][]byte
+	cacheLRU  *list.List // front = most recently used; values are chunk indices
+	cacheElem map[int]*list.Element
+	cacheSize int
 }
 
 // dmgPlist represents the structure of a DMG plist
@@ -134,7 +148,10 @@ func OpenDMG(filename string) (*DMGReader, error) {
 	}
 
 	reader := &DMGReader{
-		file: file,
+		file:      file,
+		cache:     make(map[int][]byte),
+		cacheLRU:  list.New(),
+		cacheElem: make(map[int]*list.Element),
 	}
 
 	// Read footer
@@ -417,8 +434,10 @@ func (r *DMGReader) ReadAt(buf []byte, off int64) (n int, err error) {
 	}
 
 	if chunkIdx == -1 {
-		// Start from beginning if not found
-		chunkIdx = 0
+		// Offset is not inside any chunk: `left` is the insertion point, i.e.
+		// the first chunk starting after the offset (or len(chunks) if the
+		// offset is past the end of the partition)
+		chunkIdx = left
 	}
 
 	// Process chunks
@@ -438,8 +457,8 @@ func (r *DMGReader) ReadAt(buf []byte, off int64) (n int, err error) {
 			break
 		}
 
-		// Decompress this chunk
-		chunkData, err := r.decompressChunk(chunk)
+		// Decompress this chunk (served from the LRU cache when possible)
+		chunkData, err := r.getChunk(chunkIdx)
 		if err != nil {
 			return n, fmt.Errorf("unable to decompress chunk: %w", err)
 		}
@@ -465,11 +484,58 @@ func (r *DMGReader) ReadAt(buf []byte, off int64) (n int, err error) {
 		chunkIdx++
 	}
 
-	if n == 0 && len(buf) > 0 {
-		return 0, io.EOF
+	// io.ReaderAt contract: a read that returns fewer bytes than requested
+	// must return a non-nil error explaining why
+	if n < len(buf) {
+		return n, io.EOF
 	}
 
 	return n, nil
+}
+
+// getChunk returns the decompressed data for the chunk at the given index in
+// the APFS partition, using an LRU cache bounded by chunkCacheMaxBytes.
+// Zero-fill and marker chunks are cheap to materialize and are not cached.
+func (r *DMGReader) getChunk(chunkIdx int) ([]byte, error) {
+	chunk := &r.partitions[r.apfsPartitionIdx].Chunks[chunkIdx]
+
+	switch chunk.Type {
+	case chunkTypeZeroFill, chunkTypeIgnored, chunkTypeComment, chunkTypeLastBlock:
+		return r.decompressChunk(chunk)
+	}
+
+	r.cacheMu.Lock()
+	if data, ok := r.cache[chunkIdx]; ok {
+		r.cacheLRU.MoveToFront(r.cacheElem[chunkIdx])
+		r.cacheMu.Unlock()
+		return data, nil
+	}
+	r.cacheMu.Unlock()
+
+	data, err := r.decompressChunk(chunk)
+	if err != nil {
+		return nil, err
+	}
+
+	r.cacheMu.Lock()
+	defer r.cacheMu.Unlock()
+
+	if _, ok := r.cache[chunkIdx]; !ok {
+		r.cache[chunkIdx] = data
+		r.cacheElem[chunkIdx] = r.cacheLRU.PushFront(chunkIdx)
+		r.cacheSize += len(data)
+
+		for r.cacheSize > chunkCacheMaxBytes && r.cacheLRU.Len() > 1 {
+			oldest := r.cacheLRU.Back()
+			oldIdx := oldest.Value.(int)
+			r.cacheSize -= len(r.cache[oldIdx])
+			delete(r.cache, oldIdx)
+			delete(r.cacheElem, oldIdx)
+			r.cacheLRU.Remove(oldest)
+		}
+	}
+
+	return data, nil
 }
 
 // decompressChunk decompresses a single DMG chunk
