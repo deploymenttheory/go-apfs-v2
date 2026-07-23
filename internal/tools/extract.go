@@ -1,21 +1,23 @@
 // Extract tool for extracting files from APFS volumes
-// Supports full volume extraction, path-based extraction, and regex pattern matching
+// Walks the volume through its io/fs view (pkg/apfs fs.go), so extraction
+// exercises the same public API that SDK consumers use.
 package tools
 
 import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"hash"
 	"io"
+	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
-	"github.com/deploymenttheory/go-apfs-v2/internal/apfs"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/disk"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
 	"github.com/schollz/progressbar/v3"
 	"github.com/spf13/cobra"
 )
@@ -39,23 +41,23 @@ var ExtractCmd = &cobra.Command{
 	Long: `Extract files from an APFS volume to a local directory.
 
 Supports:
-  - Full volume extraction (recursive)
+  - Full volume extraction (default)
   - Single file/directory extraction by path
   - Pattern-based extraction using regex
   - Metadata preservation (timestamps, permissions)
 
 Examples:
   # Extract entire volume
-  apfs extract --container /dev/disk2 --destination ./output --recursive
+  apfs extract --container image.dmg --destination ./output
 
   # Extract specific directory
-  apfs extract --container /dev/disk2 --path /Applications --destination ./apps
+  apfs extract --container image.dmg --path /Applications --destination ./apps --recursive
 
   # Extract files matching pattern
-  apfs extract --container /dev/disk2 --pattern "\.txt$" --destination ./textfiles
+  apfs extract --container image.dmg --pattern "\.txt$" --destination ./textfiles
 
   # Extract with metadata preservation
-  apfs extract --container /dev/disk2 --destination ./output --preserve-meta --recursive`,
+  apfs extract --container image.dmg --destination ./output --preserve-meta`,
 	RunE: runExtract,
 }
 
@@ -75,38 +77,13 @@ func init() {
 }
 
 func runExtract(cmd *cobra.Command, args []string) error {
-	// Open file with DMG detection and decompression
-	reader, offset, closer, err := disk.OpenWithOffset(extractContainerPath)
+	// Open the image with content-based format detection
+	container, closer, err := apfs.OpenImage(extractContainerPath, nil)
 	if err != nil {
-		return fmt.Errorf("unable to open file: %w", err)
-	}
-	defer closer.Close()
-
-	if extractVerbose {
-		if _, isDMG := reader.(*disk.DMGReader); isDMG {
-			fmt.Println("DMG detected, using on-the-fly decompression")
-		} else {
-			fmt.Println("Raw APFS container detected")
-		}
-	}
-
-	// Create IO handle
-	ioHandle, err := apfs.NewIOHandle()
-	if err != nil {
-		return fmt.Errorf("unable to create IO handle: %w", err)
-	}
-
-	// Create container
-	container, err := apfs.NewContainer(ioHandle)
-	if err != nil {
-		return fmt.Errorf("unable to create container: %w", err)
-	}
-	defer container.Free()
-
-	// Open container for reading at the determined offset
-	if err := container.OpenRead(reader, offset); err != nil {
 		return fmt.Errorf("unable to open container: %w", err)
 	}
+	defer closer.Close()
+	defer container.Free()
 
 	// Get volume
 	volume, err := container.GetVolume(extractVolumeIndex)
@@ -135,7 +112,6 @@ func runExtract(cmd *cobra.Command, args []string) error {
 		Pattern:         pattern,
 		PreserveMeta:    extractPreserveMeta,
 		Verbose:         extractVerbose,
-		FileHandle:      reader,
 		VerifyChecksum:  extractVerifyChecksum,
 		sourceChecksums: make(map[string]string),
 	}
@@ -145,26 +121,23 @@ func runExtract(cmd *cobra.Command, args []string) error {
 		extractor.progressBar = progressbar.NewOptions(-1,
 			progressbar.OptionSetDescription("Extracting"),
 			progressbar.OptionShowCount(),
-			progressbar.OptionShowBytes(true),
 			progressbar.OptionSetWidth(40),
 			progressbar.OptionThrottle(100*time.Millisecond),
 			progressbar.OptionSpinnerType(14),
 			progressbar.OptionShowElapsedTimeOnFinish(),
+			progressbar.OptionSetWriter(os.Stderr),
 		)
 	}
 
-	// Extract based on mode. The root path means "the whole volume": route it
-	// to ExtractAll so contents land directly in the destination directory.
+	// Extract based on mode. The root path means "the whole volume": contents
+	// land directly in the destination directory.
 	if extractPath != "" && extractPath != "/" {
-		// Extract specific path
-		if err := extractor.ExtractByPath(extractPath, extractRecursive); err != nil {
-			return fmt.Errorf("extraction failed: %w", err)
-		}
+		err = extractor.ExtractByPath(extractPath, extractRecursive)
 	} else {
-		// Extract entire volume
-		if err := extractor.ExtractAll(); err != nil {
-			return fmt.Errorf("extraction failed: %w", err)
-		}
+		err = extractor.ExtractAll()
+	}
+	if err != nil {
+		return fmt.Errorf("extraction failed: %w", err)
 	}
 
 	// Finish progress bar
@@ -197,7 +170,6 @@ type Extractor struct {
 	Pattern         *regexp.Regexp
 	PreserveMeta    bool
 	Verbose         bool
-	FileHandle      io.ReaderAt
 	VerifyChecksum  bool
 	filesExtracted  int
 	entriesSkipped  int
@@ -214,280 +186,174 @@ func (e *Extractor) warnSkip(format string, args ...any) {
 	fmt.Fprintf(os.Stderr, "Warning: "+format+"\n", args...)
 }
 
-// File type constants (from POSIX)
-const (
-	S_IFDIR = 0x4000 // Directory
-	S_IFREG = 0x8000 // Regular file
-	S_IFLNK = 0xA000 // Symbolic link
-	S_IFMT  = 0xF000 // File type mask
-)
-
-// isDirectory checks if a file entry is a directory
-func isDirectory(entry *apfs.FileEntry) (bool, error) {
-	fileMode, err := entry.GetFileMode()
-	if err != nil {
-		return false, err
-	}
-	return (fileMode & S_IFMT) == S_IFDIR, nil
-}
-
-// isSymbolicLink checks if a file entry is a symbolic link
-func isSymbolicLink(entry *apfs.FileEntry) (bool, error) {
-	fileMode, err := entry.GetFileMode()
-	if err != nil {
-		return false, err
-	}
-	return (fileMode & S_IFMT) == S_IFLNK, nil
-}
-
-// ExtractAll extracts the entire volume recursively
+// ExtractAll extracts the entire volume into the destination directory.
 func (e *Extractor) ExtractAll() error {
-	if e.Verbose {
-		fmt.Println("Extracting entire volume...")
+	return e.extractTree(".", "")
+}
+
+// ExtractByPath extracts a specific file or directory by absolute volume path.
+func (e *Extractor) ExtractByPath(volumePath string, recursive bool) error {
+	name := fsNameFromVolumePath(volumePath)
+
+	info, err := e.Volume.Stat(name)
+	if err != nil {
+		return fmt.Errorf("unable to find path %s: %w", volumePath, err)
 	}
 
-	// Get root directory (inode 2)
-	rootEntry, err := e.Volume.GetFileEntryByIdentifier(2)
-	if err != nil {
-		fmt.Printf("ERROR: unable to get root directory: %v\n", err)
-		return fmt.Errorf("unable to get root directory: %w", err)
+	base := path.Base(name)
+
+	if info.IsDir() {
+		if !recursive {
+			return fmt.Errorf("%s is a directory; use --recursive to extract its contents", volumePath)
+		}
+		return e.extractTree(name, base)
 	}
 
-	err = e.extractRecursive(rootEntry, "", e.Destination)
+	if info.Mode()&fs.ModeSymlink != 0 {
+		return e.extractSymlink(name, filepath.Join(e.Destination, base))
+	}
+
+	return e.extractFile(name, filepath.Join(e.Destination, base), info)
+}
+
+// extractTree walks the subtree rooted at root (an fs.FS name) and recreates
+// it under Destination/destBase. Individual failures are reported and counted
+// but do not abort the walk.
+func (e *Extractor) extractTree(root, destBase string) error {
+	type pendingDir struct {
+		destPath string
+		info     fs.FileInfo
+	}
+	var dirs []pendingDir
+
+	err := fs.WalkDir(e.Volume, root, func(name string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			if name == root {
+				return walkErr
+			}
+			e.warnSkip("unable to walk %s: %v", name, walkErr)
+			return nil
+		}
+
+		// Destination path: name relative to the walk root, under destBase
+		rel := strings.TrimPrefix(strings.TrimPrefix(name, root), "/")
+		if root == "." {
+			rel = name
+			if rel == "." {
+				rel = ""
+			}
+		}
+		destPath := filepath.Join(e.Destination, destBase, rel)
+
+		switch {
+		case entry.IsDir():
+			if err := os.MkdirAll(destPath, 0755); err != nil {
+				e.warnSkip("unable to create directory %s: %v", destPath, err)
+				return fs.SkipDir
+			}
+			if e.Verbose {
+				fmt.Printf("Created directory: %s\n", destPath)
+			}
+			if e.PreserveMeta {
+				if info, err := entry.Info(); err == nil {
+					// Applied after the walk so extracting children does not
+					// bump the directory's restored timestamps
+					dirs = append(dirs, pendingDir{destPath: destPath, info: info})
+				}
+			}
+
+		case entry.Type()&fs.ModeSymlink != 0:
+			if err := e.extractSymlink(name, destPath); err != nil {
+				e.warnSkip("unable to extract symlink %s: %v", name, err)
+			}
+
+		case entry.Type().IsRegular():
+			if e.Pattern != nil && !e.Pattern.MatchString(rel) {
+				return nil
+			}
+			info, err := entry.Info()
+			if err != nil {
+				e.warnSkip("unable to stat %s: %v", name, err)
+				return nil
+			}
+			if err := e.extractFile(name, destPath, info); err != nil {
+				e.warnSkip("unable to extract %s: %v", name, err)
+			}
+
+		default:
+			// Sockets, pipes, devices: nothing meaningful to extract
+			if e.Verbose {
+				fmt.Printf("Skipping special file: %s (%s)\n", name, entry.Type())
+			}
+		}
+
+		return nil
+	})
 	if err != nil {
-		fmt.Printf("ERROR: extractRecursive failed: %v\n", err)
 		return err
 	}
-	return nil
-}
 
-// ExtractByPath extracts a specific file or directory by path
-func (e *Extractor) ExtractByPath(path string, recursive bool) error {
-	if e.Verbose {
-		fmt.Printf("Extracting path: %s\n", path)
-	}
-
-	// Get file entry by path
-	entry, err := e.Volume.GetFileEntryByPath(path)
-	if err != nil {
-		return fmt.Errorf("unable to find path %s: %w", path, err)
-	}
-
-	// Get filename
-	name := filepath.Base(path)
-	if path == "/" {
-		name = "root"
-	}
-
-	destPath := filepath.Join(e.Destination, name)
-
-	// Extract based on type
-	isDir, err := isDirectory(entry)
-	if err != nil {
-		return fmt.Errorf("unable to determine file type: %w", err)
-	}
-
-	if isDir {
-		if !recursive {
-			return fmt.Errorf("%s is a directory; use --recursive to extract its contents", path)
-		}
-		return e.extractRecursive(entry, name, e.Destination)
-	}
-
-	// Extract single file
-	return e.extractFile(entry, destPath)
-}
-
-// extractRecursive recursively extracts a directory and its contents
-func (e *Extractor) extractRecursive(entry *apfs.FileEntry, relativePath string, parentDest string) error {
-	// Build destination path
-	destPath := filepath.Join(parentDest, relativePath)
-
-	if e.Verbose {
-	}
-
-	// Check pattern match
-	if e.Pattern != nil && relativePath != "" {
-		isDir, _ := isDirectory(entry)
-		if !e.Pattern.MatchString(relativePath) && !isDir {
-			return nil // Skip non-matching files
-		}
-	}
-
-	isDir, err := isDirectory(entry)
-	if err != nil {
-		fmt.Printf("ERROR: unable to determine file type: %v\n", err)
-		return fmt.Errorf("unable to determine file type: %w", err)
-	}
-
-	if isDir {
-		// Create directory
-		if err := os.MkdirAll(destPath, 0755); err != nil {
-			return fmt.Errorf("unable to create directory %s: %w", destPath, err)
-		}
-
-		if e.Verbose {
-			fmt.Printf("Created directory: %s\n", destPath)
-		}
-
-		// Get directory entries
-		identifier, err := entry.GetIdentifier()
-		if err != nil {
-			fmt.Printf("ERROR: unable to get identifier: %v\n", err)
-			return fmt.Errorf("unable to get identifier: %w", err)
-		}
-
-		if e.Verbose {
-		}
-
-		dirRecords, err := e.Volume.FileSystemBTree.GetDirectoryEntries(e.Volume.FileIOHandle, identifier, 0)
-		if err != nil {
-			fmt.Printf("ERROR: unable to read directory contents: %v\n", err)
-			return fmt.Errorf("unable to read directory contents: %w", err)
-		}
-
-		if e.Verbose {
-		}
-
-		// Extract each child
-		for _, record := range dirRecords {
-			childName := string(record.Name)
-			childRelPath := filepath.Join(relativePath, childName)
-
-			childEntry, err := e.Volume.GetFileEntryByIdentifier(record.Identifier)
-			if err != nil {
-				e.warnSkip("unable to get inode %d for %s: %v", record.Identifier, childRelPath, err)
-				continue
-			}
-
-			// Recursively extract child
-			if err := e.extractRecursive(childEntry, childRelPath, parentDest); err != nil {
-				e.warnSkip("failed to extract %s: %v", childRelPath, err)
-				// Continue with other files even if one fails
-				continue
-			}
-		}
-
-		// Preserve directory metadata
-		if e.PreserveMeta {
-			e.preserveMetadata(entry, destPath)
-		}
-
-	} else {
-		// Check if it's a symlink
-		isSymlink, err := isSymbolicLink(entry)
-		if err != nil {
-			return fmt.Errorf("unable to determine if symlink: %w", err)
-		}
-
-		if isSymlink {
-			// Extract symlink
-			target, err := entry.GetSymbolicLinkTarget()
-			if err != nil {
-				e.warnSkip("unable to read symlink target for %s: %v", destPath, err)
-				return nil // Skip this symlink but continue extraction
-			}
-
-			if err := os.Symlink(target, destPath); err != nil {
-				e.warnSkip("unable to create symlink %s -> %s: %v", destPath, target, err)
-				return nil // Skip this symlink but continue extraction
-			}
-
-			if e.Verbose {
-				fmt.Printf("Created symlink: %s -> %s\n", destPath, target)
-			}
-			e.filesExtracted++
-		} else {
-			// Extract regular file
-			if err := e.extractFile(entry, destPath); err != nil {
-				e.warnSkip("file extraction failed for %s: %v", destPath, err)
-				return nil // Skip this file but continue extraction
-			}
-		}
+	// Restore directory metadata deepest-first
+	for i := len(dirs) - 1; i >= 0; i-- {
+		e.applyMetadata(dirs[i].destPath, dirs[i].info)
 	}
 
 	return nil
 }
 
-// extractFile extracts a single file
-func (e *Extractor) extractFile(entry *apfs.FileEntry, destPath string) error {
-	// Check pattern match
-	if e.Pattern != nil {
-		if !e.Pattern.MatchString(destPath) {
-			return nil // Skip non-matching file
-		}
+// extractSymlink recreates the symlink at the fs name as destPath.
+func (e *Extractor) extractSymlink(name, destPath string) error {
+	target, err := e.Volume.Readlink(name)
+	if err != nil {
+		return fmt.Errorf("unable to read symlink target: %w", err)
 	}
 
-	// Ensure parent directory exists
+	if err := os.Symlink(target, destPath); err != nil {
+		return err
+	}
+
+	if e.Verbose {
+		fmt.Printf("Created symlink: %s -> %s\n", destPath, target)
+	} else if e.progressBar != nil {
+		e.progressBar.Add(1)
+	}
+	e.filesExtracted++
+
+	return nil
+}
+
+// extractFile copies the regular file at the fs name to destPath.
+func (e *Extractor) extractFile(name, destPath string, info fs.FileInfo) error {
+	source, err := e.Volume.Open(name)
+	if err != nil {
+		return err
+	}
+	defer source.Close()
+
 	if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
 		return fmt.Errorf("unable to create parent directory: %w", err)
 	}
 
-	// Create output file
 	outFile, err := os.Create(destPath)
 	if err != nil {
-		return fmt.Errorf("unable to create file %s: %w", destPath, err)
+		return fmt.Errorf("unable to create file: %w", err)
 	}
 	defer outFile.Close()
 
-	// Get file size
-	size, err := entry.GetSize()
-	if err != nil {
-		return fmt.Errorf("unable to get file size: %w", err)
-	}
-
-	// Read and write file data
-	var bytesWritten uint64
-	buffer := make([]byte, 1024*1024) // 1MB buffer
-
-	// Initialize checksum hasher if verification is enabled
-	var sourceHasher hash.Hash
+	var reader io.Reader = source
+	var sourceHasher = sha256.New()
 	if e.VerifyChecksum {
-		sourceHasher = sha256.New()
+		reader = io.TeeReader(source, sourceHasher)
 	}
 
-	for bytesWritten < size {
-		// Calculate read size
-		readSize := uint64(len(buffer))
-		if bytesWritten+readSize > size {
-			readSize = size - bytesWritten
-		}
-
-		// Read from APFS at current offset
-		n, err := entry.ReadAt(buffer[:readSize], int64(bytesWritten))
-		if err != nil && err != io.EOF {
-			// Check for specific error about missing file extents or compressed data
-			if strings.Contains(err.Error(), "no file extents") ||
-				strings.Contains(err.Error(), "unable to determine data stream") {
-				e.warnSkip("unable to read data for %s (may be sparse or special file): %v", destPath, err)
-				// Close and remove the partial file
-				outFile.Close()
-				os.Remove(destPath)
-				return nil // Skip this file but continue extraction
-			}
-			fmt.Printf("ERROR extractFile: Read failed: %v\n", err)
-			return fmt.Errorf("unable to read file data: %w", err)
-		}
-
-		if n == 0 {
-			break
-		}
-
-		// Update source checksum if verification enabled
-		if sourceHasher != nil {
-			sourceHasher.Write(buffer[:n])
-		}
-
-		// Write to output file
-		if _, err := outFile.Write(buffer[:n]); err != nil {
-			return fmt.Errorf("unable to write file data: %w", err)
-		}
-
-		bytesWritten += uint64(n)
+	written, err := io.Copy(outFile, reader)
+	if err != nil {
+		outFile.Close()
+		os.Remove(destPath)
+		return fmt.Errorf("unable to copy file data: %w", err)
 	}
 
-	// Store source checksum if verification enabled
-	if sourceHasher != nil {
+	if e.VerifyChecksum {
 		relPath, err := filepath.Rel(e.Destination, destPath)
 		if err == nil {
 			e.sourceChecksums[relPath] = hex.EncodeToString(sourceHasher.Sum(nil))
@@ -495,59 +361,46 @@ func (e *Extractor) extractFile(entry *apfs.FileEntry, destPath string) error {
 	}
 
 	e.filesExtracted++
-	e.bytesExtracted += bytesWritten
+	e.bytesExtracted += uint64(written)
 
-	// Update progress
 	if e.Verbose {
-		fmt.Printf("  [%d] %s (%s)\n", e.filesExtracted, filepath.Base(destPath), formatBytes(bytesWritten))
+		fmt.Printf("  [%d] %s (%s)\n", e.filesExtracted, filepath.Base(destPath), formatBytes(uint64(written)))
 	} else if e.progressBar != nil {
 		e.progressBar.Add(1)
 	}
 
-	// Preserve metadata
 	if e.PreserveMeta {
-		e.preserveMetadata(entry, destPath)
+		e.applyMetadata(destPath, info)
 	}
 
 	return nil
 }
 
-// preserveMetadata preserves file metadata (timestamps, permissions)
-func (e *Extractor) preserveMetadata(entry *apfs.FileEntry, destPath string) {
-	// Set permissions
-	fileMode, err := entry.GetFileMode()
-	if err == nil {
-		if err := os.Chmod(destPath, os.FileMode(fileMode)); err != nil {
-			if e.Verbose {
-				fmt.Printf("Warning: unable to set permissions on %s: %v\n", destPath, err)
-			}
-		}
-	} else if e.Verbose {
-		fmt.Printf("Warning: unable to get file mode for %s: %v\n", destPath, err)
+// applyMetadata restores permissions and timestamps from the volume entry.
+func (e *Extractor) applyMetadata(destPath string, info fs.FileInfo) {
+	if err := os.Chmod(destPath, info.Mode().Perm()); err != nil && e.Verbose {
+		fmt.Printf("Warning: unable to set permissions on %s: %v\n", destPath, err)
 	}
 
-	// Set timestamps
-	modTime, err := entry.GetModificationTime()
-	if err != nil {
-		if e.Verbose {
-			fmt.Printf("Warning: unable to get modification time for %s: %v\n", destPath, err)
-		}
-		return
+	modTime := info.ModTime()
+	accessTime := modTime
+	if inode, ok := info.Sys().(*apfs.Inode); ok && inode.AccessTime != 0 {
+		accessTime = time.Unix(0, int64(inode.AccessTime))
 	}
 
-	accessTime, err := entry.GetAccessTime()
-	if err != nil {
-		if e.Verbose {
-			fmt.Printf("Warning: unable to get access time for %s: %v\n", destPath, err)
-		}
-		return
+	if err := os.Chtimes(destPath, accessTime, modTime); err != nil && e.Verbose {
+		fmt.Printf("Warning: unable to set timestamps on %s: %v\n", destPath, err)
 	}
+}
 
-	if err := os.Chtimes(destPath, time.Unix(0, accessTime), time.Unix(0, modTime)); err != nil {
-		if e.Verbose {
-			fmt.Printf("Warning: unable to set timestamps on %s: %v\n", destPath, err)
-		}
+// fsNameFromVolumePath converts an absolute volume path ("/a/b") to an fs.FS
+// name ("a/b", or "." for the root).
+func fsNameFromVolumePath(volumePath string) string {
+	name := strings.Trim(path.Clean("/"+volumePath), "/")
+	if name == "" {
+		return "."
 	}
+	return name
 }
 
 // GetStats returns extraction statistics
@@ -564,9 +417,9 @@ func (e *Extractor) VerifyExtractedFiles() error {
 
 	headerText := fmt.Sprintf("Checksum Verification: %d files", len(e.sourceChecksums))
 	boxWidth := len(headerText)
-	fmt.Printf("╭─%s─╮\n", repeatString("─", boxWidth))
+	fmt.Printf("╭─%s─╮\n", strings.Repeat("─", boxWidth))
 	fmt.Printf("│ %-*s │\n", boxWidth, headerText)
-	fmt.Printf("╰─%s─╯\n\n", repeatString("─", boxWidth))
+	fmt.Printf("╰─%s─╯\n\n", strings.Repeat("─", boxWidth))
 
 	verified := 0
 	mismatches := 0
@@ -574,10 +427,10 @@ func (e *Extractor) VerifyExtractedFiles() error {
 
 	// Sort file paths for consistent output
 	var sortedPaths []string
-	for path := range e.sourceChecksums {
-		sortedPaths = append(sortedPaths, path)
+	for relPath := range e.sourceChecksums {
+		sortedPaths = append(sortedPaths, relPath)
 	}
-	sortStrings(sortedPaths)
+	sort.Strings(sortedPaths)
 
 	for _, relPath := range sortedPaths {
 		sourceChecksum := e.sourceChecksums[relPath]
@@ -640,35 +493,6 @@ func (e *Extractor) VerifyExtractedFiles() error {
 	}
 
 	return fmt.Errorf("verification failed: %d mismatches, %d missing", mismatches, missing)
-}
-
-// repeatString repeats a string n times
-func repeatString(s string, n int) string {
-	result := ""
-	for i := 0; i < n; i++ {
-		result += s
-	}
-	return result
-}
-
-// sortStrings sorts a slice of strings in place
-func sortStrings(s []string) {
-	// Simple bubble sort for small lists
-	for i := 0; i < len(s); i++ {
-		for j := i + 1; j < len(s); j++ {
-			if s[i] > s[j] {
-				s[i], s[j] = s[j], s[i]
-			}
-		}
-	}
-}
-
-// truncateHash returns first 16 chars of hash for display
-func truncateHash(hash string) string {
-	if len(hash) > 16 {
-		return hash[:16] + "..."
-	}
-	return hash
 }
 
 // computeFileChecksum computes SHA-256 checksum of a file
