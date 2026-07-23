@@ -5,13 +5,13 @@ import "fmt"
 
 // Exit codes. Stable interface for scripts and pipelines.
 const (
-	ExitOK           = 0 // success
-	ExitError        = 1 // generic runtime error
-	ExitUsage        = 2 // bad flags or arguments
-	ExitBadImage     = 3 // image not found or not a recognizable APFS image
-	ExitAuth         = 4 // authentication required or failed
-	ExitUnsupported  = 5 // feature not supported on this platform
-	ExitPartial      = 6 // operation completed partially (e.g. some files skipped)
+	ExitOK          = 0 // success
+	ExitError       = 1 // generic runtime error
+	ExitUsage       = 2 // bad flags or arguments
+	ExitBadImage    = 3 // image not found or not a recognizable APFS image
+	ExitAuth        = 4 // authentication required or failed
+	ExitUnsupported = 5 // feature not supported on this platform
+	ExitPartial     = 6 // operation completed partially (e.g. some files skipped)
 )
 
 // codedError carries an exit code with an error.

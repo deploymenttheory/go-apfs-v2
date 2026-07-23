@@ -43,7 +43,11 @@ jobs:
           go-version-file: go.mod
       - name: Vet
         run: go vet ./...
-      - name: Test
+      - name: Unit tests
         env:
           CGO_ENABLED: "0"
-        run: go test ./...
+        run: go test ./pkg/...
+      - name: CLI acceptance tests
+        env:
+          CGO_ENABLED: "0"
+        run: go test -v ./internal/cli/

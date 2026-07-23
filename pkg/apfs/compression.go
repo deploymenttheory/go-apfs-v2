@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/blacktop/ipsw/pkg/lzfse"
+	"github.com/go-compressions/lzfse"
 	"github.com/deploymenttheory/go-apfs-v2/internal/common"
 )
 
@@ -109,10 +109,9 @@ func decompressLZVN(compressedData []byte, uncompressedData []byte, uncompressed
 		return nil
 	}
 
-	// Data is compressed, decompress using LZVN
-	decoder := lzfse.NewDecoder(compressedData)
-
-	decompressed, err := decoder.DecodeBuffer()
+	// Data is compressed, decompress using LZVN (decmpfs stores raw LZVN
+	// streams without an lzfse container header)
+	decompressed, err := lzfse.DecompressLZVN(compressedData, *uncompressedDataSize)
 	if err != nil {
 		return fmt.Errorf("unable to decompress LZVN data: %w", err)
 	}
@@ -129,10 +128,7 @@ func decompressLZVN(compressedData []byte, uncompressedData []byte, uncompressed
 
 // decompressLZFSE decompresses LZFSE compressed data
 func decompressLZFSE(compressedData []byte, uncompressedData []byte, uncompressedDataSize *int) error {
-	// Create LZFSE decoder
-	decoder := lzfse.NewDecoder(compressedData)
-
-	decompressed, err := decoder.DecodeBuffer()
+	decompressed, err := lzfse.Decompress(compressedData)
 	if err != nil {
 		return fmt.Errorf("unable to decompress LZFSE data: %w", err)
 	}

@@ -13,7 +13,7 @@ import (
 	"os"
 	"sync"
 
-	"github.com/blacktop/ipsw/pkg/lzfse"
+	"github.com/go-compressions/lzfse"
 	"howett.net/plist"
 )
 
@@ -596,8 +596,7 @@ func (r *DMGReader) decompressChunk(chunk *DMGChunk) ([]byte, error) {
 			return nil, err
 		}
 
-		decoder := lzfse.NewDecoder(compressed)
-		decompressed, err := decoder.DecodeBuffer()
+		decompressed, err := lzfse.Decompress(compressed)
 		if err != nil {
 			return nil, fmt.Errorf("LZFSE decompression failed: %w", err)
 		}

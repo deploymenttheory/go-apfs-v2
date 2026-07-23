@@ -1,0 +1,57 @@
+{
+ "files": {
+  "compressed.txt": {
+   "mode": "0o644",
+   "sha256": "23f90f8b2c3a4b5f3b5e156339994afd5c2718b378aca6f0e17111f80a70d4ec",
+   "size": 23893,
+   "type": "file"
+  },
+  "dir1/nested/deep.txt": {
+   "mode": "0o644",
+   "sha256": "30cf6f2de471343739bcc1dde393c0c0771814ac3ad798f68c8a74495174521a",
+   "size": 10,
+   "type": "file"
+  },
+  "empty.txt": {
+   "mode": "0o644",
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "size": 0,
+   "type": "file"
+  },
+  "hardlink-to-hello": {
+   "mode": "0o644",
+   "sha256": "25364e43b2cfa0c8cafbbfd4017149c3214727f6d9a57cfc8fafc8a56af0815f",
+   "size": 16,
+   "type": "file"
+  },
+  "hello.txt": {
+   "mode": "0o644",
+   "sha256": "25364e43b2cfa0c8cafbbfd4017149c3214727f6d9a57cfc8fafc8a56af0815f",
+   "size": 16,
+   "type": "file"
+  },
+  "link-to-hello": {
+   "target": "hello.txt",
+   "type": "symlink"
+  },
+  "random.bin": {
+   "mode": "0o644",
+   "sha256": "33b4eff683f5c8b8d591e36e38684813f8f1c7bee2d0d000ef07d43447d0a206",
+   "size": 1572864,
+   "type": "file"
+  },
+  "script.sh": {
+   "mode": "0o755",
+   "sha256": "b4d644d4279594903f1a9911956432d9473041f2984fc6014c14d7402c7d126c",
+   "size": 18,
+   "type": "file"
+  },
+  "ünïcødé/файл.txt": {
+   "mode": "0o644",
+   "sha256": "cc4c4f3164ed1354d2a85f7531e127626a39a27857b85efa368b6f237c6bb9c5",
+   "size": 21,
+   "type": "file"
+  }
+ },
+ "volumeName": "ACCEPT"
+}

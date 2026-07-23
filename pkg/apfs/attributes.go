@@ -66,6 +66,11 @@ func (av *AttributeValues) GetDataStream(
 			return nil, fmt.Errorf("unable to create value data stream from file extents: %w", err)
 		}
 
+		// The extent-backed reader reads from the container image
+		if dbReader, ok := dataStream.readerAt.(*dataBlockReader); ok {
+			dbReader.SetFileHandle(fileHandle)
+		}
+
 		return dataStream, nil
 	}
 
