@@ -118,7 +118,7 @@ func listByPath(handle *InfoHandle, path string, longFormat, recursive bool) err
 
 	// For root directory, list its contents
 	if path == "/" {
-		return listRootDirectory(handle, longFormat)
+		return listRootDirectory(handle, longFormat, recursive)
 	}
 
 	// Get the volume
@@ -145,7 +145,7 @@ func listByPath(handle *InfoHandle, path string, longFormat, recursive bool) err
 	fileType := fileEntry.Inode.FileMode & 0xf000
 	if fileType == 0x4000 {
 		// It's a directory - list its contents
-		return listDirectoryContents(volume, fileEntry.Inode.Identifier, longFormat)
+		return listDirectoryContents(volume, fileEntry.Inode.Identifier, longFormat, recursive, "")
 	}
 
 	// It's a file or symlink - show its info
@@ -153,7 +153,7 @@ func listByPath(handle *InfoHandle, path string, longFormat, recursive bool) err
 }
 
 // listRootDirectory lists the root directory of the volume
-func listRootDirectory(handle *InfoHandle, longFormat bool) error {
+func listRootDirectory(handle *InfoHandle, longFormat, recursive bool) error {
 	// Get the volume
 	var volume *apfs.Volume
 	var err error
@@ -172,11 +172,13 @@ func listRootDirectory(handle *InfoHandle, longFormat bool) error {
 	rootFSOID := uint64(2)
 
 	// List contents of the root directory
-	return listDirectoryContents(volume, rootFSOID, longFormat)
+	return listDirectoryContents(volume, rootFSOID, longFormat, recursive, "")
 }
 
-// listDirectoryContents lists the contents of a directory by its FSOID
-func listDirectoryContents(volume *apfs.Volume, parentFSOID uint64, longFormat bool) error {
+// listDirectoryContents lists the contents of a directory by its FSOID.
+// When recursive is set, entries are printed as paths relative to the
+// starting directory (find-style) and subdirectories are descended into.
+func listDirectoryContents(volume *apfs.Volume, parentFSOID uint64, longFormat, recursive bool, prefix string) error {
 	// Get the directory's file entry to ensure it exists and is a directory
 	dirEntry, err := volume.GetFileEntryByIdentifier(parentFSOID)
 	if err != nil {
@@ -227,10 +229,14 @@ func listDirectoryContents(volume *apfs.Volume, parentFSOID uint64, longFormat b
 
 		inode := childEntry.Inode
 		name := string(dirRecord.Name)
+		displayName := name
+		if recursive && prefix != "" {
+			displayName = prefix + "/" + name
+		}
 
 		// Get color based on file type
 		color := getColorForFileMode(inode.FileMode, listColor)
-		coloredName := colorize(name, color, listColor)
+		coloredName := colorize(displayName, color, listColor)
 
 		if longFormat {
 			// Print in ls-style format
@@ -250,6 +256,17 @@ func listDirectoryContents(volume *apfs.Volume, parentFSOID uint64, longFormat b
 		} else {
 			// Simple format: just the name
 			fmt.Println(coloredName)
+		}
+
+		// Descend into subdirectories when listing recursively
+		if recursive && (inode.FileMode&0xf000) == 0x4000 {
+			childPrefix := name
+			if prefix != "" {
+				childPrefix = prefix + "/" + name
+			}
+			if err := listDirectoryContents(volume, inode.Identifier, longFormat, true, childPrefix); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: unable to list %s: %v\n", childPrefix, err)
+			}
 		}
 	}
 
