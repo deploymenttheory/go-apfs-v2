@@ -13,3 +13,10 @@
 # AI instructions
 .claude
 .cursor
+
+# Build artifacts
+/apfs
+/apfs.exe
+dist/
+coverage.out
+profiler.csv
