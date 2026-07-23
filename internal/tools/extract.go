@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/apfs"
-	"github.com/deploymenttheory/go-apfs-v2/internal/disk"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/disk"
 	"github.com/schollz/progressbar/v3"
 	"github.com/spf13/cobra"
 )
@@ -83,7 +83,7 @@ func runExtract(cmd *cobra.Command, args []string) error {
 	defer closer.Close()
 
 	if extractVerbose {
-		if strings.HasSuffix(strings.ToLower(extractContainerPath), ".dmg") {
+		if _, isDMG := reader.(*disk.DMGReader); isDMG {
 			fmt.Println("DMG detected, using on-the-fly decompression")
 		} else {
 			fmt.Println("Raw APFS container detected")

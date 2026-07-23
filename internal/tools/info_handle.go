@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/apfs"
-	"github.com/deploymenttheory/go-apfs-v2/internal/disk"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/disk"
 )
 
 // formatUUID formats a 16-byte UUID as a string in standard format

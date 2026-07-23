@@ -9,7 +9,7 @@ import (
 	"strconv"
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/apfs"
-	"github.com/deploymenttheory/go-apfs-v2/internal/disk"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/disk"
 )
 
 // MountHandle manages the state for mounting an APFS container

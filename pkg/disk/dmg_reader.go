@@ -175,6 +175,11 @@ func OpenDMG(filename string) (*DMGReader, error) {
 	return reader, nil
 }
 
+// Size returns the size of the APFS partition in bytes
+func (r *DMGReader) Size() int64 {
+	return int64(r.apfsSize)
+}
+
 // Close closes the DMG reader
 func (r *DMGReader) Close() error {
 	if r.file != nil {
