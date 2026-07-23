@@ -332,22 +332,36 @@ func (bt *FileSystemBTree) GetAllRecordsForOID(
 		return records, nil
 	}
 
-	// PHASE 2: Walk - collect remaining records from other leaves (rare)
+	// PHASE 2: Walk - collect remaining records from subsequent leaves (rare)
+	if treeHeight == 1 {
+		// The root is the only leaf; there is no next leaf to walk to
+		return records, nil
+	}
+
 	for {
-		// Re-descend from root using descPath
+		// The current leaf is exhausted: advance to the next leaf by bumping
+		// the lowest interior level and resetting everything below it
+		descPath[leafLevel-1]++
+		descPath[leafLevel] = 0
+
+		// Re-descend from root using descPath, bubbling exhaustion upward
 		node = rootNode
-		for level := 0; level < treeHeight-1; level++ {
+		level := 0
+		for level < leafLevel {
 			if descPath[level] >= len(node.Entries) {
-				// Exhausted this level, move to next node at parent level
 				if level == 0 {
-					// Root level exhausted, done
+					// Root exhausted - whole tree walked
 					return records, nil
 				}
+				// This interior node is exhausted: bump its parent, reset
+				// this level and below, and restart the descent from root
 				descPath[level-1]++
 				for j := level; j < treeHeight; j++ {
 					descPath[j] = 0
 				}
-				break
+				node = rootNode
+				level = 0
+				continue
 			}
 
 			childOID, err := bt.GetSubNodeBlockNumberFromEntry(fileHandle, node.Entries[descPath[level]])
@@ -358,28 +372,30 @@ func (bt *FileSystemBTree) GetAllRecordsForOID(
 			if err != nil {
 				return nil, err
 			}
+			level++
+		}
+
+		if !node.IsLeafNode() {
+			return nil, fmt.Errorf("B-tree walk reached level %d without finding a leaf node", level)
 		}
 
 		// At leaf node - collect matching records
-		if node.IsLeafNode() {
-			leafLevel := treeHeight - 1
-			for idx := descPath[leafLevel]; idx < len(node.Entries); idx++ {
-				entry := node.Entries[idx]
-				entryID, err := ExtractIdentifierFromKey(entry.KeyData)
-				if err != nil {
-					continue
-				}
-
-				if entryID != objectID {
-					// No more matching records
-					return records, nil
-				}
-
-				records = append(records, entry)
-				descPath[leafLevel]++
+		for idx := descPath[leafLevel]; idx < len(node.Entries); idx++ {
+			entry := node.Entries[idx]
+			entryID, err := ExtractIdentifierFromKey(entry.KeyData)
+			if err != nil {
+				continue
 			}
-			// Exhausted this leaf, continue to next
+
+			if entryID != objectID {
+				// No more matching records
+				return records, nil
+			}
+
+			records = append(records, entry)
+			descPath[leafLevel]++
 		}
+		// Exhausted this leaf too, continue to the next one
 	}
 }
 
@@ -590,84 +606,36 @@ func (bt *FileSystemBTree) GetDirectoryEntries(
 		return nil, fmt.Errorf("invalid file system B-tree")
 	}
 
-	// Read root node
-	node, err := bt.GetRootNode(fileHandle)
+	// Directory records for one parent can span many leaf nodes; use the
+	// full multi-leaf traversal and filter for directory records
+	allRecords, err := bt.GetAllRecordsForOID(fileHandle, parentIdentifier)
 	if err != nil {
-		return nil, fmt.Errorf("unable to read root node: %w", err)
+		return nil, fmt.Errorf("unable to get records for OID %d: %w", parentIdentifier, err)
 	}
 
-	// Create a search key for directory records with this parent ID
-	searchKey := make([]byte, 10)
-	fsid := CreateFileSystemKey(parentIdentifier, FileSystemDataTypeDirectoryRecord)
-	binary.LittleEndian.PutUint64(searchKey[0:8], fsid)
-	binary.LittleEndian.PutUint16(searchKey[8:10], 0) // Minimum name size
-
-	// Navigate to leaf node
-	leafNode, err := bt.findLeafNodeForKey(fileHandle, node, searchKey)
-	if err != nil {
-		return nil, fmt.Errorf("unable to find leaf node: %w", err)
-	}
-
-	// Collect all directory entries for this parent identifier
-	// Note: Entries may span multiple leaf nodes, so we need to check
-	// the current leaf and potentially traverse to next leaf nodes
 	entries := make([]*DirectoryRecord, 0)
-	currentNode := leafNode
-	done := false
 
-	// Keep traversing leaf nodes until we've found all entries with this parent ID
-	for !done && currentNode != nil {
-		foundInThisNode := false
-
-		for _, entry := range currentNode.Entries {
-			// Check if this entry is a directory record
-			dataType, err := ExtractDataTypeFromKey(entry.KeyData)
-			if err != nil {
-				continue
-			}
-
-			if dataType != FileSystemDataTypeDirectoryRecord {
-				continue
-			}
-
-			entryParentID, err := ExtractIdentifierFromKey(entry.KeyData)
-			if err != nil {
-				continue
-			}
-
-			if entryParentID == parentIdentifier {
-				// Parse the directory record
-				dirRecord := NewDirectoryRecord()
-
-				if err := dirRecord.ReadKeyData(entry.KeyData); err != nil {
-					return nil, fmt.Errorf("unable to parse directory record key: %w", err)
-				}
-
-				if err := dirRecord.ReadValueData(entry.ValueData); err != nil {
-					return nil, fmt.Errorf("unable to parse directory record value: %w", err)
-				}
-
-				entries = append(entries, dirRecord)
-				foundInThisNode = true
-			} else if entryParentID > parentIdentifier {
-				// We've passed our parent identifier, we're done
-				done = true
-				break
-			}
+	for _, entry := range allRecords {
+		dataType, err := ExtractDataTypeFromKey(entry.KeyData)
+		if err != nil {
+			continue
 		}
 
-		// If we didn't find any entries with our parent ID in this node,
-		// and we already found some, we're done
-		if !foundInThisNode && len(entries) > 0 {
-			done = true
-			break
+		if dataType != FileSystemDataTypeDirectoryRecord {
+			continue
 		}
 
-		// Try to get the next leaf node (sibling)
-		// In APFS B-trees, we need to traverse back up and get the next sibling
-		// For now, we'll break if there are no more entries in this node
-		// TODO: Implement proper sibling traversal if needed
-		done = true
+		dirRecord := NewDirectoryRecord()
+
+		if err := dirRecord.ReadKeyData(entry.KeyData); err != nil {
+			return nil, fmt.Errorf("unable to parse directory record key: %w", err)
+		}
+
+		if err := dirRecord.ReadValueData(entry.ValueData); err != nil {
+			return nil, fmt.Errorf("unable to parse directory record value: %w", err)
+		}
+
+		entries = append(entries, dirRecord)
 	}
 
 	return entries, nil
@@ -683,29 +651,16 @@ func (bt *FileSystemBTree) GetAttributes(
 		return nil, fmt.Errorf("invalid file system B-tree")
 	}
 
-	// Read root node
-	node, err := bt.GetRootNode(fileHandle)
+	// Extended attributes for one file can span leaf nodes; use the full
+	// multi-leaf traversal and filter for extended attribute records
+	allRecords, err := bt.GetAllRecordsForOID(fileHandle, identifier)
 	if err != nil {
-		return nil, fmt.Errorf("unable to read root node: %w", err)
+		return nil, fmt.Errorf("unable to get records for OID %d: %w", identifier, err)
 	}
 
-	// Create a search key for extended attributes with this identifier
-	searchKey := make([]byte, 10)
-	fsid := CreateFileSystemKey(identifier, FileSystemDataTypeExtendedAttribute)
-	binary.LittleEndian.PutUint64(searchKey[0:8], fsid)
-	binary.LittleEndian.PutUint16(searchKey[8:10], 0) // Minimum name size
-
-	// Navigate to leaf node
-	leafNode, err := bt.findLeafNodeForKey(fileHandle, node, searchKey)
-	if err != nil {
-		return nil, fmt.Errorf("unable to find leaf node: %w", err)
-	}
-
-	// Collect all extended attributes for this identifier
 	attributes := make([]*AttributeValues, 0)
 
-	for _, entry := range leafNode.Entries {
-		// Check if this entry is an extended attribute
+	for _, entry := range allRecords {
 		dataType, err := ExtractDataTypeFromKey(entry.KeyData)
 		if err != nil {
 			continue
@@ -715,20 +670,6 @@ func (bt *FileSystemBTree) GetAttributes(
 			continue
 		}
 
-		entryID, err := ExtractIdentifierFromKey(entry.KeyData)
-		if err != nil {
-			continue
-		}
-
-		if entryID != identifier {
-			// If we've passed our identifier, we're done
-			if entryID > identifier {
-				break
-			}
-			continue
-		}
-
-		// Parse the extended attribute
 		attr := &AttributeValues{}
 
 		if err := attr.ReadKeyData(entry.KeyData); err != nil {
