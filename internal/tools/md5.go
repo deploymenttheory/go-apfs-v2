@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/deploymenttheory/go-apfs-v2/internal/apfs"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
 )
 
 // CalculateMD5Hash calculates the MD5 hash of a file entry's data

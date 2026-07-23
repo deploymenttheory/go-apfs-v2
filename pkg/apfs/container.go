@@ -42,6 +42,10 @@ type Container struct {
 
 	// Value to indicate if the file IO handle was opened inside the library
 	FileIOHandleOpenedInLibrary bool
+
+	// Passwords supplied via OpenOptions, applied to volumes on access
+	userPassword     string
+	recoveryPassword string
 }
 
 // NewContainer creates a new container

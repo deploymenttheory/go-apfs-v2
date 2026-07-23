@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/deploymenttheory/go-apfs-v2/internal/apfs"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
 )
 
 // BodyfileEntry represents a line in bodyfile format
