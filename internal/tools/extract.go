@@ -153,8 +153,9 @@ func runExtract(cmd *cobra.Command, args []string) error {
 		)
 	}
 
-	// Extract based on mode
-	if extractPath != "" {
+	// Extract based on mode. The root path means "the whole volume": route it
+	// to ExtractAll so contents land directly in the destination directory.
+	if extractPath != "" && extractPath != "/" {
 		// Extract specific path
 		if err := extractor.ExtractByPath(extractPath, extractRecursive); err != nil {
 			return fmt.Errorf("extraction failed: %w", err)
@@ -182,6 +183,10 @@ func runExtract(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	if extractor.entriesSkipped > 0 {
+		return fmt.Errorf("partial extraction: %d entries could not be extracted (see warnings above)", extractor.entriesSkipped)
+	}
+
 	return nil
 }
 
@@ -195,9 +200,18 @@ type Extractor struct {
 	FileHandle      io.ReaderAt
 	VerifyChecksum  bool
 	filesExtracted  int
+	entriesSkipped  int
 	bytesExtracted  uint64
 	sourceChecksums map[string]string // relativePath -> SHA256 of source data
 	progressBar     *progressbar.ProgressBar
+}
+
+// warnSkip reports an entry that could not be extracted. Warnings always go
+// to stderr so partial extractions are never silent, and the skip count makes
+// the run exit non-zero.
+func (e *Extractor) warnSkip(format string, args ...any) {
+	e.entriesSkipped++
+	fmt.Fprintf(os.Stderr, "Warning: "+format+"\n", args...)
 }
 
 // File type constants (from POSIX)
@@ -274,23 +288,14 @@ func (e *Extractor) ExtractByPath(path string, recursive bool) error {
 	}
 
 	if isDir {
-		if recursive {
-			return e.extractRecursive(entry, name, e.Destination)
-		} else {
-			// Create directory only
-			if err := os.MkdirAll(destPath, 0755); err != nil {
-				return fmt.Errorf("unable to create directory: %w", err)
-			}
-			if e.Verbose {
-				fmt.Printf("Created directory: %s\n", destPath)
-			}
+		if !recursive {
+			return fmt.Errorf("%s is a directory; use --recursive to extract its contents", path)
 		}
-	} else {
-		// Extract single file
-		return e.extractFile(entry, destPath)
+		return e.extractRecursive(entry, name, e.Destination)
 	}
 
-	return nil
+	// Extract single file
+	return e.extractFile(entry, destPath)
 }
 
 // extractRecursive recursively extracts a directory and its contents
@@ -346,25 +351,18 @@ func (e *Extractor) extractRecursive(entry *apfs.FileEntry, relativePath string,
 
 		// Extract each child
 		for _, record := range dirRecords {
-			childEntry, err := e.Volume.GetFileEntryByIdentifier(record.Identifier)
-			if err != nil {
-				if e.Verbose {
-					childName := string(record.Name)
-					childRelPath := filepath.Join(relativePath, childName)
-					fmt.Printf("Warning: unable to get inode %d for %s: %v\n", record.Identifier, childRelPath, err)
-				}
-				continue
-			}
-
-			// Get child name
 			childName := string(record.Name)
 			childRelPath := filepath.Join(relativePath, childName)
 
+			childEntry, err := e.Volume.GetFileEntryByIdentifier(record.Identifier)
+			if err != nil {
+				e.warnSkip("unable to get inode %d for %s: %v", record.Identifier, childRelPath, err)
+				continue
+			}
+
 			// Recursively extract child
 			if err := e.extractRecursive(childEntry, childRelPath, parentDest); err != nil {
-				if e.Verbose {
-					fmt.Printf("Warning: failed to extract %s: %v\n", childRelPath, err)
-				}
+				e.warnSkip("failed to extract %s: %v", childRelPath, err)
 				// Continue with other files even if one fails
 				continue
 			}
@@ -386,16 +384,12 @@ func (e *Extractor) extractRecursive(entry *apfs.FileEntry, relativePath string,
 			// Extract symlink
 			target, err := entry.GetSymbolicLinkTarget()
 			if err != nil {
-				if e.Verbose {
-					fmt.Printf("Warning: unable to read symlink target for %s: %v\n", destPath, err)
-				}
+				e.warnSkip("unable to read symlink target for %s: %v", destPath, err)
 				return nil // Skip this symlink but continue extraction
 			}
 
 			if err := os.Symlink(target, destPath); err != nil {
-				if e.Verbose {
-					fmt.Printf("Warning: unable to create symlink %s -> %s: %v\n", destPath, target, err)
-				}
+				e.warnSkip("unable to create symlink %s -> %s: %v", destPath, target, err)
 				return nil // Skip this symlink but continue extraction
 			}
 
@@ -406,9 +400,7 @@ func (e *Extractor) extractRecursive(entry *apfs.FileEntry, relativePath string,
 		} else {
 			// Extract regular file
 			if err := e.extractFile(entry, destPath); err != nil {
-				if e.Verbose {
-					fmt.Printf("Warning: file extraction failed for %s: %v\n", destPath, err)
-				}
+				e.warnSkip("file extraction failed for %s: %v", destPath, err)
 				return nil // Skip this file but continue extraction
 			}
 		}
@@ -467,9 +459,7 @@ func (e *Extractor) extractFile(entry *apfs.FileEntry, destPath string) error {
 			// Check for specific error about missing file extents or compressed data
 			if strings.Contains(err.Error(), "no file extents") ||
 				strings.Contains(err.Error(), "unable to determine data stream") {
-				if e.Verbose {
-					fmt.Printf("Warning: unable to read data for %s (may be sparse or special file): %v\n", destPath, err)
-				}
+				e.warnSkip("unable to read data for %s (may be sparse or special file): %v", destPath, err)
 				// Close and remove the partial file
 				outFile.Close()
 				os.Remove(destPath)
