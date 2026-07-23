@@ -4,6 +4,7 @@ package apfs
 import (
 	"fmt"
 	"io"
+	"math"
 )
 
 // Container represents an APFS container
@@ -139,6 +140,16 @@ func (c *Container) OpenRead(fileHandle io.ReaderAt, fileOffset int64) error {
 
 	if c.SpaceManager != nil {
 		return fmt.Errorf("invalid container - space manager already set")
+	}
+
+	// All block-number arithmetic in the container, volumes, B-trees and data
+	// streams is relative to the start of the APFS partition. When the caller
+	// hands us a handle where the container starts at a non-zero offset (e.g. a
+	// GPT-partitioned raw image), rebase the handle once here so every
+	// downstream ReadAt computes partition-relative offsets against offset 0.
+	if fileOffset != 0 {
+		fileHandle = io.NewSectionReader(fileHandle, fileOffset, math.MaxInt64-fileOffset)
+		fileOffset = 0
 	}
 
 	// Store the file handle for later use
