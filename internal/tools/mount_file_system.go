@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/deploymenttheory/go-apfs-v2/internal/apfs"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
 )
 
 // MountFileSystem represents a mounted APFS filesystem

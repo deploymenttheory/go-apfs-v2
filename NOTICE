@@ -1,0 +1,22 @@
+go-apfs-v2
+Copyright (c) 2025-2026 deploymenttheory
+
+This product includes software design and code adapted from:
+
+1. libfsapfs (https://github.com/libyal/libfsapfs)
+   Copyright (c) Joachim Metz
+   Licensed under the GNU Lesser General Public License v3.
+   The core APFS parser in pkg/apfs is a Go port of libfsapfs's design and
+   on-disk structure handling (files there carry per-file attribution
+   comments referencing the corresponding libfsapfs sources).
+
+2. go-apfs (https://github.com/blacktop/go-apfs)
+   Copyright (c) 2020-2026 blacktop
+   Licensed under the Apache License, Version 2.0.
+   The DMG/UDIF reader design (koly/blkx/mish parsing, chunk decompression,
+   LRU chunk caching), the ADC decompressor, the GPT parsing approach and
+   the multi-leaf B-tree record-walk algorithm in pkg/disk and pkg/apfs are
+   adapted from blacktop's implementation.
+
+3. The Apple File System Reference (Apple Inc.), used as the on-disk format
+   specification, including known errata identified by the community.

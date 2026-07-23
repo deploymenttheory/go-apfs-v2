@@ -5,9 +5,10 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"os"
+	"math"
 
-	"github.com/deploymenttheory/go-apfs-v2/internal/apfs"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/disk"
 	"github.com/spf13/cobra"
 )
 
@@ -44,12 +45,19 @@ func init() {
 
 // runRead executes the read command
 func runRead(cmd *cobra.Command, args []string) error {
-	// Open the container file
-	file, err := os.Open(readContainerPath)
+	// Open the container image with content-based format detection
+	reader, containerOffset, closer, err := disk.OpenWithOffset(readContainerPath)
 	if err != nil {
 		return fmt.Errorf("unable to open container: %w", err)
 	}
-	defer file.Close()
+	defer closer.Close()
+
+	// Block addresses are container-relative; rebase the reader when the
+	// container starts at a non-zero offset (e.g. GPT-partitioned raw image)
+	file := reader
+	if containerOffset != 0 {
+		file = io.NewSectionReader(reader, containerOffset, math.MaxInt64-containerOffset)
+	}
 
 	// Read block 0 to get block size
 	block0 := make([]byte, 4096) // Start with default block size

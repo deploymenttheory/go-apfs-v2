@@ -8,7 +8,8 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/deploymenttheory/go-apfs-v2/internal/apfs"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/disk"
 )
 
 // MountHandle manages the state for mounting an APFS container
@@ -21,7 +22,7 @@ type MountHandle struct {
 	ContainerIsLocked bool
 	IsLocked          bool
 	NotifyStream      io.Writer
-	inputFile         *os.File
+	inputFile         io.Closer
 }
 
 // NewMountHandle creates a new mount handle
@@ -83,30 +84,37 @@ func (mh *MountHandle) SetRecoveryPassword(password string) error {
 
 // Open opens the APFS container for mounting
 func (mh *MountHandle) Open(filename string) error {
-	// Open the file
-	file, err := os.Open(filename)
+	// Open the image with content-based format detection (DMG, GPT raw
+	// image, or bare container)
+	reader, sniffedOffset, closer, err := disk.OpenWithOffset(filename)
 	if err != nil {
 		return fmt.Errorf("unable to open file: %w", err)
 	}
-	mh.inputFile = file
+	mh.inputFile = closer
+
+	// An explicit offset always wins over the sniffed partition offset
+	offset := mh.VolumeOffset
+	if offset == 0 {
+		offset = sniffedOffset
+	}
 
 	// Create IO handle
 	ioHandle, err := apfs.NewIOHandle()
 	if err != nil {
-		file.Close()
+		closer.Close()
 		return fmt.Errorf("unable to create IO handle: %w", err)
 	}
 
 	// Create container
 	container, err := apfs.NewContainer(ioHandle)
 	if err != nil {
-		file.Close()
+		closer.Close()
 		return fmt.Errorf("unable to create container: %w", err)
 	}
 
 	// Open the container
-	if err := container.OpenRead(file, mh.VolumeOffset); err != nil {
-		file.Close()
+	if err := container.OpenRead(reader, offset); err != nil {
+		closer.Close()
 		return fmt.Errorf("unable to open container: %w", err)
 	}
 	mh.InputContainer = container

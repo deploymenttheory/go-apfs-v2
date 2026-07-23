@@ -1,3 +1,5 @@
+//go:build linux || darwin
+
 // FUSE filesystem integration for APFS mounting
 // Uses github.com/hanwen/go-fuse/v2 for FUSE operations
 // Corresponds to libfsapfs mount_fuse.c and mount_fuse.h
@@ -9,7 +11,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/deploymenttheory/go-apfs-v2/internal/apfs"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
 )
@@ -343,7 +345,7 @@ func (fh *APFSFileHandle) Read(ctx context.Context, dest []byte, off int64) (fus
 }
 
 // MountAPFS mounts an APFS volume using FUSE
-func MountAPFS(mountHandle *MountHandle, volumeIndex int, mountPoint string, debug bool) (*fuse.Server, error) {
+func MountAPFS(mountHandle *MountHandle, volumeIndex int, mountPoint string, debug bool) (MountServer, error) {
 	// Create the APFS filesystem
 	root, err := NewAPFSFileSystem(mountHandle, volumeIndex)
 	if err != nil {
@@ -370,10 +372,3 @@ func MountAPFS(mountHandle *MountHandle, volumeIndex int, mountPoint string, deb
 	return server, nil
 }
 
-// UnmountAPFS unmounts an APFS FUSE filesystem
-func UnmountAPFS(server *fuse.Server) error {
-	if server == nil {
-		return nil
-	}
-	return server.Unmount()
-}

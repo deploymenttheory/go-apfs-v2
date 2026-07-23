@@ -9,7 +9,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/deploymenttheory/go-apfs-v2/internal/apfs"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/disk"
 )
 
 // formatUUID formats a 16-byte UUID as a string in standard format
@@ -114,6 +115,9 @@ type InfoHandle struct {
 
 	// Abort flag for signal handling
 	Abort bool
+
+	// inputCloser closes the underlying image reader on CloseInput
+	inputCloser io.Closer
 }
 
 // NewInfoHandle creates a new info handle
@@ -211,33 +215,41 @@ func (ih *InfoHandle) OpenInput(filename string) error {
 		return fmt.Errorf("invalid filename")
 	}
 
-	// Open the file
-	file, err := os.Open(filename)
+	// Open the image with content-based format detection (DMG, GPT raw
+	// image, or bare container)
+	reader, sniffedOffset, closer, err := disk.OpenWithOffset(filename)
 	if err != nil {
 		return fmt.Errorf("unable to open file: %w", err)
+	}
+
+	// An explicit --offset always wins over the sniffed partition offset
+	offset := ih.VolumeOffset
+	if offset == 0 {
+		offset = sniffedOffset
 	}
 
 	// Create IO handle
 	ioHandle, err := apfs.NewIOHandle()
 	if err != nil {
-		file.Close()
+		closer.Close()
 		return fmt.Errorf("unable to create IO handle: %w", err)
 	}
 
 	// Create container
 	container, err := apfs.NewContainer(ioHandle)
 	if err != nil {
-		file.Close()
+		closer.Close()
 		return fmt.Errorf("unable to create container: %w", err)
 	}
 
 	// Open container for reading
-	if err := container.OpenRead(file, ih.VolumeOffset); err != nil {
-		file.Close()
+	if err := container.OpenRead(reader, offset); err != nil {
+		closer.Close()
 		return fmt.Errorf("unable to open container: %w", err)
 	}
 
 	ih.InputContainer = container
+	ih.inputCloser = closer
 
 	// Check if container is locked
 	isLocked, err := container.IsLocked()
@@ -311,6 +323,12 @@ func (ih *InfoHandle) CloseInput() error {
 	}
 
 	ih.InputContainer = nil
+
+	if ih.inputCloser != nil {
+		ih.inputCloser.Close()
+		ih.inputCloser = nil
+	}
+
 	return nil
 }
 
