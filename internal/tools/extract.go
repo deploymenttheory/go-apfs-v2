@@ -19,149 +19,7 @@ import (
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
 	"github.com/schollz/progressbar/v3"
-	"github.com/spf13/cobra"
 )
-
-var (
-	extractContainerPath  string
-	extractDestination    string
-	extractPath           string
-	extractPattern        string
-	extractRecursive      bool
-	extractPreserveMeta   bool
-	extractVerbose        bool
-	extractVolumeIndex    int
-	extractVerifyChecksum bool
-)
-
-// ExtractCmd represents the extract command
-var ExtractCmd = &cobra.Command{
-	Use:   "extract",
-	Short: "Extract files from APFS volume",
-	Long: `Extract files from an APFS volume to a local directory.
-
-Supports:
-  - Full volume extraction (default)
-  - Single file/directory extraction by path
-  - Pattern-based extraction using regex
-  - Metadata preservation (timestamps, permissions)
-
-Examples:
-  # Extract entire volume
-  apfs extract --container image.dmg --destination ./output
-
-  # Extract specific directory
-  apfs extract --container image.dmg --path /Applications --destination ./apps --recursive
-
-  # Extract files matching pattern
-  apfs extract --container image.dmg --pattern "\.txt$" --destination ./textfiles
-
-  # Extract with metadata preservation
-  apfs extract --container image.dmg --destination ./output --preserve-meta`,
-	RunE: runExtract,
-}
-
-func init() {
-	ExtractCmd.Flags().StringVarP(&extractContainerPath, "container", "c", "", "Path to APFS container (required)")
-	ExtractCmd.Flags().StringVarP(&extractDestination, "destination", "d", "", "Destination directory for extracted files (required)")
-	ExtractCmd.Flags().StringVarP(&extractPath, "path", "p", "/", "Path to extract (default: root)")
-	ExtractCmd.Flags().StringVar(&extractPattern, "pattern", "", "Regex pattern to match files (e.g. \"\\.txt$\")")
-	ExtractCmd.Flags().BoolVarP(&extractRecursive, "recursive", "r", false, "Extract recursively")
-	ExtractCmd.Flags().BoolVar(&extractPreserveMeta, "preserve-meta", false, "Preserve file metadata (timestamps, permissions)")
-	ExtractCmd.Flags().BoolVarP(&extractVerbose, "verbose", "v", false, "Verbose output")
-	ExtractCmd.Flags().IntVar(&extractVolumeIndex, "volume", 0, "Volume index (default: 0)")
-	ExtractCmd.Flags().BoolVar(&extractVerifyChecksum, "verify", false, "Compute and verify checksums during extraction")
-
-	ExtractCmd.MarkFlagRequired("container")
-	ExtractCmd.MarkFlagRequired("destination")
-}
-
-func runExtract(cmd *cobra.Command, args []string) error {
-	// Open the image with content-based format detection
-	container, closer, err := apfs.OpenImage(extractContainerPath, nil)
-	if err != nil {
-		return fmt.Errorf("unable to open container: %w", err)
-	}
-	defer closer.Close()
-	defer container.Free()
-
-	// Get volume
-	volume, err := container.GetVolume(extractVolumeIndex)
-	if err != nil {
-		return fmt.Errorf("unable to get volume: %w", err)
-	}
-
-	// Create destination directory
-	if err := os.MkdirAll(extractDestination, 0755); err != nil {
-		return fmt.Errorf("unable to create destination directory: %w", err)
-	}
-
-	// Compile regex pattern if provided
-	var pattern *regexp.Regexp
-	if extractPattern != "" {
-		pattern, err = regexp.Compile(extractPattern)
-		if err != nil {
-			return fmt.Errorf("invalid regex pattern: %w", err)
-		}
-	}
-
-	// Create extractor
-	extractor := &Extractor{
-		Volume:          volume,
-		Destination:     extractDestination,
-		Pattern:         pattern,
-		PreserveMeta:    extractPreserveMeta,
-		Verbose:         extractVerbose,
-		VerifyChecksum:  extractVerifyChecksum,
-		sourceChecksums: make(map[string]string),
-	}
-
-	// Create progress bar (counter/spinner since we don't know total count upfront)
-	if !extractVerbose {
-		extractor.progressBar = progressbar.NewOptions(-1,
-			progressbar.OptionSetDescription("Extracting"),
-			progressbar.OptionShowCount(),
-			progressbar.OptionSetWidth(40),
-			progressbar.OptionThrottle(100*time.Millisecond),
-			progressbar.OptionSpinnerType(14),
-			progressbar.OptionShowElapsedTimeOnFinish(),
-			progressbar.OptionSetWriter(os.Stderr),
-		)
-	}
-
-	// Extract based on mode. The root path means "the whole volume": contents
-	// land directly in the destination directory.
-	if extractPath != "" && extractPath != "/" {
-		err = extractor.ExtractByPath(extractPath, extractRecursive)
-	} else {
-		err = extractor.ExtractAll()
-	}
-	if err != nil {
-		return fmt.Errorf("extraction failed: %w", err)
-	}
-
-	// Finish progress bar
-	if extractor.progressBar != nil {
-		extractor.progressBar.Finish()
-	}
-
-	fmt.Printf("\nExtraction complete! Files saved to: %s\n", extractDestination)
-	fmt.Printf("Total: %d files, %s\n", extractor.filesExtracted, formatBytes(extractor.bytesExtracted))
-
-	// Verify checksums if requested
-	if extractVerifyChecksum {
-		fmt.Println("\n=== Verifying Checksums ===")
-		if err := extractor.VerifyExtractedFiles(); err != nil {
-			fmt.Printf("Warning: Verification encountered errors: %v\n", err)
-		}
-	}
-
-	if extractor.entriesSkipped > 0 {
-		return fmt.Errorf("partial extraction: %d entries could not be extracted (see warnings above)", extractor.entriesSkipped)
-	}
-
-	return nil
-}
 
 // Extractor handles file extraction from APFS volumes
 type Extractor struct {
@@ -401,6 +259,32 @@ func fsNameFromVolumePath(volumePath string) string {
 		return "."
 	}
 	return name
+}
+
+// NewExtractor creates an extractor for a volume writing into destination.
+func NewExtractor(volume *apfs.Volume, destination string) *Extractor {
+	return &Extractor{
+		Volume:          volume,
+		Destination:     destination,
+		sourceChecksums: make(map[string]string),
+	}
+}
+
+// SetProgressBar attaches a progress bar (optional).
+func (e *Extractor) SetProgressBar(bar *progressbar.ProgressBar) {
+	e.progressBar = bar
+}
+
+// FinishProgress completes the progress bar if one is attached.
+func (e *Extractor) FinishProgress() {
+	if e.progressBar != nil {
+		e.progressBar.Finish()
+	}
+}
+
+// Skipped returns the number of entries that could not be extracted.
+func (e *Extractor) Skipped() int {
+	return e.entriesSkipped
 }
 
 // GetStats returns extraction statistics

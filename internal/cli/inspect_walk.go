@@ -1,4 +1,4 @@
-package tools
+package cli
 
 import (
 	"encoding/binary"
@@ -6,40 +6,18 @@ import (
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/disk"
-	"github.com/spf13/cobra"
 )
 
-// InspectCmd represents the inspect command
-var InspectCmd = &cobra.Command{
-	Use:   "inspect",
-	Short: "Inspect APFS container structure in detail",
-	Long: `Inspect command walks through the APFS container structure step-by-step,
-validating checksums, showing checkpoint descriptors, object maps, and B-trees.
-
-This is similar to 'info' but provides more detailed diagnostic output,
-showing the exact steps taken to mount a volume and locate objects.`,
-	RunE: runInspect,
-}
-
-var (
-	inspectContainer string
-	inspectVolume    int
-	inspectVerbose   bool
-)
-
-func init() {
-	InspectCmd.PersistentFlags().StringVar(&inspectContainer, "container", "", "Path to the APFS container (required)")
-	InspectCmd.PersistentFlags().IntVar(&inspectVolume, "volume", -1, "Volume index to inspect (optional, -1 for all)")
-	InspectCmd.PersistentFlags().BoolVar(&inspectVerbose, "verbose", false, "Enable verbose output")
-	InspectCmd.MarkPersistentFlagRequired("container")
-}
-
-func runInspect(cmd *cobra.Command, args []string) error {
+// runInspectWalk walks the container structure step by step, validating
+// checksums and showing checkpoint descriptors, object maps and B-trees.
+// inspectVolume selects one volume by index (-1 for all); inspectVerbose
+// enables extra detail.
+func runInspectWalk(imagePath string, inspectVolume int, inspectVerbose bool) error {
 	// Open the container image with content-based format detection
-	fmt.Printf("Opening container: %s\n\n", inspectContainer)
-	fileHandle, containerOffset, closer, err := disk.OpenWithOffset(inspectContainer)
+	fmt.Printf("Opening container: %s\n\n", imagePath)
+	fileHandle, containerOffset, closer, err := disk.OpenWithOffset(imagePath)
 	if err != nil {
-		return fmt.Errorf("unable to open container: %w", err)
+		return withCode(ExitBadImage, fmt.Errorf("unable to open container: %w", err))
 	}
 	defer closer.Close()
 

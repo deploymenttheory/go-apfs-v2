@@ -1,4 +1,4 @@
-package tools
+package cli
 
 import (
 	"bufio"
@@ -12,41 +12,16 @@ import (
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/disk"
-	"github.com/spf13/cobra"
 )
 
-var (
-	exploreFSAddr    uint64
-	exploreOMapAddr  uint64
-	exploreContainer string
-)
-
-// ExploreFSTreeCmd explores the filesystem B-tree interactively
-var ExploreFSTreeCmd = &cobra.Command{
-	Use:   "explore-fs-tree",
-	Short: "Interactively explore APFS filesystem B-tree",
-	Long: `Interactively explore the APFS filesystem B-tree structure.
-
-Requires physical block addresses for both the filesystem tree root
-and the object map B-tree root.`,
-	Example: `  apfs explore-fs-tree --container /dev/disk0s2 --fs 0xd02a4 --omap 0x3af2`,
-	RunE:    runExploreFSTree,
-}
-
-func init() {
-	ExploreFSTreeCmd.Flags().StringVarP(&exploreContainer, "container", "c", "", "Path to APFS container (required)")
-	ExploreFSTreeCmd.Flags().Uint64Var(&exploreFSAddr, "fs", 0, "Physical block address of filesystem tree root (required)")
-	ExploreFSTreeCmd.Flags().Uint64Var(&exploreOMapAddr, "omap", 0, "Physical block address of object map tree root (required)")
-	ExploreFSTreeCmd.MarkFlagRequired("container")
-	ExploreFSTreeCmd.MarkFlagRequired("fs")
-	ExploreFSTreeCmd.MarkFlagRequired("omap")
-}
-
-func runExploreFSTree(cmd *cobra.Command, args []string) error {
+// runInspectBTree interactively explores the file-system B-tree of the
+// selected volume. The tree root addresses are resolved automatically from
+// the container; exploreFSAddr/exploreOMapAddr override them when non-zero.
+func runInspectBTree(imagePath string, exploreFSAddr, exploreOMapAddr uint64) error {
 	// Open the container image with content-based format detection
-	reader, containerOffset, closer, err := disk.OpenWithOffset(exploreContainer)
+	reader, containerOffset, closer, err := disk.OpenWithOffset(imagePath)
 	if err != nil {
-		return fmt.Errorf("unable to open container: %w", err)
+		return withCode(ExitBadImage, fmt.Errorf("unable to open container: %w", err))
 	}
 	defer closer.Close()
 
@@ -55,6 +30,22 @@ func runExploreFSTree(cmd *cobra.Command, args []string) error {
 	file := reader
 	if containerOffset != 0 {
 		file = io.NewSectionReader(reader, containerOffset, math.MaxInt64-containerOffset)
+	}
+
+	// Resolve the volume's fs-tree and omap-tree root addresses unless the
+	// caller supplied explicit overrides
+	if exploreFSAddr == 0 || exploreOMapAddr == 0 {
+		fsAddr, omapAddr, err := resolveVolumeTreeRoots(file)
+		if err != nil {
+			return fmt.Errorf("unable to auto-resolve tree roots (pass --fs/--omap explicitly): %w", err)
+		}
+		if exploreFSAddr == 0 {
+			exploreFSAddr = fsAddr
+		}
+		if exploreOMapAddr == 0 {
+			exploreOMapAddr = omapAddr
+		}
+		fmt.Printf("Resolved tree roots: fs-tree %#x, omap %#x\n\n", exploreFSAddr, exploreOMapAddr)
 	}
 
 	// Determine block size from block 0
@@ -404,4 +395,40 @@ func printFileExtentRecord(entry *apfs.BTreeEntry) {
 		fmt.Printf("  Length:                 %d bytes\n", length)
 		fmt.Printf("  Physical block:         %#x\n", physBlockNum)
 	}
+}
+
+// resolveVolumeTreeRoots parses the container on a partition-relative reader
+// and returns the physical block addresses of the selected volume's
+// file-system tree root and object-map tree root.
+func resolveVolumeTreeRoots(file io.ReaderAt) (fsAddr, omapAddr uint64, err error) {
+	container, err := apfs.Open(file, nil)
+	if err != nil {
+		return 0, 0, err
+	}
+	defer container.Free()
+
+	volume, err := container.VolumeBySelector(opts.Volume)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	if volume.ObjectMapBTree == nil || volume.FileSystemBTree == nil {
+		return 0, 0, fmt.Errorf("volume trees not initialized")
+	}
+
+	omapAddr = volume.ObjectMapBTree.RootNodeBlockNumber
+
+	descriptor, err := volume.ObjectMapBTree.GetDescriptorByObjectIdentifier(
+		file,
+		volume.FileSystemBTree.RootNodeBlockNumber,
+		volume.FileSystemBTree.VolumeTransactionID,
+	)
+	if err != nil {
+		return 0, 0, fmt.Errorf("unable to resolve fs-tree root: %w", err)
+	}
+	if descriptor == nil {
+		return 0, 0, fmt.Errorf("fs-tree root OID not found in object map")
+	}
+
+	return descriptor.Value.ObjectPhysicalAddress, omapAddr, nil
 }
