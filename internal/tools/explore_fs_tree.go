@@ -5,11 +5,13 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"strconv"
 	"strings"
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/apfs"
+	"github.com/deploymenttheory/go-apfs-v2/internal/disk"
 	"github.com/spf13/cobra"
 )
 
@@ -41,12 +43,19 @@ func init() {
 }
 
 func runExploreFSTree(cmd *cobra.Command, args []string) error {
-	// Open container
-	file, err := os.Open(exploreContainer)
+	// Open the container image with content-based format detection
+	reader, containerOffset, closer, err := disk.OpenWithOffset(exploreContainer)
 	if err != nil {
 		return fmt.Errorf("unable to open container: %w", err)
 	}
-	defer file.Close()
+	defer closer.Close()
+
+	// Block addresses are container-relative; rebase the reader when the
+	// container starts at a non-zero offset (e.g. GPT-partitioned raw image)
+	file := reader
+	if containerOffset != 0 {
+		file = io.NewSectionReader(reader, containerOffset, math.MaxInt64-containerOffset)
+	}
 
 	// Determine block size from block 0
 	block0 := make([]byte, 4096)
@@ -111,7 +120,7 @@ func readBlock(file io.ReaderAt, blockAddr uint64, blockSize uint32) ([]byte, er
 	return data, nil
 }
 
-func exploreTree(file *os.File, nodeData []byte, volumeOMap *apfs.ObjectMapBTree, blockSize uint32) error {
+func exploreTree(file io.ReaderAt, nodeData []byte, volumeOMap *apfs.ObjectMapBTree, blockSize uint32) error {
 	reader := bufio.NewReader(os.Stdin)
 	currentData := nodeData
 
@@ -233,7 +242,7 @@ func printNodeInfo(data []byte, node *apfs.BTreeNode) {
 	}
 }
 
-func printEntry(idx int, entry *apfs.BTreeEntry, isLeaf bool, nodeData []byte, volumeOMap *apfs.ObjectMapBTree, file *os.File, blockSize uint32) {
+func printEntry(idx int, entry *apfs.BTreeEntry, isLeaf bool, nodeData []byte, volumeOMap *apfs.ObjectMapBTree, file io.ReaderAt, blockSize uint32) {
 	if len(entry.KeyData) < 8 {
 		fmt.Printf("- %3d:  Invalid key\n", idx)
 		return

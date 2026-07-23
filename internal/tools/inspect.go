@@ -3,9 +3,9 @@ package tools
 import (
 	"encoding/binary"
 	"fmt"
-	"os"
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/apfs"
+	"github.com/deploymenttheory/go-apfs-v2/internal/disk"
 	"github.com/spf13/cobra"
 )
 
@@ -35,18 +35,18 @@ func init() {
 }
 
 func runInspect(cmd *cobra.Command, args []string) error {
-	// Open the container file
+	// Open the container image with content-based format detection
 	fmt.Printf("Opening container: %s\n\n", inspectContainer)
-	fileHandle, err := os.Open(inspectContainer)
+	fileHandle, containerOffset, closer, err := disk.OpenWithOffset(inspectContainer)
 	if err != nil {
 		return fmt.Errorf("unable to open container: %w", err)
 	}
-	defer fileHandle.Close()
+	defer closer.Close()
 
-	// Read block 0
+	// Read block 0 of the container
 	blockSize := uint32(4096) // Default, will be updated from actual superblock
 	block0Data := make([]byte, blockSize)
-	if _, err := fileHandle.ReadAt(block0Data, 0); err != nil {
+	if _, err := fileHandle.ReadAt(block0Data, containerOffset); err != nil {
 		return fmt.Errorf("failed to read block 0: %w", err)
 	}
 
@@ -66,7 +66,7 @@ func runInspect(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("unable to create container: %w", err)
 	}
-	if err := container.OpenRead(fileHandle, 0); err != nil {
+	if err := container.OpenRead(fileHandle, containerOffset); err != nil {
 		return fmt.Errorf("unable to parse container: %w", err)
 	}
 
