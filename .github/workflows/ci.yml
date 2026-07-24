@@ -46,7 +46,26 @@ jobs:
         env:
           CGO_ENABLED: "0"
         run: go test ./pkg/...
-      - name: CLI acceptance tests
+      - name: CLI acceptance tests (fixtures)
         env:
           CGO_ENABLED: "0"
         run: go test -v ./internal/cli/
+      - name: Cache real acceptance image
+        id: dmg-cache
+        uses: actions/cache@v4
+        with:
+          path: .acceptance-cache
+          key: ghostty-1.2.3-dmg
+      - name: Download real acceptance image
+        if: steps.dmg-cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          mkdir -p .acceptance-cache
+          curl -fsSL --retry 3 -o .acceptance-cache/Ghostty.dmg \
+            "https://release.files.ghostty.org/1.2.3/Ghostty.dmg"
+      - name: CLI acceptance tests (real vendor DMG)
+        env:
+          CGO_ENABLED: "0"
+          APFS_ACCEPTANCE_DMG: ${{ github.workspace }}/.acceptance-cache/Ghostty.dmg
+        shell: bash
+        run: go test -v -run TestReal ./internal/cli/
