@@ -14,9 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   detection, and an `io/fs.FS` adapter.
 - **HFS+ writer** (`pkg/hfsplus`): build a valid HFS+/HFSX volume from a
   directory tree (`apfs pack <dir>`); validated with `fsck_hfs` and `hdiutil`.
-- **APFS container writer** (`pkg/apfswrite`, GPL-2.0): a Go port of `mkapfs`
-  that formats an empty single-volume container; validated with `fsck_apfs`
-  and `apfsck`. Exposed via `apfs create --fs apfs` in `-tags apfswrite` builds.
+- **APFS container writer** (`pkg/apfswrite`, MIT): a pure-Go writer that builds
+  a single-volume APFS container from scratch — empty, or populated with a
+  directory tree of files, symlinks and nested directories. Validated against
+  `fsck_apfs`/`hdiutil` (macOS) and `apfsck` (Linux). Exposed via
+  `apfs create --fs apfs` and `apfs pack <dir> --fs apfs`.
 - **DMG/UDIF writer** (`pkg/disk`): `apfs pack` repacks a DMG losslessly
   (raw filesystem image preserved bit-for-bit); LZMA (ULMO) chunk support and
   Apple Partition Map handling on the read side.

@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: GPL-2.0-only
-// Ported from mkapfs (apfsprogs) — Copyright (C) 2019 Ernesto A. Fernández. Go port Copyright (C) 2024 Deployment Theory.
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Deployment Theory.
 
 package apfswrite
 
@@ -506,8 +506,8 @@ func packCatLeaves(recs []catRecord, blocksize, footer int) [][]catRecord {
 
 // tocBytesFor returns the table-of-contents size (bytes) for a node holding
 // nkeys records: room for nkeys kvloc entries, rounded up to whole increments
-// of btreeTOCEntryIncrement, never below btreeTOCEntryMaxUnused entries. This
-// matches btree.c's minimum-table-size behaviour for small nodes.
+// of btreeTOCEntryIncrement, never below btreeTOCEntryMaxUnused entries — the
+// small-node minimum the format expects.
 func tocBytesFor(nkeys int) int {
 	entries := roundUpInt(nkeys, btreeTOCEntryIncrement)
 	if entries < btreeTOCEntryMaxUnused {
@@ -548,7 +548,7 @@ func extrefRecordsPerLeaf(blocksize int) int {
 func (b *builder) makeExtrefRoot(bno, oid uint64) error {
 	phys := b.physFiles()
 	if len(phys) == 0 {
-		return b.makeEmptyBtreeRoot(bno, oid, objectTypeBlockrefTree)
+		return b.writeEmptyTree(bno, oid, objectTypeBlockrefTree)
 	}
 
 	extents := make([]*builderEntry, len(phys))

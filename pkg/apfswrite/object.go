@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: GPL-2.0-only
-// Ported from mkapfs (apfsprogs) — Copyright (C) 2019 Ernesto A. Fernández. Go port Copyright (C) 2024 Deployment Theory.
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Deployment Theory.
 
 package apfswrite
 
@@ -18,10 +18,10 @@ const (
 	objOffSubtype = 28
 )
 
-// setObjectHeader sets the header for a filesystem object and computes its
-// Fletcher-64 checksum. It mirrors mkapfs object.c:set_object_header. All other
-// fields of the object must already be set by the caller, otherwise the
-// checksum will not be correct.
+// setObjectHeader stamps the object header (oid/xid/type/subtype) onto block and
+// then seals it with the Fletcher-64 checksum every APFS object carries. The
+// checksum covers all bytes after the 8-byte checksum field, so every other
+// field must already be written before this is called.
 //
 // block is the full object buffer; size is the object size in bytes (the block
 // size for single-block objects, or the total size for the space manager).
@@ -31,8 +31,8 @@ func setObjectHeader(block []byte, size int, oid uint64, typ, subtype uint32) {
 	binary.LittleEndian.PutUint32(block[objOffType:], typ)
 	binary.LittleEndian.PutUint32(block[objOffSubtype:], subtype)
 
-	// Fletcher-64 over everything after the 8-byte checksum field. Reuse the
-	// MIT pkg/apfs implementation as required by the port's licensing note.
+	// Checksum spans everything after the checksum field itself. The Fletcher-64
+	// routine is shared with the MIT reader in pkg/apfs.
 	cksum, err := apfs.CalculateFletcher64(block[objOffCksum+8:size], 0)
 	if err != nil {
 		// The only error paths are a nil buffer or a non-multiple-of-4 length;

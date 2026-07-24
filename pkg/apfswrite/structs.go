@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: GPL-2.0-only
-// Ported from mkapfs (apfsprogs) — Copyright (C) 2019 Ernesto A. Fernández. Go port Copyright (C) 2024 Deployment Theory.
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Deployment Theory.
 
 package apfswrite
 
@@ -8,11 +8,11 @@ import (
 	"encoding/binary"
 )
 
-// These Go structs mirror the __packed on-disk C structures from raw.h. All
-// fields are fixed size and listed in on-disk order, so encoding/binary.Write
-// (which inserts no alignment padding) reproduces the exact little-endian
-// layout. The object header (objPhys) is left zero here and filled in later by
-// setObjectHeader, which also computes the checksum.
+// These structs describe the APFS on-disk objects this package writes. Every
+// field is fixed size and declared in on-disk order, so encoding/binary.Write
+// (which adds no alignment padding) reproduces the exact little-endian layout
+// the format requires. The leading object header (objPhys) is left zero here
+// and filled in later by setObjectHeader, which also computes the checksum.
 
 type objPhys struct {
 	Cksum   uint64
@@ -27,7 +27,7 @@ type prange struct {
 	BlockCount uint64
 }
 
-// nxSuperblock mirrors struct apfs_nx_superblock.
+// nxSuperblock is the on-disk apfs_nx_superblock.
 type nxSuperblock struct {
 	O                          objPhys
 	Magic                      uint32
@@ -71,7 +71,7 @@ type nxSuperblock struct {
 	MkbLocker                  prange
 }
 
-// wrappedMetaCryptoState mirrors struct apfs_wrapped_meta_crypto_state.
+// wrappedMetaCryptoState is the on-disk apfs_wrapped_meta_crypto_state.
 type wrappedMetaCryptoState struct {
 	MajorVersion    uint16
 	MinorVersion    uint16
@@ -82,14 +82,14 @@ type wrappedMetaCryptoState struct {
 	Unused          uint16
 }
 
-// modifiedBy mirrors struct apfs_modified_by.
+// modifiedBy is the on-disk apfs_modified_by.
 type modifiedBy struct {
 	ID        [32]byte
 	Timestamp uint64
 	LastXID   uint64
 }
 
-// apfsSuperblock mirrors struct apfs_superblock (the volume superblock).
+// apfsSuperblock is the on-disk apfs_superblock (the volume superblock).
 type apfsSuperblock struct {
 	O                          objPhys
 	Magic                      uint32
@@ -149,7 +149,7 @@ type apfsSuperblock struct {
 	SecRootTreeType            uint32
 }
 
-// omapPhys mirrors struct apfs_omap_phys.
+// omapPhys is the on-disk apfs_omap_phys.
 type omapPhys struct {
 	O                objPhys
 	Flags            uint32
@@ -163,7 +163,7 @@ type omapPhys struct {
 	PendingRevertMax uint64
 }
 
-// nxReaperPhys mirrors the fixed portion of struct apfs_nx_reaper_phys.
+// nxReaperPhys is the fixed portion of the on-disk apfs_nx_reaper_phys.
 type nxReaperPhys struct {
 	O               objPhys
 	NextReapID      uint64

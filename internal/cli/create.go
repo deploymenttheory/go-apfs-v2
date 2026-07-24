@@ -23,14 +23,12 @@ var createCmd = &cobra.Command{
 	Long: `Create a new UDIF DMG at OUT.dmg containing a freshly formatted, empty
 volume (no files). This is the format/mkfs operation.
 
---fs hfs+  creates an empty HFS+ (HFSX) volume (always available).
---fs apfs  creates an empty APFS container; APFS creation is a GPL-2.0
-           component and is only present in binaries built with
-           '-tags apfswrite' (see pkg/apfswrite).
+--fs hfs+  creates an empty HFS+ (HFSX) volume.
+--fs apfs  creates an empty APFS container.
 
 Examples:
   apfs create blank.dmg --fs hfs+ --volname Scratch --size 16
-  apfs create blank.dmg --fs apfs --volname Data          # needs -tags apfswrite`,
+  apfs create blank.dmg --fs apfs --volname Data`,
 	Args: exactArgs(1, "OUT.dmg"),
 	RunE: runCreate,
 }

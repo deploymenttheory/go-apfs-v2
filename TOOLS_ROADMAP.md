@@ -4,13 +4,15 @@ Current capabilities are described in [`README.md`](README.md) and their
 implementation state in [`TOOLS_STATUS.md`](TOOLS_STATUS.md). This file lists
 what is planned or under consideration, roughly in priority order.
 
+## Recently completed
+
+- **APFS file population** — `pack <dir> --fs apfs` now builds a populated APFS
+  volume (files of any size, symlinks, nested directories) and `create --fs
+  apfs` formats an empty one, in pure Go. Validated against `fsck_apfs`,
+  `hdiutil` and `apfsck`.
+
 ## Near term
 
-- **APFS file population** — the biggest gap. `create --fs apfs` currently
-  formats an *empty* container (the `mkapfs` equivalent). Writing user files
-  into an APFS volume requires copy-on-write catalog B-tree insertion, extent
-  allocation and space-manager updates. This would bring `pack <dir>` to APFS,
-  matching what already works for HFS+.
 - **Case-insensitive HFS+ (`H+` v4)** — the writer currently emits
   case-sensitive HFSX (`HX`). Case-insensitive volumes need the Unicode
   case-folding comparison for catalog key ordering.

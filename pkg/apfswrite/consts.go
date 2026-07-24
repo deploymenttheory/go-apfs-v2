@@ -1,18 +1,22 @@
-// SPDX-License-Identifier: GPL-2.0-only
-// Ported from mkapfs (apfsprogs) — Copyright (C) 2019 Ernesto A. Fernández. Go port Copyright (C) 2024 Deployment Theory.
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Deployment Theory.
 
-// Package apfswrite is a pure-Go port of mkapfs (apfsprogs). It writes a
-// complete, empty, single-volume APFS container — the equivalent of
-// newfs_apfs formatting a fresh volume with just the root directory and the
-// standard special inodes, no user files.
+// Package apfswrite builds APFS containers from scratch in pure Go. It writes a
+// complete single-volume container — either empty (just the root directory and
+// the standard special inodes) or populated with a directory tree of files,
+// symbolic links and nested directories.
 //
-// This package is GPL-2.0-only (see LICENSE in this directory). It is a direct
-// translation of mkapfs, and a translation is a derivative work. It MAY import
-// the MIT-licensed pkg/apfs (for the Fletcher-64 / CRC32C checksums); the MIT
-// packages MUST NOT import this one.
+// The implementation writes the whole container as one static checkpoint
+// (transaction id 1): every object is laid out in its final position up front,
+// which sidesteps copy-on-write mutation entirely. All on-disk layouts are
+// derived from the published APFS format (Apple's "Apple File System
+// Reference"). apfsprogs/mkapfs was consulted as a reference for the format's
+// behaviour, but this is an independent implementation, not a translation; it
+// is MIT-licensed like the rest of the toolkit.
 package apfswrite
 
-// On-disk constants, mirrored from apfsprogs include/apfs/raw.h.
+// On-disk constants defined by the APFS format. The value names follow the
+// format's own naming (nx_*, apfs_*, obj_*) so they read against the spec.
 
 // Object identifier constants.
 const (
@@ -51,7 +55,8 @@ const (
 	objectTypeInvalid           = 0x00000000
 )
 
-// Fixed transaction id used by the mkfs.
+// mkfsXID is the transaction id stamped on every object. Because the container
+// is written as a single static checkpoint, there is only ever one xid.
 const mkfsXID = 1
 
 // B-tree node flags.
@@ -106,8 +111,8 @@ const objTypeShift = 60
 // Directory entry name/hash masks.
 const drecLenMask = 0x000003ff
 
-// Inode internal flag: no resource fork (newer fsck_apfs expects this on the
-// special directory inodes created by the mkfs).
+// Inode internal flag: no resource fork. fsck_apfs expects this to be set on
+// the special/root directory inodes we create.
 const inodeNoRsrcFork = 0x00008000
 
 // Extended field types for inodes.

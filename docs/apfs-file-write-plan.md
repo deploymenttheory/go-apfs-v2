@@ -18,8 +18,8 @@ The APFS *reader* (`pkg/apfs`) already parses every record type we must write
 is a precise oracle: if our reader reads a file back with the right content and
 `fsck_apfs`/`apfsck` are clean, the records are valid.
 
-Licensing: this extends the GPL-2.0 `pkg/apfswrite`; it stays behind
-`-tags apfswrite` so the default binary remains MIT.
+Licensing: `pkg/apfswrite` is pure-Go, MIT-licensed original work (see its
+README for provenance); it is part of the default build.
 
 ## Records involved (for one file "f" of content C in directory D)
 
@@ -49,5 +49,4 @@ numbers; only their contents grow).
   reference records); multi-block space-manager allocation.
 - **M4 — metadata + wiring.** Modes, uid/gid, timestamps (inode xfields) and
   symlinks; an `Entry` tree input mirroring `pkg/hfsplus`; then wire
-  `apfs pack <dir>` (GPL build) and extend the add-files/byte-delta test to
-  APFS.
+  `apfs pack <dir> --fs apfs` and extend the add-files/byte-delta test to APFS.

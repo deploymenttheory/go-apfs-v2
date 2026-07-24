@@ -1,7 +1,6 @@
 // CLI acceptance tests for `apfs create`, exercised through the built binary.
-// The test binary is built without -tags apfswrite (the default MIT build), so
-// APFS creation is expected to be refused here; the APFS writer itself is
-// covered by pkg/apfswrite.
+// Both HFS+ and APFS creation are part of the default build; the APFS writer
+// itself is covered in depth by pkg/apfswrite.
 package cli_test
 
 import (
@@ -29,16 +28,22 @@ func TestCreateHFSEmpty(t *testing.T) {
 	}
 }
 
-// TestCreateAPFSRefusedInDefaultBuild confirms APFS creation is gated behind
-// the GPL build tag: the default (MIT) binary refuses it with exit 5.
-func TestCreateAPFSRefusedInDefaultBuild(t *testing.T) {
-	dmg := filepath.Join(t.TempDir(), "x.dmg")
-	_, stderr, code := run(t, "create", dmg, "--fs", "apfs")
-	if code != 5 {
-		t.Errorf("apfs create in default build exited %d, want 5 (unsupported)\nstderr: %s", code, stderr)
+// TestCreateAPFSEmpty creates an empty APFS volume and reads it back.
+func TestCreateAPFSEmpty(t *testing.T) {
+	dmg := filepath.Join(t.TempDir(), "blank.dmg")
+	mustRun(t, "create", dmg, "--fs", "apfs", "--volname", "BlankAPFS")
+
+	out := mustRun(t, "info", "-o", "json", dmg)
+	if !strings.Contains(out, `"filesystem":"apfs"`) {
+		t.Errorf("created volume is not apfs:\n%s", out)
 	}
-	if !strings.Contains(stderr, "apfswrite") {
-		t.Errorf("refusal did not mention the -tags apfswrite build:\n%s", stderr)
+	if !strings.Contains(out, `"name":"BlankAPFS"`) {
+		t.Errorf("created volume name wrong:\n%s", out)
+	}
+
+	// The empty volume should list nothing.
+	if listing := mustRun(t, "list", dmg); nonEmptyLines(listing) != nil {
+		t.Errorf("empty volume listing not empty: %q", listing)
 	}
 }
 

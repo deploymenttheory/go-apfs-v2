@@ -1,11 +1,11 @@
-// SPDX-License-Identifier: GPL-2.0-only
-// Ported from mkapfs (apfsprogs) — Copyright (C) 2019 Ernesto A. Fernández. Go port Copyright (C) 2024 Deployment Theory.
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Deployment Theory.
 
 package apfswrite
 
 import "encoding/binary"
 
-// Fixed field offsets within an apfs_spaceman_phys block.
+// Field offsets within an apfs_spaceman_phys object.
 const (
 	smOffBlockSize       = 0x20
 	smOffBlocksPerChunk  = 0x24
@@ -26,45 +26,52 @@ const (
 	smOffIPBitmapOffset  = 0x148
 	smOffIPBMFreeNextOff = 0x14c
 
-	// Transaction id for the ip bitmap; borrowed from a test image (spaceman.c).
+	// bitmapXidOff is where the per-bitmap transaction ids begin inside the
+	// spaceman object; the variable-length address arrays follow it.
 	bitmapXidOff = 0x150
 
 	sizeofSpacemanDevice    = 48
 	sizeofSpacemanFreeQueue = 40
 )
 
-// devInfo mirrors spaceman.c:struct device_info.
-type devInfo struct {
+// deviceLayout is the computed geometry of one storage device (the main device;
+// the tier-2 slot stays empty in the non-Fusion path). "cib" is a chunk-info
+// block and "cab" a cib-address block, the two levels of the space manager's
+// allocation metadata.
+type deviceLayout struct {
 	blockCount uint64
 	chunkCount uint64
 	cibCount   uint32
 	cabCount   uint32
 
-	cibAddrBaseOff uint32 // offset of the cib/cab address array in the spaceman
+	// addrArrayOff is the byte offset, inside the spaceman object, of this
+	// device's cib/cab address array.
+	addrArrayOff uint32
 
 	firstCib uint64
 	firstCab uint64
 
-	usedBlocksEnd uint64
-	usedChunksEnd uint64
+	usedBlocksEnd uint64 // one past the last allocated block on this device
+	usedChunksEnd uint64 // number of chunks that carry any allocation
 
-	firstChunkBmap uint64
+	firstChunkBmap uint64 // first allocation-bitmap block for this device
 }
 
-// smInfo mirrors spaceman.c:struct spaceman_info.
-type smInfo struct {
-	dev [sdCount]devInfo
+// spacemanLayout gathers the container-wide space-manager geometry.
+type spacemanLayout struct {
+	dev [sdCount]deviceLayout
 
 	totalChunkCount uint64
 	totalCibCount   uint32
 	totalCabCount   uint32
 
-	ipBlocks      uint64
-	ipBmSize      uint32
-	ipBmapBlocks  uint32
-	ipBase        uint64
-	bmAddrOff     uint32
-	bmFreeNextOff uint32
+	ipBlocks     uint64 // size of the internal pool, in blocks
+	ipBmSize     uint32 // blocks in one internal-pool allocation bitmap
+	ipBmapBlocks uint32 // total internal-pool bitmap blocks (the 16-slot ring)
+	ipBase       uint64 // first internal-pool block
+
+	bmAddrOff     uint32 // offset of the current-bitmap address array in the object
+	bmFreeNextOff uint32 // offset of the bitmap free-list ring in the object
 }
 
 func (b *builder) blocksPerChunk() uint64 { return 8 * uint64(b.blocksize) }
@@ -77,248 +84,229 @@ func (b *builder) cibsPerCab() uint64 {
 	return (uint64(b.blocksize) - sizeofCibAddrBlockHdr) / 8
 }
 
-// spacemanSize calculates the size of the spaceman object in bytes, mirroring
-// spaceman.c:spaceman_size.
-func (b *builder) spacemanSize() uint32 {
+// spacemanByteSize returns the block-aligned size of the spaceman object. It
+// must be large enough to hold the fixed header plus each device's cib (or cab,
+// for very large devices) address array; the main device's array is placed last
+// so its trailing offset fixes the object's extent.
+func (b *builder) spacemanByteSize() uint32 {
 	main := &b.sm.dev[sdMain]
 	tier2 := &b.sm.dev[sdTier2]
 
-	entryCount := uint64(0)
-	if main.cabCount > 1 {
-		entryCount += uint64(main.cabCount)
-	} else {
-		entryCount += uint64(main.cibCount)
+	addrEntries := func(d *deviceLayout) uint64 {
+		if d.cabCount > 1 {
+			return uint64(d.cabCount)
+		}
+		return uint64(d.cibCount)
 	}
-	if tier2.cabCount > 1 {
-		entryCount += uint64(tier2.cabCount)
-	} else {
-		entryCount += uint64(tier2.cibCount)
-	}
+	entryCount := addrEntries(main) + addrEntries(tier2)
 
-	return uint32(divRoundUp(entryCount*8+uint64(main.cibAddrBaseOff), uint64(b.blocksize)) * uint64(b.blocksize))
+	need := entryCount*8 + uint64(main.addrArrayOff)
+	return uint32(divRoundUp(need, uint64(b.blocksize)) * uint64(b.blocksize))
 }
 
-// countUsedBlocksInChunk counts the allocated blocks in one chunk. It
-// generalizes spaceman.c:count_used_blocks_in_chunk to any number of chunks:
-// the container's allocated blocks form two contiguous ranges — the low
-// metadata [0, cpEnd+8) (block zero, checkpoint areas, container object map and
-// the volume's trees) and [ipBmapBase, usedBlocksEnd) (the ip bitmap blocks,
-// the internal pool, then the post-IP catalog/extref leaves and file data) —
-// separated only by the two unused Fusion slots at cpEnd+8..cpEnd+10. Each
-// chunk's used count is its overlap with those two ranges.
-func (b *builder) countUsedBlocksInChunk(dev *devInfo, chunkno uint64) uint32 {
-	if chunkno >= dev.usedChunksEnd {
-		return 0
-	}
-	// The tier 2 device only has a superblock (not used in the non-Fusion path).
-	if dev.usedBlocksEnd == 1 {
-		return 1
-	}
-
-	s := chunkno * b.blocksPerChunk()
-	e := s + b.blocksPerChunk()
-	if e > dev.blockCount {
-		e = dev.blockCount
-	}
-
-	lowEnd := b.cpEnd + 8
-	used := overlapLen(s, e, 0, lowEnd)
-	used += overlapLen(s, e, b.ipBmapBase, dev.usedBlocksEnd)
-	return uint32(used)
-}
-
-// overlapLen returns the number of blocks in [s, e) that also fall in [a, c).
-func overlapLen(s, e, a, c uint64) uint64 {
-	lo := s
-	if a > lo {
-		lo = a
-	}
-	hi := e
-	if c < hi {
-		hi = c
-	}
+// rangeOverlap returns how many blocks of [s, e) also lie in [a, c).
+func rangeOverlap(s, e, a, c uint64) uint64 {
+	lo := max(s, a)
+	hi := min(e, c)
 	if hi > lo {
 		return hi - lo
 	}
 	return 0
 }
 
-// countUsedBlocks mirrors spaceman.c:count_used_blocks.
-func (b *builder) countUsedBlocks(dev *devInfo) uint32 {
-	blocks := uint32(0)
+// usedInChunk counts the allocated blocks in one chunk of a device. The
+// container's allocations form two contiguous spans: the low metadata span
+// [0, cpEnd+8) — block zero, the checkpoint areas, the container object map and
+// the volume's trees — and the high span [ipBmapBase, usedBlocksEnd) — the
+// internal-pool bitmaps and pool, then the post-pool catalog/extref leaves and
+// file data. The two are separated only by the two skipped Fusion slots at
+// cpEnd+8. A chunk's used count is its overlap with those two spans.
+func (b *builder) usedInChunk(dev *deviceLayout, chunkno uint64) uint32 {
+	if chunkno >= dev.usedChunksEnd {
+		return 0
+	}
+	if dev.usedBlocksEnd == 1 {
+		return 1 // an empty tier-2 device carries only a superblock
+	}
+
+	start := chunkno * b.blocksPerChunk()
+	end := min(start+b.blocksPerChunk(), dev.blockCount)
+
+	lowSpanEnd := b.cpEnd + 8
+	used := rangeOverlap(start, end, 0, lowSpanEnd)
+	used += rangeOverlap(start, end, b.ipBmapBase, dev.usedBlocksEnd)
+	return uint32(used)
+}
+
+// deviceUsedBlocks totals the allocated blocks across all of a device's chunks.
+func (b *builder) deviceUsedBlocks(dev *deviceLayout) uint32 {
+	var blocks uint32
 	for chunkno := uint64(0); chunkno < dev.usedChunksEnd; chunkno++ {
-		blocks += b.countUsedBlocksInChunk(dev, chunkno)
+		blocks += b.usedInChunk(dev, chunkno)
 	}
 	return blocks
 }
 
-// bmapMarkAsUsed marks a range as used in an allocation bitmap.
-func bmapMarkAsUsed(bitmap []byte, paddr, length uint64) {
+// markBits sets length bits starting at bit paddr in an allocation bitmap.
+func markBits(bitmap []byte, paddr, length uint64) {
 	for i := paddr; i < paddr+length; i++ {
 		bitmap[i/8] |= 1 << (i % 8)
 	}
 }
 
-// makeMainAllocBitmap mirrors spaceman.c:make_main_alloc_bitmap.
-func (b *builder) makeMainAllocBitmap() error {
+// writeAllocBitmap writes the main device's allocation bitmap, one bit per
+// block, with every block the container occupies marked used.
+func (b *builder) writeAllocBitmap() error {
 	dev := &b.sm.dev[sdMain]
 	bmap := b.zeroedBlocks(int(dev.usedChunksEnd))
 
-	bmapMarkAsUsed(bmap, 0, 1)                                    // Block zero
-	bmapMarkAsUsed(bmap, b.cpDescBase, uint64(b.cpDescBlocks))    // Checkpoint descriptor
-	bmapMarkAsUsed(bmap, b.cpDataBase, uint64(b.cpDataBlocks))    // Checkpoint data
-	bmapMarkAsUsed(bmap, b.mainOmapBno, 2)                        // Container omap + root
-	bmapMarkAsUsed(bmap, b.firstVolBno, 6)                        // Volume sb + its trees
-	bmapMarkAsUsed(bmap, b.ipBmapBase, uint64(b.sm.ipBmapBlocks)) // IP bitmap blocks
-	bmapMarkAsUsed(bmap, b.sm.ipBase, b.sm.ipBlocks)              // Internal pool blocks
+	markBits(bmap, 0, 1)                                    // block zero
+	markBits(bmap, b.cpDescBase, uint64(b.cpDescBlocks))    // checkpoint descriptor area
+	markBits(bmap, b.cpDataBase, uint64(b.cpDataBlocks))    // checkpoint data area
+	markBits(bmap, b.mainOmapBno, 2)                        // container omap + its root
+	markBits(bmap, b.firstVolBno, 6)                        // volume superblock + its trees
+	markBits(bmap, b.ipBmapBase, uint64(b.sm.ipBmapBlocks)) // internal-pool bitmaps
+	markBits(bmap, b.sm.ipBase, b.sm.ipBlocks)              // internal pool
 	if b.postIPBlocks > 0 {
-		bmapMarkAsUsed(bmap, b.postIPBase, b.postIPBlocks) // Extra catalog leaves + file data
+		markBits(bmap, b.postIPBase, b.postIPBlocks) // catalog/extref leaves + file data
 	}
 
 	return b.writeBlocks(bmap, dev.firstChunkBmap)
 }
 
-// makeChunkInfo writes a chunk info structure at chunk (a slice into the cib),
-// mirroring spaceman.c:make_chunk_info. Returns the next chunk's first block.
-func (b *builder) makeChunkInfo(dev *devInfo, chunk []byte, start uint64) uint64 {
-	remaining := dev.blockCount - start
+// fillChunkInfo writes one apfs_chunk_info at chunk (a slice into its cib) and
+// returns the first block of the following chunk.
+func (b *builder) fillChunkInfo(dev *deviceLayout, chunk []byte, start uint64) uint64 {
 	chunkno := start / b.blocksPerChunk()
+	blockCount := min(b.blocksPerChunk(), dev.blockCount-start)
 
 	binary.LittleEndian.PutUint64(chunk[0:], mkfsXID) // ci_xid
 	binary.LittleEndian.PutUint64(chunk[8:], start)   // ci_addr
-
 	if start < dev.usedBlocksEnd {
 		binary.LittleEndian.PutUint64(chunk[24:], dev.firstChunkBmap+chunkno) // ci_bitmap_addr
 	}
-
-	blockCount := b.blocksPerChunk()
-	if remaining < blockCount {
-		blockCount = remaining
-	}
-	binary.LittleEndian.PutUint32(chunk[16:], uint32(blockCount)) // ci_block_count
-
-	freeCount := uint32(blockCount) - b.countUsedBlocksInChunk(dev, chunkno)
-	binary.LittleEndian.PutUint32(chunk[20:], freeCount) // ci_free_count
+	binary.LittleEndian.PutUint32(chunk[16:], uint32(blockCount))                             // ci_block_count
+	binary.LittleEndian.PutUint32(chunk[20:], uint32(blockCount)-b.usedInChunk(dev, chunkno)) // ci_free_count
 
 	return start + blockCount
 }
 
-// makeChunkInfoBlock mirrors spaceman.c:make_chunk_info_block.
-func (b *builder) makeChunkInfoBlock(dev *devInfo, bno uint64, index int, start uint64) (uint64, error) {
+// writeChunkInfoBlock writes one chunk-info block, filling it with as many
+// chunk-info entries as fit or as remain, and returns the next unplaced block.
+func (b *builder) writeChunkInfoBlock(dev *deviceLayout, bno uint64, index int, start uint64) (uint64, error) {
 	cib := b.zeroedBlock()
 	binary.LittleEndian.PutUint32(cib[32:], uint32(index)) // cib_index
 
-	i := 0
-	for ; uint64(i) < b.chunksPerCib(); i++ {
-		if start == dev.blockCount {
-			break
-		}
-		chunk := cib[sizeofChunkInfoBlockHdr+i*sizeofChunkInfo:]
-		start = b.makeChunkInfo(dev, chunk, start)
+	var placed int
+	for placed = 0; uint64(placed) < b.chunksPerCib() && start < dev.blockCount; placed++ {
+		chunk := cib[sizeofChunkInfoBlockHdr+placed*sizeofChunkInfo:]
+		start = b.fillChunkInfo(dev, chunk, start)
 	}
-	binary.LittleEndian.PutUint32(cib[36:], uint32(i)) // cib_chunk_info_count
+	binary.LittleEndian.PutUint32(cib[36:], uint32(placed)) // cib_chunk_info_count
 
-	setObjectHeader(cib, int(b.blocksize), bno,
-		objPhysical|objectTypeSpacemanCIB, objectTypeInvalid)
+	setObjectHeader(cib, int(b.blocksize), bno, objPhysical|objectTypeSpacemanCIB, objectTypeInvalid)
 	if err := b.writeBlock(cib, bno); err != nil {
 		return 0, err
 	}
 	return start, nil
 }
 
-// makeSingleDevice mirrors spaceman.c:make_single_device. It writes the device
-// structure at smOffDev+which*sizeofSpacemanDevice inside sm and lays out that
-// device's chunk-info blocks.
-func (b *builder) makeSingleDevice(sm []byte, which int) error {
-	devInfoP := &b.sm.dev[which]
-	dev := sm[smOffDev+which*sizeofSpacemanDevice:]
+// writeDevice fills a device record inside the spaceman object and writes that
+// device's chunk-info blocks. The cab (cib-address-block) layer is only reached
+// on very large or Fusion devices and is not produced here.
+func (b *builder) writeDevice(sm []byte, which int) error {
+	d := &b.sm.dev[which]
+	rec := sm[smOffDev+which*sizeofSpacemanDevice:]
 
-	binary.LittleEndian.PutUint64(dev[0:], devInfoP.blockCount)                                      // sm_block_count
-	binary.LittleEndian.PutUint64(dev[8:], devInfoP.chunkCount)                                      // sm_chunk_count
-	binary.LittleEndian.PutUint32(dev[16:], devInfoP.cibCount)                                       // sm_cib_count
-	binary.LittleEndian.PutUint32(dev[20:], devInfoP.cabCount)                                       // sm_cab_count
-	binary.LittleEndian.PutUint64(dev[24:], devInfoP.blockCount-uint64(b.countUsedBlocks(devInfoP))) // sm_free_count
-	binary.LittleEndian.PutUint32(dev[32:], devInfoP.cibAddrBaseOff)                                 // sm_addr_offset
+	binary.LittleEndian.PutUint64(rec[0:], d.blockCount)                                // sm_block_count
+	binary.LittleEndian.PutUint64(rec[8:], d.chunkCount)                                // sm_chunk_count
+	binary.LittleEndian.PutUint32(rec[16:], d.cibCount)                                 // sm_cib_count
+	binary.LittleEndian.PutUint32(rec[20:], d.cabCount)                                 // sm_cab_count
+	binary.LittleEndian.PutUint64(rec[24:], d.blockCount-uint64(b.deviceUsedBlocks(d))) // sm_free_count
+	binary.LittleEndian.PutUint32(rec[32:], d.addrArrayOff)                             // sm_addr_offset
 
-	start := uint64(0)
-	if devInfoP.cabCount == 0 {
-		// Only cib addresses (no cab layer). We omit the cab path entirely
-		// because it is only reachable for very large / Fusion devices.
-		for i := uint32(0); i < devInfoP.cibCount; i++ {
-			binary.LittleEndian.PutUint64(sm[uint64(devInfoP.cibAddrBaseOff)+uint64(i)*8:], devInfoP.firstCib+uint64(i))
-			var err error
-			start, err = b.makeChunkInfoBlock(devInfoP, devInfoP.firstCib+uint64(i), int(i), start)
-			if err != nil {
-				return err
-			}
-		}
-	} else {
+	if d.cabCount != 0 {
 		return errCabUnsupported
 	}
+
+	var start uint64
+	for i := uint32(0); i < d.cibCount; i++ {
+		cibBno := d.firstCib + uint64(i)
+		binary.LittleEndian.PutUint64(sm[uint64(d.addrArrayOff)+uint64(i)*8:], cibBno)
+		var err error
+		if start, err = b.writeChunkInfoBlock(d, cibBno, int(i), start); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
-// makeDevices mirrors spaceman.c:make_devices (tier 2 is empty here).
-func (b *builder) makeDevices(sm []byte) error {
-	if err := b.makeSingleDevice(sm, sdMain); err != nil {
+// writeDevices lays out both device slots (the tier-2 slot is empty here).
+func (b *builder) writeDevices(sm []byte) error {
+	if err := b.writeDevice(sm, sdMain); err != nil {
 		return err
 	}
-	return b.makeSingleDevice(sm, sdTier2)
+	return b.writeDevice(sm, sdTier2)
 }
 
-// makeIPFreeQueue mirrors spaceman.c:make_ip_free_queue. fq is a slice into sm.
-func (b *builder) makeIPFreeQueue(fq []byte) error {
+// initIPFreeQueue initializes the internal-pool free queue: an empty ephemeral
+// B-tree plus its descriptor (oid and growth cap) inside the spaceman object.
+func (b *builder) initIPFreeQueue(fq []byte) error {
 	binary.LittleEndian.PutUint64(fq[8:], ipFreeQueueOID) // sfq_tree_oid
-	if err := b.makeEmptyBtreeRoot(b.ipFreeQueueBno, ipFreeQueueOID, objectTypeSpacemanFreeQueue); err != nil {
+	if err := b.writeEmptyTree(b.ipFreeQueueBno, ipFreeQueueOID, objectTypeSpacemanFreeQueue); err != nil {
 		return err
 	}
-	binary.LittleEndian.PutUint16(fq[24:], ipFQNodeLimit(b.sm.totalChunkCount)) // sfq_tree_node_limit
+	binary.LittleEndian.PutUint16(fq[24:], b.ipFreeQueueNodeLimit()) // sfq_tree_node_limit
 	return nil
 }
 
-// makeMainFreeQueue mirrors spaceman.c:make_main_free_queue.
-func (b *builder) makeMainFreeQueue(fq []byte) error {
+// initMainFreeQueue initializes the main-device free queue.
+func (b *builder) initMainFreeQueue(fq []byte) error {
 	binary.LittleEndian.PutUint64(fq[8:], mainFreeQueueOID)
-	if err := b.makeEmptyBtreeRoot(b.mainFreeQueueBno, mainFreeQueueOID, objectTypeSpacemanFreeQueue); err != nil {
+	if err := b.writeEmptyTree(b.mainFreeQueueBno, mainFreeQueueOID, objectTypeSpacemanFreeQueue); err != nil {
 		return err
 	}
-	binary.LittleEndian.PutUint16(fq[24:], mainFQNodeLimit(b.mainBlkcnt))
+	binary.LittleEndian.PutUint16(fq[24:], b.mainFreeQueueNodeLimit())
 	return nil
 }
 
-// makeIPBitmap mirrors spaceman.c:make_ip_bitmap.
-func (b *builder) makeIPBitmap() error {
+// writeIPBitmap writes the current internal-pool allocation bitmap: it marks the
+// pool's own metadata (cab blocks, cib blocks and the device allocation bitmaps)
+// as used, since those blocks live inside the pool.
+func (b *builder) writeIPBitmap() error {
 	bmap := b.zeroedBlocks(int(b.sm.ipBmSize))
 	main := &b.sm.dev[sdMain]
 	tier2 := &b.sm.dev[sdTier2]
+	rel := func(abs uint64) uint64 { return abs - b.sm.ipBase }
 
-	// Cib address blocks.
-	bmapMarkAsUsed(bmap, main.firstCab-b.sm.ipBase, uint64(main.cabCount))
-	bmapMarkAsUsed(bmap, tier2.firstCab-b.sm.ipBase, uint64(tier2.cabCount))
-	// Chunk-info blocks.
-	bmapMarkAsUsed(bmap, main.firstCib-b.sm.ipBase, uint64(main.cibCount))
-	bmapMarkAsUsed(bmap, tier2.firstCib-b.sm.ipBase, uint64(tier2.cibCount))
-	// Allocation bitmap block.
-	bmapMarkAsUsed(bmap, main.firstChunkBmap-b.sm.ipBase, main.usedChunksEnd)
-	bmapMarkAsUsed(bmap, tier2.firstChunkBmap-b.sm.ipBase, tier2.usedChunksEnd)
+	markBits(bmap, rel(main.firstCab), uint64(main.cabCount))
+	markBits(bmap, rel(tier2.firstCab), uint64(tier2.cabCount))
+	markBits(bmap, rel(main.firstCib), uint64(main.cibCount))
+	markBits(bmap, rel(tier2.firstCib), uint64(tier2.cibCount))
+	markBits(bmap, rel(main.firstChunkBmap), main.usedChunksEnd)
+	markBits(bmap, rel(tier2.firstChunkBmap), tier2.usedChunksEnd)
 
 	return b.writeBlocks(bmap, b.ipBmapBase)
 }
 
-// makeIPBMFreeNext mirrors spaceman.c:make_ip_bm_free_next. addr is a slice
-// into sm at bm_free_next_off.
-func (b *builder) makeIPBMFreeNext(addr []byte) {
+// fillBitmapFreeRing writes the free-list ring that links the spare internal-pool
+// bitmap slots. The first ipBmSize slots are in use (marked invalid); the rest
+// form a singly linked free list terminated by an invalid index.
+func (b *builder) fillBitmapFreeRing(ring []byte) {
+	put := func(slot uint32, v uint16) { binary.LittleEndian.PutUint16(ring[slot*2:], v) }
 	for i := uint32(0); i < b.sm.ipBmSize; i++ {
-		binary.LittleEndian.PutUint16(addr[i*2:], spacemanIPBMIndexInvalid)
+		put(i, spacemanIPBMIndexInvalid)
 	}
 	for i := b.sm.ipBmSize; i < b.sm.ipBmapBlocks-1; i++ {
-		binary.LittleEndian.PutUint16(addr[i*2:], uint16(i+1))
+		put(i, uint16(i+1))
 	}
-	binary.LittleEndian.PutUint16(addr[(b.sm.ipBmapBlocks-1)*2:], spacemanIPBMIndexInvalid)
+	put(b.sm.ipBmapBlocks-1, spacemanIPBMIndexInvalid)
 }
 
-// makeInternalPool mirrors spaceman.c:make_internal_pool.
-func (b *builder) makeInternalPool(sm []byte) error {
+// writeInternalPool fills every internal-pool field of the spaceman object and
+// writes the pool's bitmap blocks. The pool is a 16-slot ring of allocation
+// bitmaps; the first ipBmSize slots hold the live bitmap and the rest are spare.
+func (b *builder) writeInternalPool(sm []byte) error {
 	binary.LittleEndian.PutUint32(sm[smOffIPBMTxMult:], spacemanIPBMTxMultiplier)
 	binary.LittleEndian.PutUint64(sm[smOffIPBlockCount:], b.sm.ipBlocks)
 	binary.LittleEndian.PutUint64(sm[smOffIPBase:], b.sm.ipBase)
@@ -333,7 +321,7 @@ func (b *builder) makeInternalPool(sm []byte) error {
 		}
 	}
 
-	// The current bitmaps are the first in the ring.
+	// The live bitmap occupies the first ipBmSize slots of the ring.
 	binary.LittleEndian.PutUint32(sm[smOffIPBitmapOffset:], b.sm.bmAddrOff)
 	for i := uint32(0); i < b.sm.ipBmSize; i++ {
 		binary.LittleEndian.PutUint16(sm[uint64(b.sm.bmAddrOff)+uint64(i)*2:], uint16(i))
@@ -347,68 +335,99 @@ func (b *builder) makeInternalPool(sm []byte) error {
 	}
 
 	binary.LittleEndian.PutUint32(sm[smOffIPBMFreeNextOff:], b.sm.bmFreeNextOff)
-	b.makeIPBMFreeNext(sm[b.sm.bmFreeNextOff:])
+	b.fillBitmapFreeRing(sm[b.sm.bmFreeNextOff:])
 
-	return b.makeIPBitmap()
+	return b.writeIPBitmap()
 }
 
-// calculateDevInfo mirrors spaceman.c:calculate_dev_info.
-func (b *builder) calculateDevInfo(dev *devInfo, which int) error {
+// deviceGeometry computes a device's chunk/cib/cab counts from its block count.
+func (b *builder) deviceGeometry(d *deviceLayout, which int) error {
 	if which == sdMain {
-		dev.blockCount = b.mainBlkcnt
+		d.blockCount = b.mainBlkcnt
 	} else {
-		dev.blockCount = 0 // no tier 2
+		d.blockCount = 0 // no tier-2 device
 	}
-	dev.chunkCount = divRoundUp(dev.blockCount, b.blocksPerChunk())
-	dev.cibCount = uint32(divRoundUp(dev.chunkCount, b.chunksPerCib()))
-	dev.cabCount = uint32(divRoundUp(uint64(dev.cibCount), b.cibsPerCab()))
-	if dev.cabCount == 1 {
-		dev.cabCount = 0
+	d.chunkCount = divRoundUp(d.blockCount, b.blocksPerChunk())
+	d.cibCount = uint32(divRoundUp(d.chunkCount, b.chunksPerCib()))
+	d.cabCount = uint32(divRoundUp(uint64(d.cibCount), b.cibsPerCab()))
+	if d.cabCount == 1 {
+		d.cabCount = 0 // a single cib needs no cib-address block
 	}
-	if dev.cabCount > 1000 {
+	if d.cabCount > 1000 {
 		return errDeviceTooBig
 	}
 	return nil
 }
 
-// setSpacemanInfo mirrors spaceman.c:set_spaceman_info.
-func (b *builder) setSpacemanInfo() error {
+// spacemanGeometry computes all space-manager geometry that does not depend on
+// absolute block placement: device counts, internal-pool sizing, and the
+// variable-array offsets inside the spaceman object. Because none of this needs
+// the checkpoint layout, it can run before block positions are fixed — which is
+// what lets the checkpoint data area be sized to the exact spaceman extent.
+func (b *builder) spacemanGeometry() error {
 	main := &b.sm.dev[sdMain]
 	tier2 := &b.sm.dev[sdTier2]
-	if err := b.calculateDevInfo(main, sdMain); err != nil {
+	if err := b.deviceGeometry(main, sdMain); err != nil {
 		return err
 	}
-	if err := b.calculateDevInfo(tier2, sdTier2); err != nil {
+	if err := b.deviceGeometry(tier2, sdTier2); err != nil {
 		return err
 	}
 	b.sm.totalChunkCount = main.chunkCount + tier2.chunkCount
 	b.sm.totalCibCount = main.cibCount + tier2.cibCount
 	b.sm.totalCabCount = main.cabCount + tier2.cabCount
+
+	// The internal pool is provisioned at three blocks per allocation-metadata
+	// block (chunks + cibs + cabs) so it can hold the bitmaps across transactions.
 	b.sm.ipBlocks = (b.sm.totalChunkCount + uint64(b.sm.totalCibCount) + uint64(b.sm.totalCabCount)) * 3
 	if b.sm.ipBlocks > b.mainBlkcnt/2 {
 		return errIPPoolTooBig
 	}
 
-	// We have 16 ip bitmaps; each maps the whole ip and may span blocks.
+	// The bitmap ring has 16 slots; each live bitmap spans ceil(ipBlocks/chunk).
 	b.sm.ipBmSize = uint32(divRoundUp(b.sm.ipBlocks, b.blocksPerChunk()))
 	b.sm.ipBmapBlocks = 16 * b.sm.ipBmSize
-	b.sm.ipBase = b.ipBmapBase + uint64(b.sm.ipBmapBlocks)
 
-	// One xid for each of the ip bitmaps.
+	// Variable arrays follow the per-bitmap xids: the current-bitmap address
+	// array, then the free-list ring, then each device's cib/cab address array.
 	b.sm.bmAddrOff = bitmapXidOff + 8*b.sm.ipBmSize
 	b.sm.bmFreeNextOff = b.sm.bmAddrOff + uint32(roundUp(uint64(2*b.sm.ipBmSize), 8))
-	main.cibAddrBaseOff = b.sm.bmFreeNextOff + b.sm.ipBmapBlocks*2
+	main.addrArrayOff = b.sm.bmFreeNextOff + b.sm.ipBmapBlocks*2
 	if main.cabCount != 0 {
-		tier2.cibAddrBaseOff = main.cibAddrBaseOff + main.cabCount*8
+		tier2.addrArrayOff = main.addrArrayOff + main.cabCount*8
 	} else {
-		tier2.cibAddrBaseOff = main.cibAddrBaseOff + main.cibCount*8
+		tier2.addrArrayOff = main.addrArrayOff + main.cibCount*8
 	}
 
-	// The volume's extra blocks are laid out contiguously right after the
-	// internal pool, at the first otherwise-free block: first the extra catalog
-	// leaf nodes (2-level catalog), then the extra extent-reference leaf nodes
-	// (2-level extref tree), then the file data blocks. This region may span
-	// several space-manager chunks; the per-chunk accounting below handles it.
+	// The spaceman extent is now determined, so the ephemeral-object sizing is
+	// too. Record it for the checkpoint layout that follows.
+	b.spacemanSz = b.spacemanByteSize()
+	b.spacemanBlkcnt = b.spacemanSz / b.blocksize
+	b.totalBlkcnt = b.spacemanBlkcnt + 3 // reaper + spaceman + two free-queue roots
+	return nil
+}
+
+// spacemanPlacement fixes every absolute block position that depends on the
+// checkpoint layout: the ephemeral objects, the internal pool, and the post-pool
+// data region (extra catalog/extref leaves and file data). It must run after the
+// checkpoint areas and fixed blocks have been laid out.
+func (b *builder) spacemanPlacement() error {
+	main := &b.sm.dev[sdMain]
+	tier2 := &b.sm.dev[sdTier2]
+
+	// Ephemeral objects occupy the checkpoint data area, in order.
+	b.reaperBno = b.cpDataBase
+	b.spacemanBno = b.reaperBno + 1
+	b.ipFreeQueueBno = b.spacemanBno + uint64(b.spacemanBlkcnt)
+	b.mainFreeQueueBno = b.ipFreeQueueBno + 1
+
+	// The internal pool sits just past its bitmap ring.
+	b.sm.ipBase = b.ipBmapBase + uint64(b.sm.ipBmapBlocks)
+
+	// Everything the volume owns beyond the fixed metadata is laid out
+	// contiguously right after the pool: extra catalog leaves, then extra
+	// extent-reference leaves, then file content. This region may span several
+	// chunks; the per-chunk accounting handles that.
 	b.postIPBase = b.sm.ipBase + b.sm.ipBlocks
 	b.catLeafBase = b.postIPBase
 	b.extrefLeafBase = b.catLeafBase + b.numCatLeaves
@@ -420,20 +439,19 @@ func (b *builder) setSpacemanInfo() error {
 	blk := b.fileDataBase
 	for _, f := range b.streamFiles {
 		if f.blocks == 0 {
-			continue // 0-byte file: no data block
+			continue
 		}
 		f.dataBlock = blk
 		blk += f.blocks
 	}
 
-	// The used region runs contiguously from block 0 to the end of the post-IP
-	// data (with a 2-block gap for the unused Fusion middle-tree/wbc slots). Its
-	// end sets how many chunks carry allocations.
+	// The allocated region runs from block zero to the end of the post-pool data.
 	main.usedBlocksEnd = b.postIPBase + b.postIPBlocks
 	main.usedChunksEnd = divRoundUp(main.usedBlocksEnd, b.blocksPerChunk())
 	tier2.usedBlocksEnd = 0
 	tier2.usedChunksEnd = 0
 
+	// The allocation bitmaps, then the cibs, then the cabs follow the pool base.
 	main.firstChunkBmap = b.sm.ipBase
 	main.firstCib = main.firstChunkBmap + main.usedChunksEnd
 	main.firstCab = main.firstCib + uint64(main.cibCount)
@@ -443,9 +461,11 @@ func (b *builder) setSpacemanInfo() error {
 	return nil
 }
 
-// makeSpaceman mirrors spaceman.c:make_spaceman.
-func (b *builder) makeSpaceman(bno, oid uint64) error {
-	size := b.spacemanSize()
+// writeSpaceman writes the whole spaceman object: its fixed header, both device
+// records with their chunk-info blocks, the two free queues, the internal pool
+// and the main allocation bitmap.
+func (b *builder) writeSpaceman(bno, oid uint64) error {
+	size := b.spacemanByteSize()
 	sm := b.zeroedBlocks(int(size) / int(b.blocksize))
 
 	binary.LittleEndian.PutUint32(sm[smOffBlockSize:], b.blocksize)
@@ -453,23 +473,22 @@ func (b *builder) makeSpaceman(bno, oid uint64) error {
 	binary.LittleEndian.PutUint32(sm[smOffChunksPerCib:], uint32(b.chunksPerCib()))
 	binary.LittleEndian.PutUint32(sm[smOffCibsPerCab:], uint32(b.cibsPerCab()))
 
-	if err := b.makeDevices(sm); err != nil {
+	if err := b.writeDevices(sm); err != nil {
 		return err
 	}
-	if err := b.makeIPFreeQueue(sm[smOffFQ+sfqIP*sizeofSpacemanFreeQueue:]); err != nil {
+	if err := b.initIPFreeQueue(sm[smOffFQ+sfqIP*sizeofSpacemanFreeQueue:]); err != nil {
 		return err
 	}
-	if err := b.makeMainFreeQueue(sm[smOffFQ+sfqMain*sizeofSpacemanFreeQueue:]); err != nil {
+	if err := b.initMainFreeQueue(sm[smOffFQ+sfqMain*sizeofSpacemanFreeQueue:]); err != nil {
 		return err
 	}
-	if err := b.makeInternalPool(sm); err != nil {
+	if err := b.writeInternalPool(sm); err != nil {
 		return err
 	}
-	if err := b.makeMainAllocBitmap(); err != nil {
+	if err := b.writeAllocBitmap(); err != nil {
 		return err
 	}
 
-	setObjectHeader(sm, int(size), oid,
-		objEphemeral|objectTypeSpaceman, objectTypeInvalid)
+	setObjectHeader(sm, int(size), oid, objEphemeral|objectTypeSpaceman, objectTypeInvalid)
 	return b.writeBlocks(sm, bno)
 }

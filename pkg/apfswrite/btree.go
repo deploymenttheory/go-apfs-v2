@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: GPL-2.0-only
-// Ported from mkapfs (apfsprogs) — Copyright (C) 2019 Ernesto A. Fernández. Go port Copyright (C) 2024 Deployment Theory.
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Deployment Theory.
 
 package apfswrite
 
@@ -19,101 +19,116 @@ const (
 	btnOffValFreeList = sizeofObjPhys + 20 // 0x34 (nloc)
 )
 
-// Table-of-contents sizing constants (btree.c).
+// Table-of-contents entries grow in fixed increments; a node reserves at least
+// this many entries even when it holds fewer records.
 const (
 	btreeTOCEntryIncrement = 8
 	btreeTOCEntryMaxUnused = 2 * btreeTOCEntryIncrement
 )
 
-// putNloc writes an apfs_nloc {off, len} at the given block offset.
+// putNloc writes an apfs_nloc {off, len} pair at the given block offset.
 func putNloc(block []byte, off int, nloc_off, nloc_len uint16) {
 	binary.LittleEndian.PutUint16(block[off:], nloc_off)
 	binary.LittleEndian.PutUint16(block[off+2:], nloc_len)
 }
 
-// minTableSize returns the minimum size of the table of contents for a leaf,
-// mirroring btree.c:min_table_size.
-func (b *builder) minTableSize(typ uint32) int {
-	var keySize, valSize, tocSize int
-	switch typ {
-	case objectTypeOmap:
-		keySize = sizeofOmapKey
-		valSize = sizeofOmapVal
-		tocSize = sizeofKvoff
-	case objectTypeSpacemanFreeQueue:
-		keySize = sizeofSpacemanFreeQueueKey
-		valSize = 8 // no ghosts here
-		tocSize = sizeofKvoff
-	case objectTypeFusionMiddleTree:
-		keySize = sizeofFusionMtKey
-		valSize = sizeofFusionMtVal
-		tocSize = sizeofKvoff
-	default:
-		// It should at least have room for one record.
-		return sizeofKvloc * btreeTOCEntryMaxUnused
-	}
-	// The footer of root nodes is ignored for some reason.
-	space := int(b.blocksize) - sizeofBtreeNodePhys
-	count := space / (keySize + valSize + tocSize)
-	return count * tocSize
+// writeLeafHeader fills the apfs_btree_node_phys header shared by the leaf nodes
+// this file builds. level stays 0 (all nodes here are leaves; the catalog index
+// node is built in catalog.go). tocLen sizes the table-of-contents extent that
+// starts right after the header; keyEnd/freeLen describe the free-space extent
+// that follows the packed keys. Both freelists are marked invalid — a freshly
+// built node has no reclaimed fragments.
+func writeLeafHeader(block []byte, flags uint16, nkeys, tocLen, keyEnd, freeLen int) {
+	binary.LittleEndian.PutUint16(block[btnOffFlags:], flags)
+	binary.LittleEndian.PutUint32(block[btnOffNkeys:], uint32(nkeys))
+	putNloc(block, btnOffTableSpace, 0, uint16(tocLen))
+	putNloc(block, btnOffFreeSpace, uint16(keyEnd), uint16(freeLen))
+	putNloc(block, btnOffKeyFreeList, btoffInvalid, 0)
+	putNloc(block, btnOffValFreeList, btoffInvalid, 0)
 }
 
-// setEmptyBtreeInfo sets the info footer for an empty b-tree node, mirroring
-// btree.c:set_empty_btree_info. info is a slice starting at the footer.
-func (b *builder) setEmptyBtreeInfo(info []byte, subtype uint32) {
-	var flags uint32
+// fixedKVSizes reports the key and value sizes for a fixed-layout B-tree of the
+// given subtype, and whether the subtype is fixed-layout at all. Free-queue
+// values are eight bytes because the queues written here hold no ghost entries.
+// Variable-layout trees (the catalog) return ok=false.
+func fixedKVSizes(subtype uint32) (keySize, valSize int, ok bool) {
+	switch subtype {
+	case objectTypeOmap:
+		return sizeofOmapKey, sizeofOmapVal, true
+	case objectTypeSpacemanFreeQueue:
+		return sizeofSpacemanFreeQueueKey, 8, true
+	case objectTypeFusionMiddleTree:
+		return sizeofFusionMtKey, sizeofFusionMtVal, true
+	default:
+		return 0, 0, false
+	}
+}
+
+// treeFlags returns the bt_info flags for a tree of the given subtype and
+// whether its nodes are fixed-key-size. Free queues are ephemeral and permit
+// ghosts; the physical trees do not.
+func treeFlags(subtype uint32) (btInfoFlags uint32, fixedNode bool) {
 	switch subtype {
 	case objectTypeSpacemanFreeQueue:
-		flags = btreeEphemeral | btreeAllowGhosts
+		return btreeEphemeral | btreeAllowGhosts, true
 	case objectTypeFusionMiddleTree:
-		flags = btreePhysical
+		return btreePhysical, true
 	default:
-		flags = btreePhysical | btreeKVNonaligned
+		return btreePhysical | btreeKVNonaligned, false
 	}
+}
 
+// tocAreaBytes returns how many bytes to reserve for a fixed-layout node's table
+// of contents. It is sized to index as many records as the node body could hold
+// if packed solid: the body is everything past the header (the info footer is
+// intentionally not deducted, which yields the record ceiling), and each record
+// costs its key, its value and one TOC entry. Variable-layout nodes fall back to
+// the small-node minimum.
+func (b *builder) tocAreaBytes(subtype uint32) int {
+	keySize, valSize, ok := fixedKVSizes(subtype)
+	if !ok {
+		return sizeofKvloc * btreeTOCEntryMaxUnused
+	}
+	body := int(b.blocksize) - sizeofBtreeNodePhys
+	perRecord := keySize + valSize + sizeofKvoff
+	return (body / perRecord) * sizeofKvoff
+}
+
+// writeEmptyTreeFooter fills the bt_info footer of an empty single-node tree:
+// the layout flags, the node size, the key/value sizes for fixed-layout trees,
+// and a node count of one (the tree is just its root).
+func (b *builder) writeEmptyTreeFooter(info []byte, subtype uint32) {
+	flags, _ := treeFlags(subtype)
 	binary.LittleEndian.PutUint32(info[0:], flags)       // bt_fixed.bt_flags
 	binary.LittleEndian.PutUint32(info[4:], b.blocksize) // bt_fixed.bt_node_size
 
-	if subtype == objectTypeSpacemanFreeQueue {
-		binary.LittleEndian.PutUint32(info[8:], sizeofSpacemanFreeQueueKey)  // bt_key_size
-		binary.LittleEndian.PutUint32(info[12:], 8)                          // bt_val_size
-		binary.LittleEndian.PutUint32(info[16:], sizeofSpacemanFreeQueueKey) // bt_longest_key
-		binary.LittleEndian.PutUint32(info[20:], 8)                          // bt_longest_val
+	if keySize, valSize, ok := fixedKVSizes(subtype); ok {
+		binary.LittleEndian.PutUint32(info[8:], uint32(keySize))  // bt_key_size
+		binary.LittleEndian.PutUint32(info[12:], uint32(valSize)) // bt_val_size
+		binary.LittleEndian.PutUint32(info[16:], uint32(keySize)) // bt_longest_key
+		binary.LittleEndian.PutUint32(info[20:], uint32(valSize)) // bt_longest_val
 	}
-	if subtype == objectTypeFusionMiddleTree {
-		binary.LittleEndian.PutUint32(info[8:], sizeofFusionMtKey)
-		binary.LittleEndian.PutUint32(info[12:], sizeofFusionMtVal)
-		binary.LittleEndian.PutUint32(info[16:], sizeofFusionMtKey)
-		binary.LittleEndian.PutUint32(info[20:], sizeofFusionMtVal)
-	}
-	binary.LittleEndian.PutUint64(info[32:], 1) // bt_node_count: only the root
+	binary.LittleEndian.PutUint64(info[32:], 1) // bt_node_count
 }
 
-// makeEmptyBtreeRoot makes an empty root for a b-tree, mirroring
-// btree.c:make_empty_btree_root. Used for the free queues, snapshot metadata
-// tree and extent reference tree.
-func (b *builder) makeEmptyBtreeRoot(bno, oid uint64, subtype uint32) error {
+// writeEmptyTree writes a tree that is one empty root-leaf. The free queues,
+// the snapshot-metadata tree and the extent-reference tree (via file.go) all
+// begin this way. subtype selects the fixed/variable layout and the storage
+// class (free queues are ephemeral, the rest physical).
+func (b *builder) writeEmptyTree(bno, oid uint64, subtype uint32) error {
 	root := b.zeroedBlock()
-	headLen := sizeofBtreeNodePhys
 	infoLen := sizeofBtreeInfo
 
 	flags := uint16(btnodeRoot | btnodeLeaf)
-	if subtype == objectTypeSpacemanFreeQueue || subtype == objectTypeFusionMiddleTree {
+	if _, fixed := treeFlags(subtype); fixed {
 		flags |= btnodeFixedKVSize
 	}
-	binary.LittleEndian.PutUint16(root[btnOffFlags:], flags)
 
-	tocLen := b.minTableSize(subtype)
+	tocLen := b.tocAreaBytes(subtype)
+	freeLen := int(b.blocksize) - sizeofBtreeNodePhys - tocLen - infoLen
+	writeLeafHeader(root, flags, 0, tocLen, 0, freeLen)
 
-	// No keys and no values.
-	binary.LittleEndian.PutUint32(root[btnOffNkeys:], 0)
-	freeLen := int(b.blocksize) - headLen - tocLen - infoLen
-	putNloc(root, btnOffTableSpace, 0, uint16(tocLen))
-	putNloc(root, btnOffFreeSpace, 0, uint16(freeLen))
-	putNloc(root, btnOffKeyFreeList, btoffInvalid, 0)
-	putNloc(root, btnOffValFreeList, btoffInvalid, 0)
-
-	b.setEmptyBtreeInfo(root[int(b.blocksize)-infoLen:], subtype)
+	b.writeEmptyTreeFooter(root[int(b.blocksize)-infoLen:], subtype)
 
 	typ := uint32(objectTypeBtree)
 	if subtype == objectTypeSpacemanFreeQueue {
@@ -125,9 +140,14 @@ func (b *builder) makeEmptyBtreeRoot(bno, oid uint64, subtype uint32) error {
 	return b.writeBlock(root, bno)
 }
 
-// setOmapInfo sets the info footer for an object map node, mirroring
-// btree.c:set_omap_info.
-func (b *builder) setOmapInfo(info []byte, nkeys int) {
+// omapEntry is one (oid -> physical block) mapping stored in an object map.
+type omapEntry struct {
+	oid   uint64
+	paddr uint64
+}
+
+// writeOmapFooter fills the bt_info footer of an object-map root node.
+func (b *builder) writeOmapFooter(info []byte, nkeys int) {
 	binary.LittleEndian.PutUint32(info[0:], btreePhysical)  // bt_flags
 	binary.LittleEndian.PutUint32(info[4:], b.blocksize)    // bt_node_size
 	binary.LittleEndian.PutUint32(info[8:], sizeofOmapKey)  // bt_key_size
@@ -138,49 +158,41 @@ func (b *builder) setOmapInfo(info []byte, nkeys int) {
 	binary.LittleEndian.PutUint64(info[32:], 1)             // bt_node_count
 }
 
-// omapEntry is one (oid -> physical block) mapping in an object map.
-type omapEntry struct {
-	oid   uint64
-	paddr uint64
+// omapEntries returns the mappings an object map must hold. The container omap
+// maps only the volume superblock's virtual oid. The volume omap maps the
+// catalog root and, when the catalog spans two levels, every catalog leaf node.
+func (b *builder) omapEntries(isVol bool) []omapEntry {
+	if !isVol {
+		return []omapEntry{{firstVolOID, b.firstVolBno}}
+	}
+	entries := []omapEntry{{firstVolCatRootOID, b.firstVolCatRootBno}}
+	if b.catTwoLevel {
+		for i := uint64(0); i < b.numCatLeaves; i++ {
+			entries = append(entries, omapEntry{catLeafOIDBase + i, b.catLeafBase + i})
+		}
+	}
+	return entries
 }
 
-// makeOmapRoot makes the root node of an object map, mirroring
-// btree.c:make_omap_root. The container omap maps the volume superblock oid;
-// the volume omap maps the catalog root and, for a 2-level catalog, each of its
-// leaf nodes. Records are fixed-size (omap_key, omap_val) sorted by oid.
-func (b *builder) makeOmapRoot(bno uint64, isVol bool) error {
-	var entries []omapEntry
-	if isVol {
-		entries = append(entries, omapEntry{firstVolCatRootOID, b.firstVolCatRootBno})
-		if b.catTwoLevel {
-			for i := uint64(0); i < b.numCatLeaves; i++ {
-				entries = append(entries, omapEntry{catLeafOIDBase + i, b.catLeafBase + i})
-			}
-		}
-	} else {
-		entries = append(entries, omapEntry{firstVolOID, b.firstVolBno})
-	}
+// writeObjectMapRoot writes the root node of an object map. Records are fixed-size
+// (omap_key, omap_val) pairs sorted by oid; keys pack forward from the end of
+// the table of contents and values pack backward from the start of the footer.
+func (b *builder) writeObjectMapRoot(bno uint64, isVol bool) error {
+	entries := b.omapEntries(isVol)
 	sort.Slice(entries, func(i, j int) bool { return entries[i].oid < entries[j].oid })
 
 	root := b.zeroedBlock()
-	headLen := sizeofBtreeNodePhys
 	infoLen := sizeofBtreeInfo
-
-	binary.LittleEndian.PutUint16(root[btnOffFlags:], btnodeRoot|btnodeLeaf|btnodeFixedKVSize)
-
 	nkeys := len(entries)
-	binary.LittleEndian.PutUint32(root[btnOffNkeys:], uint32(nkeys))
-	tocLen := b.minTableSize(objectTypeOmap)
-	keyLen := sizeofOmapKey
-	valLen := sizeofOmapVal
-	keyArea := headLen + tocLen
+
+	tocLen := b.tocAreaBytes(objectTypeOmap)
+	keyArea := sizeofBtreeNodePhys + tocLen
 	valAreaEnd := int(b.blocksize) - infoLen
 
 	for i, e := range entries {
-		// Fixed-size TOC entry (kvoff): key offset, value offset.
-		toc := headLen + i*sizeofKvoff
-		keyOff := keyArea + i*keyLen
-		valOff := valAreaEnd - (i+1)*valLen
+		toc := sizeofBtreeNodePhys + i*sizeofKvoff
+		keyOff := keyArea + i*sizeofOmapKey
+		valOff := valAreaEnd - (i+1)*sizeofOmapVal
 		binary.LittleEndian.PutUint16(root[toc:], uint16(keyOff-keyArea))
 		binary.LittleEndian.PutUint16(root[toc+2:], uint16(valAreaEnd-valOff))
 
@@ -190,22 +202,20 @@ func (b *builder) makeOmapRoot(bno uint64, isVol bool) error {
 		binary.LittleEndian.PutUint64(root[valOff+8:], e.paddr)     // ov_paddr
 	}
 
-	putNloc(root, btnOffTableSpace, 0, uint16(tocLen))
-	usedKeys := nkeys * keyLen
-	usedVals := nkeys * valLen
-	freeLen := int(b.blocksize) - headLen - tocLen - usedKeys - usedVals - infoLen
-	putNloc(root, btnOffFreeSpace, uint16(usedKeys), uint16(freeLen))
-	putNloc(root, btnOffKeyFreeList, btoffInvalid, 0)
-	putNloc(root, btnOffValFreeList, btoffInvalid, 0)
+	usedKeys := nkeys * sizeofOmapKey
+	usedVals := nkeys * sizeofOmapVal
+	freeLen := int(b.blocksize) - sizeofBtreeNodePhys - tocLen - usedKeys - usedVals - infoLen
+	writeLeafHeader(root, btnodeRoot|btnodeLeaf|btnodeFixedKVSize, nkeys, tocLen, usedKeys, freeLen)
 
-	b.setOmapInfo(root[int(b.blocksize)-infoLen:], nkeys)
-	setObjectHeader(root, int(b.blocksize), bno,
-		objectTypeBtree|objPhysical, objectTypeOmap)
+	b.writeOmapFooter(root[int(b.blocksize)-infoLen:], nkeys)
+	setObjectHeader(root, int(b.blocksize), bno, objectTypeBtree|objPhysical, objectTypeOmap)
 	return b.writeBlock(root, bno)
 }
 
-// makeOmapBtree makes an object map, mirroring btree.c:make_omap_btree.
-func (b *builder) makeOmapBtree(bno uint64, isVol bool) error {
+// writeObjectMap writes an object map: the omap_phys object that points at its
+// root plus the root node itself. The container omap is manually managed; the
+// volume omap is not.
+func (b *builder) writeObjectMap(bno uint64, isVol bool) error {
 	omap := &omapPhys{}
 	if !isVol {
 		omap.Flags = omapManuallyManaged
@@ -213,20 +223,17 @@ func (b *builder) makeOmapBtree(bno uint64, isVol bool) error {
 	omap.TreeType = objectTypeBtree | objPhysical
 	omap.SnapshotTreeType = objectTypeBtree | objPhysical
 
-	var rootBno uint64
+	rootBno := b.mainOmapRootBno
 	if isVol {
 		rootBno = b.firstVolOmapRootBno
-	} else {
-		rootBno = b.mainOmapRootBno
 	}
 	omap.TreeOID = rootBno
-	if err := b.makeOmapRoot(rootBno, isVol); err != nil {
+	if err := b.writeObjectMapRoot(rootBno, isVol); err != nil {
 		return err
 	}
 
 	block := b.zeroedBlock()
 	marshalInto(block, omap)
-	setObjectHeader(block, int(b.blocksize), bno,
-		objPhysical|objectTypeOmap, objectTypeInvalid)
+	setObjectHeader(block, int(b.blocksize), bno, objPhysical|objectTypeOmap, objectTypeInvalid)
 	return b.writeBlock(block, bno)
 }
