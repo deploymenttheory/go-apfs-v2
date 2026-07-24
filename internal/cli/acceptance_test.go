@@ -27,7 +27,9 @@ var (
 	fixtureBZ2   string
 	fixtureLZFSE string
 	fixtureRaw   string // decompressed from basic.img.gz into a temp dir
+	fixtureHFS   string // committed HFS+ fixture DMG
 	manifest     fixtureManifest
+	hfsManifest  fixtureManifest
 )
 
 type fixtureManifest struct {
@@ -90,6 +92,13 @@ func TestMain(m *testing.M) {
 	if err := json.Unmarshal(manifestData, &manifest); err != nil {
 		fmt.Fprintf(os.Stderr, "unable to parse manifest: %v\n", err)
 		os.Exit(1)
+	}
+
+	// The committed HFS+ fixture and its manifest (may be absent in older
+	// checkouts; the HFS+ tests skip when it is).
+	fixtureHFS = filepath.Join(repoRoot, "testdata", "cli", "hfs-basic.dmg")
+	if data, err := os.ReadFile(filepath.Join(repoRoot, "testdata", "cli", "hfs-manifest.json")); err == nil {
+		json.Unmarshal(data, &hfsManifest)
 	}
 
 	os.Exit(m.Run())

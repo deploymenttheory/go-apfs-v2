@@ -44,6 +44,7 @@ Commands:
   list     List directory contents
   cat      Write file contents to stdout
   extract  Extract files to a local directory
+  pack     Repack a DMG into a new DMG (lossless at the filesystem-image level)
   inspect  Low-level structural inspection (container walk, blocks, B-trees)
   mount    Mount read-only via FUSE (Linux and macOS)
 
@@ -78,6 +79,7 @@ func init() {
 	rootCmd.AddCommand(listCmd)
 	rootCmd.AddCommand(catCmd)
 	rootCmd.AddCommand(extractCmd)
+	rootCmd.AddCommand(packCmd)
 	rootCmd.AddCommand(inspectCmd)
 	rootCmd.AddCommand(mountCmd)
 }
