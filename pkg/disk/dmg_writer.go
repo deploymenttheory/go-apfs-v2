@@ -415,3 +415,41 @@ func RepackDMG(srcPath, dstPath string, opts *EncodeOptions) error {
 	}
 	return nil
 }
+
+// WrapRawImageDMG writes a UDIF DMG at dstPath wrapping a raw filesystem
+// image as a single Apple partition block. partitionHint is the Apple
+// partition type name embedded in the block name so the reader (and hdiutil)
+// locate the filesystem, e.g. "Apple_HFSX", "Apple_HFS" or "Apple_APFS".
+func WrapRawImageDMG(dstPath string, raw []byte, partitionHint string, opts *EncodeOptions) error {
+	if len(raw)%sectorSize != 0 {
+		return fmt.Errorf("WrapRawImageDMG: raw image length %d is not a multiple of %d", len(raw), sectorSize)
+	}
+	name := fmt.Sprintf("whole disk (%s : 0)", partitionHint)
+	blocks := []SourceBlock{{
+		Name:        name,
+		CFName:      name,
+		ID:          "0",
+		Attributes:  "0x0050",
+		StartSector: 0,
+		SectorCount: uint64(len(raw) / sectorSize),
+		Data:        raw,
+	}}
+
+	out, err := os.Create(dstPath)
+	if err != nil {
+		return fmt.Errorf("WrapRawImageDMG: create %s: %w", dstPath, err)
+	}
+	bw := bufio.NewWriterSize(out, 1<<20)
+	if err := EncodeUDIF(bw, blocks, opts); err != nil {
+		out.Close()
+		return fmt.Errorf("WrapRawImageDMG: encode: %w", err)
+	}
+	if err := bw.Flush(); err != nil {
+		out.Close()
+		return fmt.Errorf("WrapRawImageDMG: flush: %w", err)
+	}
+	if err := out.Close(); err != nil {
+		return fmt.Errorf("WrapRawImageDMG: close: %w", err)
+	}
+	return nil
+}
