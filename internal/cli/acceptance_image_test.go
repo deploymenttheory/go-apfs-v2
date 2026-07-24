@@ -23,12 +23,14 @@ import (
 	"testing"
 )
 
-// Expected facts about the acceptance image (Firefox 150), overridable via
-// environment to swap artifacts.
+// Expected facts about the acceptance image (default: Firefox 150),
+// overridable via environment to swap artifacts. CI runs this suite twice:
+// once against Firefox 150 (HFS+) and once against Zed (APFS).
 var (
 	acceptanceVolumeName = envOr("APFS_ACCEPTANCE_VOLNAME", "Firefox")
 	acceptanceAppBundle  = envOr("APFS_ACCEPTANCE_APP", "Firefox.app")
 	acceptanceBundleID   = envOr("APFS_ACCEPTANCE_BUNDLE_ID", "org.mozilla.firefox")
+	acceptanceBinary     = envOr("APFS_ACCEPTANCE_BINARY", "")
 )
 
 func envOr(key, fallback string) string {
@@ -38,10 +40,17 @@ func envOr(key, fallback string) string {
 	return fallback
 }
 
-// stepSummary appends a markdown line to the GitHub Actions step summary so
-// observed acceptance values are visible in the pipeline UI. A no-op outside
-// GitHub Actions.
-func stepSummary(format string, args ...any) {
+// summaryHeaderOnce tracks whether the step-summary section header has been
+// written for this test run.
+var summaryHeaderWritten bool
+
+// attest records an observed value an acceptance test is attesting: it is
+// logged in the test output (visible with go test -v in the pipeline) and
+// appended to the GitHub Actions step summary when running in CI.
+func attest(t *testing.T, format string, args ...any) {
+	t.Helper()
+	t.Logf("ATTEST "+format, args...)
+
 	path := os.Getenv("GITHUB_STEP_SUMMARY")
 	if path == "" {
 		return
@@ -51,7 +60,11 @@ func stepSummary(format string, args ...any) {
 		return
 	}
 	defer f.Close()
-	fmt.Fprintf(f, format+"\n", args...)
+	if !summaryHeaderWritten {
+		fmt.Fprintf(f, "\n### Acceptance image attestations (%s/%s)\n", runtime.GOOS, runtime.GOARCH)
+		summaryHeaderWritten = true
+	}
+	fmt.Fprintf(f, "- `%s`: "+format+"\n", append([]any{t.Name()}, args...)...)
 }
 
 // acceptanceDMG skips the test unless the acceptance image is configured.
@@ -68,7 +81,8 @@ func acceptanceDMG(t *testing.T) string {
 }
 
 type acceptanceInfo struct {
-	VolumeCount int `json:"volumeCount"`
+	Filesystem  string `json:"filesystem"`
+	VolumeCount int    `json:"volumeCount"`
 	Volumes     []struct {
 		Name        string `json:"name"`
 		Files       uint64 `json:"files"`
@@ -101,10 +115,11 @@ func TestAcceptanceInfo(t *testing.T) {
 		t.Error("volume reports zero files")
 	}
 
-	stepSummary("### Acceptance image results (%s/%s)", runtime.GOOS, runtime.GOARCH)
-	stepSummary("- **Image**: %s", filepath.Base(dmg))
-	stepSummary("- **Volume**: %s — %d files, %d directories, %d symlinks (superblock accounting)",
-		info.Volumes[0].Name, info.Volumes[0].Files, info.Volumes[0].Directories, info.Volumes[0].Symlinks)
+	attest(t, "image: %s", filepath.Base(dmg))
+	attest(t, "filesystem: %s", info.Filesystem)
+	attest(t, "volume name: %q (expected %q)", info.Volumes[0].Name, acceptanceVolumeName)
+	attest(t, "volume contents: %d files, %d directories, %d symlinks",
+		info.Volumes[0].Files, info.Volumes[0].Directories, info.Volumes[0].Symlinks)
 }
 
 // TestAcceptanceListMatchesSuperblockCounts cross-checks the recursive listing
@@ -163,7 +178,8 @@ func TestAcceptanceListMatchesSuperblockCounts(t *testing.T) {
 		t.Errorf("recursive list missing %s/Contents/Info.plist", acceptanceAppBundle)
 	}
 
-	stepSummary("- **Recursive list**: %d files, %d directories, %d symlinks enumerated", files, dirs, symlinks)
+	attest(t, "recursive list enumerated: %d files, %d directories, %d symlinks", files, dirs, symlinks)
+	attest(t, "found %s: %v; found %s/Contents/Info.plist: %v", acceptanceAppBundle, sawAppBundle, acceptanceAppBundle, sawInfoPlist)
 }
 
 func TestAcceptanceCatInfoPlist(t *testing.T) {
@@ -172,6 +188,10 @@ func TestAcceptanceCatInfoPlist(t *testing.T) {
 	if !strings.Contains(out, acceptanceBundleID) {
 		t.Errorf("Info.plist does not contain bundle id %q", acceptanceBundleID)
 	}
+
+	sum := sha256.Sum256([]byte(out))
+	attest(t, "Info.plist: %d bytes, sha256 %s, contains bundle id %q",
+		len(out), hex.EncodeToString(sum[:8]), acceptanceBundleID)
 }
 
 // TestAcceptanceCatMainBinaryIsMachO reads the app's main executable and checks it
@@ -180,9 +200,12 @@ func TestAcceptanceCatInfoPlist(t *testing.T) {
 func TestAcceptanceCatMainBinaryIsMachO(t *testing.T) {
 	dmg := acceptanceDMG(t)
 
-	// The main binary name comes from CFBundleExecutable, but for the
-	// default artifact it matches the bundle name
-	binary := strings.TrimSuffix(acceptanceAppBundle, ".app")
+	// The main binary name comes from CFBundleExecutable; default to the
+	// bundle name unless overridden for the artifact
+	binary := acceptanceBinary
+	if binary == "" {
+		binary = strings.TrimSuffix(acceptanceAppBundle, ".app")
+	}
 	out, stderr, code := run(t, "cat", dmg, "/"+acceptanceAppBundle+"/Contents/MacOS/"+binary)
 	if code != 0 {
 		t.Fatalf("cat main binary exited %d: %s", code, stderr)
@@ -198,6 +221,10 @@ func TestAcceptanceCatMainBinaryIsMachO(t *testing.T) {
 	if !machO {
 		t.Errorf("main binary magic = %x, not Mach-O", magic)
 	}
+
+	sum := sha256.Sum256([]byte(out))
+	attest(t, "main binary %q: %d bytes, magic %x (Mach-O: %v), sha256 %s",
+		binary, len(out), magic, machO, hex.EncodeToString(sum[:8]))
 }
 
 // TestAcceptanceExtractVerified extracts the whole volume with --verify (source
@@ -234,7 +261,8 @@ func TestAcceptanceExtractVerified(t *testing.T) {
 	if code != 0 {
 		verified = fmt.Sprintf("exit %d", code)
 	}
-	stepSummary("- **Extraction**: %d files written, checksum verification %s", extractedFiles, verified)
+	attest(t, "extraction wrote %d files (superblock claims %d); source-checksum verification: %s",
+		extractedFiles, info.Volumes[0].Files, verified)
 }
 
 // TestAcceptanceGroundTruthAgainstHdiutil mounts the same DMG with macOS hdiutil
@@ -290,8 +318,7 @@ func TestAcceptanceGroundTruthAgainstHdiutil(t *testing.T) {
 	if checked == 0 {
 		t.Fatal("ground-truth walk compared zero files")
 	}
-	t.Logf("verified %d files against hdiutil ground truth", checked)
-	stepSummary("- **hdiutil ground truth (macOS)**: %d files sha256-identical to the mounted image", checked)
+	attest(t, "hdiutil ground truth: %d files compared, all sha256-identical to the mounted image", checked)
 }
 
 func sha256File(path string) (string, error) {
