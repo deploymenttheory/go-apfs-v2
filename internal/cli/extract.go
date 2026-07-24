@@ -127,6 +127,7 @@ func runExtract(cmd *cobra.Command, args []string) error {
 			"bytes":            bytes,
 			"skipped":          extractor.Skipped(),
 			"symlinksDegraded": extractor.SymlinksDegraded(),
+			"namesRemapped":    extractor.NamesRemapped(),
 		}
 		if err := jsonOut(summary); err != nil {
 			return err
@@ -136,6 +137,9 @@ func runExtract(cmd *cobra.Command, args []string) error {
 		fmt.Printf("Total: %d files, %s\n", files, formatSize(bytes))
 		if degraded := extractor.SymlinksDegraded(); degraded > 0 {
 			fmt.Printf("Note: %d symlink(s) written as regular files (OS symlink support unavailable)\n", degraded)
+		}
+		if remapped := extractor.NamesRemapped(); remapped > 0 {
+			fmt.Printf("Note: %d name(s) sanitized to be storable on this filesystem\n", remapped)
 		}
 	}
 

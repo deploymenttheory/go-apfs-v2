@@ -58,6 +58,7 @@ type Extractor struct {
 	filesExtracted   int
 	entriesSkipped   int
 	symlinksDegraded int
+	namesRemapped    int
 	bytesExtracted   uint64
 	sourceChecksums  map[string]string // relativePath -> SHA256 of source data
 	progressBar      *progressbar.ProgressBar
@@ -69,6 +70,24 @@ type Extractor struct {
 func (e *Extractor) warnSkip(format string, args ...any) {
 	e.entriesSkipped++
 	fmt.Fprintf(os.Stderr, "Warning: "+format+"\n", args...)
+}
+
+// destPath joins rel under the destination root, sanitizing each path
+// component so it is representable on the host OS (e.g. Windows rejects
+// trailing spaces/dots, reserved characters and reserved device names). When
+// a component is remapped the change is reported and counted, so extraction
+// stays lossless in content and never fails purely because the source used a
+// name the destination filesystem cannot store verbatim.
+func (e *Extractor) destPath(rel string) string {
+	if rel == "" {
+		return e.Destination
+	}
+	sanitized, changed := sanitizePathForHost(rel)
+	if changed {
+		e.namesRemapped++
+		fmt.Fprintf(os.Stderr, "Note: %q cannot be represented on this filesystem; extracted as %q\n", rel, sanitized)
+	}
+	return filepath.Join(e.Destination, filepath.FromSlash(sanitized))
 }
 
 // ExtractAll extracts the entire volume into the destination directory.
@@ -95,10 +114,10 @@ func (e *Extractor) ExtractByPath(volumePath string, recursive bool) error {
 	}
 
 	if info.Mode()&fs.ModeSymlink != 0 {
-		return e.extractSymlink(name, filepath.Join(e.Destination, base))
+		return e.extractSymlink(name, e.destPath(base))
 	}
 
-	return e.extractFile(name, filepath.Join(e.Destination, base), info)
+	return e.extractFile(name, e.destPath(base), info)
 }
 
 // extractTree walks the subtree rooted at root (an fs.FS name) and recreates
@@ -128,7 +147,11 @@ func (e *Extractor) extractTree(root, destBase string) error {
 				rel = ""
 			}
 		}
-		destPath := filepath.Join(e.Destination, destBase, rel)
+		destRel := rel
+		if destBase != "" {
+			destRel = path.Join(destBase, rel)
+		}
+		destPath := e.destPath(destRel)
 
 		switch {
 		case entry.IsDir():
@@ -360,6 +383,12 @@ func (e *Extractor) Skipped() int {
 // because the OS would not create a real symlink.
 func (e *Extractor) SymlinksDegraded() int {
 	return e.symlinksDegraded
+}
+
+// NamesRemapped returns the number of entries whose names were sanitized to
+// be storable on the host filesystem.
+func (e *Extractor) NamesRemapped() int {
+	return e.namesRemapped
 }
 
 // GetStats returns extraction statistics

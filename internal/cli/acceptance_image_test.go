@@ -234,14 +234,15 @@ func TestAcceptanceExtractVerified(t *testing.T) {
 	info := acceptanceInfoJSON(t, dmg)
 	dest := t.TempDir()
 
-	// Default (auto) symlink handling degrades unsupported symlinks to files
-	// rather than failing, so extraction completes with exit 0 on every OS
-	// including unprivileged Windows. Run once with a JSON summary to observe
-	// the degraded count, then again with --verify for the text success line.
+	// Extraction completes with exit 0 on every OS: symlinks the OS refuses
+	// degrade to files, and names the OS cannot store (e.g. a trailing-space
+	// name on Windows) are sanitized. Run once with a JSON summary to observe
+	// those counts, then again with --verify for the text success line.
 	summaryOut := mustRun(t, "extract", "-o", "json", "-q", dmg, "-C", t.TempDir())
 	var summary struct {
 		Files            uint64 `json:"files"`
 		SymlinksDegraded int    `json:"symlinksDegraded"`
+		NamesRemapped    int    `json:"namesRemapped"`
 	}
 	if err := json.Unmarshal([]byte(summaryOut), &summary); err != nil {
 		t.Fatalf("extract -o json invalid: %v\n%s", err, summaryOut)
@@ -267,8 +268,8 @@ func TestAcceptanceExtractVerified(t *testing.T) {
 		t.Errorf("extracted %d files, superblock claims %d", extractedFiles, info.Volumes[0].Files)
 	}
 
-	attest(t, "extraction wrote %d files (superblock claims %d); %d symlink(s) degraded to files; source-checksum verification: passed",
-		extractedFiles, info.Volumes[0].Files, summary.SymlinksDegraded)
+	attest(t, "extraction wrote %d files (superblock claims %d); %d symlink(s) degraded to files; %d name(s) sanitized; source-checksum verification: passed",
+		extractedFiles, info.Volumes[0].Files, summary.SymlinksDegraded, summary.NamesRemapped)
 }
 
 // TestAcceptanceGroundTruthAgainstHdiutil mounts the same DMG with macOS hdiutil
