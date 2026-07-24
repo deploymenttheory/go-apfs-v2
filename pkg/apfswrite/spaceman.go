@@ -98,7 +98,14 @@ func (b *builder) spacemanSize() uint32 {
 	return uint32(divRoundUp(entryCount*8+uint64(main.cibAddrBaseOff), uint64(b.blocksize)) * uint64(b.blocksize))
 }
 
-// countUsedBlocksInChunk mirrors spaceman.c:count_used_blocks_in_chunk.
+// countUsedBlocksInChunk counts the allocated blocks in one chunk. It
+// generalizes spaceman.c:count_used_blocks_in_chunk to any number of chunks:
+// the container's allocated blocks form two contiguous ranges — the low
+// metadata [0, cpEnd+8) (block zero, checkpoint areas, container object map and
+// the volume's trees) and [ipBmapBase, usedBlocksEnd) (the ip bitmap blocks,
+// the internal pool, then the post-IP catalog/extref leaves and file data) —
+// separated only by the two unused Fusion slots at cpEnd+8..cpEnd+10. Each
+// chunk's used count is its overlap with those two ranges.
 func (b *builder) countUsedBlocksInChunk(dev *devInfo, chunkno uint64) uint32 {
 	if chunkno >= dev.usedChunksEnd {
 		return 0
@@ -108,28 +115,32 @@ func (b *builder) countUsedBlocksInChunk(dev *devInfo, chunkno uint64) uint32 {
 		return 1
 	}
 
-	firstChunkIPBlocks := b.sm.ipBlocks
-	if avail := b.blocksPerChunk() - b.sm.ipBase; avail < firstChunkIPBlocks {
-		firstChunkIPBlocks = avail
+	s := chunkno * b.blocksPerChunk()
+	e := s + b.blocksPerChunk()
+	if e > dev.blockCount {
+		e = dev.blockCount
 	}
 
-	if chunkno == 0 {
-		blocks := uint32(0)
-		blocks += 1                 // Block zero
-		blocks += b.cpDescBlocks    // Checkpoint descriptor blocks
-		blocks += b.cpDataBlocks    // Checkpoint data blocks
-		blocks += 2                 // Container object map and its root
-		blocks += 6                 // Volume superblock and its trees
-		blocks += b.sm.ipBmapBlocks // Internal pool bitmap blocks
-		blocks += uint32(firstChunkIPBlocks)
-		return blocks
-	}
+	lowEnd := b.cpEnd + 8
+	used := overlapLen(s, e, 0, lowEnd)
+	used += overlapLen(s, e, b.ipBmapBase, dev.usedBlocksEnd)
+	return uint32(used)
+}
 
-	if chunkno != dev.usedChunksEnd-1 {
-		return uint32(b.blocksPerChunk())
+// overlapLen returns the number of blocks in [s, e) that also fall in [a, c).
+func overlapLen(s, e, a, c uint64) uint64 {
+	lo := s
+	if a > lo {
+		lo = a
 	}
-	// Last chunk.
-	return uint32((b.sm.ipBlocks - firstChunkIPBlocks) % b.blocksPerChunk())
+	hi := e
+	if c < hi {
+		hi = c
+	}
+	if hi > lo {
+		return hi - lo
+	}
+	return 0
 }
 
 // countUsedBlocks mirrors spaceman.c:count_used_blocks.
@@ -160,6 +171,9 @@ func (b *builder) makeMainAllocBitmap() error {
 	bmapMarkAsUsed(bmap, b.firstVolBno, 6)                        // Volume sb + its trees
 	bmapMarkAsUsed(bmap, b.ipBmapBase, uint64(b.sm.ipBmapBlocks)) // IP bitmap blocks
 	bmapMarkAsUsed(bmap, b.sm.ipBase, b.sm.ipBlocks)              // Internal pool blocks
+	if b.postIPBlocks > 0 {
+		bmapMarkAsUsed(bmap, b.postIPBase, b.postIPBlocks) // Extra catalog leaves + file data
+	}
 
 	return b.writeBlocks(bmap, dev.firstChunkBmap)
 }
@@ -390,8 +404,32 @@ func (b *builder) setSpacemanInfo() error {
 		tier2.cibAddrBaseOff = main.cibAddrBaseOff + main.cibCount*8
 	}
 
-	// Only the ip size matters; all other used blocks come before it.
-	main.usedBlocksEnd = b.sm.ipBase + b.sm.ipBlocks
+	// The volume's extra blocks are laid out contiguously right after the
+	// internal pool, at the first otherwise-free block: first the extra catalog
+	// leaf nodes (2-level catalog), then the extra extent-reference leaf nodes
+	// (2-level extref tree), then the file data blocks. This region may span
+	// several space-manager chunks; the per-chunk accounting below handles it.
+	b.postIPBase = b.sm.ipBase + b.sm.ipBlocks
+	b.catLeafBase = b.postIPBase
+	b.extrefLeafBase = b.catLeafBase + b.numCatLeaves
+	b.fileDataBase = b.extrefLeafBase + b.numExtrefLeaves
+	b.postIPBlocks = b.numCatLeaves + b.numExtrefLeaves + b.fileDataBlocks
+	if b.postIPBase+b.postIPBlocks > b.mainBlkcnt {
+		return errFileDataTooBig
+	}
+	blk := b.fileDataBase
+	for _, f := range b.streamFiles {
+		if f.blocks == 0 {
+			continue // 0-byte file: no data block
+		}
+		f.dataBlock = blk
+		blk += f.blocks
+	}
+
+	// The used region runs contiguously from block 0 to the end of the post-IP
+	// data (with a 2-block gap for the unused Fusion middle-tree/wbc slots). Its
+	// end sets how many chunks carry allocations.
+	main.usedBlocksEnd = b.postIPBase + b.postIPBlocks
 	main.usedChunksEnd = divRoundUp(main.usedBlocksEnd, b.blocksPerChunk())
 	tier2.usedBlocksEnd = 0
 	tier2.usedChunksEnd = 0

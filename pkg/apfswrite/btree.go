@@ -3,7 +3,10 @@
 
 package apfswrite
 
-import "encoding/binary"
+import (
+	"encoding/binary"
+	"sort"
+)
 
 // Offsets within an apfs_btree_node_phys header.
 const (
@@ -135,45 +138,67 @@ func (b *builder) setOmapInfo(info []byte, nkeys int) {
 	binary.LittleEndian.PutUint64(info[32:], 1)             // bt_node_count
 }
 
+// omapEntry is one (oid -> physical block) mapping in an object map.
+type omapEntry struct {
+	oid   uint64
+	paddr uint64
+}
+
 // makeOmapRoot makes the root node of an object map, mirroring
-// btree.c:make_omap_root.
+// btree.c:make_omap_root. The container omap maps the volume superblock oid;
+// the volume omap maps the catalog root and, for a 2-level catalog, each of its
+// leaf nodes. Records are fixed-size (omap_key, omap_val) sorted by oid.
 func (b *builder) makeOmapRoot(bno uint64, isVol bool) error {
+	var entries []omapEntry
+	if isVol {
+		entries = append(entries, omapEntry{firstVolCatRootOID, b.firstVolCatRootBno})
+		if b.catTwoLevel {
+			for i := uint64(0); i < b.numCatLeaves; i++ {
+				entries = append(entries, omapEntry{catLeafOIDBase + i, b.catLeafBase + i})
+			}
+		}
+	} else {
+		entries = append(entries, omapEntry{firstVolOID, b.firstVolBno})
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].oid < entries[j].oid })
+
 	root := b.zeroedBlock()
 	headLen := sizeofBtreeNodePhys
 	infoLen := sizeofBtreeInfo
 
 	binary.LittleEndian.PutUint16(root[btnOffFlags:], btnodeRoot|btnodeLeaf|btnodeFixedKVSize)
 
-	binary.LittleEndian.PutUint32(root[btnOffNkeys:], 1)
+	nkeys := len(entries)
+	binary.LittleEndian.PutUint32(root[btnOffNkeys:], uint32(nkeys))
 	tocLen := b.minTableSize(objectTypeOmap)
 	keyLen := sizeofOmapKey
 	valLen := sizeofOmapVal
+	keyArea := headLen + tocLen
+	valAreaEnd := int(b.blocksize) - infoLen
 
-	// Location of the one record.
-	keyOff := headLen + tocLen
-	valOff := int(b.blocksize) - infoLen - valLen
-	// kvoff at head_len: k = 0, v = val_len.
-	binary.LittleEndian.PutUint16(root[headLen:], 0)
-	binary.LittleEndian.PutUint16(root[headLen+2:], uint16(valLen))
+	for i, e := range entries {
+		// Fixed-size TOC entry (kvoff): key offset, value offset.
+		toc := headLen + i*sizeofKvoff
+		keyOff := keyArea + i*keyLen
+		valOff := valAreaEnd - (i+1)*valLen
+		binary.LittleEndian.PutUint16(root[toc:], uint16(keyOff-keyArea))
+		binary.LittleEndian.PutUint16(root[toc+2:], uint16(valAreaEnd-valOff))
 
-	// Set the key and value for the one record.
-	if isVol {
-		binary.LittleEndian.PutUint64(root[keyOff:], firstVolCatRootOID)     // ok_oid
-		binary.LittleEndian.PutUint64(root[valOff+8:], b.firstVolCatRootBno) // ov_paddr
-	} else {
-		binary.LittleEndian.PutUint64(root[keyOff:], firstVolOID)
-		binary.LittleEndian.PutUint64(root[valOff+8:], b.firstVolBno)
+		binary.LittleEndian.PutUint64(root[keyOff:], e.oid)         // ok_oid
+		binary.LittleEndian.PutUint64(root[keyOff+8:], mkfsXID)     // ok_xid
+		binary.LittleEndian.PutUint32(root[valOff+4:], b.blocksize) // ov_size
+		binary.LittleEndian.PutUint64(root[valOff+8:], e.paddr)     // ov_paddr
 	}
-	binary.LittleEndian.PutUint64(root[keyOff+8:], mkfsXID)     // ok_xid
-	binary.LittleEndian.PutUint32(root[valOff+4:], b.blocksize) // ov_size
 
 	putNloc(root, btnOffTableSpace, 0, uint16(tocLen))
-	freeLen := int(b.blocksize) - headLen - tocLen - keyLen - valLen - infoLen
-	putNloc(root, btnOffFreeSpace, uint16(keyLen), uint16(freeLen))
+	usedKeys := nkeys * keyLen
+	usedVals := nkeys * valLen
+	freeLen := int(b.blocksize) - headLen - tocLen - usedKeys - usedVals - infoLen
+	putNloc(root, btnOffFreeSpace, uint16(usedKeys), uint16(freeLen))
 	putNloc(root, btnOffKeyFreeList, btoffInvalid, 0)
 	putNloc(root, btnOffValFreeList, btoffInvalid, 0)
 
-	b.setOmapInfo(root[int(b.blocksize)-infoLen:], 1)
+	b.setOmapInfo(root[int(b.blocksize)-infoLen:], nkeys)
 	setObjectHeader(root, int(b.blocksize), bno,
 		objectTypeBtree|objPhysical, objectTypeOmap)
 	return b.writeBlock(root, bno)
@@ -204,64 +229,4 @@ func (b *builder) makeOmapBtree(bno uint64, isVol bool) error {
 	setObjectHeader(block, int(b.blocksize), bno,
 		objPhysical|objectTypeOmap, objectTypeInvalid)
 	return b.writeBlock(block, bno)
-}
-
-// setCatInfo sets the info footer for a catalog root node, mirroring
-// btree.c:set_cat_info.
-func (b *builder) setCatInfo(info []byte) {
-	drecKeysz := sizeofDrecHashedKeyFixed
-	if b.normSensitive {
-		drecKeysz = sizeofDrecKeyFixed
-	}
-	maxkey := drecKeysz + len("private-dir") + 1
-	maxval := sizeofInodeVal + sizeofXfBlob + sizeofXField + int(roundUp(uint64(len("private-dir")+1), 8))
-
-	binary.LittleEndian.PutUint32(info[0:], btreeKVNonaligned) // bt_flags
-	binary.LittleEndian.PutUint32(info[4:], b.blocksize)       // bt_node_size
-	binary.LittleEndian.PutUint32(info[16:], uint32(maxkey))   // bt_longest_key
-	binary.LittleEndian.PutUint32(info[20:], uint32(maxval))   // bt_longest_val
-	binary.LittleEndian.PutUint64(info[24:], 4)                // bt_key_count (two per dir)
-	binary.LittleEndian.PutUint64(info[32:], 1)                // bt_node_count
-}
-
-// makeCatRoot makes the root node of a catalog tree with two records: the root
-// and private directories. Mirrors btree.c:make_cat_root.
-func (b *builder) makeCatRoot(bno, oid uint64) error {
-	root := b.zeroedBlock()
-	headLen := sizeofBtreeNodePhys
-	infoLen := sizeofBtreeInfo
-
-	binary.LittleEndian.PutUint16(root[btnOffFlags:], btnodeRoot|btnodeLeaf)
-
-	// The two dentry records and their inodes.
-	binary.LittleEndian.PutUint32(root[btnOffNkeys:], 4)
-	tocLen := b.minTableSize(objectTypeFSTree)
-	putNloc(root, btnOffTableSpace, 0, uint16(tocLen))
-
-	cur := &catCursor{
-		b:          b,
-		block:      root,
-		tocOff:     headLen,
-		keyArea:    headLen + tocLen,
-		keyOff:     headLen + tocLen,
-		valAreaEnd: int(b.blocksize) - infoLen,
-		valEnd:     int(b.blocksize) - infoLen,
-	}
-
-	cur.makeSpecialDirDentry(privDirInoNum, "private-dir")
-	cur.makeSpecialDirDentry(rootDirInoNum, "root")
-	cur.makeSpecialDirInode(rootDirInoNum, "root")
-	cur.makeSpecialDirInode(privDirInoNum, "private-dir")
-
-	keyLen := cur.keyOff - cur.keyArea
-	valLen := cur.valAreaEnd - cur.valEnd
-	freeLen := int(b.blocksize) - headLen - tocLen - keyLen - valLen - infoLen
-	putNloc(root, btnOffFreeSpace, uint16(keyLen), uint16(freeLen))
-	putNloc(root, btnOffKeyFreeList, btoffInvalid, 0)
-	putNloc(root, btnOffValFreeList, btoffInvalid, 0)
-
-	b.setCatInfo(root[int(b.blocksize)-infoLen:])
-	setObjectHeader(root, int(b.blocksize), oid,
-		objectTypeBtree|objVirtual, objectTypeFSTree)
-	return b.writeBlock(root, bno)
 }

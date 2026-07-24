@@ -6,6 +6,8 @@ package apfswrite
 import (
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"time"
 )
 
@@ -31,6 +33,122 @@ type CreateOptions struct {
 	// VolumeUUID is the volume UUID. The zero value selects a fixed
 	// deterministic default.
 	VolumeUUID [16]byte
+
+	// RootFiles are regular files to create in the volume root directory.
+	// It is a convenience shorthand for a flat set of root-level files; each
+	// becomes a top-level child of Root. When Root is also set, RootFiles are
+	// appended as additional top-level entries.
+	//
+	// Files may be of any size (multi-block, spanning many allocation blocks)
+	// and may be empty (0 bytes).
+	RootFiles []RootFile
+
+	// Root is a directory tree to populate the volume with: nested directories
+	// and regular files of arbitrary depth and size (including empty files). A
+	// nil Root (and empty RootFiles) formats an empty volume, exactly as before.
+	//
+	// Root itself represents the volume root directory; only its Children are
+	// used (any Name/Data on Root is ignored).
+	Root *Entry
+}
+
+// Entry is one node of the directory tree written into the volume. It mirrors
+// pkg/hfsplus's Entry in shape. The Mode's type bits select the kind of entry:
+// a directory (os.ModeDir) carries its Children; a symbolic link
+// (os.ModeSymlink) carries its target path in Data; otherwise it is a regular
+// file carrying its bytes in Data. When Mode is zero, an Entry with Children is
+// treated as a directory and any other Entry as a regular file (0644).
+type Entry struct {
+	// Name is the entry's file name (no path separators, no NUL).
+	Name string
+	// Mode carries the entry type (dir/symlink) and permission bits. When zero,
+	// sensible defaults are applied (0755 dirs, 0644 files).
+	Mode os.FileMode
+	// ModTime is written to the inode's create/mod/change/access times. When
+	// zero, a fixed deterministic timestamp is used.
+	ModTime time.Time
+	// UID and GID are the inode's owner and group ids.
+	UID, GID uint32
+	// Data is the file content for a regular file (any size, may be empty), or
+	// the target path for a symbolic link.
+	Data []byte
+	// Children are the entries contained in a directory.
+	Children []*Entry
+}
+
+// isDirEntry reports whether e should be written as a directory. A zero Mode
+// with Children present is treated as a directory (backwards compatible with
+// callers that built trees before Mode existed).
+func (e *Entry) isDirEntry() bool {
+	if e.isSymlinkEntry() {
+		return false
+	}
+	if e.Mode == 0 {
+		return len(e.Children) > 0
+	}
+	return e.Mode.IsDir()
+}
+
+// isSymlinkEntry reports whether e is a symbolic link.
+func (e *Entry) isSymlinkEntry() bool { return e.Mode&os.ModeSymlink != 0 }
+
+// resolvedMode returns the on-disk inode mode (S_IFMT | perm) for e, applying
+// default permission bits when Mode carries none.
+func (e *Entry) resolvedMode() uint16 {
+	perm := uint16(e.Mode.Perm())
+	switch {
+	case e.isSymlinkEntry():
+		if perm == 0 {
+			perm = 0o755
+		}
+		return sIFLNK | perm
+	case e.isDirEntry():
+		if perm == 0 {
+			perm = 0o755
+		}
+		return sIFDIR | perm
+	default:
+		if perm == 0 {
+			perm = 0o644
+		}
+		return sIFREG | perm
+	}
+}
+
+// RootFile is a regular file to be created in the volume root directory.
+type RootFile struct {
+	// Name is the file name (no path separators).
+	Name string
+	// Data is the file content (any size, may be empty).
+	Data []byte
+}
+
+// builderEntry holds the resolved on-disk placement for a single catalog
+// entry (a directory or a regular file).
+type builderEntry struct {
+	name      string
+	isDir     bool
+	isSymlink bool   // true for a symbolic link (target stored in a symlink xattr)
+	cnid      uint64 // catalog node id / inode number
+	parent    uint64 // parent directory cnid
+	nchildren uint32 // directories: number of direct children
+
+	// Inode metadata.
+	mode  uint16 // S_IFMT | permission bits
+	uid   uint32 // owner id
+	gid   uint32 // group id
+	mtime uint64 // create/mod/change/access time (ns since 1970 UTC)
+
+	// Symbolic links: the target path bytes (stored in a com.apple.fs.symlink
+	// extended attribute, not in a data stream).
+	linkTarget []byte
+
+	// Regular files with content (non-empty streams).
+	data        []byte
+	hasStream   bool   // true for every regular file (has a DSTREAM xfield + DSTREAM_ID record)
+	dataBlock   uint64 // physical block number of the first content block (0 if empty)
+	blocks      uint64 // number of allocation blocks in the file's extent (0 for a 0-byte file)
+	allocedSize uint64 // block-aligned allocated size in bytes (0 for a 0-byte file)
 }
 
 // Deterministic default UUIDs used when the caller leaves a UUID zero.
@@ -60,17 +178,6 @@ func CreateContainer(w io.WriterAt, sizeBytes int64, opts *CreateOptions) error 
 		return fmt.Errorf("apfswrite: unsupported block size %d", b.blocksize)
 	}
 
-	// mkapfs enforces a 512 KiB minimum for the main device.
-	const minBytes = 512 * 1024
-	if sizeBytes == 0 {
-		sizeBytes = minBytes
-	}
-	b.mainBlkcnt = uint64(sizeBytes) / uint64(b.blocksize)
-	b.blockCount = b.mainBlkcnt
-	if b.mainBlkcnt*uint64(b.blocksize) < minBytes {
-		return fmt.Errorf("apfswrite: container too small (%d bytes); minimum is %d", sizeBytes, minBytes)
-	}
-
 	b.label = opts.VolumeName
 	if b.label == "" {
 		b.label = "untitled"
@@ -78,12 +185,6 @@ func CreateContainer(w io.WriterAt, sizeBytes int64, opts *CreateOptions) error 
 	if len(b.label)+1 > volnameLen {
 		return fmt.Errorf("apfswrite: volume label too long")
 	}
-
-	// Case-sensitivity handling mirrors mkapfs. mkapfs defaults to
-	// normalization-sensitive off (i.e. a case-insensitive volume). The public
-	// API exposes only the common CaseSensitive toggle.
-	b.caseSensitive = opts.CaseSensitive
-	b.normSensitive = false
 
 	b.mainUUID = opts.ContainerUUID
 	if b.mainUUID == ([16]byte{}) {
@@ -93,6 +194,39 @@ func CreateContainer(w io.WriterAt, sizeBytes int64, opts *CreateOptions) error 
 	if b.volUUID == ([16]byte{}) {
 		b.volUUID = defaultVolumeUUID
 	}
+
+	// Case-sensitivity handling mirrors mkapfs (see below); resolve the tree now
+	// so its data requirements can size the image when the caller passes 0.
+	b.caseSensitive = opts.CaseSensitive
+	b.normSensitive = false
+
+	// Resolve the user directory tree (nested dirs + regular files of any size).
+	if err := b.setTree(opts); err != nil {
+		return err
+	}
+
+	// mkapfs enforces a 512 KiB minimum for the main device.
+	const minBytes = 512 * 1024
+	if sizeBytes == 0 {
+		// Size the image to comfortably hold the post-internal-pool payload
+		// (catalog leaves, extref leaves, file data) plus the fixed format
+		// metadata, block-aligned, with headroom for the checkpoint areas.
+		payload := b.numCatLeaves + b.numExtrefLeaves + b.fileDataBlocks
+		needBlocks := payload + payload/8 + 2048
+		sizeBytes = int64(needBlocks) * int64(b.blocksize)
+		if sizeBytes < minBytes {
+			sizeBytes = minBytes
+		}
+	}
+	b.mainBlkcnt = uint64(sizeBytes) / uint64(b.blocksize)
+	b.blockCount = b.mainBlkcnt
+	if b.mainBlkcnt*uint64(b.blocksize) < minBytes {
+		return fmt.Errorf("apfswrite: container too small (%d bytes); minimum is %d", sizeBytes, minBytes)
+	}
+
+	// Case-sensitivity handling mirrors mkapfs. mkapfs defaults to
+	// normalization-sensitive off (i.e. a case-insensitive volume). The public
+	// API exposes only the common CaseSensitive toggle (resolved above).
 
 	b.computeCheckpointLayout()
 
@@ -109,6 +243,82 @@ func CreateContainer(w io.WriterAt, sizeBytes int64, opts *CreateOptions) error 
 		}
 	}
 	return nil
+}
+
+// CreateContainerFromDir walks srcDir into an Entry tree — regular files,
+// directories and symbolic links, preserving each entry's mode, uid/gid and
+// modification time — and writes a populated APFS container of sizeBytes to w
+// via CreateContainer. It mirrors hfsplus.CreateImageFromDir. srcDir's own name
+// is not used; its contents become the volume root's children. When sizeBytes
+// is 0 the image is sized automatically to fit the tree.
+func CreateContainerFromDir(w io.WriterAt, sizeBytes int64, srcDir string, opts *CreateOptions) error {
+	root, err := entryFromDir(srcDir)
+	if err != nil {
+		return err
+	}
+	var o CreateOptions
+	if opts != nil {
+		o = *opts
+	}
+	o.Root = root
+	return CreateContainer(w, sizeBytes, &o)
+}
+
+// entryFromDir builds an Entry tree rooted at dir (dir's own name is dropped;
+// its children become the returned root's children).
+func entryFromDir(dir string) (*Entry, error) {
+	children, err := readDirEntries(dir)
+	if err != nil {
+		return nil, err
+	}
+	return &Entry{Children: children}, nil
+}
+
+// readDirEntries reads one directory level into Entry nodes, recursing into
+// subdirectories. Symlinks are captured as their target path; regular files as
+// their bytes. Mode, mtime and (where the OS exposes them) uid/gid are copied.
+func readDirEntries(dir string) ([]*Entry, error) {
+	fis, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	var out []*Entry
+	for _, fi := range fis {
+		full := filepath.Join(dir, fi.Name())
+		info, err := os.Lstat(full)
+		if err != nil {
+			return nil, err
+		}
+		e := &Entry{Name: fi.Name(), Mode: info.Mode(), ModTime: info.ModTime()}
+		if st, ok := info.Sys().(interface {
+			Uid() uint32
+			Gid() uint32
+		}); ok {
+			e.UID, e.GID = st.Uid(), st.Gid()
+		}
+		switch {
+		case info.Mode()&os.ModeSymlink != 0:
+			target, err := os.Readlink(full)
+			if err != nil {
+				return nil, err
+			}
+			e.Data = []byte(target)
+		case info.IsDir():
+			kids, err := readDirEntries(full)
+			if err != nil {
+				return nil, err
+			}
+			e.Children = kids
+		default:
+			data, err := os.ReadFile(full)
+			if err != nil {
+				return nil, err
+			}
+			e.Data = data
+		}
+		out = append(out, e)
+	}
+	return out, nil
 }
 
 // builder holds all filesystem parameters and the fixed block layout while the
@@ -159,8 +369,50 @@ type builder struct {
 	// Space manager info (sm_info), populated by setSpacemanInfo.
 	sm smInfo
 
-	timestamp uint64
+	// The user directory tree, flattened into catalog entries in cnid order,
+	// plus the subset that are regular files with a data extent.
+	entries     []*builderEntry
+	streamFiles []*builderEntry
+	symlinks    []*builderEntry
+	numFiles    uint64 // regular files (user)
+	numDirs     uint64 // directories (user, excludes root and private-dir)
+	numSymlinks uint64 // symbolic links (user)
+
+	// Catalog B-tree shape, decided in setTree from the record sizes.
+	numCatLeaves uint64 // extra leaf nodes when the catalog is a 2-level tree
+	catTwoLevel  bool   // true when the catalog needs an index root + leaves
+
+	// Extent-reference B-tree shape, decided in setTree from the extent count.
+	numExtrefLeaves uint64 // leaf nodes when the extref tree is a 2-level tree
+	extrefTwoLevel  bool   // true when the extref tree needs an index root + leaves
+
+	// Post-internal-pool allocation region. All blocks the volume owns beyond
+	// the fixed metadata are laid out contiguously starting at postIPBase, in
+	// order: extra catalog leaf nodes, extra extent-reference leaf nodes, then
+	// file data. This region may span several space-manager chunks.
+	postIPBase   uint64
+	postIPBlocks uint64
+
+	// Physical-block bases within the post-internal-pool region. catLeafBase is
+	// the first extra catalog leaf; extrefLeafBase the first extra extref leaf;
+	// fileDataBase the first block of file content.
+	catLeafBase    uint64
+	extrefLeafBase uint64
+	fileDataBase   uint64
+	fileDataBlocks uint64
+
+	timestamp   uint64
+	defaultTime uint64 // deterministic inode timestamp when an Entry has no ModTime
 }
+
+// defaultInodeTime is the fixed timestamp written to inode create/mod/change/
+// access times when an Entry supplies no ModTime, keeping output deterministic.
+var defaultInodeTime = time.Date(2024, time.January, 1, 0, 0, 0, 0, time.UTC)
+
+// catLeafOIDBase is the first virtual object id handed to extra catalog leaf
+// nodes (2-level catalog). It sits just past the named reserved object ids and
+// below the container's NextOID reservation.
+const catLeafOIDBase = mainFreeQueueOID + 1 // 1030
 
 // Fixed object ids, derived from oidReservedCount (mkapfs.h).
 const (
@@ -195,6 +447,7 @@ func (b *builder) computeCheckpointLayout() {
 	b.ipBmapBase = b.cpEnd + 10
 
 	b.timestamp = uint64(time.Now().UnixNano())
+	b.defaultTime = uint64(defaultInodeTime.UnixNano())
 }
 
 // writeBlocks writes count blocks of data starting at block number bno.
