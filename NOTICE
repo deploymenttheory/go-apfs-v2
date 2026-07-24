@@ -20,3 +20,11 @@ This product includes software design and code adapted from:
 
 3. The Apple File System Reference (Apple Inc.), used as the on-disk format
    specification, including known errata identified by the community.
+
+4. go-apfs (https://github.com/blacktop/go-apfs)
+   Copyright (c) 2020-2026 blacktop
+   Licensed under the Apache License, Version 2.0.
+   The HFS+ catalog and on-disk type definitions in pkg/hfsplus are adapted
+   from blacktop's hfsplus package; file-data reading, extents overflow
+   support, link resolution and the io/fs adapter are original to this
+   project.

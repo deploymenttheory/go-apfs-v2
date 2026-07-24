@@ -3,11 +3,17 @@ package cli
 
 import (
 	"fmt"
+	"io"
+	"io/fs"
+	"math"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/tools"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/disk"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hfsplus"
 	"github.com/spf13/cobra"
 )
 
@@ -46,6 +52,7 @@ func init() {
 
 // containerInfo is the JSON schema for apfs info.
 type containerInfo struct {
+	Filesystem  string       `json:"filesystem"` // "apfs" or "hfs+"
 	UUID        string       `json:"uuid"`
 	Size        uint64       `json:"size"`
 	BlockSize   uint32       `json:"blockSize"`
@@ -71,21 +78,56 @@ type volumeInfo struct {
 func runInfo(cmd *cobra.Command, args []string) error {
 	imagePath := args[0]
 
-	// Legacy detailed report path (fsapfsinfo port)
+	// Legacy detailed report path (fsapfsinfo port, APFS only)
 	if infoHierarchy || infoBodyfile != "" || infoEntryID != 0 || infoFilePath != "" {
 		return runLegacyInfo(imagePath)
 	}
 
-	container, closer, err := openContainer(imagePath)
+	if _, err := os.Stat(imagePath); err != nil {
+		return withCode(ExitBadImage, fmt.Errorf("unable to open image: %w", err))
+	}
+
+	reader, sniffedOffset, closer, err := disk.OpenWithOffset(imagePath)
 	if err != nil {
-		return err
+		return withCode(ExitBadImage, fmt.Errorf("unable to open image: %w", err))
 	}
 	defer closer.Close()
-	defer container.Free()
 
-	info, err := collectContainerInfo(container)
-	if err != nil {
-		return err
+	offset := opts.Offset
+	if offset == 0 {
+		offset = sniffedOffset
+	}
+	base := io.ReaderAt(reader)
+	if offset != 0 {
+		base = io.NewSectionReader(reader, offset, math.MaxInt64-offset)
+	}
+
+	var info *containerInfo
+
+	switch sniffFilesystem(base) {
+	case "apfs":
+		container, err := apfs.Open(base, &apfs.OpenOptions{
+			Password:         opts.Password,
+			RecoveryPassword: opts.RecoveryPassword,
+		})
+		if err != nil {
+			return withCode(ExitBadImage, fmt.Errorf("unable to open APFS container: %w", err))
+		}
+		defer container.Free()
+		info, err = collectContainerInfo(container)
+		if err != nil {
+			return err
+		}
+
+	case "hfsplus":
+		volume, err := hfsplus.New(base)
+		if err != nil {
+			return withCode(ExitBadImage, fmt.Errorf("unable to open HFS+ volume: %w", err))
+		}
+		info = collectHFSInfo(volume)
+
+	default:
+		return withCode(ExitBadImage, fmt.Errorf("%s does not contain a recognizable APFS or HFS+ filesystem", imagePath))
 	}
 
 	if opts.Output == "json" {
@@ -96,7 +138,51 @@ func runInfo(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func collectContainerInfo(container *apfs.Container) (*containerInfo, error) {
+// collectHFSInfo builds the info schema for an HFS+ volume. File, directory
+// and symlink counts are taken from a walk of the visible tree (the volume
+// header's own counters include hidden housekeeping entries).
+func collectHFSInfo(volume *hfsplus.Volume) *containerInfo {
+	header := volume.Header()
+
+	var files, dirs, symlinks uint64
+	fs.WalkDir(volume, ".", func(name string, entry fs.DirEntry, err error) error {
+		if err != nil || name == "." {
+			return nil
+		}
+		switch {
+		case entry.IsDir():
+			dirs++
+		case entry.Type()&fs.ModeSymlink != 0:
+			symlinks++
+		default:
+			files++
+		}
+		return nil
+	})
+
+	uuid := strings.ToLower(volume.UUID())
+
+	return &containerInfo{
+		Filesystem:  "hfs+",
+		UUID:        uuid,
+		Size:        uint64(header.TotalBlocks) * uint64(header.BlockSize),
+		BlockSize:   header.BlockSize,
+		VolumeCount: 1,
+		Volumes: []volumeInfo{{
+			Index:           0,
+			Name:            volume.Name(),
+			UUID:            uuid,
+			CaseInsensitive: !volume.CaseSensitive(),
+			Files:           files,
+			Directories:     dirs,
+			Symlinks:        symlinks,
+			Size:            uint64(header.TotalBlocks-header.FreeBlocks) * uint64(header.BlockSize),
+			LastUnmounted:   volume.Modified().UTC(),
+		}},
+	}
+}
+
+func collectContainerInfo(container *apfs.Container) (*containerInfo, error) { //nolint:unparam
 	uuid, err := container.GetIdentifier()
 	if err != nil {
 		return nil, fmt.Errorf("unable to get container identifier: %w", err)
@@ -115,6 +201,7 @@ func collectContainerInfo(container *apfs.Container) (*containerInfo, error) {
 	}
 
 	info := &containerInfo{
+		Filesystem:  "apfs",
 		UUID:        formatUUIDBytes(uuid),
 		Size:        size,
 		BlockSize:   container.IOHandle.BlockSize,
@@ -156,7 +243,12 @@ func collectContainerInfo(container *apfs.Container) (*containerInfo, error) {
 }
 
 func printContainerInfo(info *containerInfo) {
-	fmt.Println("Apple File System (APFS) container:")
+	switch info.Filesystem {
+	case "hfs+":
+		fmt.Println("HFS+ volume:")
+	default:
+		fmt.Println("Apple File System (APFS) container:")
+	}
 	fmt.Println()
 	fmt.Printf("  %-18s %s\n", "UUID", info.UUID)
 	fmt.Printf("  %-18s %s (%d bytes)\n", "Size", formatSize(info.Size), info.Size)

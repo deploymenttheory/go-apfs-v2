@@ -4,29 +4,114 @@ package cli
 import (
 	"fmt"
 	"io"
+	"io/fs"
+	"math"
 	"os"
 	"strings"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/disk"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hfsplus"
 )
 
-// openContainer opens an image with the global options applied. Errors are
-// coded: missing/unrecognizable images exit 3.
-func openContainer(imagePath string) (*apfs.Container, io.Closer, error) {
+// volumeFS is the filesystem-agnostic contract that list, cat and extract
+// operate on. Both APFS volumes (pkg/apfs) and HFS+ volumes (pkg/hfsplus)
+// implement it.
+type volumeFS interface {
+	fs.FS
+	fs.ReadDirFS
+	fs.StatFS
+	fs.ReadFileFS
+	Readlink(name string) (string, error)
+}
+
+// multiCloser closes several resources in order.
+type multiCloser []io.Closer
+
+func (m multiCloser) Close() error {
+	var firstErr error
+	for _, c := range m {
+		if err := c.Close(); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
+}
+
+// freeCloser adapts the APFS container's Free method to io.Closer.
+type freeCloser struct{ container *apfs.Container }
+
+func (f freeCloser) Close() error { return f.container.Free() }
+
+// sniffFilesystem identifies the filesystem at the start of a
+// partition-relative reader: "apfs", "hfsplus" or "".
+func sniffFilesystem(reader io.ReaderAt) string {
+	magic := make([]byte, 4)
+	if _, err := reader.ReadAt(magic, 32); err == nil && string(magic) == "NXSB" {
+		return "apfs"
+	}
+	sig := make([]byte, 2)
+	if _, err := reader.ReadAt(sig, 1024); err == nil && (string(sig) == "H+" || string(sig) == "HX") {
+		return "hfsplus"
+	}
+	return ""
+}
+
+// openFilesystem opens an image and returns the selected volume as a
+// filesystem, dispatching on the detected filesystem type (APFS or HFS+).
+func openFilesystem(imagePath string) (volumeFS, io.Closer, error) {
 	if _, err := os.Stat(imagePath); err != nil {
 		return nil, nil, withCode(ExitBadImage, fmt.Errorf("unable to open image: %w", err))
 	}
 
-	container, closer, err := apfs.OpenImage(imagePath, &apfs.OpenOptions{
-		Offset:           opts.Offset,
-		Password:         opts.Password,
-		RecoveryPassword: opts.RecoveryPassword,
-	})
+	reader, sniffedOffset, closer, err := disk.OpenWithOffset(imagePath)
 	if err != nil {
-		return nil, nil, withCode(ExitBadImage, fmt.Errorf("%s does not contain a readable APFS container: %w", imagePath, err))
+		return nil, nil, withCode(ExitBadImage, fmt.Errorf("unable to open image: %w", err))
 	}
 
-	return container, closer, nil
+	offset := opts.Offset
+	if offset == 0 {
+		offset = sniffedOffset
+	}
+	base := io.ReaderAt(reader)
+	if offset != 0 {
+		base = io.NewSectionReader(reader, offset, math.MaxInt64-offset)
+	}
+
+	switch sniffFilesystem(base) {
+	case "apfs":
+		container, err := apfs.Open(base, &apfs.OpenOptions{
+			Password:         opts.Password,
+			RecoveryPassword: opts.RecoveryPassword,
+		})
+		if err != nil {
+			closer.Close()
+			return nil, nil, withCode(ExitBadImage, fmt.Errorf("unable to open APFS container: %w", err))
+		}
+		volume, err := openVolume(container)
+		if err != nil {
+			container.Free()
+			closer.Close()
+			return nil, nil, err
+		}
+		return volume, multiCloser{freeCloser{container}, closer}, nil
+
+	case "hfsplus":
+		volume, err := hfsplus.New(base)
+		if err != nil {
+			closer.Close()
+			return nil, nil, withCode(ExitBadImage, fmt.Errorf("unable to open HFS+ volume: %w", err))
+		}
+		if opts.Volume != "" && opts.Volume != "0" && opts.Volume != volume.Name() {
+			closer.Close()
+			return nil, nil, usageErrorf("no volume matches selector %q (HFS+ image contains the single volume %q)", opts.Volume, volume.Name())
+		}
+		return volume, closer, nil
+
+	default:
+		closer.Close()
+		return nil, nil, withCode(ExitBadImage, fmt.Errorf("%s does not contain a recognizable APFS or HFS+ filesystem", imagePath))
+	}
 }
 
 // openVolume opens the volume selected by --volume (default: first) and

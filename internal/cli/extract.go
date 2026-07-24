@@ -54,17 +54,11 @@ func runExtract(cmd *cobra.Command, args []string) error {
 		volumePath = args[1]
 	}
 
-	container, closer, err := openContainer(imagePath)
+	volume, closer, err := openFilesystem(imagePath)
 	if err != nil {
 		return err
 	}
 	defer closer.Close()
-	defer container.Free()
-
-	volume, err := openVolume(container)
-	if err != nil {
-		return err
-	}
 
 	var pattern *regexp.Regexp
 	if extractPattern != "" {

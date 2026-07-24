@@ -30,17 +30,11 @@ Examples:
 func runCat(cmd *cobra.Command, args []string) error {
 	imagePath := args[0]
 
-	container, closer, err := openContainer(imagePath)
+	volume, closer, err := openFilesystem(imagePath)
 	if err != nil {
 		return err
 	}
 	defer closer.Close()
-	defer container.Free()
-
-	volume, err := openVolume(container)
-	if err != nil {
-		return err
-	}
 
 	for _, volumePath := range args[1:] {
 		name := fsNameFromVolumePath(volumePath)

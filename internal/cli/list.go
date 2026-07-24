@@ -58,17 +58,11 @@ func runList(cmd *cobra.Command, args []string) error {
 		startPath = args[1]
 	}
 
-	container, closer, err := openContainer(imagePath)
+	volume, closer, err := openFilesystem(imagePath)
 	if err != nil {
 		return err
 	}
 	defer closer.Close()
-	defer container.Free()
-
-	volume, err := openVolume(container)
-	if err != nil {
-		return err
-	}
 
 	name := fsNameFromVolumePath(startPath)
 
@@ -122,7 +116,7 @@ func runList(cmd *cobra.Command, args []string) error {
 }
 
 // emitEntry prints one entry in the selected output format.
-func emitEntry(volume *apfs.Volume, name string, info fs.FileInfo) error {
+func emitEntry(volume volumeFS, name string, info fs.FileInfo) error {
 	entryType := typeString(info.Mode())
 
 	if opts.Output == "json" {

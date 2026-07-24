@@ -21,9 +21,19 @@ import (
 	"github.com/schollz/progressbar/v3"
 )
 
+// VolumeFS is the filesystem contract the extractor walks. APFS and HFS+
+// volumes both implement it.
+type VolumeFS interface {
+	fs.FS
+	fs.ReadDirFS
+	fs.StatFS
+	fs.ReadFileFS
+	Readlink(name string) (string, error)
+}
+
 // Extractor handles file extraction from APFS volumes
 type Extractor struct {
-	Volume          *apfs.Volume
+	Volume          VolumeFS
 	Destination     string
 	Pattern         *regexp.Regexp
 	PreserveMeta    bool
@@ -262,7 +272,7 @@ func fsNameFromVolumePath(volumePath string) string {
 }
 
 // NewExtractor creates an extractor for a volume writing into destination.
-func NewExtractor(volume *apfs.Volume, destination string) *Extractor {
+func NewExtractor(volume VolumeFS, destination string) *Extractor {
 	return &Extractor{
 		Volume:          volume,
 		Destination:     destination,
