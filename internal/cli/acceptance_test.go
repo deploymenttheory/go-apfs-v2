@@ -359,9 +359,24 @@ func TestExtractFullVolume(t *testing.T) {
 				t.Errorf("%s: checksum mismatch", path)
 			}
 		case "symlink":
-			if runtime.GOOS == "windows" {
-				// The symlink was degraded to a regular file containing the
-				// target path; verify that content instead of the link.
+			// Depending on OS symlink privilege the entry is either a real
+			// symlink (target == link target) or, when the OS refused, a
+			// regular file whose content is the target path. Both are correct.
+			lstat, err := os.Lstat(destPath)
+			if err != nil {
+				t.Errorf("%s: %v", path, err)
+				continue
+			}
+			if lstat.Mode()&os.ModeSymlink != 0 {
+				target, err := os.Readlink(destPath)
+				if err != nil {
+					t.Errorf("%s: %v", path, err)
+					continue
+				}
+				if target != expected.Target {
+					t.Errorf("%s: symlink target = %q, want %q", path, target, expected.Target)
+				}
+			} else {
 				content, err := os.ReadFile(destPath)
 				if err != nil {
 					t.Errorf("%s: %v", path, err)
@@ -370,15 +385,6 @@ func TestExtractFullVolume(t *testing.T) {
 				if string(content) != expected.Target {
 					t.Errorf("%s: degraded-symlink content = %q, want %q", path, content, expected.Target)
 				}
-				continue
-			}
-			target, err := os.Readlink(destPath)
-			if err != nil {
-				t.Errorf("%s: %v", path, err)
-				continue
-			}
-			if target != expected.Target {
-				t.Errorf("%s: target = %q, want %q", path, target, expected.Target)
 			}
 		}
 	}
