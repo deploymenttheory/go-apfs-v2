@@ -21,6 +21,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/deploymenttheory/go-apfs-v2/pkg/disk"
 )
 
 // Expected facts about the acceptance image (default: Firefox 150),
@@ -326,6 +328,88 @@ func TestAcceptanceGroundTruthAgainstHdiutil(t *testing.T) {
 		t.Fatal("ground-truth walk compared zero files")
 	}
 	attest(t, "hdiutil ground truth: %d files compared, all sha256-identical to the mounted image", checked)
+}
+
+// TestAcceptancePackRoundTrip repacks the acceptance image into a new DMG and
+// asserts the fidelity invariant: the raw filesystem image is preserved
+// bit-for-bit (sha256), even though the DMG container bytes and size differ.
+// It also re-extracts from the repacked image and checks the file content
+// matches the original extraction.
+func TestAcceptancePackRoundTrip(t *testing.T) {
+	dmg := acceptanceDMG(t)
+
+	// Exact invariant: raw image round-trips bit-for-bit through pack.
+	srcRaw, err := disk.ReconstructRawImage(dmg)
+	if err != nil {
+		t.Fatalf("unable to reconstruct source raw image: %v", err)
+	}
+	srcSum := sha256.Sum256(srcRaw)
+	srcSize := len(srcRaw)
+	srcRaw = nil // release before repacking the large image
+
+	repacked := filepath.Join(t.TempDir(), "repacked.dmg")
+	mustRun(t, "pack", dmg, repacked)
+
+	dstRaw, err := disk.ReconstructRawImage(repacked)
+	if err != nil {
+		t.Fatalf("unable to reconstruct repacked raw image: %v", err)
+	}
+	dstSum := sha256.Sum256(dstRaw)
+	if dstSum != srcSum || len(dstRaw) != srcSize {
+		t.Fatalf("raw image not preserved: src %s (%d bytes) != repacked %s (%d bytes)",
+			hex.EncodeToString(srcSum[:8]), srcSize, hex.EncodeToString(dstSum[:8]), len(dstRaw))
+	}
+	dstRaw = nil
+
+	// Content invariant: the repacked image extracts to the same files.
+	origDir := t.TempDir()
+	reDir := t.TempDir()
+	run(t, "extract", "-q", dmg, "-C", origDir)
+	run(t, "extract", "-q", repacked, "-C", reDir)
+	origManifest := extractionManifest(t, origDir)
+	reManifest := extractionManifest(t, reDir)
+	if len(origManifest) == 0 {
+		t.Fatal("original extraction produced no files")
+	}
+	for path, sum := range origManifest {
+		if reManifest[path] != sum {
+			t.Errorf("%s: content differs after pack round-trip", path)
+		}
+	}
+
+	srcInfo, _ := os.Stat(dmg)
+	dstInfo, _ := os.Stat(repacked)
+	attest(t, "pack round-trip: raw image sha256 %s preserved bit-for-bit (%d bytes); container %d -> %d bytes; %d files re-extracted identically",
+		hex.EncodeToString(srcSum[:8]), srcSize,
+		fileSize(srcInfo), fileSize(dstInfo), len(origManifest))
+}
+
+// extractionManifest returns a map of relative path -> sha256 for every
+// regular file under root, not following symlinks.
+func extractionManifest(t *testing.T, root string) map[string]string {
+	t.Helper()
+	manifest := map[string]string{}
+	filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil || !entry.Type().IsRegular() {
+			return nil
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return nil
+		}
+		if sum, err := sha256File(path); err == nil {
+			manifest[filepath.ToSlash(rel)] = sum
+		}
+		return nil
+	})
+	return manifest
+}
+
+func fileSize(info os.FileInfo) int64 {
+	if info == nil {
+		return 0
+	}
+	return info.Size()
 }
 
 func sha256File(path string) (string, error) {
