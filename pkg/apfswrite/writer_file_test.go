@@ -113,30 +113,38 @@ func TestCreateContainerWithFileEmptyStillWorks(t *testing.T) {
 	}
 }
 
-// TestCreateContainerWithFileRejectsUnsupported checks the current input
-// guards: over-a-block content and (until milestone 3) empty files are rejected
-// clearly. Multiple files and subdirectories are supported from milestone 2.
+// TestCreateContainerWithFileRejectsUnsupported checks the remaining input
+// guards. As of milestone 3, over-a-block content and empty files are both
+// supported; a name with a path separator is still rejected.
 func TestCreateContainerWithFileRejectsUnsupported(t *testing.T) {
 	const size = 8 * 1024 * 1024
 
-	t.Run("too-large", func(t *testing.T) {
+	t.Run("bad-name", func(t *testing.T) {
 		img := &memImage{}
-		big := bytes.Repeat([]byte{'x'}, 4096+1)
 		err := apfswrite.CreateContainer(img, size, &apfswrite.CreateOptions{
-			RootFiles: []apfswrite.RootFile{{Name: "big", Data: big}},
+			RootFiles: []apfswrite.RootFile{{Name: "a/b", Data: []byte("x")}},
 		})
 		if err == nil {
-			t.Fatal("expected error for content larger than one block")
+			t.Fatal("expected error for a name containing a path separator")
 		}
 	})
 
-	t.Run("empty-file", func(t *testing.T) {
+	t.Run("multi-block-now-ok", func(t *testing.T) {
 		img := &memImage{}
-		err := apfswrite.CreateContainer(img, size, &apfswrite.CreateOptions{
+		big := bytes.Repeat([]byte{'x'}, 4096+1)
+		if err := apfswrite.CreateContainer(img, size, &apfswrite.CreateOptions{
+			RootFiles: []apfswrite.RootFile{{Name: "big", Data: big}},
+		}); err != nil {
+			t.Fatalf("multi-block file should now be supported: %v", err)
+		}
+	})
+
+	t.Run("empty-file-now-ok", func(t *testing.T) {
+		img := &memImage{}
+		if err := apfswrite.CreateContainer(img, size, &apfswrite.CreateOptions{
 			RootFiles: []apfswrite.RootFile{{Name: "empty", Data: nil}},
-		})
-		if err == nil {
-			t.Fatal("expected error for an empty file (milestone 3)")
+		}); err != nil {
+			t.Fatalf("empty file should now be supported: %v", err)
 		}
 	})
 }

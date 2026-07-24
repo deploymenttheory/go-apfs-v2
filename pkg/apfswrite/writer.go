@@ -37,18 +37,16 @@ type CreateOptions struct {
 	// becomes a top-level child of Root. When Root is also set, RootFiles are
 	// appended as additional top-level entries.
 	//
-	// Every file must fit within a single allocation block (BlockSize bytes);
-	// multi-block/large files are a later milestone (M3) and are rejected with
-	// a clear error.
+	// Files may be of any size (multi-block, spanning many allocation blocks)
+	// and may be empty (0 bytes).
 	RootFiles []RootFile
 
 	// Root is a directory tree to populate the volume with: nested directories
-	// and regular files of arbitrary depth. A nil Root (and empty RootFiles)
-	// formats an empty volume, exactly as before.
+	// and regular files of arbitrary depth and size (including empty files). A
+	// nil Root (and empty RootFiles) formats an empty volume, exactly as before.
 	//
 	// Root itself represents the volume root directory; only its Children are
-	// used (any Name/Data on Root is ignored). Each regular file must fit in a
-	// single allocation block (M2 limit).
+	// used (any Name/Data on Root is ignored).
 	Root *Entry
 }
 
@@ -60,7 +58,7 @@ type Entry struct {
 	Name string
 	// IsDir marks the entry as a directory. Directories have no Data.
 	IsDir bool
-	// Data is the file content for a regular file (<= BlockSize bytes in M2).
+	// Data is the file content for a regular file (any size, may be empty).
 	Data []byte
 	// Children are the entries contained in a directory.
 	Children []*Entry
@@ -70,7 +68,7 @@ type Entry struct {
 type RootFile struct {
 	// Name is the file name (no path separators).
 	Name string
-	// Data is the file content. In M2 it must fit in one allocation block.
+	// Data is the file content (any size, may be empty).
 	Data []byte
 }
 
@@ -85,10 +83,10 @@ type builderEntry struct {
 
 	// Regular files with content (non-empty streams).
 	data        []byte
-	hasStream   bool   // true for a regular file with a data extent
-	dataBlock   uint64 // physical block number holding the content
-	blocks      uint64 // number of allocation blocks (1 in M2)
-	allocedSize uint64 // block-aligned allocated size in bytes
+	hasStream   bool   // true for every regular file (has a DSTREAM xfield + DSTREAM_ID record)
+	dataBlock   uint64 // physical block number of the first content block (0 if empty)
+	blocks      uint64 // number of allocation blocks in the file's extent (0 for a 0-byte file)
+	allocedSize uint64 // block-aligned allocated size in bytes (0 for a 0-byte file)
 }
 
 // Deterministic default UUIDs used when the caller leaves a UUID zero.
@@ -118,17 +116,6 @@ func CreateContainer(w io.WriterAt, sizeBytes int64, opts *CreateOptions) error 
 		return fmt.Errorf("apfswrite: unsupported block size %d", b.blocksize)
 	}
 
-	// mkapfs enforces a 512 KiB minimum for the main device.
-	const minBytes = 512 * 1024
-	if sizeBytes == 0 {
-		sizeBytes = minBytes
-	}
-	b.mainBlkcnt = uint64(sizeBytes) / uint64(b.blocksize)
-	b.blockCount = b.mainBlkcnt
-	if b.mainBlkcnt*uint64(b.blocksize) < minBytes {
-		return fmt.Errorf("apfswrite: container too small (%d bytes); minimum is %d", sizeBytes, minBytes)
-	}
-
 	b.label = opts.VolumeName
 	if b.label == "" {
 		b.label = "untitled"
@@ -136,12 +123,6 @@ func CreateContainer(w io.WriterAt, sizeBytes int64, opts *CreateOptions) error 
 	if len(b.label)+1 > volnameLen {
 		return fmt.Errorf("apfswrite: volume label too long")
 	}
-
-	// Case-sensitivity handling mirrors mkapfs. mkapfs defaults to
-	// normalization-sensitive off (i.e. a case-insensitive volume). The public
-	// API exposes only the common CaseSensitive toggle.
-	b.caseSensitive = opts.CaseSensitive
-	b.normSensitive = false
 
 	b.mainUUID = opts.ContainerUUID
 	if b.mainUUID == ([16]byte{}) {
@@ -152,10 +133,38 @@ func CreateContainer(w io.WriterAt, sizeBytes int64, opts *CreateOptions) error 
 		b.volUUID = defaultVolumeUUID
 	}
 
-	// Resolve the user directory tree (nested dirs + regular files).
+	// Case-sensitivity handling mirrors mkapfs (see below); resolve the tree now
+	// so its data requirements can size the image when the caller passes 0.
+	b.caseSensitive = opts.CaseSensitive
+	b.normSensitive = false
+
+	// Resolve the user directory tree (nested dirs + regular files of any size).
 	if err := b.setTree(opts); err != nil {
 		return err
 	}
+
+	// mkapfs enforces a 512 KiB minimum for the main device.
+	const minBytes = 512 * 1024
+	if sizeBytes == 0 {
+		// Size the image to comfortably hold the post-internal-pool payload
+		// (catalog leaves, extref leaves, file data) plus the fixed format
+		// metadata, block-aligned, with headroom for the checkpoint areas.
+		payload := b.numCatLeaves + b.numExtrefLeaves + b.fileDataBlocks
+		needBlocks := payload + payload/8 + 2048
+		sizeBytes = int64(needBlocks) * int64(b.blocksize)
+		if sizeBytes < minBytes {
+			sizeBytes = minBytes
+		}
+	}
+	b.mainBlkcnt = uint64(sizeBytes) / uint64(b.blocksize)
+	b.blockCount = b.mainBlkcnt
+	if b.mainBlkcnt*uint64(b.blocksize) < minBytes {
+		return fmt.Errorf("apfswrite: container too small (%d bytes); minimum is %d", sizeBytes, minBytes)
+	}
+
+	// Case-sensitivity handling mirrors mkapfs. mkapfs defaults to
+	// normalization-sensitive off (i.e. a case-insensitive volume). The public
+	// API exposes only the common CaseSensitive toggle (resolved above).
 
 	b.computeCheckpointLayout()
 
@@ -233,16 +242,22 @@ type builder struct {
 	numCatLeaves uint64 // extra leaf nodes when the catalog is a 2-level tree
 	catTwoLevel  bool   // true when the catalog needs an index root + leaves
 
+	// Extent-reference B-tree shape, decided in setTree from the extent count.
+	numExtrefLeaves uint64 // leaf nodes when the extref tree is a 2-level tree
+	extrefTwoLevel  bool   // true when the extref tree needs an index root + leaves
+
 	// Post-internal-pool allocation region. All blocks the volume owns beyond
-	// the fixed metadata (extra catalog leaf nodes then file data) are laid out
-	// contiguously starting at postIPBase.
+	// the fixed metadata are laid out contiguously starting at postIPBase, in
+	// order: extra catalog leaf nodes, extra extent-reference leaf nodes, then
+	// file data. This region may span several space-manager chunks.
 	postIPBase   uint64
 	postIPBlocks uint64
 
-	// catLeafBase is the first physical block of the extra catalog leaf nodes;
-	// fileDataBase is the first physical block of file content. Both live in the
-	// post-internal-pool region.
+	// Physical-block bases within the post-internal-pool region. catLeafBase is
+	// the first extra catalog leaf; extrefLeafBase the first extra extref leaf;
+	// fileDataBase the first block of file content.
 	catLeafBase    uint64
+	extrefLeafBase uint64
 	fileDataBase   uint64
 	fileDataBlocks uint64
 
