@@ -28,16 +28,22 @@ var (
 var infoCmd = &cobra.Command{
 	Use:   "info IMAGE",
 	Short: "Display container and volume information",
-	Long: `Display information about the APFS container in an image and each of
-its volumes.
+	Long: `Display information about the filesystem in an image and each of its
+volumes. The filesystem (APFS or HFS+) is detected automatically; the JSON
+output includes a "filesystem" field ("apfs" or "hfs+"), the container and
+per-volume UUIDs, sizes, and file/directory/symlink counts.
 
 Legacy forensic flags (--hierarchy, --bodyfile, --md5, --entry, --file-path)
-produce the detailed fsapfsinfo-style text report; they are text-only.
+produce the detailed fsapfsinfo-style text report and are APFS-only,
+text-only.
 
 Examples:
   apfs info image.dmg
   apfs info -o json image.dmg | jq '.volumes[0].name'
-  apfs info --bodyfile out.body image.dmg`,
+  apfs info -o json image.dmg | jq -r .filesystem
+  apfs info -v "Macintosh HD" image.dmg     # select a volume by name or UUID
+  apfs info --hierarchy image.dmg           # full tree (APFS, text)
+  apfs info --bodyfile out.body image.dmg   # Sleuth Kit bodyfile`,
 	Args: exactArgs(1, "IMAGE"),
 	RunE: runInfo,
 }

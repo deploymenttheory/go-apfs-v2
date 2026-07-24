@@ -1,75 +1,309 @@
-# Template
+# apfs
 
-This repository serves as a **Default Template Repository** according official [GitHub Contributing Guidelines][ProjectSetup] for healthy contributions. It brings you clean default Templates for several areas:
+A cross-platform, self-contained **pure-Go toolkit for Apple disk images**. It
+reads **APFS** and **HFS+** filesystems directly from `.dmg` files, raw images
+and bare containers — without mounting, without kernel extensions, and without
+macOS — and can also **build and repack** disk images.
 
-- [Azure DevOps Pull Requests](.azuredevops/PULL_REQUEST_TEMPLATE.md) ([`.azuredevops\PULL_REQUEST_TEMPLATE.md`](`.azuredevops\PULL_REQUEST_TEMPLATE.md`))
-- [Azure Pipelines](.pipelines/pipeline.yml) ([`.pipelines/pipeline.yml`](`.pipelines/pipeline.yml`))
-- [GitHub Workflows](.github/workflows/)
-  - [Super Linter](.github/workflows/linter.yml) ([`.github/workflows/linter.yml`](`.github/workflows/linter.yml`))
-  - [Sample Workflows](.github/workflows/workflow.yml) ([`.github/workflows/workflow.yml`](`.github/workflows/workflow.yml`))
-- [GitHub Pull Requests](.github/PULL_REQUEST_TEMPLATE.md) ([`.github/PULL_REQUEST_TEMPLATE.md`](`.github/PULL_REQUEST_TEMPLATE.md`))
-- [GitHub Issues](.github/ISSUE_TEMPLATE/)
-  - [Feature Requests](.github/ISSUE_TEMPLATE/FEATURE_REQUEST.md) ([`.github/ISSUE_TEMPLATE/FEATURE_REQUEST.md`](`.github/ISSUE_TEMPLATE/FEATURE_REQUEST.md`))
-  - [Bug Reports](.github/ISSUE_TEMPLATE/BUG_REPORT.md) ([`.github/ISSUE_TEMPLATE/BUG_REPORT.md`](`.github/ISSUE_TEMPLATE/BUG_REPORT.md`))
-- [Codeowners](.github/CODEOWNERS) ([`.github/CODEOWNERS`](`.github/CODEOWNERS`)) _adjust usernames once cloned_
-- [Wiki and Documentation](docs/) ([`docs/`](`docs/`))
-- [gitignore](.gitignore) ([`.gitignore`](.gitignore))
-- [gitattributes](.gitattributes) ([`.gitattributes`](.gitattributes))
-- [Changelog](CHANGELOG.md) ([`CHANGELOG.md`](`CHANGELOG.md`))
-- [Code of Conduct](CODE_OF_CONDUCT.md) ([`CODE_OF_CONDUCT.md`](`CODE_OF_CONDUCT.md`))
-- [Contribution](CONTRIBUTING.md) ([`CONTRIBUTING.md`](`CONTRIBUTING.md`))
-- [License](LICENSE) ([`LICENSE`](`LICENSE`)) _adjust projectname once cloned_
-- [Readme](README.md) ([`README.md`](`README.md`))
-- [Security](SECURITY.md) ([`SECURITY.md`](`SECURITY.md`))
+It parses on-disk structures directly, which makes it useful for data recovery,
+forensic analysis, backup verification, security auditing, and CI pipelines
+that need to inspect or produce `.dmg` payloads on Linux, macOS or Windows.
 
+```console
+$ apfs info Firefox.dmg
+HFS+ volume:
+  UUID               2bc924f8-...
+  Size               500.6 MB (525378560 bytes)
+  Volumes            1
+Volume 0: Firefox
+  Contents           116 files, 54 directories, 1 symlinks
 
-## Status
+$ apfs list -R Firefox.dmg | head -3
+.DS_Store
+Firefox.app
+Firefox.app/Contents
 
-[![Super Linter](<https://github.com/segraef/Template/actions/workflows/linter.yml/badge.svg>)](<https://github.com/segraef/Template/actions/workflows/linter.yml>)
+$ apfs extract Firefox.dmg -C ./out --verify
+```
 
-[![Sample Workflow](<https://github.com/segraef/Template/actions/workflows/workflow.yml/badge.svg>)](<https://github.com/segraef/Template/actions/workflows/workflow.yml>)
+## Features
 
-## Creating a repository from a template
+| Capability | APFS | HFS+ / HFSX |
+| --- | :---: | :---: |
+| Read: info, list, cat, extract, inspect | ✅ | ✅ |
+| Mount read-only (FUSE, Linux/macOS) | ✅ | — |
+| FileVault (AES-128-XTS) unlock | ✅ | — |
+| Transparent compression (zlib / LZVN / LZFSE) | ✅ | ✅ |
+| Repack a DMG losslessly (`pack`) | ✅ | ✅ |
+| Build a DMG from a directory (`pack <dir>`) | — | ✅ |
+| Create an empty formatted volume (`create`) | ✅¹ | ✅ |
 
-You can [generate](https://github.com/segraef/Template/generate) a new repository with the same directory structure and files as an existing repository. More details can be found [here][CreateFromTemplate].
+¹ APFS creation is a GPL-2.0 component; see [Licensing](#licensing).
 
-## Reporting Issues and Feedback
+**Image formats read:** UDIF DMGs compressed with zlib (UDZO), bzip2 (UDBZ),
+ADC, LZFSE (ULFO) or LZMA (ULMO); GPT-partitioned and Apple-Partition-Map
+layouts; and bare raw filesystem images. Images are detected by content, not by
+file extension.
 
-### Issues and Bugs
+## Install
 
-If you find any bugs, please file an issue in the [GitHub Issues][GitHubIssues] page. Please fill out the provided template with the appropriate information.
+```console
+# Default build (MIT licensed)
+go install github.com/deploymenttheory/go-apfs-v2/cmd/apfs@latest
 
-If you are taking the time to mention a problem, even a seemingly minor one, it is greatly appreciated, and a totally valid contribution to this project. **Thank you!**
+# From a clone
+git clone https://github.com/deploymenttheory/go-apfs-v2
+cd go-apfs-v2
+go build -o apfs ./cmd/apfs
+```
 
-## Feedback
+The default binary is MIT-licensed. To include **APFS volume creation**, build
+with the `apfswrite` tag; that binary is GPL-2.0 (see [Licensing](#licensing)):
 
-If there is a feature you would like to see in here, please file an issue or feature request in the [GitHub Issues][GitHubIssues] page to provide direct feedback.
+```console
+go build -tags apfswrite -o apfs ./cmd/apfs
+```
 
-## Contribution
+No cgo is required; the toolkit is pure Go and cross-compiles to Linux, macOS
+and Windows on `amd64` and `arm64`.
 
-If you would like to become an active contributor to this repository or project, please follow the instructions provided in [`CONTRIBUTING.md`][Contributing].
+## Command reference
 
-## Learn More
+Every command takes the image path as its first argument. Global flags (below)
+apply to all commands.
 
-* [GitHub Documentation][GitHubDocs]
-* [Azure DevOps Documentation][AzureDevOpsDocs]
-* [Microsoft Azure Documentation][MicrosoftAzureDocs]
+### `info` — container and volume summary
 
-<!-- References -->
+```
+apfs info IMAGE [--hierarchy] [--bodyfile FILE] [--md5] [--entry ID] [--file-path PATH]
+```
 
-<!-- Local -->
-[ProjectSetup]: <https://docs.github.com/en/communities/setting-up-your-project-for-healthy-contributions>
-[CreateFromTemplate]: <https://docs.github.com/en/github/creating-cloning-and-archiving-repositories/creating-a-repository-on-github/creating-a-repository-from-a-template>
-[GitHubDocs]: <https://docs.github.com/>
-[AzureDevOpsDocs]: <https://docs.microsoft.com/en-us/azure/devops/?view=azure-devops>
-[GitHubIssues]: <https://github.com/segraef/Template/issues>
-[Contributing]: CONTRIBUTING.md
+Prints the filesystem type (APFS or HFS+), container/volume UUIDs, sizes, and
+file/directory/symlink counts. With `-o json`, emits a single document
+including a `filesystem` field.
 
-<!-- External -->
-[Az]: <https://img.shields.io/powershellgallery/v/Az.svg?style=flat-square&label=Az>
-[AzGallery]: <https://www.powershellgallery.com/packages/Az/>
-[PowerShellCore]: <https://github.com/PowerShell/PowerShell/releases/latest>
+```console
+apfs info image.dmg
+apfs info -o json image.dmg | jq -r '.volumes[0].name'
+apfs info -v "Macintosh HD" image.dmg          # select a volume by name/UUID
+apfs info --hierarchy image.dmg                # full tree (APFS, text)
+apfs info --bodyfile out.body image.dmg        # Sleuth Kit bodyfile
+```
 
-<!-- Docs -->
-[MicrosoftAzureDocs]: <https://docs.microsoft.com/en-us/azure/>
-[PowerShellDocs]: <https://docs.microsoft.com/en-us/powershell/>
+The forensic flags (`--hierarchy`, `--bodyfile`, `--md5`, `--entry`,
+`--file-path`) are APFS-only and text-only.
+
+### `list` — list directory contents
+
+```
+apfs list IMAGE [PATH] [-l|--long] [-R|--recursive]
+```
+
+Lists a directory (default: the volume root), sorted by name. With `-o json`,
+emits **one JSON object per line** (path, name, type, size, mode, mtime, inode,
+symlink target) for streaming with `jq`.
+
+```console
+apfs list image.dmg
+apfs list image.dmg /Applications --long
+apfs list -R image.dmg | wc -l
+apfs list -o json -R image.dmg | jq -r 'select(.type=="symlink") | "\(.path) -> \(.target)"'
+```
+
+### `cat` — write file contents to stdout
+
+```
+apfs cat IMAGE PATH...
+```
+
+Streams one or more files to stdout, for pipelines.
+
+```console
+apfs cat image.dmg /etc/hosts
+apfs cat image.dmg /App.app/Contents/Info.plist | plutil -p -
+```
+
+### `extract` — extract files to the local filesystem
+
+```
+apfs extract IMAGE [PATH] -C DIR [-r|--recursive] [--pattern REGEX]
+                   [--preserve-meta] [--verify] [--symlinks auto|real|file]
+```
+
+Extracts the whole volume (or a subtree given `PATH`) to `DIR`, preserving
+symlinks, decompressing transparently-compressed files, and optionally
+restoring permissions/timestamps (`--preserve-meta`) and verifying content
+against source checksums (`--verify`).
+
+**Symlink handling** (`--symlinks`): `auto` (default) creates a real symlink
+where the OS allows it and otherwise writes the link target into a regular file
+(useful on Windows without the symlink privilege); `real` always creates a
+symlink and fails if refused; `file` always writes the target as a file. Names
+the destination OS cannot store (e.g. trailing spaces on Windows) are sanitized
+and reported. Exit code **6** signals a partial extraction.
+
+```console
+apfs extract image.dmg -C ./out
+apfs extract image.dmg /Applications/Some.app -C ./out --recursive
+apfs extract image.dmg -C ./out --pattern '\.plist$'
+apfs extract image.dmg -C ./out --preserve-meta --verify
+```
+
+### `inspect` — low-level structural inspection
+
+```
+apfs inspect IMAGE                 # structural walk (superblock, checkpoints, omaps, volumes)
+apfs inspect IMAGE block N         # decode one block by physical address (decimal or 0x hex)
+apfs inspect IMAGE btree           # interactively explore the file-system B-tree
+```
+
+Debugging/forensics view of the on-disk structures. Text output only.
+
+```console
+apfs inspect image.dmg
+apfs inspect image.dmg block 0
+apfs inspect image.dmg block 0x1b0c1
+apfs inspect image.dmg btree
+```
+
+### `mount` — mount read-only via FUSE
+
+```
+apfs mount IMAGE MOUNTPOINT
+```
+
+Mounts an APFS image read-only using FUSE (Linux and macOS with macFUSE). On
+Windows it exits with code 5; use `extract` instead. Press Ctrl+C to unmount.
+
+```console
+apfs mount image.dmg /mnt/apfs
+```
+
+### `pack` — build a DMG from a directory, or repack a DMG
+
+```
+apfs pack SOURCE OUT.dmg [--volname NAME] [--compression zlib|none] [--chunk-size KiB]
+```
+
+Two modes, chosen by what `SOURCE` is:
+
+- **`SOURCE` is a directory** → its contents are written into a new **HFS+**
+  volume and wrapped in a DMG (the inverse of `extract`).
+- **`SOURCE` is a DMG** → it is **repacked** losslessly: the exact block layout
+  is preserved and the chunks recompressed. The result is not byte-identical to
+  the original (different compressors produce different container bytes), but
+  the **raw filesystem image round-trips bit-for-bit** and mounts under both
+  this tool and macOS.
+
+```console
+apfs pack ./mytree out.dmg --volname "My Data"   # directory -> HFS+ DMG
+apfs pack original.dmg repacked.dmg              # repack a DMG
+apfs pack original.dmg smaller.dmg --compression none
+```
+
+### `create` — format an empty volume
+
+```
+apfs create OUT.dmg --fs hfs+|apfs [--volname NAME] [--size MiB] [--case-sensitive]
+```
+
+Creates a new DMG containing a freshly formatted, **empty** volume (the mkfs
+operation). `--fs hfs+` is always available; `--fs apfs` requires a binary
+built with `-tags apfswrite` (see [Licensing](#licensing)) and otherwise exits
+with code 5.
+
+```console
+apfs create blank.dmg --fs hfs+ --volname Scratch --size 16
+apfs create blank.dmg --fs apfs --volname Data      # needs -tags apfswrite
+```
+
+## Global flags
+
+| Flag | Description |
+| --- | --- |
+| `-o, --output` | Output format: `text` or `json` (default `text`). |
+| `-v, --volume STR` | Select a volume by index, name or UUID (default: first). |
+| `-p, --password STR` | Password for encrypted (FileVault) volumes. |
+| `--password-stdin` | Read the password from standard input. |
+| `--recovery-password STR` | Recovery password for encrypted volumes. |
+| `--offset N` | Byte offset of the container in the image (expert; overrides detection). |
+| `-q, --quiet` | Suppress progress and non-essential messages. |
+| `--verbose` | Verbose diagnostics on stderr. |
+
+**Configuration precedence:** command-line flag > `APFS_<FLAG>` environment
+variable (e.g. `APFS_OUTPUT=json`, `APFS_PASSWORD=…`) > optional config file at
+`~/.config/apfs/config.yaml`.
+
+Data is written to **stdout**; progress and diagnostics go to **stderr**, so
+pipelines stay clean.
+
+## Exit codes
+
+| Code | Meaning |
+| --- | --- |
+| 0 | Success |
+| 1 | Generic runtime error |
+| 2 | Usage error (bad flags or arguments) |
+| 3 | Image not found or not a recognizable APFS/HFS+ image |
+| 4 | Authentication required or failed |
+| 5 | Feature not supported on this platform / build |
+| 6 | Partial result (e.g. some files skipped during extraction) |
+
+## Using it as a library
+
+The read side is exposed as MIT-licensed packages. Volumes implement
+`io/fs.FS`, so they plug into any code that consumes a filesystem:
+
+```go
+import (
+	"io/fs"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
+)
+
+container, closer, _ := apfs.OpenImage("image.dmg", nil)
+defer closer.Close()
+defer container.Free()
+
+vol, _ := container.VolumeBySelector("0")
+data, _ := fs.ReadFile(vol, "Applications/Some.app/Contents/Info.plist")
+```
+
+Key packages: `pkg/apfs` (APFS reader), `pkg/hfsplus` (HFS+ reader and writer),
+`pkg/disk` (DMG/UDIF reader and writer, partition tables), and the GPL-2.0
+`pkg/apfswrite` (APFS container writer).
+
+## Licensing
+
+This repository is **MIT-licensed**, with one exception:
+
+- **`pkg/apfswrite`** (the APFS *writer*) is a Go port of
+  [`mkapfs`](https://github.com/linux-apfs/apfsprogs) and is therefore
+  **GPL-2.0** (see `pkg/apfswrite/LICENSE`).
+
+The default `apfs` binary does **not** link `pkg/apfswrite` and is MIT. A binary
+built with `-tags apfswrite` links it and is **GPL-2.0**. The reader/library
+packages (`pkg/apfs`, `pkg/hfsplus`, `pkg/disk`) remain MIT for standalone use.
+See `NOTICE` for full attribution.
+
+## Development
+
+```console
+go test ./...                       # unit + fixture acceptance tests
+go build -tags apfswrite ./...      # GPL build
+```
+
+CI runs the build matrix (both MIT and GPL variants) and the test suite on
+Linux, macOS and Windows. Correctness is cross-checked against the platforms'
+own tools: created HFS+ volumes are validated with `fsck_hfs` and mounted with
+`hdiutil`; created APFS containers with `fsck_apfs` (macOS) and `apfsck`
+(Linux). Real-world acceptance runs against published vendor DMGs (Firefox for
+HFS+, Zed for APFS), and on macOS every extraction is compared byte-for-byte
+against an `hdiutil` mount of the same image.
+
+## Acknowledgements
+
+The design and on-disk handling draw on
+[libfsapfs](https://github.com/libyal/libfsapfs),
+[blacktop/go-apfs](https://github.com/blacktop/go-apfs),
+[apfsprogs](https://github.com/linux-apfs/apfsprogs) and Apple's
+*Apple File System Reference*. See `NOTICE` for details and licenses.
