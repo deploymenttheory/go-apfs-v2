@@ -34,23 +34,34 @@ var opts globalOptions
 
 var rootCmd = &cobra.Command{
 	Use:   "apfs",
-	Short: "Inspect, list and extract Apple File System (APFS) images",
-	Long: `A cross-platform toolkit for working with Apple File System (APFS)
-disk images: DMGs (compressed or raw), GPT-partitioned raw images and bare
-APFS containers, without mounting and without macOS.
+	Short: "Read, extract and build Apple File System (APFS) and HFS+ disk images",
+	Long: `A cross-platform, self-contained toolkit for Apple disk images. It reads
+APFS and HFS+ filesystems directly from DMGs (zlib, bzip2, ADC, LZFSE or LZMA
+compressed), GPT- or Apple-Partition-Map raw images, or bare containers —
+without mounting and without macOS — and can also build and repack DMGs.
 
-Commands:
-  info     Container and volume summary
-  list     List directory contents
-  cat      Write file contents to stdout
-  extract  Extract files to a local directory
-  pack     Repack a DMG into a new DMG (lossless at the filesystem-image level)
+Read commands:
+  info     Container and volume summary (text or JSON)
+  list     List directory contents (recursive, JSON lines)
+  cat      Write file contents to stdout, for pipelines
+  extract  Extract files/directories to the local filesystem
   inspect  Low-level structural inspection (container walk, blocks, B-trees)
   mount    Mount read-only via FUSE (Linux and macOS)
 
+Write commands:
+  pack     Build a DMG from a directory (HFS+), or repack a DMG losslessly
+  create   Format an empty HFS+ or APFS volume in a new DMG
+
+Images are auto-detected by content; every command takes the image as its
+first argument. Data goes to stdout, diagnostics and progress to stderr.
+
+Configuration precedence: flag > APFS_<FLAG> environment variable >
+~/.config/apfs/config.yaml.
+
 Exit codes:
-  0 success, 1 error, 2 usage, 3 unrecognized image, 4 authentication
-  required or failed, 5 unsupported on this platform, 6 partial result`,
+  0 success        3 unrecognized image     5 unsupported on this platform
+  1 error          4 authentication needed  6 partial result
+  2 usage error       or failed`,
 	Version:           version,
 	SilenceUsage:      true,
 	SilenceErrors:     true,
