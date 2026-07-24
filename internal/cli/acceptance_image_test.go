@@ -1,9 +1,9 @@
-// Real-world acceptance tests: run the CLI against a genuine vendor DMG
-// (Ghostty's release DMG: ULFO/lzfse compressed, GPT partitioned, APFS).
-// Gated on APFS_ACCEPTANCE_DMG so ordinary test runs skip them; CI downloads
-// the image and runs these on Linux, macOS and Windows. On macOS the
-// extraction is additionally verified file-by-file against an hdiutil mount
-// of the same image — the platform ground truth.
+// Acceptance tests: run the CLI against a downloaded vendor DMG (by default
+// Firefox 150's release DMG). Gated on APFS_ACCEPTANCE_DMG so ordinary test
+// runs skip them; CI downloads the image and runs these on Linux, macOS and
+// Windows. On macOS the extraction is additionally verified file-by-file
+// against an hdiutil mount of the same image — the platform ground truth.
+// Observed values are reported to the pipeline via GITHUB_STEP_SUMMARY.
 package cli_test
 
 import (
@@ -12,6 +12,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/fs"
 	"os"
@@ -22,11 +23,12 @@ import (
 	"testing"
 )
 
-// Expected facts about the acceptance image, overridable to swap artifacts.
+// Expected facts about the acceptance image (Firefox 150), overridable via
+// environment to swap artifacts.
 var (
-	realVolumeName = envOr("APFS_ACCEPTANCE_VOLNAME", "Ghostty")
-	realAppBundle  = envOr("APFS_ACCEPTANCE_APP", "Ghostty.app")
-	realBundleID   = envOr("APFS_ACCEPTANCE_BUNDLE_ID", "com.mitchellh.ghostty")
+	acceptanceVolumeName = envOr("APFS_ACCEPTANCE_VOLNAME", "Firefox")
+	acceptanceAppBundle  = envOr("APFS_ACCEPTANCE_APP", "Firefox.app")
+	acceptanceBundleID   = envOr("APFS_ACCEPTANCE_BUNDLE_ID", "org.mozilla.firefox")
 )
 
 func envOr(key, fallback string) string {
@@ -36,12 +38,28 @@ func envOr(key, fallback string) string {
 	return fallback
 }
 
-// realDMG skips the test unless the acceptance image is configured.
-func realDMG(t *testing.T) string {
+// stepSummary appends a markdown line to the GitHub Actions step summary so
+// observed acceptance values are visible in the pipeline UI. A no-op outside
+// GitHub Actions.
+func stepSummary(format string, args ...any) {
+	path := os.Getenv("GITHUB_STEP_SUMMARY")
+	if path == "" {
+		return
+	}
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	fmt.Fprintf(f, format+"\n", args...)
+}
+
+// acceptanceDMG skips the test unless the acceptance image is configured.
+func acceptanceDMG(t *testing.T) string {
 	t.Helper()
 	path := os.Getenv("APFS_ACCEPTANCE_DMG")
 	if path == "" {
-		t.Skip("APFS_ACCEPTANCE_DMG not set; skipping real-image acceptance test")
+		t.Skip("APFS_ACCEPTANCE_DMG not set; skipping acceptance-image test")
 	}
 	if _, err := os.Stat(path); err != nil {
 		t.Fatalf("APFS_ACCEPTANCE_DMG: %v", err)
@@ -49,7 +67,7 @@ func realDMG(t *testing.T) string {
 	return path
 }
 
-type realInfo struct {
+type acceptanceInfo struct {
 	VolumeCount int `json:"volumeCount"`
 	Volumes     []struct {
 		Name        string `json:"name"`
@@ -59,10 +77,10 @@ type realInfo struct {
 	} `json:"volumes"`
 }
 
-func realInfoJSON(t *testing.T, dmg string) realInfo {
+func acceptanceInfoJSON(t *testing.T, dmg string) acceptanceInfo {
 	t.Helper()
 	out := mustRun(t, "info", "-o", "json", dmg)
-	var info realInfo
+	var info acceptanceInfo
 	if err := json.Unmarshal([]byte(out), &info); err != nil {
 		t.Fatalf("info -o json invalid: %v\n%s", err, out)
 	}
@@ -72,25 +90,30 @@ func realInfoJSON(t *testing.T, dmg string) realInfo {
 	return info
 }
 
-func TestRealInfo(t *testing.T) {
-	dmg := realDMG(t)
-	info := realInfoJSON(t, dmg)
+func TestAcceptanceInfo(t *testing.T) {
+	dmg := acceptanceDMG(t)
+	info := acceptanceInfoJSON(t, dmg)
 
-	if info.Volumes[0].Name != realVolumeName {
-		t.Errorf("volume name = %q, want %q", info.Volumes[0].Name, realVolumeName)
+	if info.Volumes[0].Name != acceptanceVolumeName {
+		t.Errorf("volume name = %q, want %q", info.Volumes[0].Name, acceptanceVolumeName)
 	}
 	if info.Volumes[0].Files == 0 {
 		t.Error("volume reports zero files")
 	}
+
+	stepSummary("### Acceptance image results (%s/%s)", runtime.GOOS, runtime.GOARCH)
+	stepSummary("- **Image**: %s", filepath.Base(dmg))
+	stepSummary("- **Volume**: %s — %d files, %d directories, %d symlinks (superblock accounting)",
+		info.Volumes[0].Name, info.Volumes[0].Files, info.Volumes[0].Directories, info.Volumes[0].Symlinks)
 }
 
-// TestRealListMatchesSuperblockCounts cross-checks the recursive listing
+// TestAcceptanceListMatchesSuperblockCounts cross-checks the recursive listing
 // against the volume superblock's own accounting: every file, directory and
 // symlink the superblock claims must be enumerated by the walk. Hardlinks
 // share an inode, so listed file entries may exceed the superblock count.
-func TestRealListMatchesSuperblockCounts(t *testing.T) {
-	dmg := realDMG(t)
-	info := realInfoJSON(t, dmg)
+func TestAcceptanceListMatchesSuperblockCounts(t *testing.T) {
+	dmg := acceptanceDMG(t)
+	info := acceptanceInfoJSON(t, dmg)
 
 	out := mustRun(t, "list", "-o", "json", "-R", dmg)
 
@@ -116,10 +139,10 @@ func TestRealListMatchesSuperblockCounts(t *testing.T) {
 		case "symlink":
 			symlinks++
 		}
-		if entry.Path == realAppBundle {
+		if entry.Path == acceptanceAppBundle {
 			sawAppBundle = true
 		}
-		if entry.Path == realAppBundle+"/Contents/Info.plist" {
+		if entry.Path == acceptanceAppBundle+"/Contents/Info.plist" {
 			sawInfoPlist = true
 		}
 	}
@@ -134,31 +157,33 @@ func TestRealListMatchesSuperblockCounts(t *testing.T) {
 		t.Errorf("listed %d symlinks, superblock claims %d", symlinks, info.Volumes[0].Symlinks)
 	}
 	if !sawAppBundle {
-		t.Errorf("recursive list missing %s", realAppBundle)
+		t.Errorf("recursive list missing %s", acceptanceAppBundle)
 	}
 	if !sawInfoPlist {
-		t.Errorf("recursive list missing %s/Contents/Info.plist", realAppBundle)
+		t.Errorf("recursive list missing %s/Contents/Info.plist", acceptanceAppBundle)
+	}
+
+	stepSummary("- **Recursive list**: %d files, %d directories, %d symlinks enumerated", files, dirs, symlinks)
+}
+
+func TestAcceptanceCatInfoPlist(t *testing.T) {
+	dmg := acceptanceDMG(t)
+	out := mustRun(t, "cat", dmg, "/"+acceptanceAppBundle+"/Contents/Info.plist")
+	if !strings.Contains(out, acceptanceBundleID) {
+		t.Errorf("Info.plist does not contain bundle id %q", acceptanceBundleID)
 	}
 }
 
-func TestRealCatInfoPlist(t *testing.T) {
-	dmg := realDMG(t)
-	out := mustRun(t, "cat", dmg, "/"+realAppBundle+"/Contents/Info.plist")
-	if !strings.Contains(out, realBundleID) {
-		t.Errorf("Info.plist does not contain bundle id %q", realBundleID)
-	}
-}
-
-// TestRealCatMainBinaryIsMachO reads the app's main executable and checks it
+// TestAcceptanceCatMainBinaryIsMachO reads the app's main executable and checks it
 // is a Mach-O image — proof that large multi-extent binary content survives
 // the DMG chunk and APFS extent layers intact at the front.
-func TestRealCatMainBinaryIsMachO(t *testing.T) {
-	dmg := realDMG(t)
+func TestAcceptanceCatMainBinaryIsMachO(t *testing.T) {
+	dmg := acceptanceDMG(t)
 
 	// The main binary name comes from CFBundleExecutable, but for the
 	// default artifact it matches the bundle name
-	binary := strings.TrimSuffix(realAppBundle, ".app")
-	out, stderr, code := run(t, "cat", dmg, "/"+realAppBundle+"/Contents/MacOS/"+binary)
+	binary := strings.TrimSuffix(acceptanceAppBundle, ".app")
+	out, stderr, code := run(t, "cat", dmg, "/"+acceptanceAppBundle+"/Contents/MacOS/"+binary)
 	if code != 0 {
 		t.Fatalf("cat main binary exited %d: %s", code, stderr)
 	}
@@ -175,11 +200,11 @@ func TestRealCatMainBinaryIsMachO(t *testing.T) {
 	}
 }
 
-// TestRealExtractVerified extracts the whole volume with --verify (source
+// TestAcceptanceExtractVerified extracts the whole volume with --verify (source
 // checksums recomputed against the written files) and asserts completeness.
-func TestRealExtractVerified(t *testing.T) {
-	dmg := realDMG(t)
-	info := realInfoJSON(t, dmg)
+func TestAcceptanceExtractVerified(t *testing.T) {
+	dmg := acceptanceDMG(t)
+	info := acceptanceInfoJSON(t, dmg)
 	dest := t.TempDir()
 
 	out, stderr, code := run(t, "extract", dmg, "-C", dest, "--verify")
@@ -204,13 +229,19 @@ func TestRealExtractVerified(t *testing.T) {
 	if extractedFiles < info.Volumes[0].Files {
 		t.Errorf("extracted %d files, superblock claims %d", extractedFiles, info.Volumes[0].Files)
 	}
+
+	verified := "passed"
+	if code != 0 {
+		verified = fmt.Sprintf("exit %d", code)
+	}
+	stepSummary("- **Extraction**: %d files written, checksum verification %s", extractedFiles, verified)
 }
 
-// TestRealGroundTruthAgainstHdiutil mounts the same DMG with macOS hdiutil
+// TestAcceptanceGroundTruthAgainstHdiutil mounts the same DMG with macOS hdiutil
 // and compares the sha256 of every regular file against our extraction.
 // This is the platform ground truth and runs on the macOS CI runner.
-func TestRealGroundTruthAgainstHdiutil(t *testing.T) {
-	dmg := realDMG(t)
+func TestAcceptanceGroundTruthAgainstHdiutil(t *testing.T) {
+	dmg := acceptanceDMG(t)
 	if runtime.GOOS != "darwin" {
 		t.Skip("hdiutil ground-truth comparison requires macOS")
 	}
@@ -260,6 +291,7 @@ func TestRealGroundTruthAgainstHdiutil(t *testing.T) {
 		t.Fatal("ground-truth walk compared zero files")
 	}
 	t.Logf("verified %d files against hdiutil ground truth", checked)
+	stepSummary("- **hdiutil ground truth (macOS)**: %d files sha256-identical to the mounted image", checked)
 }
 
 func sha256File(path string) (string, error) {

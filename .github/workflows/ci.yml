@@ -50,22 +50,22 @@ jobs:
         env:
           CGO_ENABLED: "0"
         run: go test -v ./internal/cli/
-      - name: Cache real acceptance image
+      - name: Cache Firefox 150 acceptance image
         id: dmg-cache
         uses: actions/cache@v4
         with:
           path: .acceptance-cache
-          key: ghostty-1.2.3-dmg
-      - name: Download real acceptance image
+          key: firefox-150.0-dmg
+      - name: Download Firefox 150 acceptance image
         if: steps.dmg-cache.outputs.cache-hit != 'true'
         shell: bash
         run: |
           mkdir -p .acceptance-cache
-          curl -fsSL --retry 3 -o .acceptance-cache/Ghostty.dmg \
-            "https://release.files.ghostty.org/1.2.3/Ghostty.dmg"
-      - name: CLI acceptance tests (real vendor DMG)
+          curl -fsSL --retry 3 -o .acceptance-cache/Firefox.dmg \
+            "https://ftp.mozilla.org/pub/firefox/releases/150.0/mac/en-GB/Firefox%20150.0.dmg"
+      - name: Acceptance tests (Firefox 150 image)
         env:
           CGO_ENABLED: "0"
-          APFS_ACCEPTANCE_DMG: ${{ github.workspace }}/.acceptance-cache/Ghostty.dmg
+          APFS_ACCEPTANCE_DMG: ${{ github.workspace }}/.acceptance-cache/Firefox.dmg
         shell: bash
-        run: go test -v -run TestReal ./internal/cli/
+        run: go test -v -run TestAcceptance ./internal/cli/
