@@ -80,6 +80,7 @@ func init() {
 	rootCmd.AddCommand(catCmd)
 	rootCmd.AddCommand(extractCmd)
 	rootCmd.AddCommand(packCmd)
+	rootCmd.AddCommand(createCmd)
 	rootCmd.AddCommand(inspectCmd)
 	rootCmd.AddCommand(mountCmd)
 }

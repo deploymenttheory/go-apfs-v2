@@ -21,12 +21,18 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - name: Build
+      - name: Build (default, MIT)
         env:
           CGO_ENABLED: "0"
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
         run: go build ./...
+      - name: Build (GPL, -tags apfswrite)
+        env:
+          CGO_ENABLED: "0"
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: go build -tags apfswrite ./...
 
   test:
     name: Test (${{ matrix.os }})
@@ -42,6 +48,16 @@ jobs:
           go-version-file: go.mod
       - name: Vet
         run: go vet ./...
+      - name: Build apfsck oracle (Linux; pinned to the ported mkapfs version)
+        if: runner.os == 'Linux'
+        run: |
+          # The apt apfsprogs is stale (Dec 2023) and its checks disagree with
+          # the mkapfs v0.2.1 that pkg/apfswrite was ported from. Build the
+          # matching apfsck from source so the oracle is version-consistent.
+          git clone --depth 1 --branch v0.2.1 https://github.com/linux-apfs/apfsprogs /tmp/apfsprogs
+          make -C /tmp/apfsprogs/apfsck
+          sudo cp /tmp/apfsprogs/apfsck/apfsck /usr/local/bin/
+          apfsck --version || true
       - name: Unit tests
         env:
           CGO_ENABLED: "0"

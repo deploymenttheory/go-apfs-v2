@@ -28,3 +28,12 @@ This product includes software design and code adapted from:
    from blacktop's hfsplus package; file-data reading, extents overflow
    support, link resolution and the io/fs adapter are original to this
    project.
+
+5. apfsprogs / mkapfs (https://github.com/linux-apfs/apfsprogs)
+   Copyright (C) 2019 Ernesto A. Fernández
+   Licensed under the GNU General Public License, version 2.
+   The APFS filesystem WRITER in pkg/apfswrite is a Go port of mkapfs.
+   IMPORTANT: pkg/apfswrite is therefore licensed GPL-2.0 (see
+   pkg/apfswrite/LICENSE), NOT MIT, and any binary that links it — including
+   the apfs CLI built with APFS-write support — is covered by the GPL-2.0.
+   The rest of this repository remains MIT.

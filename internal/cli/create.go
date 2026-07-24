@@ -1,0 +1,94 @@
+// apfs create OUT.dmg — create an empty formatted volume in a new DMG.
+package cli
+
+import (
+	"fmt"
+	"os"
+
+	"github.com/deploymenttheory/go-apfs-v2/pkg/disk"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hfsplus"
+	"github.com/spf13/cobra"
+)
+
+var (
+	createFS       string
+	createVolName  string
+	createSizeMiB  uint
+	createCaseSens bool
+)
+
+var createCmd = &cobra.Command{
+	Use:   "create OUT.dmg",
+	Short: "Create a new DMG containing an empty formatted volume",
+	Long: `Create a new UDIF DMG at OUT.dmg containing a freshly formatted, empty
+volume (no files). This is the format/mkfs operation.
+
+--fs hfs+  creates an empty HFS+ (HFSX) volume (always available).
+--fs apfs  creates an empty APFS container; APFS creation is a GPL-2.0
+           component and is only present in binaries built with
+           '-tags apfswrite' (see pkg/apfswrite).
+
+Examples:
+  apfs create blank.dmg --fs hfs+ --volname Scratch --size 16
+  apfs create blank.dmg --fs apfs --volname Data          # needs -tags apfswrite`,
+	Args: exactArgs(1, "OUT.dmg"),
+	RunE: runCreate,
+}
+
+func init() {
+	createCmd.Flags().StringVar(&createFS, "fs", "apfs", "filesystem to create: apfs or hfs+")
+	createCmd.Flags().StringVar(&createVolName, "volname", "untitled", "volume name")
+	createCmd.Flags().UintVar(&createSizeMiB, "size", 0, "image size in MiB (0 = minimum for the filesystem)")
+	createCmd.Flags().BoolVar(&createCaseSens, "case-sensitive", false, "create a case-sensitive volume")
+}
+
+func runCreate(cmd *cobra.Command, args []string) error {
+	dstPath := args[0]
+
+	var sizeBytes int64
+	if createSizeMiB > 0 {
+		sizeBytes = int64(createSizeMiB) * 1024 * 1024
+	}
+
+	switch createFS {
+	case "hfs+", "hfsx":
+		return createHFS(dstPath, sizeBytes)
+	case "apfs":
+		return createAPFS(dstPath, sizeBytes)
+	default:
+		return usageErrorf("invalid --fs %q: must be apfs or hfs+", createFS)
+	}
+}
+
+// createHFS writes an empty HFS+ volume wrapped in a DMG (MIT).
+func createHFS(dstPath string, sizeBytes int64) error {
+	root := &hfsplus.Entry{Name: createVolName, Mode: os.ModeDir | 0755}
+	var buf writeAtBuffer
+	if err := hfsplus.CreateImage(&buf, sizeBytes, createVolName, root, nil); err != nil {
+		return fmt.Errorf("unable to create HFS+ volume: %w", err)
+	}
+	if err := disk.WrapRawImageDMG(dstPath, buf.Bytes(), "Apple_HFS", nil); err != nil {
+		return fmt.Errorf("unable to write DMG: %w", err)
+	}
+	return createReport(dstPath, "hfs+")
+}
+
+func createReport(dstPath, fsName string) error {
+	info, _ := os.Stat(dstPath)
+	size := int64(0)
+	if info != nil {
+		size = info.Size()
+	}
+	if opts.Output == "json" {
+		return jsonOut(map[string]any{
+			"destination": dstPath,
+			"filesystem":  fsName,
+			"volume":      createVolName,
+			"bytes":       size,
+		})
+	}
+	if !opts.Quiet {
+		fmt.Printf("Created empty %s volume %q -> %s (%s)\n", fsName, createVolName, dstPath, formatSize(uint64(size)))
+	}
+	return nil
+}
