@@ -87,9 +87,17 @@ const (
 const (
 	typeExtent     = 2
 	typeInode      = 3
+	typeXattr      = 4
 	typeDstreamID  = 6
 	typeFileExtent = 8
 	typeDirRec     = 9
+)
+
+// Extended-attribute value flags (j_xattr_val_t flags, APFS_XATTR_DATA_*).
+const (
+	xattrDataStream      = 0x0001
+	xattrDataEmbedded    = 0x0002
+	xattrFileSystemOwned = 0x0004
 )
 
 // Key header field shift.
@@ -114,14 +122,19 @@ const (
 	xfSystemField = 0x20
 )
 
-// S_IFREG from <sys/stat.h>, used for regular-file mode bits.
-const sIFREG = 0o100000
+// S_IFREG / S_IFLNK from <sys/stat.h>, used for file-type mode bits.
+const (
+	sIFREG = 0o100000
+	sIFLNK = 0o120000
+)
 
 // Directory entry type (drec val flags & APFS_DREC_TYPE_MASK): the file-type
-// nibble of the mode. DT_REG == S_IFREG >> 12, DT_DIR == S_IFDIR >> 12.
+// nibble of the mode. DT_REG == S_IFREG >> 12, DT_DIR == S_IFDIR >> 12,
+// DT_LNK == S_IFLNK >> 12.
 const (
 	dtReg = sIFREG >> 12
 	dtDir = sIFDIR >> 12
+	dtLnk = sIFLNK >> 12
 )
 
 // Physical-extent record kinds and the shift of the kind field within
@@ -228,6 +241,8 @@ const (
 	sizeofInodeKey             = 8
 	sizeofDrecKeyFixed         = 10 // hdr(8)+name_len(2)
 	sizeofDrecHashedKeyFixed   = 12 // hdr(8)+name_len_and_hash(4)
+	sizeofXattrKeyFixed        = 10 // hdr(8)+name_len(2)
+	sizeofXattrValFixed        = 4  // flags(2)+xdata_len(2)
 
 	sizeofDstream       = 40 // size(8)+alloced_size(8)+default_crypto_id(8)+total_bytes_written(8)+total_bytes_read(8)
 	sizeofDstreamIDVal  = 4  // refcnt(4)

@@ -17,6 +17,7 @@ var (
 	packCompression string
 	packChunkKiB    uint
 	packVolumeName  string
+	packFS          string
 )
 
 var packCmd = &cobra.Command{
@@ -24,8 +25,14 @@ var packCmd = &cobra.Command{
 	Short: "Build a DMG from a directory, or repack an existing DMG",
 	Long: `Pack SOURCE into a new UDIF DMG at OUT.dmg.
 
-If SOURCE is a directory, its contents are written into a new HFS+ volume and
-wrapped in a DMG (this is the write/inverse of extract).
+If SOURCE is a directory, its contents are written into a new volume and
+wrapped in a DMG (this is the write/inverse of extract). The volume filesystem
+is chosen with --fs:
+
+  --fs hfs+  writes an HFS+ (HFSX) volume (default; always available).
+  --fs apfs  writes an APFS container. APFS writing is a GPL-2.0 component and
+             is only present in binaries built with '-tags apfswrite' (see
+             pkg/apfswrite); the default (MIT) binary refuses --fs apfs.
 
 If SOURCE is an existing DMG, its exact block layout is preserved while its
 chunks are recompressed. A repack is not byte-identical to the original —
@@ -45,6 +52,7 @@ func init() {
 	packCmd.Flags().StringVar(&packCompression, "compression", "zlib", "chunk compression: zlib or none")
 	packCmd.Flags().UintVar(&packChunkKiB, "chunk-size", 1024, "chunk size in KiB (must be a multiple of 512 bytes)")
 	packCmd.Flags().StringVar(&packVolumeName, "volname", "", "volume name when packing a directory (default: directory name)")
+	packCmd.Flags().StringVar(&packFS, "fs", "hfs+", "filesystem when packing a directory: hfs+ or apfs (apfs needs -tags apfswrite)")
 }
 
 func runPack(cmd *cobra.Command, args []string) error {
@@ -84,7 +92,8 @@ func packEncodeOptions() (*disk.EncodeOptions, error) {
 	return encOpts, nil
 }
 
-// packDirectory writes srcDir into a new HFS+ volume and wraps it in a DMG.
+// packDirectory writes srcDir into a new volume (HFS+ or APFS) and wraps it in
+// a DMG.
 func packDirectory(srcDir, dstPath string, encOpts *disk.EncodeOptions) error {
 	volname := packVolumeName
 	if volname == "" {
@@ -94,6 +103,18 @@ func packDirectory(srcDir, dstPath string, encOpts *disk.EncodeOptions) error {
 		}
 	}
 
+	switch packFS {
+	case "hfs+", "hfsx":
+		return packDirectoryHFS(srcDir, dstPath, volname, encOpts)
+	case "apfs":
+		return packDirectoryAPFS(srcDir, dstPath, volname, encOpts)
+	default:
+		return usageErrorf("invalid --fs %q: must be hfs+ or apfs", packFS)
+	}
+}
+
+// packDirectoryHFS writes srcDir into a new HFS+ volume and wraps it in a DMG.
+func packDirectoryHFS(srcDir, dstPath, volname string, encOpts *disk.EncodeOptions) error {
 	var buf writeAtBuffer
 	if err := hfsplus.CreateImageFromDir(&buf, 0, volname, srcDir, nil); err != nil {
 		return fmt.Errorf("unable to build HFS+ volume from %s: %w", srcDir, err)

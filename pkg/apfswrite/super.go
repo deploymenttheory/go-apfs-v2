@@ -208,6 +208,7 @@ func (b *builder) makeVolume(bno, oid uint64) error {
 	// from the directory count, matching what fsck_apfs expects.
 	vsb.NumFiles = b.numFiles
 	vsb.NumDirectories = b.numDirs
+	vsb.NumSymlinks = b.numSymlinks
 	vsb.FsAllocCount = 5 + b.postIPBlocks
 	vsb.TotalBlocksAlloced = b.postIPBlocks
 

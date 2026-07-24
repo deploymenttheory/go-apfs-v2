@@ -35,7 +35,7 @@ func collectWants(root *apfswrite.Entry) map[string]wantEntry {
 			if prefix != "" {
 				p = prefix + "/" + e.Name
 			}
-			if e.IsDir {
+			if e.Mode.IsDir() {
 				want[p] = wantEntry{isDir: true}
 				rec(p, e.Children)
 			} else {
@@ -117,14 +117,14 @@ func TestCreateContainerWithTree(t *testing.T) {
 	root := &apfswrite.Entry{Children: []*apfswrite.Entry{
 		{Name: "readme.txt", Data: []byte("top-level readme\n")},
 		{Name: "notes.md", Data: []byte("# notes\nsome content here\n")},
-		{Name: "docs", IsDir: true, Children: []*apfswrite.Entry{
+		{Name: "docs", Mode: fs.ModeDir, Children: []*apfswrite.Entry{
 			{Name: "guide.txt", Data: []byte("a guide inside docs\n")},
-			{Name: "sub", IsDir: true, Children: []*apfswrite.Entry{
+			{Name: "sub", Mode: fs.ModeDir, Children: []*apfswrite.Entry{
 				{Name: "deep.txt", Data: []byte("two levels deep content\n")},
 				{Name: "deep2.bin", Data: bytes.Repeat([]byte{0xAB}, 512)},
 			}},
 		}},
-		{Name: "empty_dir", IsDir: true},
+		{Name: "empty_dir", Mode: fs.ModeDir},
 	}}
 
 	v := openVolume(t, &apfswrite.CreateOptions{VolumeName: "TreeVol", Root: root})
@@ -145,7 +145,7 @@ func TestCreateContainerMultiLeafCatalog(t *testing.T) {
 		})
 	}
 	// Add a nested directory with a couple more files for good measure.
-	children = append(children, &apfswrite.Entry{Name: "nested", IsDir: true, Children: []*apfswrite.Entry{
+	children = append(children, &apfswrite.Entry{Name: "nested", Mode: fs.ModeDir, Children: []*apfswrite.Entry{
 		{Name: "a.txt", Data: []byte("nested a\n")},
 		{Name: "b.txt", Data: []byte("nested b\n")},
 	}})
@@ -174,14 +174,14 @@ func TestCreateContainerTreeFsckClean(t *testing.T) {
 
 	root := &apfswrite.Entry{Children: []*apfswrite.Entry{
 		{Name: "readme.txt", Data: []byte("hello from a tree\n")},
-		{Name: "dir_a", IsDir: true, Children: []*apfswrite.Entry{
+		{Name: "dir_a", Mode: fs.ModeDir, Children: []*apfswrite.Entry{
 			{Name: "one.txt", Data: []byte("one\n")},
 			{Name: "two.txt", Data: []byte("two\n")},
-			{Name: "inner", IsDir: true, Children: []*apfswrite.Entry{
+			{Name: "inner", Mode: fs.ModeDir, Children: []*apfswrite.Entry{
 				{Name: "deep.bin", Data: bytes.Repeat([]byte{0x5A}, 300)},
 			}},
 		}},
-		{Name: "dir_b", IsDir: true, Children: []*apfswrite.Entry{
+		{Name: "dir_b", Mode: fs.ModeDir, Children: []*apfswrite.Entry{
 			{Name: "b1.txt", Data: []byte("b one\n")},
 		}},
 	}}

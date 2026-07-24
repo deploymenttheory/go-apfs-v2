@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
 )
 
 // setTree resolves the caller's directory tree (Root plus the RootFiles
@@ -45,23 +47,40 @@ func (b *builder) setTree(opts *CreateOptions) error {
 			}
 			seen[e.Name] = true
 
+			var mtime uint64
+			if !e.ModTime.IsZero() {
+				mtime = uint64(e.ModTime.UnixNano())
+			}
 			be := &builderEntry{
 				name:   e.Name,
-				isDir:  e.IsDir,
 				cnid:   nextCNID,
 				parent: parent,
+				mode:   e.resolvedMode(),
+				uid:    e.UID,
+				gid:    e.GID,
+				mtime:  mtime,
 			}
 			nextCNID++
 			b.entries = append(b.entries, be)
 
-			if e.IsDir {
+			switch {
+			case e.isSymlinkEntry():
+				// A symbolic link stores its target in a com.apple.fs.symlink
+				// extended attribute (not a data stream): no DSTREAM xfield, no
+				// DSTREAM_ID record and no file extent.
+				be.isSymlink = true
+				be.linkTarget = e.Data
+				b.symlinks = append(b.symlinks, be)
+				b.numSymlinks++
+			case e.isDirEntry():
+				be.isDir = true
 				n, err := walk(be.cnid, e.Children)
 				if err != nil {
 					return 0, err
 				}
 				be.nchildren = n
 				b.numDirs++
-			} else {
+			default:
 				// Every regular file carries a data stream (a DSTREAM xfield and a
 				// DSTREAM_ID record), even a 0-byte one. A non-empty file also owns
 				// a physical extent of ceil(size/blocksize) contiguous blocks; an
@@ -150,7 +169,6 @@ func validateName(name string) error {
 }
 
 // hasFiles reports whether any user entries are being written.
-func (b *builder) hasFiles() bool { return len(b.entries) > 0 }
 
 // nextObjID returns the volume's next free object id: one past the highest user
 // cnid in use (APFS_MIN_USER_INO_NUM when there are no entries).
@@ -217,12 +235,19 @@ func (b *builder) buildCatRecords() []catRecord {
 	}))
 
 	for _, e := range b.entries {
-		dt := dtDir
-		if !e.isDir {
-			dt = dtReg
+		dt := dtReg
+		switch {
+		case e.isDir:
+			dt = dtDir
+		case e.isSymlink:
+			dt = dtLnk
 		}
 		recs = append(recs, b.dentryRecord(e.parent, e.name, e.cnid, uint16(dt)))
 		recs = append(recs, b.inodeRecord(e))
+		if e.isSymlink {
+			// The symlink target lives in a com.apple.fs.symlink xattr record.
+			recs = append(recs, b.symlinkXattrRecord(e))
+		}
 		if e.hasStream {
 			recs = append(recs, b.dstreamIDRecord(e))
 			// A 0-byte file has a data stream but no physical extent, so no
@@ -264,6 +289,8 @@ func catLess(a, b catRecord) bool {
 			return a.hash < b.hash
 		}
 		return a.name < b.name
+	case typeXattr:
+		return a.name < b.name
 	case typeFileExtent:
 		return a.logical < b.logical
 	}
@@ -273,7 +300,7 @@ func catLess(a, b catRecord) bool {
 // dentryRecord builds a hashed dentry record: key (parent, DIR_REC, hash(name)),
 // value j_drec_hashed_val pointing at childID with directory-entry type dt.
 func (b *builder) dentryRecord(parent uint64, name string, childID uint64, dt uint16) catRecord {
-	key, hash := buildHashedDrecKey(parent, name)
+	key, hash := b.buildHashedDrecKey(parent, name)
 	val := make([]byte, sizeofDrecVal)
 	binary.LittleEndian.PutUint64(val[0:], childID)     // file_id
 	binary.LittleEndian.PutUint64(val[8:], b.timestamp) // date_added
@@ -307,21 +334,40 @@ func (b *builder) inodeValue(e *builderEntry) []byte {
 	binary.LittleEndian.PutUint64(val[0:], e.parent) // parent_id
 	binary.LittleEndian.PutUint64(val[8:], e.cnid)   // private_id
 
-	binary.LittleEndian.PutUint64(val[16:], b.timestamp) // create_time
-	binary.LittleEndian.PutUint64(val[24:], b.timestamp) // mod_time
-	binary.LittleEndian.PutUint64(val[32:], b.timestamp) // change_time
-	binary.LittleEndian.PutUint64(val[40:], b.timestamp) // access_time
+	// Resolve mode and timestamp, applying deterministic defaults for entries
+	// (like the special root/private-dir inodes) that carry neither.
+	mode := e.mode
+	if mode == 0 {
+		switch {
+		case e.isSymlink:
+			mode = sIFLNK | 0o755
+		case e.isDir:
+			mode = sIFDIR | 0o755
+		default:
+			mode = sIFREG | 0o644
+		}
+	}
+	mtime := e.mtime
+	if mtime == 0 {
+		mtime = b.defaultTime
+	}
+
+	binary.LittleEndian.PutUint64(val[16:], mtime) // create_time
+	binary.LittleEndian.PutUint64(val[24:], mtime) // mod_time
+	binary.LittleEndian.PutUint64(val[32:], mtime) // change_time
+	binary.LittleEndian.PutUint64(val[40:], mtime) // access_time
 
 	binary.LittleEndian.PutUint64(val[48:], inodeNoRsrcFork) // internal_flags
 
 	if e.isDir {
 		binary.LittleEndian.PutUint32(val[56:], e.nchildren)            // nchildren
 		binary.LittleEndian.PutUint32(val[60:], protectionClassDirNone) // default_protection_class
-		binary.LittleEndian.PutUint16(val[80:], 0o755|sIFDIR)           // mode
 	} else {
-		binary.LittleEndian.PutUint32(val[56:], 1)            // nlink
-		binary.LittleEndian.PutUint16(val[80:], sIFREG|0o644) // mode
+		binary.LittleEndian.PutUint32(val[56:], 1) // nlink
 	}
+	binary.LittleEndian.PutUint32(val[72:], e.uid) // owner
+	binary.LittleEndian.PutUint32(val[76:], e.gid) // group
+	binary.LittleEndian.PutUint16(val[80:], mode)  // mode
 
 	// xf_blob header.
 	xblob := sizeofInodeVal
@@ -380,24 +426,51 @@ func (b *builder) fileExtentRecord(e *builderEntry) catRecord {
 }
 
 // buildHashedDrecKey builds a hashed dentry key and returns the key bytes and
-// the name_len_and_hash field used for ordering. Mirrors makeHashedDentryKey.
-func buildHashedDrecKey(parent uint64, name string) ([]byte, uint32) {
+// the name_len_and_hash field used for ordering. The 22-bit name hash is
+// computed over the case-folded (on a case-insensitive volume), NFD-normalized
+// filename — exactly the fold+normalize the reader (pkg/apfs name_hash.go) and
+// fsck_apfs apply on lookup, so uppercase/Unicode names hash correctly. Case
+// folding is disabled only on a case-sensitive (normalization-insensitive)
+// volume, where APFS hashes the normalized bytes without folding.
+func (b *builder) buildHashedDrecKey(parent uint64, name string) ([]byte, uint32) {
 	nameLen := uint32(len(name) + 1)
 	key := make([]byte, sizeofDrecHashedKeyFixed+int(nameLen))
 	setKeyHeader(key, 0, parent, typeDirRec)
 	copy(key[12:], name)
 	// key[12+len(name)] = 0 already (zeroed).
 
-	hash := uint32(0xFFFFFFFF)
-	var buf [4]byte
-	for _, c := range []byte(name) {
-		binary.LittleEndian.PutUint32(buf[:], uint32(c))
-		hash = crc32c(hash, buf[:])
-	}
-	hash = (hash & 0x3FFFFF) << 10
-	nameLenAndHash := hash | nameLen
+	hash := apfs.CalculateNameHash([]byte(name), !b.caseSensitive)
+	nameLenAndHash := (hash << 10) | nameLen
 	binary.LittleEndian.PutUint32(key[8:], nameLenAndHash)
 	return key, nameLenAndHash
+}
+
+// symlinkName is the extended-attribute name that stores a symbolic link's
+// target, matching what the reader resolves in getSymbolicLinkData.
+const symlinkName = "com.apple.fs.symlink"
+
+// symlinkXattrRecord builds the com.apple.fs.symlink extended-attribute record
+// carrying a symbolic link's target. The value is stored embedded (not in a
+// data stream): j_xattr_val_t flags = XATTR_DATA_EMBEDDED | XATTR_FILE_SYSTEM_OWNED,
+// data = target bytes followed by a NUL terminator. This is the representation
+// the reader's GetSymbolicLinkTarget expects and that fsck_apfs accepts.
+func (b *builder) symlinkXattrRecord(e *builderEntry) catRecord {
+	// Key: header (cnid, XATTR) + name_len(2) + NUL-terminated attribute name.
+	nameLen := len(symlinkName) + 1
+	key := make([]byte, sizeofXattrKeyFixed+nameLen)
+	setKeyHeader(key, 0, e.cnid, typeXattr)
+	binary.LittleEndian.PutUint16(key[8:], uint16(nameLen))
+	copy(key[sizeofXattrKeyFixed:], symlinkName)
+
+	// Value: flags(2) + xdata_len(2) + xdata (target + NUL).
+	xdata := make([]byte, len(e.linkTarget)+1)
+	copy(xdata, e.linkTarget)
+	val := make([]byte, sizeofXattrValFixed+len(xdata))
+	binary.LittleEndian.PutUint16(val[0:], xattrDataEmbedded|xattrFileSystemOwned)
+	binary.LittleEndian.PutUint16(val[2:], uint16(len(xdata)))
+	copy(val[sizeofXattrValFixed:], xdata)
+
+	return catRecord{id: e.cnid, typ: typeXattr, name: symlinkName, key: key, val: val}
 }
 
 // packCatLeaves greedily packs sorted records into leaf nodes of blocksize,

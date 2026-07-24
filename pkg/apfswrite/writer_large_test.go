@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"fmt"
+	"io/fs"
 	"math/rand"
 	"os/exec"
 	"path/filepath"
@@ -98,7 +99,7 @@ func TestCreateContainerEmptyFile(t *testing.T) {
 	root := &apfswrite.Entry{Children: []*apfswrite.Entry{
 		{Name: "empty.txt", Data: []byte{}},
 		{Name: "nonempty.txt", Data: []byte("not empty\n")},
-		{Name: "dir", IsDir: true, Children: []*apfswrite.Entry{
+		{Name: "dir", Mode: fs.ModeDir, Children: []*apfswrite.Entry{
 			{Name: "alsoempty", Data: nil},
 		}},
 	}}
@@ -254,7 +255,7 @@ func TestCreateContainerLargeFileFsckClean(t *testing.T) {
 		{Name: "partial.bin", Data: randomBytes(1<<20+123, 2)},
 		{Name: "five.bin", Data: randomBytes(5*(1<<20)+4095, 3)},
 		{Name: "empty.txt", Data: []byte{}},
-		{Name: "docs", IsDir: true, Children: []*apfswrite.Entry{
+		{Name: "docs", Mode: fs.ModeDir, Children: []*apfswrite.Entry{
 			{Name: "twoblk.bin", Data: bytes.Repeat([]byte{0x5A}, 2*4096)},
 			{Name: "emptytoo", Data: nil},
 		}},

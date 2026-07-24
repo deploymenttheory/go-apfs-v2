@@ -6,6 +6,8 @@ package apfswrite
 import (
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"time"
 )
 
@@ -50,18 +52,67 @@ type CreateOptions struct {
 	Root *Entry
 }
 
-// Entry is one node of the directory tree written into the volume. A directory
-// has IsDir set and carries its Children; a regular file carries its bytes in
-// Data. It mirrors pkg/hfsplus's Entry in shape.
+// Entry is one node of the directory tree written into the volume. It mirrors
+// pkg/hfsplus's Entry in shape. The Mode's type bits select the kind of entry:
+// a directory (os.ModeDir) carries its Children; a symbolic link
+// (os.ModeSymlink) carries its target path in Data; otherwise it is a regular
+// file carrying its bytes in Data. When Mode is zero, an Entry with Children is
+// treated as a directory and any other Entry as a regular file (0644).
 type Entry struct {
 	// Name is the entry's file name (no path separators, no NUL).
 	Name string
-	// IsDir marks the entry as a directory. Directories have no Data.
-	IsDir bool
-	// Data is the file content for a regular file (any size, may be empty).
+	// Mode carries the entry type (dir/symlink) and permission bits. When zero,
+	// sensible defaults are applied (0755 dirs, 0644 files).
+	Mode os.FileMode
+	// ModTime is written to the inode's create/mod/change/access times. When
+	// zero, a fixed deterministic timestamp is used.
+	ModTime time.Time
+	// UID and GID are the inode's owner and group ids.
+	UID, GID uint32
+	// Data is the file content for a regular file (any size, may be empty), or
+	// the target path for a symbolic link.
 	Data []byte
 	// Children are the entries contained in a directory.
 	Children []*Entry
+}
+
+// isDirEntry reports whether e should be written as a directory. A zero Mode
+// with Children present is treated as a directory (backwards compatible with
+// callers that built trees before Mode existed).
+func (e *Entry) isDirEntry() bool {
+	if e.isSymlinkEntry() {
+		return false
+	}
+	if e.Mode == 0 {
+		return len(e.Children) > 0
+	}
+	return e.Mode.IsDir()
+}
+
+// isSymlinkEntry reports whether e is a symbolic link.
+func (e *Entry) isSymlinkEntry() bool { return e.Mode&os.ModeSymlink != 0 }
+
+// resolvedMode returns the on-disk inode mode (S_IFMT | perm) for e, applying
+// default permission bits when Mode carries none.
+func (e *Entry) resolvedMode() uint16 {
+	perm := uint16(e.Mode.Perm())
+	switch {
+	case e.isSymlinkEntry():
+		if perm == 0 {
+			perm = 0o755
+		}
+		return sIFLNK | perm
+	case e.isDirEntry():
+		if perm == 0 {
+			perm = 0o755
+		}
+		return sIFDIR | perm
+	default:
+		if perm == 0 {
+			perm = 0o644
+		}
+		return sIFREG | perm
+	}
 }
 
 // RootFile is a regular file to be created in the volume root directory.
@@ -77,9 +128,20 @@ type RootFile struct {
 type builderEntry struct {
 	name      string
 	isDir     bool
+	isSymlink bool   // true for a symbolic link (target stored in a symlink xattr)
 	cnid      uint64 // catalog node id / inode number
 	parent    uint64 // parent directory cnid
 	nchildren uint32 // directories: number of direct children
+
+	// Inode metadata.
+	mode  uint16 // S_IFMT | permission bits
+	uid   uint32 // owner id
+	gid   uint32 // group id
+	mtime uint64 // create/mod/change/access time (ns since 1970 UTC)
+
+	// Symbolic links: the target path bytes (stored in a com.apple.fs.symlink
+	// extended attribute, not in a data stream).
+	linkTarget []byte
 
 	// Regular files with content (non-empty streams).
 	data        []byte
@@ -183,6 +245,82 @@ func CreateContainer(w io.WriterAt, sizeBytes int64, opts *CreateOptions) error 
 	return nil
 }
 
+// CreateContainerFromDir walks srcDir into an Entry tree — regular files,
+// directories and symbolic links, preserving each entry's mode, uid/gid and
+// modification time — and writes a populated APFS container of sizeBytes to w
+// via CreateContainer. It mirrors hfsplus.CreateImageFromDir. srcDir's own name
+// is not used; its contents become the volume root's children. When sizeBytes
+// is 0 the image is sized automatically to fit the tree.
+func CreateContainerFromDir(w io.WriterAt, sizeBytes int64, srcDir string, opts *CreateOptions) error {
+	root, err := entryFromDir(srcDir)
+	if err != nil {
+		return err
+	}
+	var o CreateOptions
+	if opts != nil {
+		o = *opts
+	}
+	o.Root = root
+	return CreateContainer(w, sizeBytes, &o)
+}
+
+// entryFromDir builds an Entry tree rooted at dir (dir's own name is dropped;
+// its children become the returned root's children).
+func entryFromDir(dir string) (*Entry, error) {
+	children, err := readDirEntries(dir)
+	if err != nil {
+		return nil, err
+	}
+	return &Entry{Children: children}, nil
+}
+
+// readDirEntries reads one directory level into Entry nodes, recursing into
+// subdirectories. Symlinks are captured as their target path; regular files as
+// their bytes. Mode, mtime and (where the OS exposes them) uid/gid are copied.
+func readDirEntries(dir string) ([]*Entry, error) {
+	fis, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	var out []*Entry
+	for _, fi := range fis {
+		full := filepath.Join(dir, fi.Name())
+		info, err := os.Lstat(full)
+		if err != nil {
+			return nil, err
+		}
+		e := &Entry{Name: fi.Name(), Mode: info.Mode(), ModTime: info.ModTime()}
+		if st, ok := info.Sys().(interface {
+			Uid() uint32
+			Gid() uint32
+		}); ok {
+			e.UID, e.GID = st.Uid(), st.Gid()
+		}
+		switch {
+		case info.Mode()&os.ModeSymlink != 0:
+			target, err := os.Readlink(full)
+			if err != nil {
+				return nil, err
+			}
+			e.Data = []byte(target)
+		case info.IsDir():
+			kids, err := readDirEntries(full)
+			if err != nil {
+				return nil, err
+			}
+			e.Children = kids
+		default:
+			data, err := os.ReadFile(full)
+			if err != nil {
+				return nil, err
+			}
+			e.Data = data
+		}
+		out = append(out, e)
+	}
+	return out, nil
+}
+
 // builder holds all filesystem parameters and the fixed block layout while the
 // container is being written. It corresponds to mkapfs's global `param` plus
 // `eph_info` and the checkpoint-area macros.
@@ -235,8 +373,10 @@ type builder struct {
 	// plus the subset that are regular files with a data extent.
 	entries     []*builderEntry
 	streamFiles []*builderEntry
+	symlinks    []*builderEntry
 	numFiles    uint64 // regular files (user)
 	numDirs     uint64 // directories (user, excludes root and private-dir)
+	numSymlinks uint64 // symbolic links (user)
 
 	// Catalog B-tree shape, decided in setTree from the record sizes.
 	numCatLeaves uint64 // extra leaf nodes when the catalog is a 2-level tree
@@ -261,8 +401,13 @@ type builder struct {
 	fileDataBase   uint64
 	fileDataBlocks uint64
 
-	timestamp uint64
+	timestamp   uint64
+	defaultTime uint64 // deterministic inode timestamp when an Entry has no ModTime
 }
+
+// defaultInodeTime is the fixed timestamp written to inode create/mod/change/
+// access times when an Entry supplies no ModTime, keeping output deterministic.
+var defaultInodeTime = time.Date(2024, time.January, 1, 0, 0, 0, 0, time.UTC)
 
 // catLeafOIDBase is the first virtual object id handed to extra catalog leaf
 // nodes (2-level catalog). It sits just past the named reserved object ids and
@@ -302,6 +447,7 @@ func (b *builder) computeCheckpointLayout() {
 	b.ipBmapBase = b.cpEnd + 10
 
 	b.timestamp = uint64(time.Now().UnixNano())
+	b.defaultTime = uint64(defaultInodeTime.UnixNano())
 }
 
 // writeBlocks writes count blocks of data starting at block number bno.

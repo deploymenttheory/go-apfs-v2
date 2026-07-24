@@ -41,14 +41,3 @@ func setObjectHeader(block []byte, size int, oid uint64, typ, subtype uint32) {
 	}
 	binary.LittleEndian.PutUint64(block[objOffCksum:], cksum)
 }
-
-// crc32c computes the CRC-32C (Castagnoli) checksum used for hashed directory
-// entry keys, mirroring apfsprogs lib/checksum.c:crc32c. It reuses the MIT
-// pkg/apfs table-driven implementation.
-func crc32c(crc uint32, buf []byte) uint32 {
-	out, err := apfs.CalculateWeakCRC32(buf, crc)
-	if err != nil {
-		panic("apfswrite: crc32c: " + err.Error())
-	}
-	return out
-}
