@@ -202,10 +202,16 @@ func TestCreateContainerFromDir(t *testing.T) {
 	if got, err := v.ReadFile("data/big.bin"); err != nil || sha256.Sum256(got) != sha256.Sum256(big) {
 		t.Errorf("data/big.bin round-trip failed: err=%v", err)
 	}
-	if fe, err := v.GetFileEntryByPath("bin/run.sh"); err != nil {
-		t.Errorf("bin/run.sh: %v", err)
-	} else if mode, _ := fe.GetFileMode(); mode&0o111 == 0 {
-		t.Errorf("bin/run.sh not executable: mode %o", mode)
+	// The exec bit is captured from the on-disk source file's mode. Windows
+	// has no Unix execute permission, so a file created there reports 0666 and
+	// the writer faithfully stores that — only assert the exec bit where the
+	// source filesystem can carry it.
+	if runtime.GOOS != "windows" {
+		if fe, err := v.GetFileEntryByPath("bin/run.sh"); err != nil {
+			t.Errorf("bin/run.sh: %v", err)
+		} else if mode, _ := fe.GetFileMode(); mode&0o111 == 0 {
+			t.Errorf("bin/run.sh not executable: mode %o", mode)
+		}
 	}
 	if haveSymlink {
 		fe, err := v.GetFileEntryByPath("link")
