@@ -1,0 +1,51 @@
+{
+ "files": {
+  "dir1/nested/deep.txt": {
+   "mode": "0o644",
+   "sha256": "30cf6f2de471343739bcc1dde393c0c0771814ac3ad798f68c8a74495174521a",
+   "size": 10,
+   "type": "file"
+  },
+  "empty.txt": {
+   "mode": "0o644",
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "size": 0,
+   "type": "file"
+  },
+  "hardlink-to-hello": {
+   "mode": "0o644",
+   "sha256": "b4eec6294b425678f0c225df5247ab1d2a92330eef06b570385702897c496d71",
+   "size": 16,
+   "type": "file"
+  },
+  "hello.txt": {
+   "mode": "0o644",
+   "sha256": "b4eec6294b425678f0c225df5247ab1d2a92330eef06b570385702897c496d71",
+   "size": 16,
+   "type": "file"
+  },
+  "link-to-hello": {
+   "target": "hello.txt",
+   "type": "symlink"
+  },
+  "random.bin": {
+   "mode": "0o644",
+   "sha256": "4acffd0c007df4988c6d590c26fd13c6a8e04e47cf325ca9e4f8a87a08e4cb5e",
+   "size": 1572864,
+   "type": "file"
+  },
+  "script.sh": {
+   "mode": "0o755",
+   "sha256": "299001868fb8c02fd431c336c6d058f5558c5dff5b5af5e6fe04b870a6a9cbba",
+   "size": 18,
+   "type": "file"
+  },
+  "u\u0308ni\u0308c\u00f8de\u0301/\u0444\u0430\u0438\u0306\u043b.txt": {
+   "mode": "0o644",
+   "sha256": "2f83c52112da9b859b66d180ea7c85d7449dc5526784bfd22a773e56222b0eb0",
+   "size": 18,
+   "type": "file"
+  }
+ },
+ "volumeName": "HFSTEST"
+}

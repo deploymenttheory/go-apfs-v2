@@ -2,15 +2,11 @@
 package main
 
 import (
-	"fmt"
 	"os"
 
-	"github.com/deploymenttheory/go-apfs-v2/internal/cmd"
+	"github.com/deploymenttheory/go-apfs-v2/internal/cli"
 )
 
 func main() {
-	if err := cmd.Execute(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
-	}
+	os.Exit(cli.Execute())
 }

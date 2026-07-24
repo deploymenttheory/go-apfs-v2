@@ -1,4 +1,4 @@
-package tools
+package cli
 
 import (
 	"encoding/binary"
@@ -9,46 +9,15 @@ import (
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/disk"
-	"github.com/spf13/cobra"
 )
 
-// ReadCmd represents the read command
-var ReadCmd = &cobra.Command{
-	Use:   "read",
-	Short: "Read and display information about a specific block",
-	Long: `Read a block from the APFS container and display information about it.
-
-This command reads a specific block by its physical address and attempts to
-interpret it based on its object type. It displays the object header, validates
-checksums, and shows the block's raw data.
-
-Example:
-  apfs read --container /dev/disk0s2 --block 0x1234
-  apfs read --container /dev/disk0s2 --block 1000 --verbose`,
-	RunE: runRead,
-}
-
-var (
-	readBlockAddr     uint64
-	readContainerPath string
-	readVerbose       bool
-)
-
-func init() {
-	ReadCmd.Flags().Uint64VarP(&readBlockAddr, "block", "b", 0, "Block address to read (required)")
-	ReadCmd.Flags().StringVarP(&readContainerPath, "container", "c", "", "Path to APFS container (required)")
-	ReadCmd.Flags().BoolVarP(&readVerbose, "verbose", "v", false, "Enable verbose output")
-
-	ReadCmd.MarkFlagRequired("block")
-	ReadCmd.MarkFlagRequired("container")
-}
-
-// runRead executes the read command
-func runRead(cmd *cobra.Command, args []string) error {
+// runInspectBlock reads one block by physical address and displays its
+// object header, checksum validation and type-specific decode.
+func runInspectBlock(imagePath string, readBlockAddr uint64, readVerbose bool) error {
 	// Open the container image with content-based format detection
-	reader, containerOffset, closer, err := disk.OpenWithOffset(readContainerPath)
+	reader, containerOffset, closer, err := disk.OpenWithOffset(imagePath)
 	if err != nil {
-		return fmt.Errorf("unable to open container: %w", err)
+		return withCode(ExitBadImage, fmt.Errorf("unable to open container: %w", err))
 	}
 	defer closer.Close()
 

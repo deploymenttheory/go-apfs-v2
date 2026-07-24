@@ -2,7 +2,6 @@ name: CI
 
 on:
   push:
-    branches: [main]
   pull_request:
 
 permissions:
@@ -43,7 +42,47 @@ jobs:
           go-version-file: go.mod
       - name: Vet
         run: go vet ./...
-      - name: Test
+      - name: Unit tests
         env:
           CGO_ENABLED: "0"
-        run: go test ./...
+        run: go test ./pkg/...
+      - name: CLI acceptance tests (fixtures)
+        env:
+          CGO_ENABLED: "0"
+        run: go test -v ./internal/cli/
+      - name: Cache acceptance images
+        id: dmg-cache
+        uses: actions/cache@v4
+        with:
+          path: .acceptance-cache
+          key: acceptance-firefox-150.0-zed-0.196.5
+      - name: Download Firefox 150 acceptance image
+        if: steps.dmg-cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          mkdir -p .acceptance-cache
+          curl -fsSL --retry 3 -o .acceptance-cache/Firefox.dmg \
+            "https://ftp.mozilla.org/pub/firefox/releases/150.0/mac/en-GB/Firefox%20150.0.dmg"
+      - name: Download Zed 0.196.5 acceptance image
+        if: steps.dmg-cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          mkdir -p .acceptance-cache
+          curl -fsSL --retry 3 -o .acceptance-cache/Zed.dmg \
+            "https://github.com/zed-industries/zed/releases/download/v0.196.5/Zed-aarch64.dmg"
+      - name: Acceptance tests (Firefox 150 image, HFS+)
+        env:
+          CGO_ENABLED: "0"
+          APFS_ACCEPTANCE_DMG: ${{ github.workspace }}/.acceptance-cache/Firefox.dmg
+        shell: bash
+        run: go test -v -run TestAcceptance ./internal/cli/
+      - name: Acceptance tests (Zed 0.196.5 image, APFS)
+        env:
+          CGO_ENABLED: "0"
+          APFS_ACCEPTANCE_DMG: ${{ github.workspace }}/.acceptance-cache/Zed.dmg
+          APFS_ACCEPTANCE_VOLNAME: Zed
+          APFS_ACCEPTANCE_APP: Zed.app
+          APFS_ACCEPTANCE_BUNDLE_ID: dev.zed.Zed
+          APFS_ACCEPTANCE_BINARY: zed
+        shell: bash
+        run: go test -v -run TestAcceptance ./internal/cli/

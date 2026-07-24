@@ -11,9 +11,12 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"sync"
 
-	"github.com/blacktop/ipsw/pkg/lzfse"
+	"github.com/go-compressions/lzfse"
+	"github.com/ulikunitz/xz"
+	"github.com/ulikunitz/xz/lzma"
 	"howett.net/plist"
 )
 
@@ -34,9 +37,14 @@ const (
 	chunkTypeCompressZLIB  = 0x80000005
 	chunkTypeCompressBZ2   = 0x80000006
 	chunkTypeCompressLZFSE = 0x80000007
+	chunkTypeCompressLZMA  = 0x80000008
 	chunkTypeComment       = 0x7ffffffe
 	chunkTypeLastBlock     = 0xffffffff
 )
+
+// xzMagic identifies an XZ container; DMG chunk type 0x80000008 (ULMO) can
+// carry either XZ or raw LZMA1 streams, distinguished by this magic
+var xzMagic = []byte{0xfd, '7', 'z', 'X', 'Z', 0x00}
 
 // DMGFooter represents the UDIF Resource File footer
 type DMGFooter struct {
@@ -307,15 +315,29 @@ func (r *DMGReader) parsePartition(block *blkxEntry) (*DMGPartition, error) {
 	return partition, nil
 }
 
-// findAPFSPartition locates the APFS partition in the DMG
+// findAPFSPartition locates the filesystem data partition in the DMG:
+// GPT-partitioned images via the GPT entries, Apple Partition Map images
+// via the blkx partition names (e.g. "Mac_OS_X (Apple_HFSX : 3)").
 func (r *DMGReader) findAPFSPartition() error {
-	// Parse GPT to find APFS partition
+	// Parse GPT to find the partition
 	if err := r.parseGPT(); err != nil {
+		// No GPT: fall back to Apple Partition Map style blkx names, in
+		// preference order APFS, then HFS+/HFSX
+		for _, hint := range []string{"Apple_APFS", "Apple_HFSX", "Apple_HFS"} {
+			for i, part := range r.partitions {
+				if strings.Contains(part.Name, hint) {
+					r.apfsPartitionIdx = i
+					r.apfsOffset = part.StartSector * sectorSize
+					r.apfsSize = part.SectorCount * sectorSize
+					return nil
+				}
+			}
+		}
 		return err
 	}
 
 	if r.apfsPartitionIdx == -1 {
-		return fmt.Errorf("no APFS partition found in DMG")
+		return fmt.Errorf("no APFS or HFS+ partition found in DMG")
 	}
 
 	return nil
@@ -596,13 +618,37 @@ func (r *DMGReader) decompressChunk(chunk *DMGChunk) ([]byte, error) {
 			return nil, err
 		}
 
-		decoder := lzfse.NewDecoder(compressed)
-		decompressed, err := decoder.DecodeBuffer()
+		decompressed, err := lzfse.Decompress(compressed)
 		if err != nil {
 			return nil, fmt.Errorf("LZFSE decompression failed: %w", err)
 		}
 
 		return decompressed, nil
+
+	case chunkTypeCompressLZMA:
+		compressed := make([]byte, chunk.CompressedLength)
+		_, err := r.file.ReadAt(compressed, int64(chunk.CompressedOffset))
+		if err != nil {
+			return nil, err
+		}
+
+		// ULMO chunks may be XZ containers or raw LZMA1 streams
+		var lzmaReader io.Reader
+		if bytes.HasPrefix(compressed, xzMagic) {
+			lzmaReader, err = xz.NewReader(bytes.NewReader(compressed))
+		} else {
+			lzmaReader, err = lzma.NewReader(bytes.NewReader(compressed))
+		}
+		if err != nil {
+			return nil, fmt.Errorf("LZMA decompression failed: %w", err)
+		}
+
+		var buf bytes.Buffer
+		if _, err := buf.ReadFrom(lzmaReader); err != nil {
+			return nil, fmt.Errorf("LZMA decompression failed: %w", err)
+		}
+
+		return buf.Bytes(), nil
 
 	case chunkTypeCompressADC:
 		compressed := make([]byte, chunk.CompressedLength)
