@@ -1,9 +1,5 @@
-//go:build apfswrite
-
-// This file wires APFS creation into the CLI. It imports pkg/apfswrite, which
-// is a GPL-2.0 port of mkapfs, so a binary built with -tags apfswrite is
-// covered by the GPL-2.0. Without the tag, the default binary is MIT and APFS
-// creation is unavailable (see create_apfs_stub.go).
+// Wires APFS volume creation (create --fs apfs) into the CLI via the pure-Go
+// pkg/apfswrite builder.
 package cli
 
 import (

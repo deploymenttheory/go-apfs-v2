@@ -29,10 +29,8 @@ If SOURCE is a directory, its contents are written into a new volume and
 wrapped in a DMG (this is the write/inverse of extract). The volume filesystem
 is chosen with --fs:
 
-  --fs hfs+  writes an HFS+ (HFSX) volume (default; always available).
-  --fs apfs  writes an APFS container. APFS writing is a GPL-2.0 component and
-             is only present in binaries built with '-tags apfswrite' (see
-             pkg/apfswrite); the default (MIT) binary refuses --fs apfs.
+  --fs hfs+  writes an HFS+ (HFSX) volume (default).
+  --fs apfs  writes an APFS container.
 
 If SOURCE is an existing DMG, its exact block layout is preserved while its
 chunks are recompressed. A repack is not byte-identical to the original —
@@ -52,7 +50,7 @@ func init() {
 	packCmd.Flags().StringVar(&packCompression, "compression", "zlib", "chunk compression: zlib or none")
 	packCmd.Flags().UintVar(&packChunkKiB, "chunk-size", 1024, "chunk size in KiB (must be a multiple of 512 bytes)")
 	packCmd.Flags().StringVar(&packVolumeName, "volname", "", "volume name when packing a directory (default: directory name)")
-	packCmd.Flags().StringVar(&packFS, "fs", "hfs+", "filesystem when packing a directory: hfs+ or apfs (apfs needs -tags apfswrite)")
+	packCmd.Flags().StringVar(&packFS, "fs", "hfs+", "filesystem when packing a directory: hfs+ or apfs")
 }
 
 func runPack(cmd *cobra.Command, args []string) error {

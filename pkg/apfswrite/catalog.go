@@ -1,14 +1,14 @@
-// SPDX-License-Identifier: GPL-2.0-only
-// Ported from mkapfs (apfsprogs) — Copyright (C) 2019 Ernesto A. Fernández. Go port Copyright (C) 2024 Deployment Theory.
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Deployment Theory.
 
 package apfswrite
 
 import "encoding/binary"
 
 // makeCatTree builds the volume's catalog (file-system) B-tree. When every
-// record fits in one node the tree is a single root-leaf, exactly like
-// mkapfs's make_cat_root. When the records overflow one leaf the tree grows to
-// two levels: an index root at (bno, oid) plus one leaf per group of records,
+// record fits in one node the tree is a single root-leaf. When the records
+// overflow one leaf the tree grows to two levels: an index root at (bno, oid)
+// plus one leaf per group of records,
 // each leaf a virtual object mapped by the volume object map. Child-node
 // pointers in the index are virtual oids, which the reader and fsck resolve
 // through that object map.

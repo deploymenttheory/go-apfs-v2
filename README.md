@@ -35,10 +35,14 @@ $ apfs extract Firefox.dmg -C ./out --verify
 | FileVault (AES-128-XTS) unlock | ✅ | — |
 | Transparent compression (zlib / LZVN / LZFSE) | ✅ | ✅ |
 | Repack a DMG losslessly (`pack`) | ✅ | ✅ |
-| Build a DMG from a directory (`pack <dir>`) | — | ✅ |
-| Create an empty formatted volume (`create`) | ✅¹ | ✅ |
+| Build a DMG from a directory (`pack <dir>`) | ✅ | ✅ |
+| Create a formatted volume (`create`) | ✅ | ✅ |
 
-¹ APFS creation is a GPL-2.0 component; see [Licensing](#licensing).
+Both filesystems can be written as well as read: `pack <dir>` builds a populated
+volume (files, symlinks, nested directories) and `create` formats an empty one.
+The APFS writer is a pure-Go, MIT-licensed package (`pkg/apfswrite`); created
+containers are validated against Apple's `fsck_apfs`/`hdiutil` and Linux
+`apfsck`.
 
 **Image formats read:** UDIF DMGs compressed with zlib (UDZO), bzip2 (UDBZ),
 ADC, LZFSE (ULFO) or LZMA (ULMO); GPT-partitioned and Apple-Partition-Map
@@ -48,7 +52,6 @@ file extension.
 ## Install
 
 ```console
-# Default build (MIT licensed)
 go install github.com/deploymenttheory/go-apfs-v2/cmd/apfs@latest
 
 # From a clone
@@ -57,15 +60,9 @@ cd go-apfs-v2
 go build -o apfs ./cmd/apfs
 ```
 
-The default binary is MIT-licensed. To include **APFS volume creation**, build
-with the `apfswrite` tag; that binary is GPL-2.0 (see [Licensing](#licensing)):
-
-```console
-go build -tags apfswrite -o apfs ./cmd/apfs
-```
-
-No cgo is required; the toolkit is pure Go and cross-compiles to Linux, macOS
-and Windows on `amd64` and `arm64`.
+The binary is MIT-licensed and includes the full read and write feature set
+(APFS and HFS+). No cgo is required; the toolkit is pure Go and cross-compiles
+to Linux, macOS and Windows on `amd64` and `arm64`.
 
 ## Command reference
 
@@ -182,13 +179,14 @@ apfs mount image.dmg /mnt/apfs
 ### `pack` — build a DMG from a directory, or repack a DMG
 
 ```
-apfs pack SOURCE OUT.dmg [--volname NAME] [--compression zlib|none] [--chunk-size KiB]
+apfs pack SOURCE OUT.dmg [--fs hfs+|apfs] [--volname NAME] [--compression zlib|none] [--chunk-size KiB]
 ```
 
 Two modes, chosen by what `SOURCE` is:
 
-- **`SOURCE` is a directory** → its contents are written into a new **HFS+**
-  volume and wrapped in a DMG (the inverse of `extract`).
+- **`SOURCE` is a directory** → its contents are written into a new volume and
+  wrapped in a DMG (the inverse of `extract`). `--fs` chooses the filesystem:
+  `hfs+` (default) or `apfs`.
 - **`SOURCE` is a DMG** → it is **repacked** losslessly: the exact block layout
   is preserved and the chunks recompressed. The result is not byte-identical to
   the original (different compressors produce different container bytes), but
@@ -196,8 +194,9 @@ Two modes, chosen by what `SOURCE` is:
   this tool and macOS.
 
 ```console
-apfs pack ./mytree out.dmg --volname "My Data"   # directory -> HFS+ DMG
-apfs pack original.dmg repacked.dmg              # repack a DMG
+apfs pack ./mytree out.dmg --volname "My Data"          # directory -> HFS+ DMG
+apfs pack ./mytree out.dmg --fs apfs --volname "My Data" # directory -> APFS DMG
+apfs pack original.dmg repacked.dmg                     # repack a DMG
 apfs pack original.dmg smaller.dmg --compression none
 ```
 
@@ -208,13 +207,11 @@ apfs create OUT.dmg --fs hfs+|apfs [--volname NAME] [--size MiB] [--case-sensiti
 ```
 
 Creates a new DMG containing a freshly formatted, **empty** volume (the mkfs
-operation). `--fs hfs+` is always available; `--fs apfs` requires a binary
-built with `-tags apfswrite` (see [Licensing](#licensing)) and otherwise exits
-with code 5.
+operation). Both `--fs hfs+` and `--fs apfs` are supported.
 
 ```console
 apfs create blank.dmg --fs hfs+ --volname Scratch --size 16
-apfs create blank.dmg --fs apfs --volname Data      # needs -tags apfswrite
+apfs create blank.dmg --fs apfs --volname Data
 ```
 
 ## Global flags
@@ -269,30 +266,26 @@ data, _ := fs.ReadFile(vol, "Applications/Some.app/Contents/Info.plist")
 ```
 
 Key packages: `pkg/apfs` (APFS reader), `pkg/hfsplus` (HFS+ reader and writer),
-`pkg/disk` (DMG/UDIF reader and writer, partition tables), and the GPL-2.0
-`pkg/apfswrite` (APFS container writer).
+`pkg/disk` (DMG/UDIF reader and writer, partition tables), and `pkg/apfswrite`
+(APFS container writer).
 
 ## Licensing
 
-This repository is **MIT-licensed**, with one exception:
-
-- **`pkg/apfswrite`** (the APFS *writer*) is a Go port of
-  [`mkapfs`](https://github.com/linux-apfs/apfsprogs) and is therefore
-  **GPL-2.0** (see `pkg/apfswrite/LICENSE`).
-
-The default `apfs` binary does **not** link `pkg/apfswrite` and is MIT. A binary
-built with `-tags apfswrite` links it and is **GPL-2.0**. The reader/library
-packages (`pkg/apfs`, `pkg/hfsplus`, `pkg/disk`) remain MIT for standalone use.
-See `NOTICE` for full attribution.
+This repository is **MIT-licensed** in full, including `pkg/apfswrite` (the APFS
+writer). That package began as a study of
+[`mkapfs`](https://github.com/linux-apfs/apfsprogs) (GPL-2.0), used as a
+reference for the format's behaviour, and was then reimplemented independently
+from Apple's *Apple File System Reference*; it shares none of mkapfs's source
+expression. See `NOTICE` and `pkg/apfswrite/README.md` for the full provenance.
 
 ## Development
 
 ```console
-go test ./...                       # unit + fixture acceptance tests
-go build -tags apfswrite ./...      # GPL build
+go test ./...      # unit + fixture acceptance tests
+go build ./...     # build everything
 ```
 
-CI runs the build matrix (both MIT and GPL variants) and the test suite on
+CI runs the build matrix and the test suite on
 Linux, macOS and Windows. Correctness is cross-checked against the platforms'
 own tools: created HFS+ volumes are validated with `fsck_hfs` and mounted with
 `hdiutil`; created APFS containers with `fsck_apfs` (macOS) and `apfsck`

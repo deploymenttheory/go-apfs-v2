@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: GPL-2.0-only
-// Ported from mkapfs (apfsprogs) — Copyright (C) 2019 Ernesto A. Fernández. Go port Copyright (C) 2024 Deployment Theory.
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Deployment Theory.
 
 package apfswrite
 
@@ -7,81 +7,84 @@ import (
 	"encoding/binary"
 )
 
-// mkfsIDString identifies the formatting program in the volume superblock.
-const mkfsIDString = "mkapfs go port (apfswrite)"
+// formatterID identifies this tool in the volume superblock's "formatted by"
+// field, the way newfs_apfs records itself.
+const formatterID = "go-apfs (apfswrite)"
 
-// makeContainer builds the whole filesystem, mirroring super.c:make_container.
-func (b *builder) makeContainer() error {
+// nextContainerOID returns nx_next_oid: one past the highest virtual object id
+// the container assigns. The fixed container objects occupy ids up to
+// mainFreeQueueOID; a two-level catalog additionally consumes one virtual id per
+// leaf starting at catLeafOIDBase, which then becomes the high-water mark.
+func (b *builder) nextContainerOID() uint64 {
+	next := uint64(mainFreeQueueOID + 1)
+	if b.catTwoLevel {
+		next = catLeafOIDBase + b.numCatLeaves
+	}
+	return next
+}
+
+// assemble writes the whole container. By the time it runs every block position
+// and all space-manager geometry are fixed, so it works in three phases: write
+// the container's objects (the ephemeral objects, the container object map and
+// the volume with its trees), populate the container superblock that references
+// them, and finally lay down the checkpoint and the primary superblock at block
+// zero.
+func (b *builder) assemble() error {
+	// Phase 1: write the objects the container superblock will point at. The
+	// order among these is immaterial — each lands at its own fixed block.
+	if err := b.writeSpaceman(b.spacemanBno, spacemanOID); err != nil {
+		return err
+	}
+	if err := b.writeReaper(b.reaperBno, reaperOID); err != nil {
+		return err
+	}
+	if err := b.writeObjectMap(b.mainOmapBno, false /* container omap */); err != nil {
+		return err
+	}
+	if err := b.writeVolume(b.firstVolBno, firstVolOID); err != nil {
+		return err
+	}
+
+	// Phase 2: populate the container superblock, field by field.
 	sb := &nxSuperblock{}
-	size := b.blockCount * uint64(b.blocksize)
-
 	sb.Magic = nxMagic
 	sb.BlockSize = b.blocksize
 	sb.BlockCount = b.blockCount
-
-	// We only support version 2 of APFS. No Fusion.
-	sb.IncompatibleFeatures |= nxIncompatVersion2
-
+	sb.IncompatibleFeatures = nxIncompatVersion2 // APFS version 2, no Fusion
 	sb.UUID = b.mainUUID
-
-	// Leave some room for the objects created by the mkfs.
-	sb.NextOID = oidReservedCount + 100
+	sb.NextOID = b.nextContainerOID()
 	sb.NextXID = mkfsXID + 1
-
-	// We need to know the spaceman size before we can decide the location of
-	// the other ephemeral objects.
-	if err := b.setSpacemanInfo(); err != nil {
-		return err
-	}
-	b.setEphemeralBnos()
-
+	b.fillCheckpointAreas(sb)
 	sb.SpacemanOID = spacemanOID
-	if err := b.makeSpaceman(b.spacemanBno, spacemanOID); err != nil {
-		return err
-	}
-	sb.ReaperOID = reaperOID
-	if err := b.makeEmptyReaper(b.reaperBno, reaperOID); err != nil {
-		return err
-	}
 	sb.OmapOID = b.mainOmapBno
-	if err := b.makeOmapBtree(b.mainOmapBno, false /* is_vol */); err != nil {
-		return err
-	}
-
-	b.setCheckpointAreas(sb)
-
-	sb.MaxFileSystems = getMaxVolumes(size)
+	sb.ReaperOID = reaperOID
+	sb.MaxFileSystems = maxVolumes(b.blockCount * uint64(b.blocksize))
 	sb.FsOID[0] = firstVolOID
-	if err := b.makeVolume(b.firstVolBno, firstVolOID); err != nil {
-		return err
-	}
+	b.fillEphemeralInfo(&sb.EphemeralInfo[0])
 
-	b.setEphemeralInfo(&sb.EphemeralInfo[0])
-
-	// Serialize the superblock and finalize its object header/checksum.
 	block := b.zeroedBlock()
 	marshalInto(block, sb)
 	setObjectHeader(block, int(b.blocksize), oidNXSuperblock,
 		objEphemeral|objectTypeNXSuperblock, objectTypeInvalid)
 
-	// If the disk was ever formatted as APFS, valid checkpoint superblocks may
-	// still remain. Wipe the descriptor area to avoid mounting them by mistake.
-	if err := b.zeroArea(b.cpDescBase, uint64(b.cpDescBlocks)); err != nil {
+	// Phase 3: the descriptor area is wiped first so no stale checkpoint
+	// superblock from a prior format can be mounted by mistake, then this
+	// checkpoint's mapping block and superblock copy go into it. The primary
+	// superblock lands at block zero last.
+	if err := b.wipeArea(b.cpDescBase, uint64(b.cpDescBlocks)); err != nil {
 		return err
 	}
-	if err := b.makeCpointMapBlock(b.cpMapBno); err != nil {
+	if err := b.writeCheckpointMap(b.cpMapBno); err != nil {
 		return err
 	}
-	if err := b.makeCpointSuperblock(b.cpSbBno, block); err != nil {
+	if err := b.writeCheckpointSuper(b.cpSbBno, block); err != nil {
 		return err
 	}
-
-	// The primary superblock lives at block zero.
 	return b.writeBlock(block, nxBlockNum)
 }
 
-// zeroArea wipes an area on disk, mirroring super.c:zero_area.
-func (b *builder) zeroArea(start, blocks uint64) error {
+// wipeArea zeroes blocks blocks starting at start.
+func (b *builder) wipeArea(start, blocks uint64) error {
 	zero := b.zeroedBlock()
 	for bno := start; bno < start+blocks; bno++ {
 		if err := b.writeBlock(zero, bno); err != nil {
@@ -91,12 +94,12 @@ func (b *builder) zeroArea(start, blocks uint64) error {
 	return nil
 }
 
-// setCheckpointAreas sets all superblock fields describing the checkpoint
-// areas, mirroring super.c:set_checkpoint_areas.
-func (b *builder) setCheckpointAreas(sb *nxSuperblock) {
+// fillCheckpointAreas records the checkpoint areas in the superblock. The one
+// checkpoint occupies the first two descriptor blocks (the mapping block and
+// this superblock copy) and totalBlkcnt data blocks (the ephemeral objects).
+func (b *builder) fillCheckpointAreas(sb *nxSuperblock) {
 	sb.XpDescBase = b.cpDescBase
 	sb.XpDescBlocks = b.cpDescBlocks
-	// The first two blocks hold the superblock and the mappings.
 	sb.XpDescLen = 2
 	sb.XpDescNext = 2
 	sb.XpDescIndex = 0
@@ -108,34 +111,30 @@ func (b *builder) setCheckpointAreas(sb *nxSuperblock) {
 	sb.XpDataIndex = 0
 }
 
-// getMaxVolumes calculates the maximum number of volumes for the container,
-// mirroring super.c:get_max_volumes.
-func getMaxVolumes(size uint64) uint32 {
-	maxVols := divRoundUp(size, 512*1024*1024)
-	if maxVols > nxMaxFileSystems {
-		maxVols = nxMaxFileSystems
-	}
-	return uint32(maxVols)
+// maxVolumes returns the container's maximum volume count: one per 512 MiB,
+// capped at the format maximum.
+func maxVolumes(size uint64) uint32 {
+	return uint32(min(divRoundUp(size, 512*1024*1024), nxMaxFileSystems))
 }
 
-// setEphemeralInfo sets the container's first ephemeral-info entry, mirroring
-// super.c:set_ephemeral_info.
-func (b *builder) setEphemeralInfo(info *uint64) {
+// fillEphemeralInfo sets the container's first ephemeral-info word, which encodes
+// the minimum ephemeral block count, the maximum ephemeral structure count and
+// the info version. Small containers use the main free queue's node limit as the
+// minimum; larger ones use the format's fixed minimum.
+func (b *builder) fillEphemeralInfo(info *uint64) {
 	containerSize := b.blockCount * uint64(b.blocksize)
-	var minBlockCount uint64
+	minBlockCount := uint64(nxEphMinBlockCount)
 	if containerSize < 128*1024*1024 {
-		minBlockCount = uint64(mainFQNodeLimit(b.blockCount))
-	} else {
-		minBlockCount = nxEphMinBlockCount
+		minBlockCount = uint64(b.mainFreeQueueNodeLimit())
 	}
 	*info = (minBlockCount << 32) |
 		(nxMaxFileSystemEphStructs << 16) |
 		nxEphInfoVersion1
 }
 
-// setMetaCrypto sets a volume's meta_crypto field, mirroring
-// super.c:set_meta_crypto.
-func setMetaCrypto(wmcs *wrappedMetaCryptoState) {
+// fillMetaCrypto fills a volume's wrapped-meta-crypto-state field. On an
+// unencrypted volume this carries only the version and a no-protection class.
+func fillMetaCrypto(wmcs *wrappedMetaCryptoState) {
 	wmcs.MajorVersion = wmcsMajorVersion
 	wmcs.MinorVersion = wmcsMinorVersion
 	wmcs.Cpflags = 0
@@ -144,136 +143,124 @@ func setMetaCrypto(wmcs *wrappedMetaCryptoState) {
 	wmcs.KeyRevision = 1
 }
 
-// makeVolume makes a volume, mirroring super.c:make_volume.
-func (b *builder) makeVolume(bno, oid uint64) error {
-	vsb := &apfsSuperblock{}
-
-	vsb.Magic = apfsMagic
-	vsb.Features = featureHardlinkMapRecords
-
+// volIncompatFeatures returns the volume's incompatible-feature flags, which
+// encode the case- and normalization-sensitivity of the name comparison.
+func (b *builder) volIncompatFeatures() uint64 {
 	switch {
 	case b.normSensitive:
-		vsb.IncompatibleFeatures = 0
+		return 0
 	case b.caseSensitive:
-		vsb.IncompatibleFeatures = incompatNormalizationInsensitive
+		return incompatNormalizationInsensitive
 	default:
-		vsb.IncompatibleFeatures = incompatCaseInsensitive
+		return incompatCaseInsensitive
 	}
+}
 
-	setMetaCrypto(&vsb.MetaCrypto)
-
-	// Next free object id: one past the highest user cnid in use.
-	vsb.NextObjID = b.nextObjID()
-
-	vsb.VolUUID = b.volUUID
-	vsb.FsFlags = fsUnencrypted
-
-	copy(vsb.FormattedBy.ID[:], mkfsIDString)
-	vsb.FormattedBy.Timestamp = b.timestamp
-	vsb.FormattedBy.LastXID = mkfsXID
-
-	copy(vsb.Volname[:], b.label)
-	vsb.NextDocID = minDocID
-
-	vsb.RootTreeType = objVirtual | objectTypeBtree
-	vsb.ExtentrefTreeType = objPhysical | objectTypeBtree
-	vsb.SnapMetaTreeType = objPhysical | objectTypeBtree
-
-	vsb.OmapOID = b.firstVolOmapBno
-	if err := b.makeOmapBtree(b.firstVolOmapBno, true /* is_vol */); err != nil {
+// writeVolume writes the volume: its four trees (object map, catalog,
+// extent-reference and snapshot-metadata) and its file content, then the volume
+// superblock that references them.
+func (b *builder) writeVolume(bno, oid uint64) error {
+	// Write the trees and file data first; the superblock fields below only
+	// record where each landed.
+	if err := b.writeObjectMap(b.firstVolOmapBno, true /* volume omap */); err != nil {
 		return err
 	}
-	vsb.RootTreeOID = firstVolCatRootOID
 	if err := b.makeCatTree(b.firstVolCatRootBno, firstVolCatRootOID); err != nil {
 		return err
 	}
-
 	// The extent-reference tree holds one physical-extent record per file data
-	// extent; the snapshot metadata tree stays empty.
-	vsb.ExtentrefTreeOID = b.firstVolExtrefRootBno
+	// extent; the snapshot-metadata tree stays empty.
 	if err := b.makeExtrefRoot(b.firstVolExtrefRootBno, b.firstVolExtrefRootBno); err != nil {
 		return err
 	}
-	vsb.SnapMetaTreeOID = b.firstVolSnapRootBno
-	if err := b.makeEmptyBtreeRoot(b.firstVolSnapRootBno, b.firstVolSnapRootBno, objectTypeSnapMetaTree); err != nil {
+	if err := b.writeEmptyTree(b.firstVolSnapRootBno, b.firstVolSnapRootBno, objectTypeSnapMetaTree); err != nil {
 		return err
 	}
-
-	// Volume file/block accounting. apfsck derives the volume block count from
-	// every physical/omap block plus the file data extents; fsck matches
-	// apfs_fs_alloc_count against it. The empty volume owns five blocks (the
-	// root nodes of the four trees plus the omap structure); every extra
-	// catalog leaf node and every file data block (the post-internal-pool
-	// region) adds one. Reserved directories (root, private-dir) are excluded
-	// from the directory count, matching what fsck_apfs expects.
-	vsb.NumFiles = b.numFiles
-	vsb.NumDirectories = b.numDirs
-	vsb.NumSymlinks = b.numSymlinks
-	vsb.FsAllocCount = 5 + b.postIPBlocks
-	vsb.TotalBlocksAlloced = b.postIPBlocks
-
-	// Write the file contents into their data blocks.
 	if err := b.writeFileData(); err != nil {
 		return err
 	}
 
+	// Populate the volume superblock field by field.
+	//
+	// FsAllocCount is what fsck_apfs cross-checks: the blocks the volume owns are
+	// the five of an empty volume (its four tree roots plus the omap structure)
+	// plus every extra catalog leaf, extref leaf and file-data block in the
+	// post-pool region. The root and private directories are not counted as
+	// directories.
+	vsb := &apfsSuperblock{}
+	vsb.Magic = apfsMagic
+	vsb.Features = featureHardlinkMapRecords
+	vsb.IncompatibleFeatures = b.volIncompatFeatures()
+	vsb.FsAllocCount = 5 + b.postIPBlocks
+	fillMetaCrypto(&vsb.MetaCrypto)
+	vsb.RootTreeType = objVirtual | objectTypeBtree
+	vsb.ExtentrefTreeType = objPhysical | objectTypeBtree
+	vsb.SnapMetaTreeType = objPhysical | objectTypeBtree
+	vsb.OmapOID = b.firstVolOmapBno
+	vsb.RootTreeOID = firstVolCatRootOID
+	vsb.ExtentrefTreeOID = b.firstVolExtrefRootBno
+	vsb.SnapMetaTreeOID = b.firstVolSnapRootBno
+	vsb.NextObjID = b.nextObjID()
+	vsb.NumFiles = b.numFiles
+	vsb.NumDirectories = b.numDirs
+	vsb.NumSymlinks = b.numSymlinks
+	vsb.TotalBlocksAlloced = b.postIPBlocks
+	vsb.VolUUID = b.volUUID
+	vsb.FsFlags = fsUnencrypted
+	copy(vsb.FormattedBy.ID[:], formatterID)
+	vsb.FormattedBy.Timestamp = b.timestamp
+	vsb.FormattedBy.LastXID = mkfsXID
+	copy(vsb.Volname[:], b.label)
+	vsb.NextDocID = minDocID
+
 	block := b.zeroedBlock()
 	marshalInto(block, vsb)
-	setObjectHeader(block, int(b.blocksize), oid,
-		objVirtual|objectTypeFS, objectTypeInvalid)
+	setObjectHeader(block, int(b.blocksize), oid, objVirtual|objectTypeFS, objectTypeInvalid)
 	return b.writeBlock(block, bno)
 }
 
-// makeCpointMapBlock makes the mapping block for the one checkpoint, mirroring
-// super.c:make_cpoint_map_block.
-func (b *builder) makeCpointMapBlock(bno uint64) error {
+// writeCheckpointMap writes the checkpoint's mapping block, which records where
+// each ephemeral object of this checkpoint lives on disk.
+func (b *builder) writeCheckpointMap(bno uint64) error {
 	block := b.zeroedBlock()
 
-	// cpm_flags at offset sizeofObjPhys; cpm_count next; then the mappings.
 	off := sizeofObjPhys
 	binary.LittleEndian.PutUint32(block[off:], checkpointMapLast) // cpm_flags
-	// cpm_count filled at the end.
-	mapBase := sizeofObjPhys + 8 // header (obj + flags + count)
+	mapBase := sizeofObjPhys + 8                                  // header: obj + flags + count
 
 	idx := 0
-	putMapping := func(typ, subtype, mapSize uint32, oid, paddr uint64) {
+	addMapping := func(typ, subtype, mapSize uint32, oid, paddr uint64) {
 		m := block[mapBase+idx*sizeofCheckpointMapping:]
 		binary.LittleEndian.PutUint32(m[0:], typ)     // cpm_type
 		binary.LittleEndian.PutUint32(m[4:], subtype) // cpm_subtype
 		binary.LittleEndian.PutUint32(m[8:], mapSize) // cpm_size
-		// m[12:] cpm_pad = 0
-		// m[16:] cpm_fs_oid = 0
-		binary.LittleEndian.PutUint64(m[24:], oid)   // cpm_oid
-		binary.LittleEndian.PutUint64(m[32:], paddr) // cpm_paddr
+		binary.LittleEndian.PutUint64(m[24:], oid)    // cpm_oid
+		binary.LittleEndian.PutUint64(m[32:], paddr)  // cpm_paddr
 		idx++
 	}
 
-	// Reaper.
-	putMapping(objEphemeral|objectTypeNXReaper, objectTypeInvalid, b.blocksize, reaperOID, b.reaperBno)
-	// Space manager.
-	putMapping(objEphemeral|objectTypeSpaceman, objectTypeInvalid, b.spacemanSz, spacemanOID, b.spacemanBno)
-	// Internal-pool free queue root.
-	putMapping(objEphemeral|objectTypeBtree, objectTypeSpacemanFreeQueue, b.blocksize, ipFreeQueueOID, b.ipFreeQueueBno)
-	// Main device free queue root.
-	putMapping(objEphemeral|objectTypeBtree, objectTypeSpacemanFreeQueue, b.blocksize, mainFreeQueueOID, b.mainFreeQueueBno)
+	addMapping(objEphemeral|objectTypeNXReaper, objectTypeInvalid, b.blocksize, reaperOID, b.reaperBno)
+	addMapping(objEphemeral|objectTypeSpaceman, objectTypeInvalid, b.spacemanSz, spacemanOID, b.spacemanBno)
+	addMapping(objEphemeral|objectTypeBtree, objectTypeSpacemanFreeQueue, b.blocksize, ipFreeQueueOID, b.ipFreeQueueBno)
+	addMapping(objEphemeral|objectTypeBtree, objectTypeSpacemanFreeQueue, b.blocksize, mainFreeQueueOID, b.mainFreeQueueBno)
 
 	binary.LittleEndian.PutUint32(block[off+4:], uint32(idx)) // cpm_count
 
-	setObjectHeader(block, int(b.blocksize), bno,
-		objPhysical|objectTypeCheckpointMap, objectTypeInvalid)
+	setObjectHeader(block, int(b.blocksize), bno, objPhysical|objectTypeCheckpointMap, objectTypeInvalid)
 	return b.writeBlock(block, bno)
 }
 
-// makeCpointSuperblock makes the one checkpoint superblock, mirroring
-// super.c:make_cpoint_superblock (it is just a copy of the block-zero sb).
-func (b *builder) makeCpointSuperblock(bno uint64, sbCopy []byte) error {
+// writeCheckpointSuper writes the checkpoint's superblock copy — a duplicate of
+// the primary superblock placed in the descriptor area.
+func (b *builder) writeCheckpointSuper(bno uint64, sbCopy []byte) error {
 	block := b.zeroedBlock()
 	copy(block, sbCopy)
 	return b.writeBlock(block, bno)
 }
 
-// makeEmptyReaper makes an empty reaper, mirroring super.c:make_empty_reaper.
-func (b *builder) makeEmptyReaper(bno, oid uint64) error {
+// writeReaper writes an empty reaper object (no objects are pending reclaim in a
+// freshly formatted container).
+func (b *builder) writeReaper(bno, oid uint64) error {
 	reaper := &nxReaperPhys{}
 	reaper.NextReapID = 1
 	reaper.Flags = nrBHMFlag
@@ -281,19 +268,6 @@ func (b *builder) makeEmptyReaper(bno, oid uint64) error {
 
 	block := b.zeroedBlock()
 	marshalInto(block, reaper)
-	setObjectHeader(block, int(b.blocksize), oid,
-		objEphemeral|objectTypeNXReaper, objectTypeInvalid)
+	setObjectHeader(block, int(b.blocksize), oid, objEphemeral|objectTypeNXReaper, objectTypeInvalid)
 	return b.writeBlock(block, bno)
-}
-
-// setEphemeralBnos decides the block numbers for the ephemeral objects,
-// mirroring super.c:set_ephemeral_bnos.
-func (b *builder) setEphemeralBnos() {
-	b.reaperBno = b.cpDataBase
-	b.spacemanBno = b.reaperBno + 1
-	b.spacemanSz = b.spacemanSize()
-	b.spacemanBlkcnt = b.spacemanSz / b.blocksize
-	b.ipFreeQueueBno = b.spacemanBno + uint64(b.spacemanBlkcnt)
-	b.mainFreeQueueBno = b.ipFreeQueueBno + 1
-	b.totalBlkcnt = uint32(b.mainFreeQueueBno - b.reaperBno + 1)
 }

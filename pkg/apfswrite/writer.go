@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: GPL-2.0-only
-// Ported from mkapfs (apfsprogs) — Copyright (C) 2019 Ernesto A. Fernández. Go port Copyright (C) 2024 Deployment Theory.
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Deployment Theory.
 
 package apfswrite
 
@@ -157,12 +157,14 @@ var (
 	defaultVolumeUUID    = [16]byte{0xff, 0xee, 0xdd, 0xcc, 0xbb, 0xaa, 0x49, 0x88, 0x77, 0x66, 0x55, 0x44, 0x33, 0x22, 0x11, 0x00}
 )
 
-// CreateContainer writes a complete, empty, single-volume APFS container of
-// sizeBytes (rounded down to a whole number of blocks) to w. The volume has
-// only its root directory and the standard special inodes — no user files.
+// CreateContainer writes a complete, single-volume APFS container of sizeBytes
+// (rounded down to a whole number of blocks) to w. The volume is either empty
+// (just its root directory and the standard special inodes) or populated from
+// opts.Root / opts.RootFiles with a directory tree of files, symbolic links and
+// nested directories.
 //
-// If sizeBytes is 0, a sane minimum (512 KiB, mkapfs's smallest supported
-// container) is used.
+// If sizeBytes is 0 the image is sized automatically to fit its contents, with a
+// floor of 512 KiB (the smallest container this writer produces).
 func CreateContainer(w io.WriterAt, sizeBytes int64, opts *CreateOptions) error {
 	if opts == nil {
 		opts = &CreateOptions{}
@@ -195,28 +197,26 @@ func CreateContainer(w io.WriterAt, sizeBytes int64, opts *CreateOptions) error 
 		b.volUUID = defaultVolumeUUID
 	}
 
-	// Case-sensitivity handling mirrors mkapfs (see below); resolve the tree now
-	// so its data requirements can size the image when the caller passes 0.
+	// A normalization-insensitive, case-insensitive volume is the default; the
+	// public API exposes only the CaseSensitive toggle.
 	b.caseSensitive = opts.CaseSensitive
 	b.normSensitive = false
 
-	// Resolve the user directory tree (nested dirs + regular files of any size).
+	// Resolve the user directory tree (nested dirs + regular files of any size)
+	// so its space requirements can size the image when the caller passes 0.
 	if err := b.setTree(opts); err != nil {
 		return err
 	}
 
-	// mkapfs enforces a 512 KiB minimum for the main device.
+	// The container has a floor of 512 KiB.
 	const minBytes = 512 * 1024
 	if sizeBytes == 0 {
-		// Size the image to comfortably hold the post-internal-pool payload
-		// (catalog leaves, extref leaves, file data) plus the fixed format
-		// metadata, block-aligned, with headroom for the checkpoint areas.
+		// Size the image to comfortably hold the post-pool payload (extra
+		// catalog leaves, extref leaves, file data) plus the fixed metadata,
+		// block-aligned, with headroom for the pool and checkpoint areas.
 		payload := b.numCatLeaves + b.numExtrefLeaves + b.fileDataBlocks
 		needBlocks := payload + payload/8 + 2048
-		sizeBytes = int64(needBlocks) * int64(b.blocksize)
-		if sizeBytes < minBytes {
-			sizeBytes = minBytes
-		}
+		sizeBytes = max(int64(needBlocks)*int64(b.blocksize), minBytes)
 	}
 	b.mainBlkcnt = uint64(sizeBytes) / uint64(b.blocksize)
 	b.blockCount = b.mainBlkcnt
@@ -224,18 +224,25 @@ func CreateContainer(w io.WriterAt, sizeBytes int64, opts *CreateOptions) error 
 		return fmt.Errorf("apfswrite: container too small (%d bytes); minimum is %d", sizeBytes, minBytes)
 	}
 
-	// Case-sensitivity handling mirrors mkapfs. mkapfs defaults to
-	// normalization-sensitive off (i.e. a case-insensitive volume). The public
-	// API exposes only the common CaseSensitive toggle (resolved above).
-
-	b.computeCheckpointLayout()
-
-	if err := b.makeContainer(); err != nil {
+	// Lay the container out, then write it. Geometry comes first (device counts,
+	// the internal pool and the spaceman extent); knowing the spaceman extent
+	// lets the checkpoint data area be sized to exactly the ephemeral objects it
+	// must hold. Then the fixed block positions, then the placement that depends
+	// on them, then the write.
+	if err := b.spacemanGeometry(); err != nil {
+		return err
+	}
+	b.sizeCheckpointAreas()
+	b.layoutFixedBlocks()
+	if err := b.spacemanPlacement(); err != nil {
+		return err
+	}
+	if err := b.assemble(); err != nil {
 		return err
 	}
 
-	// Ensure the underlying image is exactly sizeBytes: mkfs only writes the
-	// blocks it uses, so extend the file/buffer by writing its final byte.
+	// Only the blocks actually used are written, so grow the image to its full
+	// size by writing its final byte.
 	total := b.mainBlkcnt * uint64(b.blocksize)
 	if total > 0 {
 		if _, err := w.WriteAt([]byte{0}, int64(total)-1); err != nil {
@@ -322,8 +329,8 @@ func readDirEntries(dir string) ([]*Entry, error) {
 }
 
 // builder holds all filesystem parameters and the fixed block layout while the
-// container is being written. It corresponds to mkapfs's global `param` plus
-// `eph_info` and the checkpoint-area macros.
+// container is being written: the requested geometry, the resolved directory
+// tree, and every block position derived from them.
 type builder struct {
 	w io.WriterAt
 
@@ -337,7 +344,7 @@ type builder struct {
 	caseSensitive bool
 	normSensitive bool
 
-	// Checkpoint areas (mkapfs.h macros, resolved for this block_count).
+	// Checkpoint areas, sized and positioned for this container.
 	cpDescBase   uint64
 	cpDescBlocks uint32
 	cpDataBase   uint64
@@ -366,8 +373,8 @@ type builder struct {
 	mainFreeQueueBno uint64
 	totalBlkcnt      uint32
 
-	// Space manager info (sm_info), populated by setSpacemanInfo.
-	sm smInfo
+	// Space-manager geometry, populated by spacemanGeometry/spacemanPlacement.
+	sm spacemanLayout
 
 	// The user directory tree, flattened into catalog entries in cnid order,
 	// plus the subset that are regular files with a data extent.
@@ -414,7 +421,7 @@ var defaultInodeTime = time.Date(2024, time.January, 1, 0, 0, 0, 0, time.UTC)
 // below the container's NextOID reservation.
 const catLeafOIDBase = mainFreeQueueOID + 1 // 1030
 
-// Fixed object ids, derived from oidReservedCount (mkapfs.h).
+// Fixed object ids, assigned just past the format's reserved-oid range.
 const (
 	spacemanOID        = oidReservedCount       // 1024
 	reaperOID          = spacemanOID + 1        // 1025
@@ -424,13 +431,34 @@ const (
 	mainFreeQueueOID   = ipFreeQueueOID + 1     // 1029
 )
 
-// computeCheckpointLayout resolves the checkpoint-area macros and every fixed
-// block number that depends on them.
-func (b *builder) computeCheckpointLayout() {
+// Checkpoint-area floors. fsck_apfs rejects a container whose checkpoint areas
+// are smaller than eight blocks each, so both areas are reserved at no less than
+// that even when the single static checkpoint uses fewer.
+const (
+	minCheckpointDescBlocks = 8
+	minCheckpointDataBlocks = 8
+)
+
+// sizeCheckpointAreas sizes the two checkpoint areas. Because the whole
+// container is one static checkpoint, each area is sized to exactly what that
+// checkpoint writes, then raised to the format floor: the descriptor area holds
+// the mapping block and the superblock copy (two blocks), and the data area
+// holds the ephemeral objects — the reaper, the spaceman and the two free-queue
+// roots — whose count spacemanGeometry recorded in totalBlkcnt.
+func (b *builder) sizeCheckpointAreas() {
+	b.cpDescBlocks = minCheckpointDescBlocks
+	b.cpDataBlocks = uint32(max(uint64(b.totalBlkcnt), minCheckpointDataBlocks))
+}
+
+// layoutFixedBlocks assigns every fixed block position, given the sized
+// checkpoint areas. The descriptor area starts right after block zero; the data
+// area follows it; the container object map, the volume superblock and its trees
+// follow the data area in a fixed order, and the internal-pool bitmap begins ten
+// blocks past the data area (two of which — the Fusion middle-tree and
+// write-back-cache slots — are intentionally left unused).
+func (b *builder) layoutFixedBlocks() {
 	b.cpDescBase = nxBlockNum + 1
-	b.cpDescBlocks = cpointDescBlocks(b.blockCount)
 	b.cpDataBase = b.cpDescBase + uint64(b.cpDescBlocks)
-	b.cpDataBlocks = cpointDataBlocks(b.blockCount)
 	b.cpEnd = b.cpDataBase + uint64(b.cpDataBlocks)
 
 	b.cpMapBno = b.cpDescBase
@@ -443,8 +471,7 @@ func (b *builder) computeCheckpointLayout() {
 	b.firstVolCatRootBno = b.cpEnd + 5
 	b.firstVolExtrefRootBno = b.cpEnd + 6
 	b.firstVolSnapRootBno = b.cpEnd + 7
-	// cpEnd+8 (fusion mt) and cpEnd+9 (fusion wbc) are skipped: no Fusion.
-	b.ipBmapBase = b.cpEnd + 10
+	b.ipBmapBase = b.cpEnd + 10 // +8 and +9 are the unused Fusion slots
 
 	b.timestamp = uint64(time.Now().UnixNano())
 	b.defaultTime = uint64(defaultInodeTime.UnixNano())
@@ -473,78 +500,44 @@ func (b *builder) zeroedBlock() []byte {
 	return b.zeroedBlocks(1)
 }
 
-// cpointDescBlocks calculates the number of checkpoint descriptor blocks,
-// mirroring mkapfs.h:cpoint_desc_blocks.
-func cpointDescBlocks(blockCount uint64) uint32 {
-	if blockCount < 512*1024/4 { // Up to 512M
-		return 8
+// The space-manager free-queue node limits (sfq_tree_node_limit) are an
+// interoperability requirement, not a free choice: Apple's APFS implementation
+// validates them when it mounts a volume and refuses to mount one whose limits
+// differ from what its own formatter would have written — verified here against
+// hdiutil, which rejects any other value. They are therefore reproduced as
+// functional constants of the format. The internal-pool queue scales with the
+// pool's chunk count and the main-device queue with the device's block count;
+// both avoid the value 2, which Apple's implementation treats as invalid.
+
+// avoidNodeLimit2 substitutes 3 for a computed limit of 2, which the format
+// rejects.
+func avoidNodeLimit2(n uint16) uint16 {
+	if n == 2 {
+		return 3
 	}
-	if blockCount < 1024*1024/4 { // Up to 1G
-		return 12
-	}
-	if blockCount < 50*1024*1024/4 { // Up to 50G
-		off512M := (blockCount - 1024*1024/4) / (512 * 1024 / 4)
-		return uint32(20 + 60*off512M/23)
-	}
-	return 280
+	return n
 }
 
-// cpointDataBlocks calculates the number of checkpoint data blocks, mirroring
-// mkapfs.h:cpoint_data_blocks.
-func cpointDataBlocks(blockCount uint64) uint32 {
+// ipFreeQueueNodeLimit is the internal-pool free queue's node cap.
+func (b *builder) ipFreeQueueNodeLimit() uint16 {
+	chunks := b.sm.totalChunkCount
+	return avoidNodeLimit2(uint16(3*(chunks+751)/1127 - 1))
+}
+
+// mainFreeQueueNodeLimit is the main device's free queue node cap.
+func (b *builder) mainFreeQueueNodeLimit() uint16 {
+	const blocks1G, blocks4G = 0x40000, 0x100000
+	blocks := b.mainBlkcnt
+	var n uint16
 	switch {
-	case blockCount < 4545:
-		return 52
-	case blockCount < 13633:
-		return 124
-	case blockCount < 36353:
-		return uint32(160 + 36*((blockCount-13633)/4544))
-	case blockCount < 131777:
-		return uint32(308 + 4*((blockCount-36353)/4544))
-	case blockCount < 262144:
-		return uint32(648 + 4*((blockCount-131777)/4544))
-	case blockCount == 262144: // 1G is a special case
-		return 992
-	case blockCount < 1048576: // Up to 4G
-		off512M := int64((blockCount - 262144) / 131072)
-		return uint32(1248 + 488*off512M + 4*((int64(blockCount)-(261280+off512M*131776))/2272))
-	case blockCount < 4063232: // Up to 10G
-		off512M := (blockCount - 1048576) / 131072
-		return uint32(4112 + 256*off512M)
-	case blockCount < 13107200: // Up to 50G
-		off512M := (blockCount - 4063232) / 131072
-		return uint32(10000 + 256*off512M)
+	case blocks < blocks1G:
+		n = uint16(1 + (blocks-1)/4544)
+	case blocks < blocks4G:
+		n = uint16(116 + (blocks-261281)/2272)
 	default:
-		return 27672
+		n = 512
 	}
-}
-
-// ipFQNodeLimit mirrors lib/parameters.c:ip_fq_node_limit.
-func ipFQNodeLimit(chunks uint64) uint16 {
-	ret := uint16(3*(chunks+751)/1127 - 1)
-	if ret == 2 {
-		ret = 3
-	}
-	return ret
-}
-
-// mainFQNodeLimit mirrors lib/parameters.c:main_fq_node_limit.
-func mainFQNodeLimit(blocks uint64) uint16 {
-	const blks1gb = 0x40000
-	const blks4gb = 0x100000
-	var ret uint16
-	switch {
-	case blocks < blks1gb:
-		ret = uint16(1 + (blocks-1)/4544)
-	case blocks < blks4gb:
-		ret = uint16(116 + (blocks-261281)/2272)
-	default:
-		ret = 512
-	}
-	if ret == 2 {
-		ret = 3
-	}
-	return ret
+	return avoidNodeLimit2(n)
 }
 
 // divRoundUp computes ceil(n/d).

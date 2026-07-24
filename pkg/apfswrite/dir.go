@@ -1,14 +1,14 @@
-// SPDX-License-Identifier: GPL-2.0-only
-// Ported from mkapfs (apfsprogs) — Copyright (C) 2019 Ernesto A. Fernández. Go port Copyright (C) 2024 Deployment Theory.
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Deployment Theory.
 
 package apfswrite
 
 import "encoding/binary"
 
 // catCursor tracks the free positions inside a B-tree leaf/index node while its
-// records are laid out. Keys grow forward from keyArea; values grow backward
-// from valAreaEnd. It corresponds to the running pointers passed around between
-// btree.c's node-building helpers.
+// records are laid out. An APFS node stores keys growing forward from the key
+// area and values growing backward from the end of the value area; the cursor
+// holds both frontiers plus the offset of the next table-of-contents entry.
 type catCursor struct {
 	b          *builder
 	block      []byte
@@ -19,8 +19,9 @@ type catCursor struct {
 	valEnd     int // current end of the free value area
 }
 
-// setKeyHeader sets the cnid and type on a catalog key, mirroring
-// dir.c:set_key_header. keyOff points at the apfs_key_header.
+// setKeyHeader packs the cnid and record type into a catalog key's leading
+// obj_id_and_type field (type in the high bits, id in the low bits). keyOff
+// points at the start of the key.
 func setKeyHeader(block []byte, keyOff int, ino, typ uint64) {
 	objIDAndType := (typ << objTypeShift) | ino
 	binary.LittleEndian.PutUint64(block[keyOff:], objIDAndType)

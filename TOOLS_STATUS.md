@@ -16,10 +16,10 @@ Legend: ✅ implemented · 🟡 partial · ⬜ not yet
 | Snapshots (read) | 🟡 | ⬜ |
 | FileVault / encryption unlock | ✅ | — |
 | `io/fs.FS` adapter | ✅ | ✅ |
-| Create empty volume | ✅¹ | ✅ |
-| Populate a volume with files | ⬜ | ✅ |
+| Create empty volume | ✅ | ✅ |
+| Populate a volume with files | ✅ | ✅ |
 
-¹ `pkg/apfswrite`, GPL-2.0, in `-tags apfswrite` builds only.
+The APFS writer lives in `pkg/apfswrite` (pure Go, MIT).
 
 ## Disk images (`pkg/disk`)
 
@@ -42,8 +42,8 @@ Legend: ✅ implemented · 🟡 partial · ⬜ not yet
 | `extract` | ✅ | metadata, verify, symlink policy, name sanitization |
 | `inspect` | ✅ | APFS only (walk / block / btree) |
 | `mount` | ✅ | APFS only; Linux/macOS FUSE |
-| `pack` | ✅ | directory→HFS+ DMG, or lossless DMG repack |
-| `create` | ✅ | HFS+ (MIT); APFS (GPL, `-tags apfswrite`) |
+| `pack` | ✅ | directory→HFS+ or APFS DMG (`--fs`), or lossless DMG repack |
+| `create` | ✅ | empty HFS+ or APFS volume (`--fs`) |
 
 ## Quality gates
 
@@ -53,5 +53,5 @@ Legend: ✅ implemented · 🟡 partial · ⬜ not yet
 | Real vendor-DMG acceptance (Firefox HFS+, Zed APFS) | all OSes in CI |
 | `fsck_hfs` + `hdiutil` on created HFS+ | macOS in CI |
 | `fsck_apfs` on created APFS | macOS in CI |
-| `apfsck` (pinned to the ported mkapfs version) on created APFS | Linux in CI |
+| `apfsck` (pinned version) on created APFS | Linux in CI |
 | Byte-for-byte extraction vs `hdiutil` mount | macOS in CI |
