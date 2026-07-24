@@ -33,31 +33,61 @@ type CreateOptions struct {
 	VolumeUUID [16]byte
 
 	// RootFiles are regular files to create in the volume root directory.
+	// It is a convenience shorthand for a flat set of root-level files; each
+	// becomes a top-level child of Root. When Root is also set, RootFiles are
+	// appended as additional top-level entries.
 	//
-	// Milestone 1 support is intentionally minimal: at most one file, whose
-	// content must be non-empty and fit within a single allocation block
-	// (BlockSize bytes). Larger content, multiple files, subdirectories and
-	// richer metadata are later milestones and are rejected with a clear
-	// error. When empty, the volume is formatted exactly as before (no user
-	// files).
+	// Every file must fit within a single allocation block (BlockSize bytes);
+	// multi-block/large files are a later milestone (M3) and are rejected with
+	// a clear error.
 	RootFiles []RootFile
+
+	// Root is a directory tree to populate the volume with: nested directories
+	// and regular files of arbitrary depth. A nil Root (and empty RootFiles)
+	// formats an empty volume, exactly as before.
+	//
+	// Root itself represents the volume root directory; only its Children are
+	// used (any Name/Data on Root is ignored). Each regular file must fit in a
+	// single allocation block (M2 limit).
+	Root *Entry
+}
+
+// Entry is one node of the directory tree written into the volume. A directory
+// has IsDir set and carries its Children; a regular file carries its bytes in
+// Data. It mirrors pkg/hfsplus's Entry in shape.
+type Entry struct {
+	// Name is the entry's file name (no path separators, no NUL).
+	Name string
+	// IsDir marks the entry as a directory. Directories have no Data.
+	IsDir bool
+	// Data is the file content for a regular file (<= BlockSize bytes in M2).
+	Data []byte
+	// Children are the entries contained in a directory.
+	Children []*Entry
 }
 
 // RootFile is a regular file to be created in the volume root directory.
 type RootFile struct {
 	// Name is the file name (no path separators).
 	Name string
-	// Data is the file content. For milestone 1 it must be 1..BlockSize bytes.
+	// Data is the file content. In M2 it must fit in one allocation block.
 	Data []byte
 }
 
-// builderFile holds the resolved on-disk placement for a single user file.
-type builderFile struct {
-	name        string
+// builderEntry holds the resolved on-disk placement for a single catalog
+// entry (a directory or a regular file).
+type builderEntry struct {
+	name      string
+	isDir     bool
+	cnid      uint64 // catalog node id / inode number
+	parent    uint64 // parent directory cnid
+	nchildren uint32 // directories: number of direct children
+
+	// Regular files with content (non-empty streams).
 	data        []byte
-	cnid        uint64 // catalog node id / inode number and data-stream id
+	hasStream   bool   // true for a regular file with a data extent
 	dataBlock   uint64 // physical block number holding the content
-	blocks      uint64 // number of allocation blocks (1 for M1)
+	blocks      uint64 // number of allocation blocks (1 in M2)
 	allocedSize uint64 // block-aligned allocated size in bytes
 }
 
@@ -122,8 +152,8 @@ func CreateContainer(w io.WriterAt, sizeBytes int64, opts *CreateOptions) error 
 		b.volUUID = defaultVolumeUUID
 	}
 
-	// Resolve user files (milestone 1: at most one small root file).
-	if err := b.setFiles(opts.RootFiles); err != nil {
+	// Resolve the user directory tree (nested dirs + regular files).
+	if err := b.setTree(opts); err != nil {
 		return err
 	}
 
@@ -192,16 +222,37 @@ type builder struct {
 	// Space manager info (sm_info), populated by setSpacemanInfo.
 	sm smInfo
 
-	// User files placed in the volume root (milestone 1: at most one).
-	files []*builderFile
-	// fileDataBase is the first physical block used for file content; file
-	// data blocks are laid out contiguously starting here, immediately after
-	// the space manager's internal pool. fileDataBlocks is their total count.
+	// The user directory tree, flattened into catalog entries in cnid order,
+	// plus the subset that are regular files with a data extent.
+	entries     []*builderEntry
+	streamFiles []*builderEntry
+	numFiles    uint64 // regular files (user)
+	numDirs     uint64 // directories (user, excludes root and private-dir)
+
+	// Catalog B-tree shape, decided in setTree from the record sizes.
+	numCatLeaves uint64 // extra leaf nodes when the catalog is a 2-level tree
+	catTwoLevel  bool   // true when the catalog needs an index root + leaves
+
+	// Post-internal-pool allocation region. All blocks the volume owns beyond
+	// the fixed metadata (extra catalog leaf nodes then file data) are laid out
+	// contiguously starting at postIPBase.
+	postIPBase   uint64
+	postIPBlocks uint64
+
+	// catLeafBase is the first physical block of the extra catalog leaf nodes;
+	// fileDataBase is the first physical block of file content. Both live in the
+	// post-internal-pool region.
+	catLeafBase    uint64
 	fileDataBase   uint64
 	fileDataBlocks uint64
 
 	timestamp uint64
 }
+
+// catLeafOIDBase is the first virtual object id handed to extra catalog leaf
+// nodes (2-level catalog). It sits just past the named reserved object ids and
+// below the container's NextOID reservation.
+const catLeafOIDBase = mainFreeQueueOID + 1 // 1030
 
 // Fixed object ids, derived from oidReservedCount (mkapfs.h).
 const (

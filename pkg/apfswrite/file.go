@@ -6,70 +6,148 @@ package apfswrite
 import (
 	"encoding/binary"
 	"fmt"
+	"sort"
 	"strings"
 )
 
-// setFiles validates the caller's RootFiles and resolves them into builderFile
-// entries. Milestone 1 supports at most one non-empty file that fits in a
-// single allocation block; anything else is rejected with a clear error so the
-// (still-supported) empty-container path stays unchanged.
-func (b *builder) setFiles(files []RootFile) error {
-	if len(files) == 0 {
-		return nil
+// setTree resolves the caller's directory tree (Root plus the RootFiles
+// convenience) into a flat list of catalog entries with assigned cnids, then
+// decides the catalog B-tree shape (single leaf vs a 2-level index+leaves
+// tree). Physical block numbers are assigned later, in the space manager.
+func (b *builder) setTree(opts *CreateOptions) error {
+	// Build the effective root directory: Root's children plus any RootFiles.
+	var topLevel []*Entry
+	if opts.Root != nil {
+		topLevel = append(topLevel, opts.Root.Children...)
 	}
-	if len(files) > 1 {
-		return fmt.Errorf("apfswrite: milestone 1 supports at most one root file, got %d", len(files))
+	for _, f := range opts.RootFiles {
+		topLevel = append(topLevel, &Entry{Name: f.Name, Data: f.Data})
 	}
-
-	f := files[0]
-	if f.Name == "" {
-		return fmt.Errorf("apfswrite: root file has empty name")
-	}
-	if strings.ContainsAny(f.Name, "/\x00") {
-		return fmt.Errorf("apfswrite: root file name %q contains a path separator or NUL", f.Name)
-	}
-	// The name plus its null terminator must fit the catalog key limit.
-	if len(f.Name)+1 > int(drecLenMask) {
-		return fmt.Errorf("apfswrite: root file name too long")
-	}
-	if len(f.Data) == 0 {
-		return fmt.Errorf("apfswrite: milestone 1 requires non-empty file content")
-	}
-	if uint64(len(f.Data)) > uint64(b.blocksize) {
-		return fmt.Errorf("apfswrite: milestone 1 supports files up to one block (%d bytes), got %d", b.blocksize, len(f.Data))
+	if len(topLevel) == 0 {
+		return nil // empty volume
 	}
 
-	bf := &builderFile{
-		name:        f.Name,
-		data:        f.Data,
-		cnid:        minUserInoNum,
-		blocks:      1,
-		allocedSize: uint64(b.blocksize),
+	// Deterministic order: sort siblings by name at every level.
+	nextCNID := uint64(minUserInoNum)
+	var walk func(parent uint64, children []*Entry) (uint32, error)
+	walk = func(parent uint64, children []*Entry) (uint32, error) {
+		sorted := make([]*Entry, len(children))
+		copy(sorted, children)
+		sort.Slice(sorted, func(i, j int) bool { return sorted[i].Name < sorted[j].Name })
+
+		seen := make(map[string]bool, len(sorted))
+		for _, e := range sorted {
+			if err := validateName(e.Name); err != nil {
+				return 0, err
+			}
+			if seen[e.Name] {
+				return 0, fmt.Errorf("apfswrite: duplicate name %q in one directory", e.Name)
+			}
+			seen[e.Name] = true
+
+			be := &builderEntry{
+				name:   e.Name,
+				isDir:  e.IsDir,
+				cnid:   nextCNID,
+				parent: parent,
+			}
+			nextCNID++
+			b.entries = append(b.entries, be)
+
+			if e.IsDir {
+				n, err := walk(be.cnid, e.Children)
+				if err != nil {
+					return 0, err
+				}
+				be.nchildren = n
+				b.numDirs++
+			} else {
+				if len(e.Data) == 0 {
+					return 0, fmt.Errorf("apfswrite: empty file %q not supported yet (milestone 3)", e.Name)
+				}
+				if uint64(len(e.Data)) > uint64(b.blocksize) {
+					return 0, fmt.Errorf("apfswrite: file %q is %d bytes; milestone 2 supports files up to one block (%d bytes)", e.Name, len(e.Data), b.blocksize)
+				}
+				be.data = e.Data
+				be.hasStream = true
+				be.blocks = 1
+				be.allocedSize = uint64(b.blocksize)
+				b.streamFiles = append(b.streamFiles, be)
+				b.numFiles++
+			}
+		}
+		return uint32(len(sorted)), nil
 	}
-	b.files = append(b.files, bf)
-	b.fileDataBlocks += bf.blocks
+
+	if _, err := walk(rootDirInoNum, topLevel); err != nil {
+		return err
+	}
+
+	b.fileDataBlocks = 0
+	for _, f := range b.streamFiles {
+		b.fileDataBlocks += f.blocks
+	}
+
+	// Decide the catalog shape from the record sizes. Block numbers are not yet
+	// known but do not affect record sizes, so the packing decided here matches
+	// the one recomputed at write time.
+	recs := b.buildCatRecords()
+	leaves := packCatLeaves(recs, int(b.blocksize), sizeofBtreeInfo)
+	if len(leaves) > 1 {
+		b.catTwoLevel = true
+		// Repack leaves without the root footer (only the index root carries it).
+		leaves = packCatLeaves(recs, int(b.blocksize), 0)
+		b.numCatLeaves = uint64(len(leaves))
+		if b.numCatLeaves > maxCatLeaves {
+			return fmt.Errorf("apfswrite: catalog needs %d leaf nodes; milestone 2 supports a 2-level tree up to %d leaves", b.numCatLeaves, maxCatLeaves)
+		}
+	}
+
+	if uint64(len(b.streamFiles)) > maxExtrefRecords {
+		return fmt.Errorf("apfswrite: %d file extents exceed the single extent-reference leaf capacity (%d); larger trees are milestone 3", len(b.streamFiles), maxExtrefRecords)
+	}
 	return nil
 }
 
-// hasFiles reports whether any user files are being written.
-func (b *builder) hasFiles() bool { return len(b.files) > 0 }
+// maxCatLeaves caps the 2-level catalog: L leaves need L index records in one
+// root node and L omap entries in one omap leaf; both fit comfortably here.
+const maxCatLeaves = 64
 
-// nextObjID returns the volume's next free object id: one past the highest
-// user cnid in use (APFS_MIN_USER_INO_NUM when there are no files).
+// maxExtrefRecords caps the single-leaf extent-reference tree.
+const maxExtrefRecords = 100
+
+func validateName(name string) error {
+	if name == "" {
+		return fmt.Errorf("apfswrite: entry has an empty name")
+	}
+	if strings.ContainsAny(name, "/\x00") {
+		return fmt.Errorf("apfswrite: name %q contains a path separator or NUL", name)
+	}
+	if len(name)+1 > int(drecLenMask) {
+		return fmt.Errorf("apfswrite: name %q too long", name)
+	}
+	return nil
+}
+
+// hasFiles reports whether any user entries are being written.
+func (b *builder) hasFiles() bool { return len(b.entries) > 0 }
+
+// nextObjID returns the volume's next free object id: one past the highest user
+// cnid in use (APFS_MIN_USER_INO_NUM when there are no entries).
 func (b *builder) nextObjID() uint64 {
 	next := uint64(minUserInoNum)
-	for _, f := range b.files {
-		if f.cnid+1 > next {
-			next = f.cnid + 1
+	for _, e := range b.entries {
+		if e.cnid+1 > next {
+			next = e.cnid + 1
 		}
 	}
 	return next
 }
 
-// writeFileData writes each file's content into its data block, zero-padded to
-// a full allocation block.
+// writeFileData writes each stream file's content into its data block,
+// zero-padded to a full allocation block.
 func (b *builder) writeFileData() error {
-	for _, f := range b.files {
+	for _, f := range b.streamFiles {
 		block := b.zeroedBlocks(int(f.blocks))
 		copy(block, f.data)
 		if err := b.writeBlocks(block, f.dataBlock); err != nil {
@@ -79,139 +157,270 @@ func (b *builder) writeFileData() error {
 	return nil
 }
 
-// --- catalog record builders for regular files ---
+// --- catalog record generation ---
 //
-// These extend dir.go's catCursor. Records must be appended in ascending key
-// order (obj-id, then type, then the type-specific key), matching the order
-// makeCatRoot calls them in.
+// Each record is materialized as (key, value) byte slices plus the fields the
+// catalog key comparator needs. buildCatRecords returns the whole catalog in
+// globally sorted order.
 
-// makeFileDentry writes a hashed dentry record for a regular file: key
-// (parentIno, DIR_REC, hash(name)), value j_drec_hashed_val pointing at the
-// file's cnid with directory-entry type DT_REG.
-func (c *catCursor) makeFileDentry(parentIno uint64, f *builderFile) {
-	kStart := c.keyOff
-	kLen := makeHashedDentryKey(c.block, c.keyOff, parentIno, f.name)
-	c.keyOff += kLen
-
-	valOff := c.valEnd - sizeofDrecVal
-	binary.LittleEndian.PutUint64(c.block[valOff:], f.cnid)          // file_id
-	binary.LittleEndian.PutUint64(c.block[valOff+8:], c.b.timestamp) // date_added
-	binary.LittleEndian.PutUint16(c.block[valOff+16:], dtReg)        // flags (dir-entry type)
-	vLen := sizeofDrecVal
-	vOff := c.valAreaEnd - c.valEnd + vLen
-	c.valEnd -= vLen
-
-	c.putKvloc(uint16(kStart-c.keyArea), uint16(kLen), uint16(vOff), uint16(vLen))
-	c.tocOff += sizeofKvloc
+type catRecord struct {
+	id      uint64 // object id (low 60 bits of the key header)
+	typ     uint8  // record type (APFS_TYPE_*)
+	hash    uint32 // DIR_REC: name_len_and_hash, for ordering
+	name    string // DIR_REC: name, for ordering tie-break
+	logical uint64 // FILE_EXTENT: logical address, for ordering
+	key     []byte
+	val     []byte
 }
 
-// makeFileInode writes the inode record for a regular file: key (cnid, INODE),
-// value j_inode_val with an INO_EXT_TYPE_NAME xfield (the filename) and an
-// INO_EXT_TYPE_DSTREAM xfield (the j_dstream describing the file's content).
-func (c *catCursor) makeFileInode(parentIno uint64, f *builderFile) {
-	kStart := c.keyOff
-	setKeyHeader(c.block, c.keyOff, f.cnid, typeInode)
-	kLen := sizeofInodeKey
-	c.keyOff += kLen
+// buildCatRecords generates every catalog record — the special root and
+// private-dir records plus one dentry+inode (and, for files, dstream-id and
+// file-extent) per user entry — and returns them sorted by the catalog key
+// comparator.
+func (b *builder) buildCatRecords() []catRecord {
+	recs := make([]catRecord, 0, 4+4*len(b.entries))
 
-	nameLen := len(f.name) + 1 // includes null terminator
+	// Special directory dentries live under the virtual root parent (id 1).
+	recs = append(recs, b.dentryRecord(rootDirParent, "root", rootDirInoNum, dtDir))
+	recs = append(recs, b.dentryRecord(rootDirParent, "private-dir", privDirInoNum, dtDir))
+	// Root inode (id 2): nchildren = number of top-level entries.
+	recs = append(recs, b.inodeRecord(&builderEntry{
+		name: "root", isDir: true, cnid: rootDirInoNum, parent: rootDirParent,
+		nchildren: b.rootChildCount(),
+	}))
+	// Private-dir inode (id 3).
+	recs = append(recs, b.inodeRecord(&builderEntry{
+		name: "private-dir", isDir: true, cnid: privDirInoNum, parent: rootDirParent,
+	}))
+
+	for _, e := range b.entries {
+		dt := dtDir
+		if !e.isDir {
+			dt = dtReg
+		}
+		recs = append(recs, b.dentryRecord(e.parent, e.name, e.cnid, uint16(dt)))
+		recs = append(recs, b.inodeRecord(e))
+		if e.hasStream {
+			recs = append(recs, b.dstreamIDRecord(e))
+			recs = append(recs, b.fileExtentRecord(e))
+		}
+	}
+
+	sort.SliceStable(recs, func(i, j int) bool { return catLess(recs[i], recs[j]) })
+	return recs
+}
+
+// rootChildCount counts the direct children of the volume root (cnid 2).
+func (b *builder) rootChildCount() uint32 {
+	n := uint32(0)
+	for _, e := range b.entries {
+		if e.parent == rootDirInoNum {
+			n++
+		}
+	}
+	return n
+}
+
+// catLess is the catalog key comparator: object id ascending, then record type
+// ascending, then the type-specific key (DIR_REC by name hash then name;
+// FILE_EXTENT by logical address).
+func catLess(a, b catRecord) bool {
+	if a.id != b.id {
+		return a.id < b.id
+	}
+	if a.typ != b.typ {
+		return a.typ < b.typ
+	}
+	switch a.typ {
+	case typeDirRec:
+		if a.hash != b.hash {
+			return a.hash < b.hash
+		}
+		return a.name < b.name
+	case typeFileExtent:
+		return a.logical < b.logical
+	}
+	return false
+}
+
+// dentryRecord builds a hashed dentry record: key (parent, DIR_REC, hash(name)),
+// value j_drec_hashed_val pointing at childID with directory-entry type dt.
+func (b *builder) dentryRecord(parent uint64, name string, childID uint64, dt uint16) catRecord {
+	key, hash := buildHashedDrecKey(parent, name)
+	val := make([]byte, sizeofDrecVal)
+	binary.LittleEndian.PutUint64(val[0:], childID)     // file_id
+	binary.LittleEndian.PutUint64(val[8:], b.timestamp) // date_added
+	binary.LittleEndian.PutUint16(val[16:], dt)         // flags (dir-entry type)
+	return catRecord{id: parent, typ: typeDirRec, hash: hash, name: name, key: key, val: val}
+}
+
+// inodeRecord builds an inode record: key (cnid, INODE), value j_inode_val with
+// a NAME xfield and, for stream files, a DSTREAM xfield.
+func (b *builder) inodeRecord(e *builderEntry) catRecord {
+	key := make([]byte, sizeofInodeKey)
+	setKeyHeader(key, 0, e.cnid, typeInode)
+	val := b.inodeValue(e)
+	return catRecord{id: e.cnid, typ: typeInode, key: key, val: val}
+}
+
+// inodeValue serializes a j_inode_val for a directory or regular file.
+func (b *builder) inodeValue(e *builderEntry) []byte {
+	nameLen := len(e.name) + 1
 	paddedNameLen := int(roundUp(uint64(nameLen), 8))
-	// value = inode_val + xf_blob + 2*x_field + name(padded) + dstream(40)
-	iLen := sizeofInodeVal + sizeofXfBlob + 2*sizeofXField + paddedNameLen + sizeofDstream
-	valOff := c.valEnd - iLen
 
-	binary.LittleEndian.PutUint64(c.block[valOff+0:], parentIno) // parent_id
-	binary.LittleEndian.PutUint64(c.block[valOff+8:], f.cnid)    // private_id == dstream id
+	numXF := 1
+	extra := paddedNameLen
+	if e.hasStream {
+		numXF = 2
+		extra += sizeofDstream
+	}
+	valLen := sizeofInodeVal + sizeofXfBlob + numXF*sizeofXField + extra
+	val := make([]byte, valLen)
 
-	binary.LittleEndian.PutUint64(c.block[valOff+16:], c.b.timestamp) // create_time
-	binary.LittleEndian.PutUint64(c.block[valOff+24:], c.b.timestamp) // mod_time
-	binary.LittleEndian.PutUint64(c.block[valOff+32:], c.b.timestamp) // change_time
-	binary.LittleEndian.PutUint64(c.block[valOff+40:], c.b.timestamp) // access_time
+	binary.LittleEndian.PutUint64(val[0:], e.parent) // parent_id
+	binary.LittleEndian.PutUint64(val[8:], e.cnid)   // private_id
 
-	// internal_flags (48): mirror the special inodes' NO_RSRC_FORK marker. The
-	// file has no resource-fork xattr, so this is consistent.
-	binary.LittleEndian.PutUint64(c.block[valOff+48:], inodeNoRsrcFork)
-	binary.LittleEndian.PutUint32(c.block[valOff+56:], 1) // nlink = 1
-	// default_protection_class (60), write_gen (64), bsd_flags (68) = 0.
-	// owner/group (72,76) = 0 (root) for cross-platform determinism.
-	binary.LittleEndian.PutUint16(c.block[valOff+80:], sIFREG|0o644) // mode
-	// pad1 (82) and uncompressed_size (84) stay 0.
+	binary.LittleEndian.PutUint64(val[16:], b.timestamp) // create_time
+	binary.LittleEndian.PutUint64(val[24:], b.timestamp) // mod_time
+	binary.LittleEndian.PutUint64(val[32:], b.timestamp) // change_time
+	binary.LittleEndian.PutUint64(val[40:], b.timestamp) // access_time
 
-	// xf_blob at offset 92 (sizeofInodeVal).
-	xblob := valOff + sizeofInodeVal
-	usedData := paddedNameLen + sizeofDstream
-	binary.LittleEndian.PutUint16(c.block[xblob+0:], 2)                // xf_num_exts
-	binary.LittleEndian.PutUint16(c.block[xblob+2:], uint16(usedData)) // xf_used_data
+	binary.LittleEndian.PutUint64(val[48:], inodeNoRsrcFork) // internal_flags
 
-	// x_field[0]: NAME (must carry DO_NOT_COPY).
+	if e.isDir {
+		binary.LittleEndian.PutUint32(val[56:], e.nchildren)            // nchildren
+		binary.LittleEndian.PutUint32(val[60:], protectionClassDirNone) // default_protection_class
+		binary.LittleEndian.PutUint16(val[80:], 0o755|sIFDIR)           // mode
+	} else {
+		binary.LittleEndian.PutUint32(val[56:], 1)            // nlink
+		binary.LittleEndian.PutUint16(val[80:], sIFREG|0o644) // mode
+	}
+
+	// xf_blob header.
+	xblob := sizeofInodeVal
+	binary.LittleEndian.PutUint16(val[xblob:], uint16(numXF))   // xf_num_exts
+	binary.LittleEndian.PutUint16(val[xblob+2:], uint16(extra)) // xf_used_data
+
+	// x_field[0]: NAME.
 	xf0 := xblob + sizeofXfBlob
-	c.block[xf0+0] = inoExtTypeName
-	c.block[xf0+1] = xfDoNotCopy
-	binary.LittleEndian.PutUint16(c.block[xf0+2:], uint16(nameLen))
-	// x_field[1]: DSTREAM (must carry SYSTEM_FIELD).
-	xf1 := xf0 + sizeofXField
-	c.block[xf1+0] = inoExtTypeDstream
-	c.block[xf1+1] = xfSystemField
-	binary.LittleEndian.PutUint16(c.block[xf1+2:], uint16(sizeofDstream))
+	val[xf0+0] = inoExtTypeName
+	val[xf0+1] = xfDoNotCopy
+	binary.LittleEndian.PutUint16(val[xf0+2:], uint16(nameLen))
 
-	// Values follow the x_field array, in the same order, each 8-byte padded.
-	nameVal := xf1 + sizeofXField
-	copy(c.block[nameVal:], f.name) // trailing bytes already zero (padding)
-	dsVal := nameVal + paddedNameLen
-	binary.LittleEndian.PutUint64(c.block[dsVal+0:], uint64(len(f.data))) // size
-	binary.LittleEndian.PutUint64(c.block[dsVal+8:], f.allocedSize)       // alloced_size
-	// default_crypto_id (16): 0 on an unencrypted volume. fsck_apfs rejects
-	// APFS_CRYPTO_SW_ID here when apfs_fs_flags has APFS_FS_UNENCRYPTED set.
-	binary.LittleEndian.PutUint64(c.block[dsVal+16:], 0)
-	binary.LittleEndian.PutUint64(c.block[dsVal+24:], uint64(len(f.data))) // total_bytes_written
-	// total_bytes_read (32) = 0.
+	if e.hasStream {
+		// x_field[1]: DSTREAM.
+		xf1 := xf0 + sizeofXField
+		val[xf1+0] = inoExtTypeDstream
+		val[xf1+1] = xfSystemField
+		binary.LittleEndian.PutUint16(val[xf1+2:], uint16(sizeofDstream))
 
-	vOff := c.valAreaEnd - c.valEnd + iLen
-	c.valEnd -= iLen
-	c.putKvloc(uint16(kStart-c.keyArea), uint16(kLen), uint16(vOff), uint16(iLen))
-	c.tocOff += sizeofKvloc
+		nameVal := xf1 + sizeofXField
+		copy(val[nameVal:], e.name)
+		dsVal := nameVal + paddedNameLen
+		binary.LittleEndian.PutUint64(val[dsVal+0:], uint64(len(e.data))) // size
+		binary.LittleEndian.PutUint64(val[dsVal+8:], e.allocedSize)       // alloced_size
+		// default_crypto_id (16) = 0 on an unencrypted volume.
+		binary.LittleEndian.PutUint64(val[dsVal+24:], uint64(len(e.data))) // total_bytes_written
+	} else {
+		nameVal := xf0 + sizeofXField
+		copy(val[nameVal:], e.name)
+	}
+	return val
 }
 
-// makeDstreamID writes the data-stream id record: key (cnid, DSTREAM_ID),
-// value j_dstream_id_val (refcnt). fsck requires this to accompany a file's
-// data stream (its absence is reported as a missing reference count).
-func (c *catCursor) makeDstreamID(f *builderFile) {
-	kStart := c.keyOff
-	setKeyHeader(c.block, c.keyOff, f.cnid, typeDstreamID)
-	kLen := sizeofInodeKey // bare key header, 8 bytes
-	c.keyOff += kLen
-
-	valOff := c.valEnd - sizeofDstreamIDVal
-	binary.LittleEndian.PutUint32(c.block[valOff:], 1) // refcnt = 1
-	vLen := sizeofDstreamIDVal
-	vOff := c.valAreaEnd - c.valEnd + vLen
-	c.valEnd -= vLen
-
-	c.putKvloc(uint16(kStart-c.keyArea), uint16(kLen), uint16(vOff), uint16(vLen))
-	c.tocOff += sizeofKvloc
+// dstreamIDRecord builds the data-stream id record: key (cnid, DSTREAM_ID),
+// value j_dstream_id_val (refcnt).
+func (b *builder) dstreamIDRecord(e *builderEntry) catRecord {
+	key := make([]byte, sizeofInodeKey)
+	setKeyHeader(key, 0, e.cnid, typeDstreamID)
+	val := make([]byte, sizeofDstreamIDVal)
+	binary.LittleEndian.PutUint32(val[0:], 1) // refcnt = 1
+	return catRecord{id: e.cnid, typ: typeDstreamID, key: key, val: val}
 }
 
-// makeFileExtent writes the file-extent record mapping logical offset 0 to the
-// file's physical data block: key (cnid, FILE_EXTENT, 0), value
-// j_file_extent_val (block-aligned length, physical block, crypto id 0).
-func (c *catCursor) makeFileExtent(f *builderFile) {
-	kStart := c.keyOff
-	setKeyHeader(c.block, c.keyOff, f.cnid, typeFileExtent)
-	binary.LittleEndian.PutUint64(c.block[c.keyOff+8:], 0) // logical_addr = 0
-	kLen := sizeofFileExtentKey
-	c.keyOff += kLen
-
-	valOff := c.valEnd - sizeofFileExtentVal
-	// len_and_flags: block-aligned length in the low 56 bits, no flags.
-	binary.LittleEndian.PutUint64(c.block[valOff+0:], f.allocedSize)
-	binary.LittleEndian.PutUint64(c.block[valOff+8:], f.dataBlock) // phys_block_num
+// fileExtentRecord builds the file-extent record mapping logical offset 0 to
+// the file's physical data block: key (cnid, FILE_EXTENT, 0), value
+// j_file_extent_val.
+func (b *builder) fileExtentRecord(e *builderEntry) catRecord {
+	key := make([]byte, sizeofFileExtentKey)
+	setKeyHeader(key, 0, e.cnid, typeFileExtent)
+	binary.LittleEndian.PutUint64(key[8:], 0) // logical_addr = 0
+	val := make([]byte, sizeofFileExtentVal)
+	binary.LittleEndian.PutUint64(val[0:], e.allocedSize) // len_and_flags (block-aligned length)
+	binary.LittleEndian.PutUint64(val[8:], e.dataBlock)   // phys_block_num
 	// crypto_id (16) = 0.
-	vLen := sizeofFileExtentVal
-	vOff := c.valAreaEnd - c.valEnd + vLen
-	c.valEnd -= vLen
+	return catRecord{id: e.cnid, typ: typeFileExtent, logical: 0, key: key, val: val}
+}
 
-	c.putKvloc(uint16(kStart-c.keyArea), uint16(kLen), uint16(vOff), uint16(vLen))
-	c.tocOff += sizeofKvloc
+// buildHashedDrecKey builds a hashed dentry key and returns the key bytes and
+// the name_len_and_hash field used for ordering. Mirrors makeHashedDentryKey.
+func buildHashedDrecKey(parent uint64, name string) ([]byte, uint32) {
+	nameLen := uint32(len(name) + 1)
+	key := make([]byte, sizeofDrecHashedKeyFixed+int(nameLen))
+	setKeyHeader(key, 0, parent, typeDirRec)
+	copy(key[12:], name)
+	// key[12+len(name)] = 0 already (zeroed).
+
+	hash := uint32(0xFFFFFFFF)
+	var buf [4]byte
+	for _, c := range []byte(name) {
+		binary.LittleEndian.PutUint32(buf[:], uint32(c))
+		hash = crc32c(hash, buf[:])
+	}
+	hash = (hash & 0x3FFFFF) << 10
+	nameLenAndHash := hash | nameLen
+	binary.LittleEndian.PutUint32(key[8:], nameLenAndHash)
+	return key, nameLenAndHash
+}
+
+// packCatLeaves greedily packs sorted records into leaf nodes of blocksize,
+// reserving footer bytes at the end of each node (sizeofBtreeInfo for a node
+// that also serves as the tree root, 0 for a plain leaf). Each record costs its
+// key + value bytes plus one kvloc table entry.
+func packCatLeaves(recs []catRecord, blocksize, footer int) [][]catRecord {
+	var leaves [][]catRecord
+	var cur []catRecord
+	keys, vals := 0, 0
+
+	flush := func() {
+		if len(cur) > 0 {
+			leaves = append(leaves, cur)
+			cur, keys, vals = nil, 0, 0
+		}
+	}
+
+	for _, r := range recs {
+		n := len(cur) + 1
+		toc := tocBytesFor(n)
+		used := sizeofBtreeNodePhys + toc + keys + len(r.key) + vals + len(r.val) + footer
+		if used > blocksize && len(cur) > 0 {
+			flush()
+		}
+		cur = append(cur, r)
+		keys += len(r.key)
+		vals += len(r.val)
+	}
+	flush()
+	return leaves
+}
+
+// tocBytesFor returns the table-of-contents size (bytes) for a node holding
+// nkeys records: room for nkeys kvloc entries, rounded up to whole increments
+// of btreeTOCEntryIncrement, never below btreeTOCEntryMaxUnused entries. This
+// matches btree.c's minimum-table-size behaviour for small nodes.
+func tocBytesFor(nkeys int) int {
+	entries := roundUpInt(nkeys, btreeTOCEntryIncrement)
+	if entries < btreeTOCEntryMaxUnused {
+		entries = btreeTOCEntryMaxUnused
+	}
+	return entries * sizeofKvloc
+}
+
+func roundUpInt(x, y int) int {
+	if x <= 0 {
+		return 0
+	}
+	return ((x + y - 1) / y) * y
 }
 
 // makeExtrefRoot builds the volume's extent-reference (blockref) tree root. It
@@ -219,7 +428,7 @@ func (c *catCursor) makeFileExtent(f *builderFile) {
 // file data extent: key (phys_block, EXTENT), value j_phys_ext_val
 // (len_and_kind = KIND_NEW|blocks, owning_obj_id = file cnid, refcnt = 1).
 func (b *builder) makeExtrefRoot(bno, oid uint64) error {
-	if !b.hasFiles() {
+	if len(b.streamFiles) == 0 {
 		return b.makeEmptyBtreeRoot(bno, oid, objectTypeBlockrefTree)
 	}
 
@@ -229,9 +438,11 @@ func (b *builder) makeExtrefRoot(bno, oid uint64) error {
 
 	binary.LittleEndian.PutUint16(root[btnOffFlags:], btnodeRoot|btnodeLeaf)
 
-	nkeys := len(b.files)
+	nkeys := len(b.streamFiles)
 	binary.LittleEndian.PutUint32(root[btnOffNkeys:], uint32(nkeys))
-	tocLen := b.minTableSize(objectTypeBlockrefTree)
+	// The TOC must hold one entry per record; minTableSize only guarantees room
+	// for a handful, so size it for nkeys as fsck requires.
+	tocLen := tocBytesFor(nkeys)
 	putNloc(root, btnOffTableSpace, 0, uint16(tocLen))
 
 	cur := &catCursor{
@@ -244,9 +455,13 @@ func (b *builder) makeExtrefRoot(bno, oid uint64) error {
 		valEnd:     int(b.blocksize) - infoLen,
 	}
 
-	// Records are sorted by physical block number, which our contiguous
-	// layout already guarantees in file order.
-	for _, f := range b.files {
+	// Records are sorted by physical block number, which our contiguous layout
+	// already guarantees in stream-file order.
+	extents := make([]*builderEntry, len(b.streamFiles))
+	copy(extents, b.streamFiles)
+	sort.Slice(extents, func(i, j int) bool { return extents[i].dataBlock < extents[j].dataBlock })
+
+	for _, f := range extents {
 		kStart := cur.keyOff
 		setKeyHeader(cur.block, cur.keyOff, f.dataBlock, typeExtent)
 		kLen := sizeofPhysExtKey

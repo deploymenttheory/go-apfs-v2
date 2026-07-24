@@ -184,7 +184,7 @@ func (b *builder) makeVolume(bno, oid uint64) error {
 		return err
 	}
 	vsb.RootTreeOID = firstVolCatRootOID
-	if err := b.makeCatRoot(b.firstVolCatRootBno, firstVolCatRootOID); err != nil {
+	if err := b.makeCatTree(b.firstVolCatRootBno, firstVolCatRootOID); err != nil {
 		return err
 	}
 
@@ -202,11 +202,14 @@ func (b *builder) makeVolume(bno, oid uint64) error {
 	// Volume file/block accounting. apfsck derives the volume block count from
 	// every physical/omap block plus the file data extents; fsck matches
 	// apfs_fs_alloc_count against it. The empty volume owns five blocks (the
-	// root nodes of the four trees plus the omap structure); each file data
-	// block adds one.
-	vsb.NumFiles = uint64(len(b.files))
-	vsb.FsAllocCount = 5 + b.fileDataBlocks
-	vsb.TotalBlocksAlloced = b.fileDataBlocks
+	// root nodes of the four trees plus the omap structure); every extra
+	// catalog leaf node and every file data block (the post-internal-pool
+	// region) adds one. Reserved directories (root, private-dir) are excluded
+	// from the directory count, matching what fsck_apfs expects.
+	vsb.NumFiles = b.numFiles
+	vsb.NumDirectories = b.numDirs
+	vsb.FsAllocCount = 5 + b.postIPBlocks
+	vsb.TotalBlocksAlloced = b.postIPBlocks
 
 	// Write the file contents into their data blocks.
 	if err := b.writeFileData(); err != nil {

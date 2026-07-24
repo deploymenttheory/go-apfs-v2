@@ -122,7 +122,7 @@ func (b *builder) countUsedBlocksInChunk(dev *devInfo, chunkno uint64) uint32 {
 		blocks += 6                 // Volume superblock and its trees
 		blocks += b.sm.ipBmapBlocks // Internal pool bitmap blocks
 		blocks += uint32(firstChunkIPBlocks)
-		blocks += uint32(b.fileDataBlocks) // User file data blocks
+		blocks += uint32(b.postIPBlocks) // Extra catalog leaves + file data blocks
 		return blocks
 	}
 
@@ -161,8 +161,8 @@ func (b *builder) makeMainAllocBitmap() error {
 	bmapMarkAsUsed(bmap, b.firstVolBno, 6)                        // Volume sb + its trees
 	bmapMarkAsUsed(bmap, b.ipBmapBase, uint64(b.sm.ipBmapBlocks)) // IP bitmap blocks
 	bmapMarkAsUsed(bmap, b.sm.ipBase, b.sm.ipBlocks)              // Internal pool blocks
-	if b.fileDataBlocks > 0 {
-		bmapMarkAsUsed(bmap, b.fileDataBase, b.fileDataBlocks) // User file data blocks
+	if b.postIPBlocks > 0 {
+		bmapMarkAsUsed(bmap, b.postIPBase, b.postIPBlocks) // Extra catalog leaves + file data
 	}
 
 	return b.writeBlocks(bmap, dev.firstChunkBmap)
@@ -407,19 +407,24 @@ func (b *builder) setSpacemanInfo() error {
 	tier2.firstCib = tier2.firstChunkBmap + tier2.usedChunksEnd
 	tier2.firstCab = tier2.firstCib + uint64(tier2.cibCount)
 
-	// File data blocks are laid out contiguously right after the internal pool,
-	// i.e. at the first otherwise-free block. Milestone 1 keeps them within the
-	// first chunk so the fixed chunk-0 used-block accounting stays valid.
-	b.fileDataBase = main.usedBlocksEnd
-	if b.fileDataBlocks > 0 {
-		if b.fileDataBase+b.fileDataBlocks > b.blocksPerChunk() {
+	// The volume's extra blocks are laid out contiguously right after the
+	// internal pool, at the first otherwise-free block: first the extra catalog
+	// leaf nodes (for a 2-level catalog), then the file data blocks. They must
+	// stay within the first chunk so the fixed chunk-0 used-block accounting
+	// stays valid.
+	b.postIPBase = main.usedBlocksEnd
+	b.catLeafBase = b.postIPBase
+	b.fileDataBase = b.catLeafBase + b.numCatLeaves
+	b.postIPBlocks = b.numCatLeaves + b.fileDataBlocks
+	if b.postIPBlocks > 0 {
+		if b.postIPBase+b.postIPBlocks > b.blocksPerChunk() {
 			return errFileDataTooBig
 		}
-		if b.fileDataBase+b.fileDataBlocks > b.mainBlkcnt {
+		if b.postIPBase+b.postIPBlocks > b.mainBlkcnt {
 			return errFileDataTooBig
 		}
 		blk := b.fileDataBase
-		for _, f := range b.files {
+		for _, f := range b.streamFiles {
 			f.dataBlock = blk
 			blk += f.blocks
 		}

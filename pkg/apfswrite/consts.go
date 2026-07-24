@@ -117,9 +117,12 @@ const (
 // S_IFREG from <sys/stat.h>, used for regular-file mode bits.
 const sIFREG = 0o100000
 
-// Directory entry type (drec val flags & APFS_DREC_TYPE_MASK) for a regular
-// file: the file-type nibble of the mode. DT_REG == S_IFREG >> 12.
-const dtReg = sIFREG >> 12
+// Directory entry type (drec val flags & APFS_DREC_TYPE_MASK): the file-type
+// nibble of the mode. DT_REG == S_IFREG >> 12, DT_DIR == S_IFDIR >> 12.
+const (
+	dtReg = sIFREG >> 12
+	dtDir = sIFDIR >> 12
+)
 
 // Physical-extent record kinds and the shift of the kind field within
 // len_and_kind (APFS_PEXT_KIND_*, APFS_PEXT_KIND_SHIFT).

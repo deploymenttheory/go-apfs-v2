@@ -1,0 +1,239 @@
+// SPDX-License-Identifier: GPL-2.0-only
+// Ported from mkapfs (apfsprogs) — Copyright (C) 2019 Ernesto A. Fernández. Go port Copyright (C) 2024 Deployment Theory.
+
+package apfswrite_test
+
+import (
+	"bytes"
+	"crypto/sha256"
+	"fmt"
+	"io/fs"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"testing"
+
+	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/apfswrite"
+)
+
+// wantEntry is an expected filesystem path collected from the input tree.
+type wantEntry struct {
+	isDir bool
+	data  []byte
+}
+
+// collectWants walks an input Entry tree and records the expected fs.WalkDir
+// path set (relative, "." for root) with each file's content.
+func collectWants(root *apfswrite.Entry) map[string]wantEntry {
+	want := map[string]wantEntry{".": {isDir: true}}
+	var rec func(prefix string, es []*apfswrite.Entry)
+	rec = func(prefix string, es []*apfswrite.Entry) {
+		for _, e := range es {
+			p := e.Name
+			if prefix != "" {
+				p = prefix + "/" + e.Name
+			}
+			if e.IsDir {
+				want[p] = wantEntry{isDir: true}
+				rec(p, e.Children)
+			} else {
+				want[p] = wantEntry{data: e.Data}
+			}
+		}
+	}
+	rec("", root.Children)
+	return want
+}
+
+// walkAndAssert opens the image with the MIT reader and asserts that fs.WalkDir
+// visits exactly the expected path set, that directories are directories, and
+// that each file's content sha256 matches.
+func walkAndAssert(t *testing.T, img fs.FS, want map[string]wantEntry) {
+	t.Helper()
+	got := map[string]bool{}
+	err := fs.WalkDir(img, ".", func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		got[p] = true
+		w, ok := want[p]
+		if !ok {
+			t.Errorf("unexpected path %q", p)
+			return nil
+		}
+		if d.IsDir() != w.isDir {
+			t.Errorf("path %q: IsDir=%v, want %v", p, d.IsDir(), w.isDir)
+		}
+		if !w.isDir {
+			data, err := fs.ReadFile(img, p)
+			if err != nil {
+				t.Errorf("ReadFile %q: %v", p, err)
+				return nil
+			}
+			if sha256.Sum256(data) != sha256.Sum256(w.data) {
+				t.Errorf("path %q: content mismatch (got %d bytes, want %d)", p, len(data), len(w.data))
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("WalkDir: %v", err)
+	}
+	for p := range want {
+		if !got[p] {
+			t.Errorf("missing path %q (never visited)", p)
+		}
+	}
+}
+
+// openVolume creates the container and returns the first volume as an fs.FS.
+func openVolume(t *testing.T, opts *apfswrite.CreateOptions) *apfs.Volume {
+	t.Helper()
+	const size = 32 * 1024 * 1024
+	img := &memImage{}
+	if err := apfswrite.CreateContainer(img, size, opts); err != nil {
+		t.Fatalf("CreateContainer: %v", err)
+	}
+	container, err := apfs.Open(img, &apfs.OpenOptions{})
+	if err != nil {
+		t.Fatalf("apfs.Open: %v", err)
+	}
+	volumes, err := container.Volumes()
+	if err != nil {
+		t.Fatalf("Volumes: %v", err)
+	}
+	if len(volumes) != 1 {
+		t.Fatalf("volume count = %d, want 1", len(volumes))
+	}
+	return volumes[0]
+}
+
+// TestCreateContainerWithTree writes a nested directory tree with several files
+// (including one two levels deep), reads it back with the MIT reader, walks it
+// with fs.WalkDir and asserts every path and file sha256. Runs on every OS.
+func TestCreateContainerWithTree(t *testing.T) {
+	root := &apfswrite.Entry{Children: []*apfswrite.Entry{
+		{Name: "readme.txt", Data: []byte("top-level readme\n")},
+		{Name: "notes.md", Data: []byte("# notes\nsome content here\n")},
+		{Name: "docs", IsDir: true, Children: []*apfswrite.Entry{
+			{Name: "guide.txt", Data: []byte("a guide inside docs\n")},
+			{Name: "sub", IsDir: true, Children: []*apfswrite.Entry{
+				{Name: "deep.txt", Data: []byte("two levels deep content\n")},
+				{Name: "deep2.bin", Data: bytes.Repeat([]byte{0xAB}, 512)},
+			}},
+		}},
+		{Name: "empty_dir", IsDir: true},
+	}}
+
+	v := openVolume(t, &apfswrite.CreateOptions{VolumeName: "TreeVol", Root: root})
+	walkAndAssert(t, v, collectWants(root))
+}
+
+// TestCreateContainerMultiLeafCatalog writes enough files that the catalog can
+// no longer fit in a single leaf node, forcing B-tree growth to a 2-level tree,
+// then verifies the whole tree still reads back with matching sha256s.
+func TestCreateContainerMultiLeafCatalog(t *testing.T) {
+	const nFiles = 60
+	children := make([]*apfswrite.Entry, 0, nFiles)
+	for i := 0; i < nFiles; i++ {
+		content := []byte(fmt.Sprintf("file number %d with some distinct content padding %d\n", i, i*7))
+		children = append(children, &apfswrite.Entry{
+			Name: fmt.Sprintf("file_%03d.txt", i),
+			Data: content,
+		})
+	}
+	// Add a nested directory with a couple more files for good measure.
+	children = append(children, &apfswrite.Entry{Name: "nested", IsDir: true, Children: []*apfswrite.Entry{
+		{Name: "a.txt", Data: []byte("nested a\n")},
+		{Name: "b.txt", Data: []byte("nested b\n")},
+	}})
+	root := &apfswrite.Entry{Children: children}
+
+	v := openVolume(t, &apfswrite.CreateOptions{VolumeName: "MultiLeaf", Root: root})
+	walkAndAssert(t, v, collectWants(root))
+
+	// Sanity: the root really does list all the top-level entries.
+	entries, err := v.ReadDir(".")
+	if err != nil {
+		t.Fatalf("ReadDir: %v", err)
+	}
+	if len(entries) != nFiles+1 {
+		t.Errorf("root entries = %d, want %d", len(entries), nFiles+1)
+	}
+}
+
+// TestCreateContainerTreeFsckClean runs Apple's fsck_apfs against a nested tree
+// (macOS only). fsck_apfs is the strict oracle.
+func TestCreateContainerTreeFsckClean(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("fsck_apfs is only available on macOS")
+	}
+	requireTools(t, "hdiutil", "fsck_apfs")
+
+	root := &apfswrite.Entry{Children: []*apfswrite.Entry{
+		{Name: "readme.txt", Data: []byte("hello from a tree\n")},
+		{Name: "dir_a", IsDir: true, Children: []*apfswrite.Entry{
+			{Name: "one.txt", Data: []byte("one\n")},
+			{Name: "two.txt", Data: []byte("two\n")},
+			{Name: "inner", IsDir: true, Children: []*apfswrite.Entry{
+				{Name: "deep.bin", Data: bytes.Repeat([]byte{0x5A}, 300)},
+			}},
+		}},
+		{Name: "dir_b", IsDir: true, Children: []*apfswrite.Entry{
+			{Name: "b1.txt", Data: []byte("b one\n")},
+		}},
+	}}
+
+	const size = 32 * 1024 * 1024
+	imgPath := filepath.Join(t.TempDir(), "tree.img")
+	writeImage(t, imgPath, size, &apfswrite.CreateOptions{VolumeName: "FsckTreeVol", Root: root})
+
+	dev := attachRaw(t, imgPath)
+	defer detach(t, dev)
+
+	out, err := exec.Command("fsck_apfs", "-n", dev).CombinedOutput()
+	t.Logf("fsck_apfs output:\n%s", out)
+	if err != nil {
+		t.Fatalf("fsck_apfs reported errors (exit %v)", err)
+	}
+	if !strings.Contains(string(out), "appears to be OK") {
+		t.Errorf("fsck_apfs did not report the container clean")
+	}
+}
+
+// TestCreateContainerMultiLeafFsckClean forces catalog B-tree growth and checks
+// fsck_apfs is still clean (macOS only).
+func TestCreateContainerMultiLeafFsckClean(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("fsck_apfs is only available on macOS")
+	}
+	requireTools(t, "hdiutil", "fsck_apfs")
+
+	const nFiles = 60
+	children := make([]*apfswrite.Entry, 0, nFiles)
+	for i := 0; i < nFiles; i++ {
+		children = append(children, &apfswrite.Entry{
+			Name: fmt.Sprintf("file_%03d.txt", i),
+			Data: []byte(fmt.Sprintf("content for file %d\n", i)),
+		})
+	}
+	root := &apfswrite.Entry{Children: children}
+
+	const size = 32 * 1024 * 1024
+	imgPath := filepath.Join(t.TempDir(), "multileaf.img")
+	writeImage(t, imgPath, size, &apfswrite.CreateOptions{VolumeName: "FsckMultiLeaf", Root: root})
+
+	dev := attachRaw(t, imgPath)
+	defer detach(t, dev)
+
+	out, err := exec.Command("fsck_apfs", "-n", dev).CombinedOutput()
+	t.Logf("fsck_apfs output:\n%s", out)
+	if err != nil {
+		t.Fatalf("fsck_apfs reported errors (exit %v)", err)
+	}
+	if !strings.Contains(string(out), "appears to be OK") {
+		t.Errorf("fsck_apfs did not report the container clean")
+	}
+}

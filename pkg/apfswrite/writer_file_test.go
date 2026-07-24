@@ -113,8 +113,9 @@ func TestCreateContainerWithFileEmptyStillWorks(t *testing.T) {
 	}
 }
 
-// TestCreateContainerWithFileRejectsUnsupported checks the milestone-1 input
-// guards: multiple files and over-a-block content are rejected clearly.
+// TestCreateContainerWithFileRejectsUnsupported checks the current input
+// guards: over-a-block content and (until milestone 3) empty files are rejected
+// clearly. Multiple files and subdirectories are supported from milestone 2.
 func TestCreateContainerWithFileRejectsUnsupported(t *testing.T) {
 	const size = 8 * 1024 * 1024
 
@@ -129,16 +130,13 @@ func TestCreateContainerWithFileRejectsUnsupported(t *testing.T) {
 		}
 	})
 
-	t.Run("multiple", func(t *testing.T) {
+	t.Run("empty-file", func(t *testing.T) {
 		img := &memImage{}
 		err := apfswrite.CreateContainer(img, size, &apfswrite.CreateOptions{
-			RootFiles: []apfswrite.RootFile{
-				{Name: "a", Data: []byte("a")},
-				{Name: "b", Data: []byte("b")},
-			},
+			RootFiles: []apfswrite.RootFile{{Name: "empty", Data: nil}},
 		})
 		if err == nil {
-			t.Fatal("expected error for multiple root files")
+			t.Fatal("expected error for an empty file (milestone 3)")
 		}
 	})
 }
