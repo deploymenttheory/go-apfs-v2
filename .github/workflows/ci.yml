@@ -21,12 +21,18 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - name: Build
+      - name: Build (default, MIT)
         env:
           CGO_ENABLED: "0"
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
         run: go build ./...
+      - name: Build (GPL, -tags apfswrite)
+        env:
+          CGO_ENABLED: "0"
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: go build -tags apfswrite ./...
 
   test:
     name: Test (${{ matrix.os }})
@@ -42,6 +48,9 @@ jobs:
           go-version-file: go.mod
       - name: Vet
         run: go vet ./...
+      - name: Install apfsck (Linux APFS-write oracle, best-effort)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y apfsprogs || echo "apfsprogs unavailable; apfsck test will skip"
       - name: Unit tests
         env:
           CGO_ENABLED: "0"
