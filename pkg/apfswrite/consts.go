@@ -83,10 +83,13 @@ const (
 	minUserInoNum = 16
 )
 
-// Catalog record types.
+// Catalog record types (APFS_TYPE_*).
 const (
-	typeInode  = 3
-	typeDirRec = 9
+	typeExtent     = 2
+	typeInode      = 3
+	typeDstreamID  = 6
+	typeFileExtent = 8
+	typeDirRec     = 9
 )
 
 // Key header field shift.
@@ -100,10 +103,30 @@ const drecLenMask = 0x000003ff
 const inodeNoRsrcFork = 0x00008000
 
 // Extended field types for inodes.
-const inoExtTypeName = 4
+const (
+	inoExtTypeName    = 4
+	inoExtTypeDstream = 8
+)
 
 // Extended field flags.
-const xfDoNotCopy = 0x02
+const (
+	xfDoNotCopy   = 0x02
+	xfSystemField = 0x20
+)
+
+// S_IFREG from <sys/stat.h>, used for regular-file mode bits.
+const sIFREG = 0o100000
+
+// Directory entry type (drec val flags & APFS_DREC_TYPE_MASK) for a regular
+// file: the file-type nibble of the mode. DT_REG == S_IFREG >> 12.
+const dtReg = sIFREG >> 12
+
+// Physical-extent record kinds and the shift of the kind field within
+// len_and_kind (APFS_PEXT_KIND_*, APFS_PEXT_KIND_SHIFT).
+const (
+	pextKindNew   = 1
+	pextKindShift = 60
+)
 
 // Constant for extended fields.
 const minDocID = 3
@@ -202,6 +225,13 @@ const (
 	sizeofInodeKey             = 8
 	sizeofDrecKeyFixed         = 10 // hdr(8)+name_len(2)
 	sizeofDrecHashedKeyFixed   = 12 // hdr(8)+name_len_and_hash(4)
+
+	sizeofDstream       = 40 // size(8)+alloced_size(8)+default_crypto_id(8)+total_bytes_written(8)+total_bytes_read(8)
+	sizeofDstreamIDVal  = 4  // refcnt(4)
+	sizeofFileExtentKey = 16 // hdr(8)+logical_addr(8)
+	sizeofFileExtentVal = 24 // len_and_flags(8)+phys_block_num(8)+crypto_id(8)
+	sizeofPhysExtKey    = 8  // hdr(8)
+	sizeofPhysExtVal    = 20 // len_and_kind(8)+owning_obj_id(8)+refcnt(4)
 )
 
 // S_IFDIR from <sys/stat.h>, used for directory mode bits.

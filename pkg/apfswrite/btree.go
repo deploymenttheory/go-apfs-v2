@@ -207,8 +207,8 @@ func (b *builder) makeOmapBtree(bno uint64, isVol bool) error {
 }
 
 // setCatInfo sets the info footer for a catalog root node, mirroring
-// btree.c:set_cat_info.
-func (b *builder) setCatInfo(info []byte) {
+// btree.c:set_cat_info. nkeys is the number of records in the leaf.
+func (b *builder) setCatInfo(info []byte, nkeys int) {
 	drecKeysz := sizeofDrecHashedKeyFixed
 	if b.normSensitive {
 		drecKeysz = sizeofDrecKeyFixed
@@ -216,11 +216,25 @@ func (b *builder) setCatInfo(info []byte) {
 	maxkey := drecKeysz + len("private-dir") + 1
 	maxval := sizeofInodeVal + sizeofXfBlob + sizeofXField + int(roundUp(uint64(len("private-dir")+1), 8))
 
+	// A file inode carries two xfields (name + dstream) and may have a longer
+	// name and key, so account for those when files are present.
+	for _, f := range b.files {
+		nameKey := drecKeysz + len(f.name) + 1
+		if nameKey > maxkey {
+			maxkey = nameKey
+		}
+		fileVal := sizeofInodeVal + sizeofXfBlob + 2*sizeofXField +
+			int(roundUp(uint64(len(f.name)+1), 8)) + sizeofDstream
+		if fileVal > maxval {
+			maxval = fileVal
+		}
+	}
+
 	binary.LittleEndian.PutUint32(info[0:], btreeKVNonaligned) // bt_flags
 	binary.LittleEndian.PutUint32(info[4:], b.blocksize)       // bt_node_size
 	binary.LittleEndian.PutUint32(info[16:], uint32(maxkey))   // bt_longest_key
 	binary.LittleEndian.PutUint32(info[20:], uint32(maxval))   // bt_longest_val
-	binary.LittleEndian.PutUint64(info[24:], 4)                // bt_key_count (two per dir)
+	binary.LittleEndian.PutUint64(info[24:], uint64(nkeys))    // bt_key_count
 	binary.LittleEndian.PutUint64(info[32:], 1)                // bt_node_count
 }
 
@@ -233,8 +247,10 @@ func (b *builder) makeCatRoot(bno, oid uint64) error {
 
 	binary.LittleEndian.PutUint16(root[btnOffFlags:], btnodeRoot|btnodeLeaf)
 
-	// The two dentry records and their inodes.
-	binary.LittleEndian.PutUint32(root[btnOffNkeys:], 4)
+	// The two special-dir dentries and their inodes, plus (per user file) a
+	// dentry, an inode, a data-stream id and a file-extent record.
+	nkeys := 4 + 4*len(b.files)
+	binary.LittleEndian.PutUint32(root[btnOffNkeys:], uint32(nkeys))
 	tocLen := b.minTableSize(objectTypeFSTree)
 	putNloc(root, btnOffTableSpace, 0, uint16(tocLen))
 
@@ -248,10 +264,23 @@ func (b *builder) makeCatRoot(bno, oid uint64) error {
 		valEnd:     int(b.blocksize) - infoLen,
 	}
 
-	cur.makeSpecialDirDentry(privDirInoNum, "private-dir")
-	cur.makeSpecialDirDentry(rootDirInoNum, "root")
-	cur.makeSpecialDirInode(rootDirInoNum, "root")
-	cur.makeSpecialDirInode(privDirInoNum, "private-dir")
+	// Records must be laid out in ascending key order: obj-id, then type, then
+	// the type-specific key. The special-dir dentries live under the virtual
+	// root parent (id 1); the root inode is id 2; user files (id >= 16) sort
+	// last. A root-level file adds a (2, DIR_REC) dentry that sorts after the
+	// (2, INODE) root inode.
+	cur.makeSpecialDirDentry(privDirInoNum, "private-dir") // (1, DIR_REC, hash)
+	cur.makeSpecialDirDentry(rootDirInoNum, "root")        // (1, DIR_REC, hash)
+	cur.makeSpecialDirInode(rootDirInoNum, "root", uint32(len(b.files)))
+	for _, f := range b.files {
+		cur.makeFileDentry(rootDirInoNum, f) // (2, DIR_REC, hash(name))
+	}
+	cur.makeSpecialDirInode(privDirInoNum, "private-dir", 0)
+	for _, f := range b.files {
+		cur.makeFileInode(rootDirInoNum, f) // (cnid, INODE)
+		cur.makeDstreamID(f)                // (cnid, DSTREAM_ID)
+		cur.makeFileExtent(f)               // (cnid, FILE_EXTENT, 0)
+	}
 
 	keyLen := cur.keyOff - cur.keyArea
 	valLen := cur.valAreaEnd - cur.valEnd
@@ -260,7 +289,7 @@ func (b *builder) makeCatRoot(bno, oid uint64) error {
 	putNloc(root, btnOffKeyFreeList, btoffInvalid, 0)
 	putNloc(root, btnOffValFreeList, btoffInvalid, 0)
 
-	b.setCatInfo(root[int(b.blocksize)-infoLen:])
+	b.setCatInfo(root[int(b.blocksize)-infoLen:], nkeys)
 	setObjectHeader(root, int(b.blocksize), oid,
 		objectTypeBtree|objVirtual, objectTypeFSTree)
 	return b.writeBlock(root, bno)

@@ -86,8 +86,10 @@ func (c *catCursor) makeSpecialInodeKey(ino uint64) int {
 }
 
 // makeSpecialInodeVal writes the inode value for a special directory ending at
-// valEnd, mirroring dir.c:make_special_inode_val. Returns the value length.
-func (c *catCursor) makeSpecialInodeVal(ino uint64, name string) int {
+// valEnd, mirroring dir.c:make_special_inode_val. nchildren is the directory's
+// child count (non-zero for the root once user files are added). Returns the
+// value length.
+func (c *catCursor) makeSpecialInodeVal(ino uint64, name string, nchildren uint32) int {
 	nameLen := len(name) + 1
 	paddedNameLen := int(roundUp(uint64(nameLen), 8))
 	iLen := sizeofInodeVal + sizeofXfBlob + sizeofXField + paddedNameLen
@@ -103,8 +105,10 @@ func (c *catCursor) makeSpecialInodeVal(ino uint64, name string) int {
 	binary.LittleEndian.PutUint64(c.block[valOff+40:], c.b.timestamp) // access_time
 
 	// internal_flags (48): newer fsck_apfs expects APFS_INODE_NO_RSRC_FORK on
-	// these special directory inodes. nchildren (56) left 0 (empty dir).
+	// these special directory inodes. nchildren (56) is the directory's child
+	// count.
 	binary.LittleEndian.PutUint64(c.block[valOff+48:], inodeNoRsrcFork)
+	binary.LittleEndian.PutUint32(c.block[valOff+56:], nchildren)
 	binary.LittleEndian.PutUint32(c.block[valOff+60:], protectionClassDirNone)
 
 	// owner/group left as 0 (root) for cross-platform determinism.
@@ -149,14 +153,14 @@ func (c *catCursor) makeSpecialDirDentry(ino uint64, name string) {
 	c.tocOff += sizeofKvloc
 }
 
-// makeSpecialDirInode makes an inode record for an empty special dir, mirroring
-// dir.c:make_special_dir_inode.
-func (c *catCursor) makeSpecialDirInode(ino uint64, name string) {
+// makeSpecialDirInode makes an inode record for a special dir, mirroring
+// dir.c:make_special_dir_inode. nchildren is the directory's child count.
+func (c *catCursor) makeSpecialDirInode(ino uint64, name string, nchildren uint32) {
 	kStart := c.keyOff
 	kLen := c.makeSpecialInodeKey(ino)
 	c.keyOff += kLen
 
-	vLen := c.makeSpecialInodeVal(ino, name)
+	vLen := c.makeSpecialInodeVal(ino, name, nchildren)
 	vOff := c.valAreaEnd - c.valEnd + vLen
 	c.valEnd -= vLen
 

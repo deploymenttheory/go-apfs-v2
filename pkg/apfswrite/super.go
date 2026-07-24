@@ -162,8 +162,8 @@ func (b *builder) makeVolume(bno, oid uint64) error {
 
 	setMetaCrypto(&vsb.MetaCrypto)
 
-	// We won't create any user inodes.
-	vsb.NextObjID = minUserInoNum
+	// Next free object id: one past the highest user cnid in use.
+	vsb.NextObjID = b.nextObjID()
 
 	vsb.VolUUID = b.volUUID
 	vsb.FsFlags = fsUnencrypted
@@ -188,9 +188,10 @@ func (b *builder) makeVolume(bno, oid uint64) error {
 		return err
 	}
 
-	// The snapshot metadata and extent reference trees are empty.
+	// The extent-reference tree holds one physical-extent record per file data
+	// extent; the snapshot metadata tree stays empty.
 	vsb.ExtentrefTreeOID = b.firstVolExtrefRootBno
-	if err := b.makeEmptyBtreeRoot(b.firstVolExtrefRootBno, b.firstVolExtrefRootBno, objectTypeBlockrefTree); err != nil {
+	if err := b.makeExtrefRoot(b.firstVolExtrefRootBno, b.firstVolExtrefRootBno); err != nil {
 		return err
 	}
 	vsb.SnapMetaTreeOID = b.firstVolSnapRootBno
@@ -198,8 +199,19 @@ func (b *builder) makeVolume(bno, oid uint64) error {
 		return err
 	}
 
-	// The root nodes of all four trees, plus the object map structure.
-	vsb.FsAllocCount = 5
+	// Volume file/block accounting. apfsck derives the volume block count from
+	// every physical/omap block plus the file data extents; fsck matches
+	// apfs_fs_alloc_count against it. The empty volume owns five blocks (the
+	// root nodes of the four trees plus the omap structure); each file data
+	// block adds one.
+	vsb.NumFiles = uint64(len(b.files))
+	vsb.FsAllocCount = 5 + b.fileDataBlocks
+	vsb.TotalBlocksAlloced = b.fileDataBlocks
+
+	// Write the file contents into their data blocks.
+	if err := b.writeFileData(); err != nil {
+		return err
+	}
 
 	block := b.zeroedBlock()
 	marshalInto(block, vsb)

@@ -31,6 +31,34 @@ type CreateOptions struct {
 	// VolumeUUID is the volume UUID. The zero value selects a fixed
 	// deterministic default.
 	VolumeUUID [16]byte
+
+	// RootFiles are regular files to create in the volume root directory.
+	//
+	// Milestone 1 support is intentionally minimal: at most one file, whose
+	// content must be non-empty and fit within a single allocation block
+	// (BlockSize bytes). Larger content, multiple files, subdirectories and
+	// richer metadata are later milestones and are rejected with a clear
+	// error. When empty, the volume is formatted exactly as before (no user
+	// files).
+	RootFiles []RootFile
+}
+
+// RootFile is a regular file to be created in the volume root directory.
+type RootFile struct {
+	// Name is the file name (no path separators).
+	Name string
+	// Data is the file content. For milestone 1 it must be 1..BlockSize bytes.
+	Data []byte
+}
+
+// builderFile holds the resolved on-disk placement for a single user file.
+type builderFile struct {
+	name        string
+	data        []byte
+	cnid        uint64 // catalog node id / inode number and data-stream id
+	dataBlock   uint64 // physical block number holding the content
+	blocks      uint64 // number of allocation blocks (1 for M1)
+	allocedSize uint64 // block-aligned allocated size in bytes
 }
 
 // Deterministic default UUIDs used when the caller leaves a UUID zero.
@@ -92,6 +120,11 @@ func CreateContainer(w io.WriterAt, sizeBytes int64, opts *CreateOptions) error 
 	b.volUUID = opts.VolumeUUID
 	if b.volUUID == ([16]byte{}) {
 		b.volUUID = defaultVolumeUUID
+	}
+
+	// Resolve user files (milestone 1: at most one small root file).
+	if err := b.setFiles(opts.RootFiles); err != nil {
+		return err
 	}
 
 	b.computeCheckpointLayout()
@@ -158,6 +191,14 @@ type builder struct {
 
 	// Space manager info (sm_info), populated by setSpacemanInfo.
 	sm smInfo
+
+	// User files placed in the volume root (milestone 1: at most one).
+	files []*builderFile
+	// fileDataBase is the first physical block used for file content; file
+	// data blocks are laid out contiguously starting here, immediately after
+	// the space manager's internal pool. fileDataBlocks is their total count.
+	fileDataBase   uint64
+	fileDataBlocks uint64
 
 	timestamp uint64
 }
