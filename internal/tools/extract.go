@@ -31,19 +31,36 @@ type VolumeFS interface {
 	Readlink(name string) (string, error)
 }
 
+// SymlinkMode controls how symbolic links are materialized on disk.
+type SymlinkMode int
+
+const (
+	// SymlinkAuto creates a real symlink where the OS permits it and falls
+	// back to a regular file containing the target path otherwise (as git
+	// does with core.symlinks=false). This never fails on symlink support.
+	SymlinkAuto SymlinkMode = iota
+	// SymlinkReal always creates a real symlink and reports a failure if the
+	// OS refuses (e.g. unprivileged Windows).
+	SymlinkReal
+	// SymlinkFile always writes the target path into a regular file.
+	SymlinkFile
+)
+
 // Extractor handles file extraction from APFS volumes
 type Extractor struct {
-	Volume          VolumeFS
-	Destination     string
-	Pattern         *regexp.Regexp
-	PreserveMeta    bool
-	Verbose         bool
-	VerifyChecksum  bool
-	filesExtracted  int
-	entriesSkipped  int
-	bytesExtracted  uint64
-	sourceChecksums map[string]string // relativePath -> SHA256 of source data
-	progressBar     *progressbar.ProgressBar
+	Volume           VolumeFS
+	Destination      string
+	Pattern          *regexp.Regexp
+	PreserveMeta     bool
+	Verbose          bool
+	VerifyChecksum   bool
+	SymlinkMode      SymlinkMode
+	filesExtracted   int
+	entriesSkipped   int
+	symlinksDegraded int
+	bytesExtracted   uint64
+	sourceChecksums  map[string]string // relativePath -> SHA256 of source data
+	progressBar      *progressbar.ProgressBar
 }
 
 // warnSkip reports an entry that could not be extracted. Warnings always go
@@ -169,20 +186,62 @@ func (e *Extractor) extractTree(root, destBase string) error {
 	return nil
 }
 
-// extractSymlink recreates the symlink at the fs name as destPath.
+// extractSymlink recreates the symlink at the fs name as destPath, applying
+// the configured SymlinkMode. In auto mode, if the OS refuses to create a
+// real symlink (e.g. unprivileged Windows), the target path is written into
+// a regular file instead so no information is lost and extraction completes.
 func (e *Extractor) extractSymlink(name, destPath string) error {
 	target, err := e.Volume.Readlink(name)
 	if err != nil {
 		return fmt.Errorf("unable to read symlink target: %w", err)
 	}
 
-	if err := os.Symlink(target, destPath); err != nil {
-		return err
+	switch e.SymlinkMode {
+	case SymlinkFile:
+		return e.writeSymlinkAsFile(destPath, target, nil)
+
+	case SymlinkReal:
+		if err := os.Symlink(target, destPath); err != nil {
+			return err
+		}
+
+	default: // SymlinkAuto
+		if err := os.Symlink(target, destPath); err != nil {
+			// The symlink was read fine; the OS just won't materialize it.
+			// Preserve it losslessly as a regular file (git-style fallback).
+			return e.writeSymlinkAsFile(destPath, target, err)
+		}
 	}
 
 	if e.Verbose {
 		fmt.Printf("Created symlink: %s -> %s\n", destPath, target)
 	} else if e.progressBar != nil {
+		e.progressBar.Add(1)
+	}
+	e.filesExtracted++
+
+	return nil
+}
+
+// writeSymlinkAsFile writes a symlink's target path into a regular file at
+// destPath. cause is the original os.Symlink error when this is a fallback
+// (nil when SymlinkFile mode was requested explicitly).
+func (e *Extractor) writeSymlinkAsFile(destPath, target string, cause error) error {
+	if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
+		return fmt.Errorf("unable to create parent directory: %w", err)
+	}
+	if err := os.WriteFile(destPath, []byte(target), 0644); err != nil {
+		return err
+	}
+
+	if cause != nil {
+		e.symlinksDegraded++
+		fmt.Fprintf(os.Stderr, "Note: %s could not be created as a symlink (%v); wrote its target %q as a regular file instead\n",
+			destPath, cause, target)
+	} else if e.Verbose {
+		fmt.Printf("Wrote symlink target as file: %s -> %s\n", destPath, target)
+	}
+	if e.progressBar != nil {
 		e.progressBar.Add(1)
 	}
 	e.filesExtracted++
@@ -295,6 +354,12 @@ func (e *Extractor) FinishProgress() {
 // Skipped returns the number of entries that could not be extracted.
 func (e *Extractor) Skipped() int {
 	return e.entriesSkipped
+}
+
+// SymlinksDegraded returns the number of symlinks written as regular files
+// because the OS would not create a real symlink.
+func (e *Extractor) SymlinksDegraded() int {
+	return e.symlinksDegraded
 }
 
 // GetStats returns extraction statistics

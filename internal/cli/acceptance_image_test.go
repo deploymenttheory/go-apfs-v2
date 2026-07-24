@@ -234,14 +234,14 @@ func TestAcceptanceExtractVerified(t *testing.T) {
 	info := acceptanceInfoJSON(t, dmg)
 	dest := t.TempDir()
 
+	// Default (auto) symlink handling degrades unsupported symlinks to files
+	// rather than failing, so extraction completes with exit 0 on every OS
+	// including unprivileged Windows.
 	out, stderr, code := run(t, "extract", dmg, "-C", dest, "--verify")
 	if code != 0 {
-		if runtime.GOOS == "windows" && code == 6 {
-			t.Logf("windows: accepting partial extraction (symlink privileges): %s", stderr)
-		} else {
-			t.Fatalf("extract exited %d\nstderr: %s\n%s", code, stderr, out)
-		}
-	} else if !strings.Contains(out, "All files verified successfully") {
+		t.Fatalf("extract exited %d\nstderr: %s\n%s", code, stderr, out)
+	}
+	if !strings.Contains(out, "All files verified successfully") {
 		t.Errorf("verify success marker missing:\n%s", lastLines(out, 10))
 	}
 
@@ -257,12 +257,12 @@ func TestAcceptanceExtractVerified(t *testing.T) {
 		t.Errorf("extracted %d files, superblock claims %d", extractedFiles, info.Volumes[0].Files)
 	}
 
-	verified := "passed"
-	if code != 0 {
-		verified = fmt.Sprintf("exit %d", code)
+	degraded := ""
+	if runtime.GOOS == "windows" {
+		degraded = " (symlinks degraded to files where OS symlink privilege is unavailable)"
 	}
-	attest(t, "extraction wrote %d files (superblock claims %d); source-checksum verification: %s",
-		extractedFiles, info.Volumes[0].Files, verified)
+	attest(t, "extraction wrote %d files (superblock claims %d); source-checksum verification: passed%s",
+		extractedFiles, info.Volumes[0].Files, degraded)
 }
 
 // TestAcceptanceGroundTruthAgainstHdiutil mounts the same DMG with macOS hdiutil

@@ -340,14 +340,10 @@ func TestExtractFullVolume(t *testing.T) {
 	dest := t.TempDir()
 	_, stderr, code := run(t, "extract", fixtureDMG, "-C", dest)
 
-	// Symlink creation can fail on Windows runners without privileges; a
-	// partial extraction (exit 6) with only symlink skips is acceptable there
+	// Default (auto) symlink handling degrades unsupported symlinks to files,
+	// so extraction completes cleanly on every OS including Windows.
 	if code != 0 {
-		if runtime.GOOS == "windows" && code == 6 {
-			t.Logf("windows: accepting partial extraction (symlinks): %s", stderr)
-		} else {
-			t.Fatalf("extract exited %d\nstderr: %s", code, stderr)
-		}
+		t.Fatalf("extract exited %d\nstderr: %s", code, stderr)
 	}
 
 	for path, expected := range manifest.Files {
@@ -364,6 +360,16 @@ func TestExtractFullVolume(t *testing.T) {
 			}
 		case "symlink":
 			if runtime.GOOS == "windows" {
+				// The symlink was degraded to a regular file containing the
+				// target path; verify that content instead of the link.
+				content, err := os.ReadFile(destPath)
+				if err != nil {
+					t.Errorf("%s: %v", path, err)
+					continue
+				}
+				if string(content) != expected.Target {
+					t.Errorf("%s: degraded-symlink content = %q, want %q", path, content, expected.Target)
+				}
 				continue
 			}
 			target, err := os.Readlink(destPath)
@@ -399,6 +405,60 @@ func TestExtractDirWithoutRecursiveFails(t *testing.T) {
 	_, _, code := run(t, "extract", fixtureDMG, "/dir1", "-C", t.TempDir())
 	if code == 0 {
 		t.Errorf("extract of a directory without -r should fail")
+	}
+}
+
+// TestExtractSymlinkAsFile proves the lossless symlink fallback on every OS:
+// --symlinks file writes the link target into a regular file (the same path
+// auto mode takes on an OS that refuses symlinks). Exit 0, content == target.
+func TestExtractSymlinkAsFile(t *testing.T) {
+	expected, ok := manifest.Files["link-to-hello"]
+	if !ok || expected.Type != "symlink" {
+		t.Skip("fixture has no link-to-hello symlink")
+	}
+
+	dest := t.TempDir()
+	_, stderr, code := run(t, "extract", fixtureDMG, "-C", dest, "--symlinks", "file")
+	if code != 0 {
+		t.Fatalf("extract --symlinks file exited %d: %s", code, stderr)
+	}
+
+	linkPath := filepath.Join(dest, "link-to-hello")
+	info, err := os.Lstat(linkPath)
+	if err != nil {
+		t.Fatalf("degraded symlink missing: %v", err)
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		t.Errorf("expected a regular file, got a symlink")
+	}
+	content, err := os.ReadFile(linkPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(content) != expected.Target {
+		t.Errorf("degraded-symlink content = %q, want %q", content, expected.Target)
+	}
+}
+
+// TestExtractSymlinkRealMode ensures --symlinks real produces an actual
+// symlink (skipped on Windows where the privilege is typically absent).
+func TestExtractSymlinkRealMode(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("real symlink creation needs privilege not present on Windows runners")
+	}
+	expected, ok := manifest.Files["link-to-hello"]
+	if !ok || expected.Type != "symlink" {
+		t.Skip("fixture has no link-to-hello symlink")
+	}
+
+	dest := t.TempDir()
+	mustRun(t, "extract", fixtureDMG, "-C", dest, "--symlinks", "real")
+	target, err := os.Readlink(filepath.Join(dest, "link-to-hello"))
+	if err != nil {
+		t.Fatalf("expected a real symlink: %v", err)
+	}
+	if target != expected.Target {
+		t.Errorf("target = %q, want %q", target, expected.Target)
 	}
 }
 

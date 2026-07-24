@@ -17,6 +17,7 @@ var (
 	extractRecursive    bool
 	extractPreserveMeta bool
 	extractVerify       bool
+	extractSymlinks     string
 )
 
 var extractCmd = &cobra.Command{
@@ -27,6 +28,12 @@ the whole volume is extracted.
 
 Exit code 6 indicates a partial extraction: some entries were skipped and a
 warning was printed to stderr for each.
+
+Symlink handling (--symlinks): "auto" (default) creates a real symlink where
+the OS allows it and otherwise writes the link target into a regular file
+(useful on Windows without the symlink privilege); "real" always creates a
+symlink and fails if the OS refuses; "file" always writes the target as a
+regular file.
 
 Examples:
   apfs extract image.dmg -C ./out
@@ -44,6 +51,7 @@ func init() {
 	extractCmd.Flags().BoolVar(&extractPreserveMeta, "preserve-meta", false, "preserve permissions and timestamps")
 	extractCmd.Flags().Bool("xattrs", false, "reserved: extended attribute extraction (not yet implemented)")
 	extractCmd.Flags().BoolVar(&extractVerify, "verify", false, "verify extracted files against source checksums")
+	extractCmd.Flags().StringVar(&extractSymlinks, "symlinks", "auto", "symlink handling: auto, real or file")
 	extractCmd.MarkFlagRequired("destination")
 }
 
@@ -68,11 +76,24 @@ func runExtract(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	var symlinkMode tools.SymlinkMode
+	switch extractSymlinks {
+	case "auto":
+		symlinkMode = tools.SymlinkAuto
+	case "real":
+		symlinkMode = tools.SymlinkReal
+	case "file":
+		symlinkMode = tools.SymlinkFile
+	default:
+		return usageErrorf("invalid --symlinks %q: must be auto, real or file", extractSymlinks)
+	}
+
 	extractor := tools.NewExtractor(volume, extractDestination)
 	extractor.Pattern = pattern
 	extractor.PreserveMeta = extractPreserveMeta
 	extractor.Verbose = opts.Verbose
 	extractor.VerifyChecksum = extractVerify
+	extractor.SymlinkMode = symlinkMode
 
 	if !opts.Verbose && !opts.Quiet && stderrIsTTY() {
 		extractor.SetProgressBar(progressbar.NewOptions(-1,
@@ -101,10 +122,11 @@ func runExtract(cmd *cobra.Command, args []string) error {
 
 	if opts.Output == "json" {
 		summary := map[string]any{
-			"destination": extractDestination,
-			"files":       files,
-			"bytes":       bytes,
-			"skipped":     extractor.Skipped(),
+			"destination":      extractDestination,
+			"files":            files,
+			"bytes":            bytes,
+			"skipped":          extractor.Skipped(),
+			"symlinksDegraded": extractor.SymlinksDegraded(),
 		}
 		if err := jsonOut(summary); err != nil {
 			return err
@@ -112,6 +134,9 @@ func runExtract(cmd *cobra.Command, args []string) error {
 	} else if !opts.Quiet {
 		fmt.Printf("\nExtraction complete! Files saved to: %s\n", extractDestination)
 		fmt.Printf("Total: %d files, %s\n", files, formatSize(bytes))
+		if degraded := extractor.SymlinksDegraded(); degraded > 0 {
+			fmt.Printf("Note: %d symlink(s) written as regular files (OS symlink support unavailable)\n", degraded)
+		}
 	}
 
 	if extractVerify {
