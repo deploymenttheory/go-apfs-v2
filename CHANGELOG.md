@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **APFS snapshots** (`pkg/apfswrite`, `pkg/apfs`, CLI): spec-compliant snapshot
+  creation recognized by macOS (`diskutil apfs listSnapshots`) and validated
+  with `fsck_apfs`/`apfsck`. `apfs snapshot {list,create,revert,verify}` plus a
+  `--snapshot NAME` flag on `create`/`pack`. Create rebuilds an image with an
+  added snapshot; revert marks the volume's `revert_to_xid` for roll-back on
+  next mount. One snapshot per image today (single static checkpoint).
+
 - **HFS+/HFSX reader** (`pkg/hfsplus`): catalog and extents-overflow B-trees,
   fork data reading, symlinks, hardlink resolution, transparent compression
   detection, and an `io/fs.FS` adapter.

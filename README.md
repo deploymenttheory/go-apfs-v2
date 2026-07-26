@@ -37,6 +37,7 @@ $ apfs extract Firefox.dmg -C ./out --verify
 | Repack a DMG losslessly (`pack`) | ✅ | ✅ |
 | Build a DMG from a directory (`pack <dir>`) | ✅ | ✅ |
 | Create a formatted volume (`create`) | ✅ | ✅ |
+| APFS snapshots: create, list, revert (`snapshot`) | ✅ | — |
 
 Both filesystems can be written as well as read: `pack <dir>` builds a populated
 volume (files, symlinks, nested directories) and `create` formats an empty one.
@@ -213,6 +214,43 @@ operation). Both `--fs hfs+` and `--fs apfs` are supported.
 apfs create blank.dmg --fs hfs+ --volname Scratch --size 16
 apfs create blank.dmg --fs apfs --volname Data
 ```
+
+A snapshot capturing the new volume can be created at the same time with
+`--snapshot NAME` (APFS only). This applies to `pack` too.
+
+### `snapshot` — create, list and revert APFS snapshots
+
+```
+apfs snapshot list   IMAGE
+apfs snapshot create IMAGE --name NAME [-O OUT.dmg] [--force]
+apfs snapshot revert IMAGE --name NAME [-O OUT.dmg] [--force]
+apfs snapshot verify IMAGE
+```
+
+Real, spec-compliant APFS snapshots — recognized by macOS (`diskutil apfs
+listSnapshots`), validated with `fsck_apfs`/`apfsck`. Snapshots are an APFS
+concept (HFS+ has none). A snapshot captures a volume at a point in time, for
+data-forensics and backup-verification workflows.
+
+- **list** — show each APFS volume's snapshots (name, xid, creation time). With
+  `-o json`, one record per snapshot.
+- **create** — rebuild the image with an added snapshot of the current state.
+  The writer rebuilds the volume from its contents (so the result is not a
+  byte-for-byte copy of the source). To protect evidence, the result goes to
+  `-O/--output` by default; overwriting the source in place requires `--force`.
+- **revert** — mark the volume to roll back to a snapshot on next mount (the
+  spec's `revert_to_xid` mechanism, patched in place with a resealed checksum).
+  Same output safety.
+- **verify** — confirm every snapshot's frozen superblock and metadata read back.
+
+```console
+apfs snapshot create evidence.dmg --name baseline -O evidence-snap.dmg
+apfs snapshot list   evidence-snap.dmg
+apfs snapshot revert evidence-snap.dmg --name baseline -O reverted.dmg
+```
+
+One snapshot per image is supported today; multiple snapshots require distinct
+transaction ids and incremental checkpoints (planned).
 
 ## Global flags
 
