@@ -6,7 +6,26 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
 )
+
+// revertToXID opens image with the reader and returns the first volume's
+// revert_to_xid (0 when no revert is pending).
+func revertToXID(t *testing.T, image string) uint64 {
+	t.Helper()
+	c, closer, err := apfs.OpenImage(image, nil)
+	if err != nil {
+		t.Fatalf("open %s: %v", image, err)
+	}
+	defer closer.Close()
+	defer c.Free()
+	v, err := c.VolumeBySelector("0")
+	if err != nil {
+		t.Fatalf("volume: %v", err)
+	}
+	return v.Superblock.RevertToTransactionIdentifier
+}
 
 // TestSnapshotListCreatedSnapshot creates an APFS volume carrying a snapshot and
 // lists it back through the reader.
@@ -109,5 +128,66 @@ func TestSnapshotRevert(t *testing.T) {
 	// Reverting to a nonexistent snapshot is an error.
 	if _, _, code := run(t, "snapshot", "revert", base, "--name", "nope", "-O", filepath.Join(dir, "x.dmg")); code == 0 {
 		t.Errorf("revert to a nonexistent snapshot should fail")
+	}
+}
+
+// TestSnapshotRevertSetsFields confirms revert actually writes the live volume's
+// revert_to fields (the spec revert-on-mount marker), read back with the reader.
+func TestSnapshotRevertSetsFields(t *testing.T) {
+	dir := t.TempDir()
+	base := filepath.Join(dir, "img.dmg")
+	mustRun(t, "create", base, "--fs", "apfs", "--volname", "V", "--snapshot", "baseline")
+
+	out := filepath.Join(dir, "reverted.dmg")
+	mustRun(t, "snapshot", "revert", base, "--name", "baseline", "-O", out)
+
+	// The source is untouched (revert_to_xid == 0); the output is marked.
+	if x := revertToXID(t, base); x != 0 {
+		t.Errorf("source image revert_to_xid = %d, want 0 (untouched)", x)
+	}
+	if x := revertToXID(t, out); x == 0 {
+		t.Errorf("reverted image revert_to_xid = 0, want the snapshot's xid")
+	}
+}
+
+// TestSnapshotRevertRefusesOverwrite confirms revert is forensic-safe: no
+// --output and no --force is a usage error.
+func TestSnapshotRevertRefusesOverwrite(t *testing.T) {
+	dir := t.TempDir()
+	dmg := filepath.Join(dir, "img.dmg")
+	mustRun(t, "create", dmg, "--fs", "apfs", "--volname", "V", "--snapshot", "baseline")
+
+	if _, _, code := run(t, "snapshot", "revert", dmg, "--name", "baseline"); code != 2 {
+		t.Errorf("revert without --output/--force exited %d, want 2 (usage)", code)
+	}
+}
+
+// TestSnapshotVerify confirms the verify subcommand reports the snapshot.
+func TestSnapshotVerify(t *testing.T) {
+	dir := t.TempDir()
+	dmg := filepath.Join(dir, "img.dmg")
+	mustRun(t, "create", dmg, "--fs", "apfs", "--volname", "V", "--snapshot", "baseline")
+
+	out := mustRun(t, "snapshot", "verify", dmg)
+	if !strings.Contains(out, "Verified 1") {
+		t.Errorf("verify did not report the snapshot:\n%s", out)
+	}
+}
+
+// TestPackSnapshot confirms `pack <dir> --fs apfs --snapshot` carries a snapshot.
+func TestPackSnapshot(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "src")
+	if err := os.MkdirAll(src, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "f.txt"), []byte("x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	dmg := filepath.Join(dir, "packed.dmg")
+	mustRun(t, "pack", src, dmg, "--fs", "apfs", "--volname", "Packed", "--snapshot", "packsnap")
+
+	if listing := mustRun(t, "snapshot", "list", dmg); !strings.Contains(listing, "packsnap") {
+		t.Errorf("pack --snapshot did not create the snapshot:\n%s", listing)
 	}
 }
