@@ -228,13 +228,31 @@ func (b *builder) writeSnapshots() error {
 	return b.writeOmapSnapshotTree(b.volSnapTreePaddr)
 }
 
-// writeSnapshotVolumeSuperblock writes a snapshot's snapshot's volume superblock: a physical copy
-// of the volume superblock as it stood at the snapshot's xid, referenced by the
-// snapshot record's sblock_oid.
+// writeSnapshotVolumeSuperblock writes a snapshot's volume superblock: a
+// physical copy of the volume superblock as it stood at the snapshot's xid,
+// referenced by the snapshot record's sblock_oid.
 func (b *builder) writeSnapshotVolumeSuperblock(s *snapBuild) error {
 	vsb := b.volumeSuperblock()
-	vsb.NumSnapshots = 0                    // the state before this snapshot existed
-	vsb.ExtentrefTreeOID = s.extentrefPaddr // the snapshot's own extentref tree
+	vsb.NumSnapshots = 0 // the state before this snapshot existed
+
+	// A snapshot's volume superblock is a partial copy: the object map, the
+	// extentref tree and the snapshot metadata tree are *not* reached through
+	// it. The reader takes the object map and snapshot metadata tree from the
+	// live volume superblock, and the snapshot's extentref tree from the
+	// snapshot metadata record's extentref_tree_oid (see snapMetaRecords),
+	// which is why that record carries the field at all. apfsck asserts all
+	// three, in apfsck/snapshot.c:check_snapshot():
+	//
+	//	if (vsb->v_extref_oid != 0)
+	//		report("Snapshot volume superblock", "has extentref tree.");
+	//	if (vsb->v_omap_oid != 0)
+	//		report("Snapshot volume superblock", "has object map.");
+	//	if (vsb->v_snap_meta_oid != 0)
+	//		report("Snapshot volume superblock", "has snapshot tree.");
+	vsb.ExtentrefTreeOID = 0
+	vsb.OmapOID = 0
+	vsb.SnapMetaTreeOID = 0
+
 	block := b.zeroedBlock()
 	marshalInto(block, vsb)
 	setObjectHeaderXID(block, int(b.blocksize), s.sblockPaddr,
