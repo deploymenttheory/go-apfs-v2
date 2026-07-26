@@ -10,6 +10,10 @@ what is planned or under consideration, roughly in priority order.
   volume (files of any size, symlinks, nested directories) and `create --fs
   apfs` formats an empty one, in pure Go. Validated against `fsck_apfs`,
   `hdiutil` and `apfsck`.
+- **APFS snapshots** — `apfs snapshot {create,list,revert,verify}` and the
+  `--snapshot` flag on `create`/`pack`. Spec-compliant snapshots recognized by
+  macOS (`diskutil apfs listSnapshots`); revert marks `revert_to_xid` for
+  roll-back on next mount. One snapshot per image today.
 
 ## Near term
 
@@ -22,7 +26,10 @@ what is planned or under consideration, roughly in priority order.
 
 - **Extended attributes / decmpfs on write** (both filesystems).
 - **Hard links** in the HFS+ writer.
-- **Multi-volume and snapshot** handling on the write side.
+- **Multiple APFS snapshots per image** — needs distinct transaction ids and
+  incremental checkpoints (the writer currently emits a single static
+  checkpoint, so one snapshot shares the live volume's xid).
+- **Multi-volume** containers on the write side.
 - **hdiutil-mountable created DMGs** — created images are read by this tool and
   their raw filesystem is `fsck`-clean and hdiutil-mountable; the DMG *wrapper*
   of a partition-map-less image is not yet directly mountable by hdiutil.

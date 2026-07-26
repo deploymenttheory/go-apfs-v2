@@ -140,10 +140,14 @@ func (b *builder) writeEmptyTree(bno, oid uint64, subtype uint32) error {
 	return b.writeBlock(root, bno)
 }
 
-// omapEntry is one (oid -> physical block) mapping stored in an object map.
+// omapEntry is one (oid -> physical block) mapping stored in an object map, at a
+// given transaction id. A lookup at xid X resolves to the entry with the largest
+// xid <= X, which is what keeps a snapshot's older object versions resolvable.
 type omapEntry struct {
 	oid   uint64
 	paddr uint64
+	xid   uint64
+	flags uint32
 }
 
 // writeOmapFooter fills the bt_info footer of an object-map root node.
@@ -159,16 +163,21 @@ func (b *builder) writeOmapFooter(info []byte, nkeys int) {
 }
 
 // omapEntries returns the mappings an object map must hold. The container omap
-// maps only the volume superblock's virtual oid. The volume omap maps the
-// catalog root and, when the catalog spans two levels, every catalog leaf node.
+// maps only the volume superblock's virtual oid — at the live xid, since the
+// live superblock is the current one. The volume omap maps the catalog root
+// and, when the catalog spans two levels, every catalog leaf node, all at the
+// base xid (the mkfs state a snapshot captures).
 func (b *builder) omapEntries(isVol bool) []omapEntry {
 	if !isVol {
-		return []omapEntry{{firstVolOID, b.firstVolBno}}
+		return []omapEntry{{firstVolOID, b.firstVolBno, b.liveXID, 0}}
 	}
-	entries := []omapEntry{{firstVolCatRootOID, b.firstVolCatRootBno}}
+	// The catalog root (and any leaves) are shared by the live volume and the
+	// snapshots, so they carry no OMAP_VAL_SAVED flag (that would mark them as
+	// superseded in the live volume, which is not the case here).
+	entries := []omapEntry{{firstVolCatRootOID, b.firstVolCatRootBno, mkfsXID, 0}}
 	if b.catTwoLevel {
 		for i := uint64(0); i < b.numCatLeaves; i++ {
-			entries = append(entries, omapEntry{catLeafOIDBase + i, b.catLeafBase + i})
+			entries = append(entries, omapEntry{catLeafOIDBase + i, b.catLeafBase + i, mkfsXID, 0})
 		}
 	}
 	return entries
@@ -197,7 +206,8 @@ func (b *builder) writeObjectMapRoot(bno uint64, isVol bool) error {
 		binary.LittleEndian.PutUint16(root[toc+2:], uint16(valAreaEnd-valOff))
 
 		binary.LittleEndian.PutUint64(root[keyOff:], e.oid)         // ok_oid
-		binary.LittleEndian.PutUint64(root[keyOff+8:], mkfsXID)     // ok_xid
+		binary.LittleEndian.PutUint64(root[keyOff+8:], e.xid)       // ok_xid
+		binary.LittleEndian.PutUint32(root[valOff:], e.flags)       // ov_flags
 		binary.LittleEndian.PutUint32(root[valOff+4:], b.blocksize) // ov_size
 		binary.LittleEndian.PutUint64(root[valOff+8:], e.paddr)     // ov_paddr
 	}
@@ -222,6 +232,14 @@ func (b *builder) writeObjectMap(bno uint64, isVol bool) error {
 	}
 	omap.TreeType = objectTypeBtree | objPhysical
 	omap.SnapshotTreeType = objectTypeBtree | objPhysical
+
+	// The volume omap records its snapshots: the snapshot tree (keyed by xid),
+	// the snapshot count and the most recent snapshot xid.
+	if isVol && len(b.snapshots) > 0 {
+		omap.SnapCount = uint32(len(b.snapshots))
+		omap.SnapshotTreeOID = b.volSnapTreeBno
+		omap.MostRecentSnap = b.snapshots[len(b.snapshots)-1].xid
+	}
 
 	rootBno := b.mainOmapRootBno
 	if isVol {

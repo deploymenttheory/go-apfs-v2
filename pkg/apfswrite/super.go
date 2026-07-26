@@ -53,7 +53,7 @@ func (b *builder) assemble() error {
 	sb.IncompatibleFeatures = nxIncompatVersion2 // APFS version 2, no Fusion
 	sb.UUID = b.mainUUID
 	sb.NextOID = b.nextContainerOID()
-	sb.NextXID = mkfsXID + 1
+	sb.NextXID = b.liveXID + 1
 	b.fillCheckpointAreas(sb)
 	sb.SpacemanOID = spacemanOID
 	sb.OmapOID = b.mainOmapBno
@@ -62,10 +62,12 @@ func (b *builder) assemble() error {
 	sb.FsOID[0] = firstVolOID
 	b.fillEphemeralInfo(&sb.EphemeralInfo[0])
 
+	// The container superblock (and its checkpoint copy) is the latest
+	// checkpoint, stamped at the live xid.
 	block := b.zeroedBlock()
 	marshalInto(block, sb)
-	setObjectHeader(block, int(b.blocksize), oidNXSuperblock,
-		objEphemeral|objectTypeNXSuperblock, objectTypeInvalid)
+	setObjectHeaderXID(block, int(b.blocksize), oidNXSuperblock,
+		objEphemeral|objectTypeNXSuperblock, objectTypeInvalid, b.liveXID)
 
 	// Phase 3: the descriptor area is wiped first so no stale checkpoint
 	// superblock from a prior format can be mounted by mistake, then this
@@ -156,42 +158,23 @@ func (b *builder) volIncompatFeatures() uint64 {
 	}
 }
 
-// writeVolume writes the volume: its four trees (object map, catalog,
-// extent-reference and snapshot-metadata) and its file content, then the volume
-// superblock that references them.
-func (b *builder) writeVolume(bno, oid uint64) error {
-	// Write the trees and file data first; the superblock fields below only
-	// record where each landed.
-	if err := b.writeObjectMap(b.firstVolOmapBno, true /* volume omap */); err != nil {
-		return err
-	}
-	if err := b.makeCatTree(b.firstVolCatRootBno, firstVolCatRootOID); err != nil {
-		return err
-	}
-	// The extent-reference tree holds one physical-extent record per file data
-	// extent; the snapshot-metadata tree stays empty.
-	if err := b.makeExtrefRoot(b.firstVolExtrefRootBno, b.firstVolExtrefRootBno); err != nil {
-		return err
-	}
-	if err := b.writeEmptyTree(b.firstVolSnapRootBno, b.firstVolSnapRootBno, objectTypeSnapMetaTree); err != nil {
-		return err
-	}
-	if err := b.writeFileData(); err != nil {
-		return err
-	}
-
-	// Populate the volume superblock field by field.
-	//
-	// FsAllocCount is what fsck_apfs cross-checks: the blocks the volume owns are
-	// the five of an empty volume (its four tree roots plus the omap structure)
-	// plus every extra catalog leaf, extref leaf and file-data block in the
-	// post-pool region. The root and private directories are not counted as
-	// directories.
+// volumeSuperblock builds the on-disk volume superblock fields shared by the
+// live volume and every frozen snapshot copy (they reference the same trees and
+// carry the same accounting). The caller sets the xid-, oid- and
+// snapshot-specific fields (NumSnapshots, object header) afterwards.
+//
+// FsAllocCount is what fsck_apfs cross-checks: the blocks the volume owns are the
+// five of an empty volume (its four tree roots plus the omap structure) plus
+// every extra catalog leaf, extref leaf and file-data block in the post-pool
+// region. The root and private directories are not counted as directories.
+func (b *builder) volumeSuperblock() *apfsSuperblock {
 	vsb := &apfsSuperblock{}
 	vsb.Magic = apfsMagic
 	vsb.Features = featureHardlinkMapRecords
 	vsb.IncompatibleFeatures = b.volIncompatFeatures()
-	vsb.FsAllocCount = 5 + b.postIPBlocks
+	// The frozen snapshot superblocks are superblocks, not fs-allocated blocks,
+	// so they are excluded from the allocation count.
+	vsb.FsAllocCount = 5 + b.postIPBlocks - uint64(len(b.snapshots))
 	fillMetaCrypto(&vsb.MetaCrypto)
 	vsb.RootTreeType = objVirtual | objectTypeBtree
 	vsb.ExtentrefTreeType = objPhysical | objectTypeBtree
@@ -200,7 +183,8 @@ func (b *builder) writeVolume(bno, oid uint64) error {
 	vsb.RootTreeOID = firstVolCatRootOID
 	vsb.ExtentrefTreeOID = b.firstVolExtrefRootBno
 	vsb.SnapMetaTreeOID = b.firstVolSnapRootBno
-	vsb.NextObjID = b.nextObjID()
+	// Snapshots reserve an inode each past the highest user inode.
+	vsb.NextObjID = b.nextObjID() + uint64(len(b.snapshots))
 	vsb.NumFiles = b.numFiles
 	vsb.NumDirectories = b.numDirs
 	vsb.NumSymlinks = b.numSymlinks
@@ -212,11 +196,53 @@ func (b *builder) writeVolume(bno, oid uint64) error {
 	vsb.FormattedBy.LastXID = mkfsXID
 	copy(vsb.Volname[:], b.label)
 	vsb.NextDocID = minDocID
+	return vsb
+}
 
+// writeVolume writes the volume: its four trees (object map, catalog,
+// extent-reference and snapshot-metadata) and its file content, then the live
+// volume superblock referencing them, then any snapshots (frozen superblocks +
+// the object-map snapshot tree).
+func (b *builder) writeVolume(bno, oid uint64) error {
+	// Write the trees and file data first; the superblock fields below only
+	// record where each landed.
+	if err := b.writeObjectMap(b.firstVolOmapBno, true /* volume omap */); err != nil {
+		return err
+	}
+	if err := b.makeCatTree(b.firstVolCatRootBno, firstVolCatRootOID); err != nil {
+		return err
+	}
+	// The extent-reference tree holds one physical-extent record per file data
+	// extent. With snapshots the extents were created at (and are owned by) the
+	// snapshot's transaction, so the live tree — which has no changes since the
+	// last snapshot — is empty and each snapshot carries its own copy instead.
+	if len(b.snapshots) > 0 {
+		if err := b.writeEmptyTree(b.firstVolExtrefRootBno, b.firstVolExtrefRootBno, objectTypeBlockrefTree); err != nil {
+			return err
+		}
+	} else if err := b.makeExtrefRoot(b.firstVolExtrefRootBno, b.firstVolExtrefRootBno); err != nil {
+		return err
+	}
+	if err := b.writeSnapMetaTree(b.firstVolSnapRootBno); err != nil {
+		return err
+	}
+	if err := b.writeFileData(); err != nil {
+		return err
+	}
+
+	// The live volume superblock, stamped at the live xid (past every snapshot).
+	vsb := b.volumeSuperblock()
+	vsb.NumSnapshots = uint64(len(b.snapshots))
 	block := b.zeroedBlock()
 	marshalInto(block, vsb)
-	setObjectHeader(block, int(b.blocksize), oid, objVirtual|objectTypeFS, objectTypeInvalid)
-	return b.writeBlock(block, bno)
+	setObjectHeaderXID(block, int(b.blocksize), oid, objVirtual|objectTypeFS, objectTypeInvalid, b.liveXID)
+	if err := b.writeBlock(block, bno); err != nil {
+		return err
+	}
+
+	// The per-snapshot frozen superblocks and the volume's object-map snapshot
+	// tree.
+	return b.writeSnapshots()
 }
 
 // writeCheckpointMap writes the checkpoint's mapping block, which records where
@@ -246,7 +272,9 @@ func (b *builder) writeCheckpointMap(bno uint64) error {
 
 	binary.LittleEndian.PutUint32(block[off+4:], uint32(idx)) // cpm_count
 
-	setObjectHeader(block, int(b.blocksize), bno, objPhysical|objectTypeCheckpointMap, objectTypeInvalid)
+	// The checkpoint map belongs to this checkpoint, so it carries the same xid
+	// as the checkpoint superblock (the live xid).
+	setObjectHeaderXID(block, int(b.blocksize), bno, objPhysical|objectTypeCheckpointMap, objectTypeInvalid, b.liveXID)
 	return b.writeBlock(block, bno)
 }
 

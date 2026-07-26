@@ -18,6 +18,7 @@ var (
 	packChunkKiB    uint
 	packVolumeName  string
 	packFS          string
+	packSnapshot    string
 )
 
 var packCmd = &cobra.Command{
@@ -51,6 +52,7 @@ func init() {
 	packCmd.Flags().UintVar(&packChunkKiB, "chunk-size", 1024, "chunk size in KiB (must be a multiple of 512 bytes)")
 	packCmd.Flags().StringVar(&packVolumeName, "volname", "", "volume name when packing a directory (default: directory name)")
 	packCmd.Flags().StringVar(&packFS, "fs", "hfs+", "filesystem when packing a directory: hfs+ or apfs")
+	packCmd.Flags().StringVar(&packSnapshot, "snapshot", "", "APFS only: also create a snapshot with this name capturing the packed volume")
 }
 
 func runPack(cmd *cobra.Command, args []string) error {

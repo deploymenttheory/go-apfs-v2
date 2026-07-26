@@ -50,6 +50,7 @@ const (
 	objectTypeBlockrefTree      = 0x0000000f
 	objectTypeSnapMetaTree      = 0x00000010
 	objectTypeNXReaper          = 0x00000011
+	objectTypeOmapSnapshot      = 0x00000013
 	objectTypeFusionMiddleTree  = 0x00000015
 	objectTypeNXFusionWBC       = 0x00000016
 	objectTypeInvalid           = 0x00000000
@@ -90,12 +91,20 @@ const (
 
 // Catalog record types (APFS_TYPE_*).
 const (
-	typeExtent     = 2
-	typeInode      = 3
-	typeXattr      = 4
-	typeDstreamID  = 6
-	typeFileExtent = 8
-	typeDirRec     = 9
+	typeSnapMetadata = 1
+	typeExtent       = 2
+	typeInode        = 3
+	typeXattr        = 4
+	typeDstreamID    = 6
+	typeFileExtent   = 8
+	typeDirRec       = 9
+	typeSnapName     = 11
+)
+
+// Snapshot on-disk sizes.
+const (
+	sizeofSnapMetadataVal = 50 // extentref_oid(8)+sblock_oid(8)+create(8)+change(8)+inum(8)+extref_type(4)+flags(4)+name_len(2)
+	sizeofOmapSnapshot    = 16 // oms_flags(4)+oms_pad(4)+oms_oid(8)
 )
 
 // Extended-attribute value flags (j_xattr_val_t flags, APFS_XATTR_DATA_*).

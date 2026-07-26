@@ -13,11 +13,15 @@ Legend: ✅ implemented · 🟡 partial · ⬜ not yet
 | Transparent compression (zlib / LZVN / LZFSE) | ✅ | ✅ |
 | Symlinks, hardlinks | ✅ | ✅ |
 | Extended attributes (read) | ✅ | 🟡 |
-| Snapshots (read) | 🟡 | ⬜ |
+| Snapshots (read / list) | ✅ | — |
+| Snapshots (create, revert) | ✅¹ | — |
 | FileVault / encryption unlock | ✅ | — |
 | `io/fs.FS` adapter | ✅ | ✅ |
 | Create empty volume | ✅ | ✅ |
 | Populate a volume with files | ✅ | ✅ |
+
+¹ One snapshot per image (single static checkpoint); multiple snapshots need
+distinct xids and incremental checkpoints.
 
 The APFS writer lives in `pkg/apfswrite` (pure Go, MIT).
 

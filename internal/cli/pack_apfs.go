@@ -11,8 +11,12 @@ import (
 
 // packDirectoryAPFS builds an APFS container from srcDir and wraps it in a DMG.
 func packDirectoryAPFS(srcDir, dstPath, volname string, encOpts *disk.EncodeOptions) error {
+	opts := &apfswrite.CreateOptions{VolumeName: volname}
+	if packSnapshot != "" {
+		opts.Snapshots = []apfswrite.SnapshotSpec{{Name: packSnapshot}}
+	}
 	var buf writeAtBuffer
-	if err := apfswrite.CreateContainerFromDir(&buf, 0, srcDir, &apfswrite.CreateOptions{VolumeName: volname}); err != nil {
+	if err := apfswrite.CreateContainerFromDir(&buf, 0, srcDir, opts); err != nil {
 		return fmt.Errorf("unable to build APFS container from %s: %w", srcDir, err)
 	}
 	if err := disk.WrapRawImageDMG(dstPath, buf.Bytes(), "Apple_APFS", encOpts); err != nil {

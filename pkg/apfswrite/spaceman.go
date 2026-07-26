@@ -426,13 +426,15 @@ func (b *builder) spacemanPlacement() error {
 
 	// Everything the volume owns beyond the fixed metadata is laid out
 	// contiguously right after the pool: extra catalog leaves, then extra
-	// extent-reference leaves, then file content. This region may span several
-	// chunks; the per-chunk accounting handles that.
+	// extent-reference leaves, then file content, then the snapshot objects
+	// (the volume omap's snapshot tree + one frozen superblock per snapshot).
+	// This region may span several chunks; the per-chunk accounting handles that.
 	b.postIPBase = b.sm.ipBase + b.sm.ipBlocks
 	b.catLeafBase = b.postIPBase
 	b.extrefLeafBase = b.catLeafBase + b.numCatLeaves
 	b.fileDataBase = b.extrefLeafBase + b.numExtrefLeaves
-	b.postIPBlocks = b.numCatLeaves + b.numExtrefLeaves + b.fileDataBlocks
+	b.placeSnapshots(b.fileDataBase + b.fileDataBlocks)
+	b.postIPBlocks = b.numCatLeaves + b.numExtrefLeaves + b.fileDataBlocks + b.snapBlocks
 	if b.postIPBase+b.postIPBlocks > b.mainBlkcnt {
 		return errFileDataTooBig
 	}

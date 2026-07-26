@@ -10,11 +10,15 @@ import (
 )
 
 func createAPFS(dstPath string, sizeBytes int64) error {
-	var buf writeAtBuffer
-	err := apfswrite.CreateContainer(&buf, sizeBytes, &apfswrite.CreateOptions{
+	opts := &apfswrite.CreateOptions{
 		VolumeName:    createVolName,
 		CaseSensitive: createCaseSens,
-	})
+	}
+	if createSnapshot != "" {
+		opts.Snapshots = []apfswrite.SnapshotSpec{{Name: createSnapshot}}
+	}
+	var buf writeAtBuffer
+	err := apfswrite.CreateContainer(&buf, sizeBytes, opts)
 	if err != nil {
 		return fmt.Errorf("unable to create APFS container: %w", err)
 	}

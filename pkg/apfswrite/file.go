@@ -617,8 +617,8 @@ func (b *builder) writeExtrefNode(bno uint64, extents []*builderEntry, isRoot bo
 		val := make([]byte, sizeofPhysExtVal)
 		lenAndKind := (uint64(pextKindNew) << pextKindShift) | f.blocks
 		binary.LittleEndian.PutUint64(val[0:], lenAndKind)
-		binary.LittleEndian.PutUint64(val[8:], f.cnid) // owning_obj_id
-		binary.LittleEndian.PutUint32(val[16:], 1)     // refcnt
+		binary.LittleEndian.PutUint64(val[8:], f.cnid)              // owning_obj_id
+		binary.LittleEndian.PutUint32(val[16:], b.extentRefcount()) // refcnt
 		cur.putRecord(key, val)
 	}
 
