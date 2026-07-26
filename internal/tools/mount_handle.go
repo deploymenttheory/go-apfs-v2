@@ -1,5 +1,4 @@
 // Mount handle for APFS filesystem mounting
-// Corresponds to libfsapfs mount_handle.c and mount_handle.h
 package tools
 
 import (
@@ -14,7 +13,7 @@ import (
 
 // MountHandle manages the state for mounting an APFS container
 type MountHandle struct {
-	FSIndex           int
+	VolumeIndex       int
 	VolumeOffset      int64
 	UserPassword      string
 	RecoveryPassword  string
@@ -28,17 +27,17 @@ type MountHandle struct {
 // NewMountHandle creates a new mount handle
 func NewMountHandle() *MountHandle {
 	return &MountHandle{
-		FSIndex:      -1, // -1 means mount all volumes
+		VolumeIndex:  -1, // -1 means mount all volumes
 		VolumeOffset: 0,
 		NotifyStream: os.Stderr,
 	}
 }
 
-// SetFileSystemIndex sets the file system index from a string
+// SetVolumeIndex sets the volume index from a string
 // Accepts a number or "all" to mount all volumes
-func (mh *MountHandle) SetFileSystemIndex(indexStr string) error {
+func (mh *MountHandle) SetVolumeIndex(indexStr string) error {
 	if indexStr == "all" {
-		mh.FSIndex = -1 // -1 indicates all volumes
+		mh.VolumeIndex = -1 // -1 indicates all volumes
 		return nil
 	}
 
@@ -51,7 +50,7 @@ func (mh *MountHandle) SetFileSystemIndex(indexStr string) error {
 		return fmt.Errorf("file system index must be non-negative")
 	}
 
-	mh.FSIndex = index
+	mh.VolumeIndex = index
 	return nil
 }
 

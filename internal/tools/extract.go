@@ -97,7 +97,7 @@ func (e *Extractor) ExtractAll() error {
 
 // ExtractByPath extracts a specific file or directory by absolute volume path.
 func (e *Extractor) ExtractByPath(volumePath string, recursive bool) error {
-	name := fsNameFromVolumePath(volumePath)
+	name := FSNameFromVolumePath(volumePath)
 
 	info, err := e.Volume.Stat(name)
 	if err != nil {
@@ -343,9 +343,9 @@ func (e *Extractor) applyMetadata(destPath string, info fs.FileInfo) {
 	}
 }
 
-// fsNameFromVolumePath converts an absolute volume path ("/a/b") to an fs.FS
+// FSNameFromVolumePath converts an absolute volume path ("/a/b") to an fs.FS
 // name ("a/b", or "." for the root).
-func fsNameFromVolumePath(volumePath string) string {
+func FSNameFromVolumePath(volumePath string) string {
 	name := strings.Trim(path.Clean("/"+volumePath), "/")
 	if name == "" {
 		return "."

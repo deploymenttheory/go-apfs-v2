@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 
+	"github.com/deploymenttheory/go-apfs-v2/internal/tools"
 	"github.com/spf13/cobra"
 )
 
@@ -37,7 +38,7 @@ func runCat(cmd *cobra.Command, args []string) error {
 	defer closer.Close()
 
 	for _, volumePath := range args[1:] {
-		name := fsNameFromVolumePath(volumePath)
+		name := tools.FSNameFromVolumePath(volumePath)
 
 		file, err := volume.Open(name)
 		if err != nil {

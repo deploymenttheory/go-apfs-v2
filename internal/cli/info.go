@@ -278,7 +278,7 @@ func printContainerInfo(info *containerInfo) {
 			fmt.Printf("  %-18s yes\n", "Locked")
 		}
 		if !vi.LastUnmounted.IsZero() {
-			fmt.Printf("  %-18s %s\n", "Last unmounted", vi.LastUnmounted.Format(time.RFC3339))
+			fmt.Printf("  %-18s %s\n", "Unmount time", vi.LastUnmounted.Format(time.RFC3339))
 		}
 	}
 }
@@ -309,7 +309,7 @@ func runLegacyInfo(imagePath string) error {
 	handle.NotifyStream = os.Stdout
 
 	if opts.Volume != "" {
-		if err := handle.SetFileSystemIndex(opts.Volume); err != nil {
+		if err := handle.SetVolumeIndex(opts.Volume); err != nil {
 			return usageErrorf("legacy info flags select volumes by index: %v", err)
 		}
 	}

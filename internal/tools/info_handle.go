@@ -1,5 +1,4 @@
 // Info handle for displaying APFS container and volume information
-// Corresponds to libfsapfs info_handle.c and info_handle.h
 package tools
 
 import (
@@ -84,10 +83,9 @@ func max(a, b int) int {
 }
 
 // InfoHandle provides functionality for displaying APFS information
-// Corresponds to info_handle_t
 type InfoHandle struct {
-	// FSIndex specifies which file system/volume to show (or -1 for all)
-	FSIndex int
+	// VolumeIndex specifies which volume to show (or -1 for all)
+	VolumeIndex int
 
 	// RecoveryPassword for encrypted volumes
 	RecoveryPassword string
@@ -121,10 +119,9 @@ type InfoHandle struct {
 }
 
 // NewInfoHandle creates a new info handle
-// Corresponds to info_handle_initialize
 func NewInfoHandle(calculateMD5 bool) (*InfoHandle, error) {
 	return &InfoHandle{
-		FSIndex:           -1, // -1 means all file systems
+		VolumeIndex:       -1, // -1 means all volumes
 		VolumeOffset:      0,
 		CalculateMD5:      calculateMD5,
 		NotifyStream:      os.Stdout,
@@ -134,7 +131,6 @@ func NewInfoHandle(calculateMD5 bool) (*InfoHandle, error) {
 }
 
 // SetBodyfile sets the bodyfile output stream
-// Corresponds to info_handle_set_bodyfile
 func (ih *InfoHandle) SetBodyfile(filename string) error {
 	if filename == "" {
 		return fmt.Errorf("invalid filename")
@@ -149,11 +145,10 @@ func (ih *InfoHandle) SetBodyfile(filename string) error {
 	return nil
 }
 
-// SetFileSystemIndex sets the file system index from a string
-// Corresponds to info_handle_set_file_system_index
-func (ih *InfoHandle) SetFileSystemIndex(indexStr string) error {
+// SetVolumeIndex sets the volume index from a string
+func (ih *InfoHandle) SetVolumeIndex(indexStr string) error {
 	if indexStr == "all" {
-		ih.FSIndex = -1
+		ih.VolumeIndex = -1
 		return nil
 	}
 
@@ -166,12 +161,11 @@ func (ih *InfoHandle) SetFileSystemIndex(indexStr string) error {
 		return fmt.Errorf("invalid file system index: must be non-negative")
 	}
 
-	ih.FSIndex = index
+	ih.VolumeIndex = index
 	return nil
 }
 
 // SetPassword sets the user password
-// Corresponds to info_handle_set_password
 func (ih *InfoHandle) SetPassword(password string) error {
 	if password == "" {
 		return fmt.Errorf("invalid password")
@@ -182,7 +176,6 @@ func (ih *InfoHandle) SetPassword(password string) error {
 }
 
 // SetRecoveryPassword sets the recovery password
-// Corresponds to info_handle_set_recovery_password
 func (ih *InfoHandle) SetRecoveryPassword(password string) error {
 	if password == "" {
 		return fmt.Errorf("invalid recovery password")
@@ -193,7 +186,6 @@ func (ih *InfoHandle) SetRecoveryPassword(password string) error {
 }
 
 // SetVolumeOffset sets the volume offset from a string
-// Corresponds to info_handle_set_volume_offset
 func (ih *InfoHandle) SetVolumeOffset(offsetStr string) error {
 	offset, err := strconv.ParseInt(offsetStr, 10, 64)
 	if err != nil {
@@ -209,7 +201,6 @@ func (ih *InfoHandle) SetVolumeOffset(offsetStr string) error {
 }
 
 // OpenInput opens the APFS container from a file
-// Corresponds to info_handle_open_input
 func (ih *InfoHandle) OpenInput(filename string) error {
 	if filename == "" {
 		return fmt.Errorf("invalid filename")
@@ -311,7 +302,6 @@ func (ih *InfoHandle) OpenInput(filename string) error {
 }
 
 // CloseInput closes the input container
-// Corresponds to info_handle_close_input
 func (ih *InfoHandle) CloseInput() error {
 	if ih.InputContainer == nil {
 		return fmt.Errorf("invalid info handle - input container not set")
@@ -333,7 +323,6 @@ func (ih *InfoHandle) CloseInput() error {
 }
 
 // VolumeByIndex retrieves a volume by its index
-// Corresponds to info_handle_get_volume_by_index
 func (ih *InfoHandle) VolumeByIndex(volumeIndex int) (*apfs.Volume, error) {
 	if ih.InputContainer == nil {
 		return nil, fmt.Errorf("invalid info handle - input container not set")
@@ -357,7 +346,6 @@ func (ih *InfoHandle) VolumeByIndex(volumeIndex int) (*apfs.Volume, error) {
 }
 
 // SignalAbort sets the abort flag
-// Corresponds to info_handle_signal_abort
 func (ih *InfoHandle) SignalAbort() error {
 	if ih == nil {
 		return fmt.Errorf("invalid info handle")
@@ -368,7 +356,6 @@ func (ih *InfoHandle) SignalAbort() error {
 }
 
 // PrintContainerInfo prints information about the APFS container
-// Corresponds to info_handle_container_fprint
 func (ih *InfoHandle) PrintContainerInfo() error {
 	if ih.InputContainer == nil {
 		return fmt.Errorf("invalid info handle - input container not set")
@@ -397,8 +384,8 @@ func (ih *InfoHandle) PrintContainerInfo() error {
 
 	fmt.Fprintf(ih.NotifyStream, "\n")
 
-	// Print volume information based on FSIndex
-	if ih.FSIndex == -1 {
+	// Print volume information based on VolumeIndex
+	if ih.VolumeIndex == -1 {
 		// Print all volumes
 		for i := 0; i < numberOfVolumes; i++ {
 			volume, err := ih.VolumeByIndex(i)
@@ -416,16 +403,16 @@ func (ih *InfoHandle) PrintContainerInfo() error {
 		}
 	} else {
 		// Print specific volume
-		if ih.FSIndex >= numberOfVolumes {
-			return fmt.Errorf("file system index %d out of range (0-%d)", ih.FSIndex, numberOfVolumes-1)
+		if ih.VolumeIndex >= numberOfVolumes {
+			return fmt.Errorf("volume index %d out of range (0-%d)", ih.VolumeIndex, numberOfVolumes-1)
 		}
 
-		volume, err := ih.VolumeByIndex(ih.FSIndex)
+		volume, err := ih.VolumeByIndex(ih.VolumeIndex)
 		if err != nil {
-			return fmt.Errorf("unable to retrieve volume %d: %w", ih.FSIndex, err)
+			return fmt.Errorf("unable to retrieve volume %d: %w", ih.VolumeIndex, err)
 		}
 
-		if err := ih.PrintVolumeInfo(ih.FSIndex, volume); err != nil {
+		if err := ih.PrintVolumeInfo(ih.VolumeIndex, volume); err != nil {
 			return fmt.Errorf("unable to print volume info: %w", err)
 		}
 	}
@@ -434,7 +421,6 @@ func (ih *InfoHandle) PrintContainerInfo() error {
 }
 
 // PrintVolumeInfo prints information about a specific volume
-// Corresponds to info_handle_volume_fprint
 func (ih *InfoHandle) PrintVolumeInfo(volumeIndex int, volume *apfs.Volume) error {
 	if volume == nil {
 		return fmt.Errorf("invalid volume")
@@ -471,7 +457,7 @@ func (ih *InfoHandle) PrintVolumeInfo(volumeIndex int, volume *apfs.Volume) erro
 	if volume.Superblock != nil {
 		if unmountTime := volume.Superblock.UnmountTime; unmountTime != 0 {
 			t := time.Unix(0, int64(unmountTime))
-			fmt.Fprintf(ih.NotifyStream, "    %-20s  %s\n", "Last unmounted", t.Format("2006-01-02 15:04:05"))
+			fmt.Fprintf(ih.NotifyStream, "    %-20s  %s\n", "Unmount time", t.Format("2006-01-02 15:04:05"))
 		}
 	}
 	fmt.Fprintf(ih.NotifyStream, "\n")
@@ -513,7 +499,6 @@ func (ih *InfoHandle) PrintVolumeInfo(volumeIndex int, volume *apfs.Volume) erro
 }
 
 // PrintFileSystemHierarchy prints the file system hierarchy
-// Corresponds to info_handle_file_system_hierarchy_fprint
 func (ih *InfoHandle) PrintFileSystemHierarchy() error {
 	if ih.InputContainer == nil {
 		return fmt.Errorf("invalid info handle - input container not set")
@@ -523,11 +508,11 @@ func (ih *InfoHandle) PrintFileSystemHierarchy() error {
 	var volume *apfs.Volume
 	var err error
 
-	if ih.FSIndex == -1 {
+	if ih.VolumeIndex == -1 {
 		// Default to first volume if "all" was specified
 		volume, err = ih.VolumeByIndex(0)
 	} else {
-		volume, err = ih.VolumeByIndex(ih.FSIndex)
+		volume, err = ih.VolumeByIndex(ih.VolumeIndex)
 	}
 
 	if err != nil {
@@ -652,7 +637,6 @@ func (ih *InfoHandle) printFileEntryRecursiveWithPrefix(entry *apfs.FileEntry, p
 }
 
 // PrintFileEntryByIdentifier prints information about a file entry by its identifier
-// Corresponds to info_handle_file_entry_fprint_by_identifier
 func (ih *InfoHandle) PrintFileEntryByIdentifier(identifier uint64) error {
 	if ih.InputContainer == nil {
 		return fmt.Errorf("invalid info handle - input container not set")
@@ -662,10 +646,10 @@ func (ih *InfoHandle) PrintFileEntryByIdentifier(identifier uint64) error {
 	var volume *apfs.Volume
 	var err error
 
-	if ih.FSIndex == -1 {
+	if ih.VolumeIndex == -1 {
 		volume, err = ih.VolumeByIndex(0)
 	} else {
-		volume, err = ih.VolumeByIndex(ih.FSIndex)
+		volume, err = ih.VolumeByIndex(ih.VolumeIndex)
 	}
 
 	if err != nil {
@@ -682,7 +666,6 @@ func (ih *InfoHandle) PrintFileEntryByIdentifier(identifier uint64) error {
 }
 
 // PrintFileEntryByPath prints information about a file entry by its path
-// Corresponds to info_handle_file_entry_fprint_by_path
 func (ih *InfoHandle) PrintFileEntryByPath(path string) error {
 	if ih.InputContainer == nil {
 		return fmt.Errorf("invalid info handle - input container not set")
@@ -692,10 +675,10 @@ func (ih *InfoHandle) PrintFileEntryByPath(path string) error {
 	var volume *apfs.Volume
 	var err error
 
-	if ih.FSIndex == -1 {
+	if ih.VolumeIndex == -1 {
 		volume, err = ih.VolumeByIndex(0)
 	} else {
-		volume, err = ih.VolumeByIndex(ih.FSIndex)
+		volume, err = ih.VolumeByIndex(ih.VolumeIndex)
 	}
 
 	if err != nil {
@@ -788,7 +771,6 @@ func (ih *InfoHandle) printFileEntryInfo(entry *apfs.FileEntry, path string) err
 }
 
 // PrintFileEntries prints all file entries in bodyfile format
-// Corresponds to info_handle_file_entries_fprint
 func (ih *InfoHandle) PrintFileEntries() error {
 	if ih.InputContainer == nil {
 		return fmt.Errorf("invalid info handle - input container not set")
@@ -802,10 +784,10 @@ func (ih *InfoHandle) PrintFileEntries() error {
 	var volume *apfs.Volume
 	var err error
 
-	if ih.FSIndex == -1 {
+	if ih.VolumeIndex == -1 {
 		volume, err = ih.VolumeByIndex(0)
 	} else {
-		volume, err = ih.VolumeByIndex(ih.FSIndex)
+		volume, err = ih.VolumeByIndex(ih.VolumeIndex)
 	}
 
 	if err != nil {

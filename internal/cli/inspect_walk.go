@@ -55,7 +55,7 @@ func runInspectWalk(imagePath string, inspectVolume int, inspectVerbose bool) er
 	fmt.Println("  Container Structure")
 	fmt.Printf("    %-30s  %d blocks\n", "Checkpoint descriptor area", xpDescBlocks)
 	fmt.Printf("    %-30s  %#x\n", "Checkpoint base address", nxsb.XPDescBase)
-	fmt.Printf("    %-30s  %#x\n", "Object map physical OID", nxsb.OmapOID)
+	fmt.Printf("    %-30s  %#x\n", "Object map object identifier", nxsb.OmapOID)
 	fmt.Println()
 
 	// List volumes
@@ -164,8 +164,8 @@ func runInspectWalk(imagePath string, inspectVolume int, inspectVerbose bool) er
 
 		// Metadata section
 		fmt.Println("  Metadata")
-		fmt.Printf("    %-30s  %#x\n", "Object map OID", vsb.OmapOID)
-		fmt.Printf("    %-30s  %#x\n", "File-system tree root OID", vsb.RootTreeOID)
+		fmt.Printf("    %-30s  %#x\n", "Object map object identifier", vsb.OmapOID)
+		fmt.Printf("    %-30s  %#x\n", "File-system tree object identifier", vsb.RootTreeOID)
 		caseInsensitive := (vsb.IncompatibleFeaturesFlags & 0x00000001) != 0
 		caseSensitive := "Yes"
 		if caseInsensitive {

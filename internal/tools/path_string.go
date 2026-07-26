@@ -1,5 +1,4 @@
 // Path string manipulation utilities for APFS tools
-// Corresponds to libfsapfs path_string.c and path_string.h
 package tools
 
 import (

@@ -83,8 +83,8 @@ func displayBlockInfo(blockData []byte, blockAddr uint64, verbose bool) error {
 
 	fmt.Println("  Object Header")
 	fmt.Printf("    %-20s  0x%016x\n", "Checksum", checksum)
-	fmt.Printf("    %-20s  0x%016x (%d)\n", "Object ID", objectID, objectID)
-	fmt.Printf("    %-20s  0x%016x (%d)\n", "Transaction ID", transactionID, transactionID)
+	fmt.Printf("    %-26s  0x%016x (%d)\n", "Object identifier", objectID, objectID)
+	fmt.Printf("    %-26s  0x%016x (%d)\n", "Transaction identifier", transactionID, transactionID)
 	fmt.Printf("    %-20s  0x%08x (%s)\n", "Object Type", objectType, getObjectTypeName(objectType))
 	fmt.Printf("    %-20s  0x%08x (%s)\n", "Object Subtype", objectSubtype, getObjectSubtypeName(objectSubtype))
 	fmt.Println()
@@ -170,8 +170,8 @@ func displayContainerSuperblock(blockData []byte, verbose bool) error {
 		incompatFeatures := binary.LittleEndian.Uint64(blockData[64:72])
 
 		fmt.Printf("    %-20s  0x%016x\n", "Features", features)
-		fmt.Printf("    %-20s  0x%016x\n", "Read-only features", readOnlyFeatures)
-		fmt.Printf("    %-20s  0x%016x\n", "Incompat features", incompatFeatures)
+		fmt.Printf("    %-26s  0x%016x\n", "Read-only compat. features", readOnlyFeatures)
+		fmt.Printf("    %-26s  0x%016x\n", "Incompatible features", incompatFeatures)
 	}
 
 	fmt.Println()
@@ -279,9 +279,9 @@ func displayObjectMap(blockData []byte, verbose bool) error {
 	fmt.Printf("    %-25s  %d\n", "Snapshot count", snapshotCount)
 	fmt.Printf("    %-25s  0x%08x (%s)\n", "Tree type", treeType, getObjectTypeName(treeType))
 	fmt.Printf("    %-25s  0x%08x (%s)\n", "Snapshot tree type", snapshotTreeType, getObjectTypeName(snapshotTreeType))
-	fmt.Printf("    %-25s  0x%016x\n", "Tree OID", treeOID)
+	fmt.Printf("    %-25s  0x%016x\n", "Tree object identifier", treeOID)
 	if snapshotTreeOID != 0 {
-		fmt.Printf("    %-25s  0x%016x\n", "Snapshot tree OID", snapshotTreeOID)
+		fmt.Printf("    %-25s  0x%016x\n", "Snapshot tree object identifier", snapshotTreeOID)
 	}
 	fmt.Println()
 	return nil
@@ -448,15 +448,15 @@ func displayVolumeSuperblock(blockData []byte, verbose bool) error {
 	fmt.Println("  Volume Superblock")
 	fmt.Printf("    %-20s  0x%08x (%c%c%c%c)\n", "Magic", magic,
 		blockData[32], blockData[33], blockData[34], blockData[35])
-	fmt.Printf("    %-20s  %d\n", "FS Index", fsIndex)
+	fmt.Printf("    %-26s  %d\n", "Volume index", fsIndex)
 	fmt.Printf("    %-20s  0x%016x\n", "Features", features)
 
 	if verbose {
 		roFeatures := binary.LittleEndian.Uint64(blockData[48:56])
 		incompatFeatures := binary.LittleEndian.Uint64(blockData[56:64])
 
-		fmt.Printf("    %-20s  0x%016x\n", "Read-only features", roFeatures)
-		fmt.Printf("    %-20s  0x%016x\n", "Incompat features", incompatFeatures)
+		fmt.Printf("    %-26s  0x%016x\n", "Read-only compat. features", roFeatures)
+		fmt.Printf("    %-26s  0x%016x\n", "Incompatible features", incompatFeatures)
 	}
 
 	fmt.Println()

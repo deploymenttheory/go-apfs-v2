@@ -1,5 +1,4 @@
 // Output utilities for APFS tools
-// Corresponds to libfsapfs fsapfstools_output.c and fsapfstools_output.h
 package tools
 
 import (
@@ -9,12 +8,12 @@ import (
 )
 
 const (
-	// Version information
-	ToolsVersion = "0.1.0"
+	// ToolsVersion must track the CLI version in internal/cli/root.go.
+	ToolsVersion = "0.2.0"
 	LibraryName  = "go-apfs-v2"
 
 	// Copyright information
-	CopyrightYear   = "2024"
+	CopyrightYear   = "2026"
 	CopyrightHolder = "Deployment Theory"
 )
 

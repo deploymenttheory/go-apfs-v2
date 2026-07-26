@@ -1,5 +1,4 @@
 // Mount file system abstraction for FUSE operations
-// Corresponds to libfsapfs mount_file_system.c and mount_file_system.h
 package tools
 
 import (

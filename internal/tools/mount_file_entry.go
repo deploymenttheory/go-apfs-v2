@@ -1,5 +1,4 @@
 // Mount file entry abstraction for FUSE operations
-// Corresponds to libfsapfs mount_file_entry.c and mount_file_entry.h
 package tools
 
 import (

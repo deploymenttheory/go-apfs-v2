@@ -15,6 +15,7 @@ import (
 	"github.com/spf13/viper"
 )
 
+// version must track tools.ToolsVersion in internal/tools/output.go.
 const version = "0.2.0"
 
 // globalOptions are the persistent flags shared by all commands, resolved

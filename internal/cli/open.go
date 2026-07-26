@@ -4,26 +4,18 @@ package cli
 import (
 	"fmt"
 	"io"
-	"io/fs"
 	"math"
 	"os"
-	"strings"
 
+	"github.com/deploymenttheory/go-apfs-v2/internal/tools"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/disk"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/hfsplus"
 )
 
-// volumeFS is the filesystem-agnostic contract that list, cat and extract
-// operate on. Both APFS volumes (pkg/apfs) and HFS+ volumes (pkg/hfsplus)
-// implement it.
-type volumeFS interface {
-	fs.FS
-	fs.ReadDirFS
-	fs.StatFS
-	fs.ReadFileFS
-	Readlink(name string) (string, error)
-}
+// volumeFS is the contract that list, cat and extract operate on. Both APFS
+// volumes (pkg/apfs) and HFS+ volumes (pkg/hfsplus) implement it.
+type volumeFS = tools.VolumeFS
 
 // multiCloser closes several resources in order.
 type multiCloser []io.Closer
@@ -130,14 +122,4 @@ func openVolume(container *apfs.Container) (*apfs.Volume, error) {
 	}
 
 	return volume, nil
-}
-
-// fsNameFromVolumePath converts an absolute volume path ("/a/b") to an fs.FS
-// name ("a/b", or "." for the root). Accepts already-relative input too.
-func fsNameFromVolumePath(volumePath string) string {
-	name := strings.Trim(strings.TrimSpace(volumePath), "/")
-	if name == "" {
-		return "."
-	}
-	return name
 }

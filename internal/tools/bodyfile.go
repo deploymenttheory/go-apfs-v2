@@ -1,5 +1,4 @@
 // Bodyfile output functions for APFS
-// Corresponds to libfsapfs bodyfile.c and bodyfile.h
 package tools
 
 import (
@@ -45,7 +44,6 @@ func (be *BodyfileEntry) FormatBodyfileLine() string {
 }
 
 // escapePath escapes special characters in a path for bodyfile format
-// This matches the behavior of bodyfile_path_string_copy_from_file_entry_path in libfsapfs
 // It handles:
 // - Control characters (U+0-U+1f, U+7f-U+9f) -> \x##
 // - Unicode surrogate characters and undefined Unicode -> \U########

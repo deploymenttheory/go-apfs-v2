@@ -2,7 +2,6 @@
 
 // FUSE filesystem integration for APFS mounting
 // Uses github.com/hanwen/go-fuse/v2 for FUSE operations
-// Corresponds to libfsapfs mount_fuse.c and mount_fuse.h
 package tools
 
 import (

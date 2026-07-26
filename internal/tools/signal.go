@@ -1,5 +1,4 @@
 // Signal handling utilities for APFS tools
-// Corresponds to libfsapfs fsapfstools_signal.c and fsapfstools_signal.h
 package tools
 
 import (
@@ -25,7 +24,6 @@ var globalSignalManager = &signalManager{
 
 // AttachSignalHandler attaches a signal handler for interrupt signals
 // This handles SIGINT (Ctrl+C) and SIGTERM on Unix, and equivalent on Windows
-// Corresponds to fsapfstools_signal_attach
 func AttachSignalHandler(handler SignalHandler) error {
 	if handler == nil {
 		return fmt.Errorf("signal handler cannot be nil")
@@ -57,7 +55,6 @@ func AttachSignalHandler(handler SignalHandler) error {
 }
 
 // DetachSignalHandler detaches the current signal handler
-// Corresponds to fsapfstools_signal_detach
 func DetachSignalHandler() error {
 	if !globalSignalManager.attached {
 		return fmt.Errorf("no signal handler attached")
