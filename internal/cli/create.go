@@ -15,6 +15,7 @@ var (
 	createVolName  string
 	createSizeMiB  uint
 	createCaseSens bool
+	createSnapshot string
 )
 
 var createCmd = &cobra.Command{
@@ -38,6 +39,7 @@ func init() {
 	createCmd.Flags().StringVar(&createVolName, "volname", "untitled", "volume name")
 	createCmd.Flags().UintVar(&createSizeMiB, "size", 0, "image size in MiB (0 = minimum for the filesystem)")
 	createCmd.Flags().BoolVar(&createCaseSens, "case-sensitive", false, "create a case-sensitive volume")
+	createCmd.Flags().StringVar(&createSnapshot, "snapshot", "", "APFS only: also create a snapshot with this name capturing the new volume")
 }
 
 func runCreate(cmd *cobra.Command, args []string) error {

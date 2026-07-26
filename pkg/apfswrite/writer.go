@@ -50,6 +50,22 @@ type CreateOptions struct {
 	// Root itself represents the volume root directory; only its Children are
 	// used (any Name/Data on Root is ignored).
 	Root *Entry
+
+	// Snapshots are APFS snapshots to create on the volume, each capturing the
+	// built state (the volume's contents at creation time). They are written as
+	// spec-compliant snapshots — a snapshot-metadata record pair, a frozen
+	// physical volume superblock, an object-map snapshot entry and pinned extent
+	// refcounts — recognized by macOS. Names must be unique and non-empty.
+	Snapshots []SnapshotSpec
+}
+
+// SnapshotSpec describes one APFS snapshot to create at build time.
+type SnapshotSpec struct {
+	// Name is the snapshot name (unique, non-empty, no NUL).
+	Name string
+	// ModTime is the snapshot's create/change time. Zero means a deterministic
+	// default.
+	ModTime time.Time
 }
 
 // Entry is one node of the directory tree written into the volume. It mirrors
@@ -208,13 +224,19 @@ func CreateContainer(w io.WriterAt, sizeBytes int64, opts *CreateOptions) error 
 		return err
 	}
 
+	// Resolve the requested snapshots (xids, live xid, block count).
+	if err := b.setSnapshots(opts); err != nil {
+		return err
+	}
+
 	// The container has a floor of 512 KiB.
 	const minBytes = 512 * 1024
 	if sizeBytes == 0 {
 		// Size the image to comfortably hold the post-pool payload (extra
-		// catalog leaves, extref leaves, file data) plus the fixed metadata,
-		// block-aligned, with headroom for the pool and checkpoint areas.
-		payload := b.numCatLeaves + b.numExtrefLeaves + b.fileDataBlocks
+		// catalog leaves, extref leaves, file data, snapshot objects) plus the
+		// fixed metadata, block-aligned, with headroom for the pool and
+		// checkpoint areas.
+		payload := b.numCatLeaves + b.numExtrefLeaves + b.fileDataBlocks + b.snapBlocks
 		needBlocks := payload + payload/8 + 2048
 		sizeBytes = max(int64(needBlocks)*int64(b.blocksize), minBytes)
 	}
@@ -407,6 +429,15 @@ type builder struct {
 	extrefLeafBase uint64
 	fileDataBase   uint64
 	fileDataBlocks uint64
+
+	// Snapshots. Each captures the built state (snapshot == live). The snapshot
+	// objects (a per-snapshot frozen superblock + snap_meta_ext, and one shared
+	// object-map snapshot tree) live at the end of the post-internal-pool region.
+	snapshots      []*snapBuild
+	liveXID        uint64 // the live volume's transaction id (> snapshot xids)
+	snapBase       uint64 // first block of the snapshot object region
+	snapBlocks     uint64 // total blocks in the snapshot object region
+	volSnapTreeBno uint64 // the volume omap's snapshot tree (0 when no snapshots)
 
 	timestamp   uint64
 	defaultTime uint64 // deterministic inode timestamp when an Entry has no ModTime

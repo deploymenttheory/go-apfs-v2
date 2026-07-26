@@ -26,8 +26,15 @@ const (
 // block is the full object buffer; size is the object size in bytes (the block
 // size for single-block objects, or the total size for the space manager).
 func setObjectHeader(block []byte, size int, oid uint64, typ, subtype uint32) {
+	setObjectHeaderXID(block, size, oid, typ, subtype, mkfsXID)
+}
+
+// setObjectHeaderXID is setObjectHeader with an explicit transaction id. Most
+// objects are stamped at mkfsXID (the base state); the live volume and container
+// superblocks carry the higher live xid when the volume has snapshots.
+func setObjectHeaderXID(block []byte, size int, oid uint64, typ, subtype uint32, xid uint64) {
 	binary.LittleEndian.PutUint64(block[objOffOID:], oid)
-	binary.LittleEndian.PutUint64(block[objOffXID:], mkfsXID)
+	binary.LittleEndian.PutUint64(block[objOffXID:], xid)
 	binary.LittleEndian.PutUint32(block[objOffType:], typ)
 	binary.LittleEndian.PutUint32(block[objOffSubtype:], subtype)
 
