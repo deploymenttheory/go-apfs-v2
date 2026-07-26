@@ -398,10 +398,13 @@ func (t *SnapshotMetadataTree) GetEntryByIdentifier(
 // SnapshotMetadata represents snapshot metadata
 // Corresponds to libfsapfs_snapshot_metadata_t
 type SnapshotMetadata struct {
-	ObjectIdentifier            uint64
-	VolumeSuperblockBlockNumber uint64
-	SuperblockObjectIdentifier  uint64 // Alias for VolumeSuperblockBlockNumber
-	Name                        string
+	ObjectIdentifier               uint64 // the snapshot's transaction id (xid)
+	VolumeSuperblockBlockNumber    uint64 // physical block of the frozen volume superblock
+	SuperblockObjectIdentifier     uint64 // Alias for VolumeSuperblockBlockNumber
+	ExtentReferenceTreeBlockNumber uint64 // physical block of the snapshot's extent-reference tree
+	CreationTime                   uint64 // ns since 1970-01-01 UTC
+	ChangeTime                     uint64 // ns since 1970-01-01 UTC
+	Name                           string
 }
 
 // GetMetadataByObjectIdentifier retrieves snapshot metadata by object identifier
@@ -499,27 +502,43 @@ func (t *SnapshotMetadataTree) getSnapshotsFromLeafNode(
 		return fmt.Errorf("invalid snapshots array")
 	}
 
-	// Iterate through all entries in the leaf node
+	// The snapshot metadata tree holds two record kinds keyed by object type in
+	// the high 4 bits of obj_id_and_type: APFS_TYPE_SNAP_METADATA (1), whose key
+	// object id is the snapshot's transaction id and whose value is a
+	// j_snap_metadata_val; and APFS_TYPE_SNAP_NAME (11), a name->xid index. Only
+	// the metadata records represent snapshots.
+	const (
+		objIDMask         = 0x0fffffffffffffff
+		objTypeShift      = 60
+		typeSnapMetadata  = 1
+		snapMetaValFixed  = 50 // extentref_oid..name_len, then name
+		snapMetaNameLenAt = 48
+	)
 	for _, entry := range node.Entries {
 		if len(entry.KeyData) < 8 {
 			continue
 		}
-
-		objectIdentifier := binary.LittleEndian.Uint64(entry.KeyData[0:8])
-
-		metadata := &SnapshotMetadata{
-			ObjectIdentifier: objectIdentifier,
+		objIDAndType := binary.LittleEndian.Uint64(entry.KeyData[0:8])
+		if objIDAndType>>objTypeShift != typeSnapMetadata {
+			continue // skip snapshot-name records
 		}
 
-		// Parse value data
-		if len(entry.ValueData) >= 46 {
-			metadata.VolumeSuperblockBlockNumber = binary.LittleEndian.Uint64(entry.ValueData[8:16])
-			metadata.SuperblockObjectIdentifier = metadata.VolumeSuperblockBlockNumber
+		metadata := &SnapshotMetadata{
+			ObjectIdentifier: objIDAndType & objIDMask, // the snapshot's xid
+		}
 
-			// Parse name
-			nameSize := binary.LittleEndian.Uint16(entry.ValueData[44:46])
-			if len(entry.ValueData) >= 46+int(nameSize) {
-				metadata.Name = string(entry.ValueData[46 : 46+nameSize])
+		v := entry.ValueData
+		if len(v) >= snapMetaValFixed {
+			metadata.ExtentReferenceTreeBlockNumber = binary.LittleEndian.Uint64(v[0:8])
+			metadata.VolumeSuperblockBlockNumber = binary.LittleEndian.Uint64(v[8:16])
+			metadata.SuperblockObjectIdentifier = metadata.VolumeSuperblockBlockNumber
+			metadata.CreationTime = binary.LittleEndian.Uint64(v[16:24])
+			metadata.ChangeTime = binary.LittleEndian.Uint64(v[24:32])
+
+			nameSize := binary.LittleEndian.Uint16(v[snapMetaNameLenAt : snapMetaNameLenAt+2])
+			if nameSize > 0 && len(v) >= snapMetaValFixed+int(nameSize) {
+				// name is NUL-terminated; drop the trailing NUL.
+				metadata.Name = string(v[snapMetaValFixed : snapMetaValFixed+int(nameSize)-1])
 			}
 		}
 

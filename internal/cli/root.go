@@ -94,6 +94,7 @@ func init() {
 	rootCmd.AddCommand(createCmd)
 	rootCmd.AddCommand(inspectCmd)
 	rootCmd.AddCommand(mountCmd)
+	rootCmd.AddCommand(snapshotCmd)
 }
 
 // resolveGlobalOptions binds flags into viper and resolves the effective

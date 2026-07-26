@@ -506,22 +506,9 @@ func (v *Volume) GetSnapshot(index int) (*Snapshot, error) {
 		return nil, fmt.Errorf("unable to create snapshot: %w", err)
 	}
 
-	// Get superblock block number from object map
-	descriptor, err := v.ObjectMapBTree.GetDescriptorByObjectIdentifier(
-		v.FileIOHandle,
-		snapshotMetadata.SuperblockObjectIdentifier,
-		0,
-	)
-	if err != nil {
-		snapshot.Free()
-		return nil, fmt.Errorf("unable to get snapshot superblock descriptor: %w", err)
-	}
-
-	blockNumber, err := descriptor.GetPhysicalAddress()
-	if err != nil {
-		snapshot.Free()
-		return nil, fmt.Errorf("unable to get physical address: %w", err)
-	}
+	// The snapshot's volume superblock is a physical object, so sblock_oid is its
+	// block number directly (not an object-map-resolved virtual oid).
+	blockNumber := snapshotMetadata.VolumeSuperblockBlockNumber
 
 	// Open snapshot (reads volume superblock)
 	offset := int64(blockNumber) * int64(v.IOHandle.BlockSize)
