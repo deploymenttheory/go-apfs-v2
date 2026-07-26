@@ -27,7 +27,7 @@ func NewContainerDataHandle(ioHandle *IOHandle) (*ContainerDataHandle, error) {
 // ReadDataBlock reads a data block from the container
 // This is a callback function for a data block vector
 //
-// Parameters align with the libfdata vector callback structure:
+// Parameters follow the segment-reader shape used by DataBlockVector.
 //   - reader: The file handle to read from
 //   - elementIndex: The index of the element in the vector (unused here)
 //   - elementDataFileIndex: The file index (unused for containers)

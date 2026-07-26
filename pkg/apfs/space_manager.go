@@ -192,7 +192,7 @@ func (sm *SpaceManager) ReadData(data []byte) error {
 		}
 	}
 
-	// Flags, internal pool and filesystem reserve, offsets 144..200
+	// Flags, internal pool and file-system reserve, offsets 144..200
 	sm.Flags = binary.LittleEndian.Uint32(data[144:148])
 	sm.IPBMTxMultiplier = binary.LittleEndian.Uint32(data[148:152])
 	sm.IPBlockCount = binary.LittleEndian.Uint64(data[152:160])

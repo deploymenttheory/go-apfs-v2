@@ -41,7 +41,7 @@ func NewFileSystemDataHandle(
 
 // ReadDataBlock reads a data block from the file system
 // This method corresponds to FileSystemDataHandle.ReadDataBlock
-// Parameters align with the libfdata vector callback structure
+// Parameters follow the segment-reader shape used by DataBlockVector.
 func (fsdh *FileSystemDataHandle) ReadDataBlock(
 	reader io.ReaderAt,
 	elementDataFileIndex int,
