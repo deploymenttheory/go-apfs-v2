@@ -2,6 +2,7 @@
 package cli_test
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -43,5 +44,70 @@ func TestSnapshotListRejectsNonAPFS(t *testing.T) {
 	_, stderr, code := run(t, "snapshot", "list", dmg)
 	if code != 5 {
 		t.Errorf("snapshot list on HFS+ exited %d, want 5 (unsupported)\nstderr: %s", code, stderr)
+	}
+}
+
+// TestSnapshotCreateOnExistingImage rebuilds an existing APFS image with a
+// snapshot and confirms the snapshot and the content survive.
+func TestSnapshotCreateOnExistingImage(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "src")
+	if err := os.MkdirAll(filepath.Join(src, "sub"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "a.txt"), []byte("alpha\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "sub", "b.txt"), []byte("beta\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	base := filepath.Join(dir, "evidence.dmg")
+	mustRun(t, "pack", src, base, "--fs", "apfs", "--volname", "Evidence")
+
+	out := filepath.Join(dir, "evidence-snap.dmg")
+	mustRun(t, "snapshot", "create", base, "--name", "baseline", "-O", out)
+
+	if listing := mustRun(t, "snapshot", "list", out); !strings.Contains(listing, "baseline") {
+		t.Errorf("snapshot not listed after create:\n%s", listing)
+	}
+	if got := mustRun(t, "cat", out, "/a.txt"); got != "alpha\n" {
+		t.Errorf("content not preserved: a.txt = %q", got)
+	}
+	if got := mustRun(t, "cat", out, "/sub/b.txt"); got != "beta\n" {
+		t.Errorf("content not preserved: sub/b.txt = %q", got)
+	}
+}
+
+// TestSnapshotCreateRefusesOverwrite confirms the forensic-safe default: no
+// --output and no --force is a usage error.
+func TestSnapshotCreateRefusesOverwrite(t *testing.T) {
+	dir := t.TempDir()
+	dmg := filepath.Join(dir, "img.dmg")
+	mustRun(t, "create", dmg, "--fs", "apfs", "--volname", "V", "--snapshot", "s0")
+
+	_, _, code := run(t, "snapshot", "create", dmg, "--name", "s1")
+	if code != 2 {
+		t.Errorf("snapshot create without --output/--force exited %d, want 2 (usage)", code)
+	}
+}
+
+// TestSnapshotRevert marks an image to revert and confirms the result is still a
+// valid, listable APFS image.
+func TestSnapshotRevert(t *testing.T) {
+	dir := t.TempDir()
+	base := filepath.Join(dir, "img.dmg")
+	mustRun(t, "create", base, "--fs", "apfs", "--volname", "V", "--snapshot", "baseline")
+
+	out := filepath.Join(dir, "reverted.dmg")
+	mustRun(t, "snapshot", "revert", base, "--name", "baseline", "-O", out)
+
+	if listing := mustRun(t, "snapshot", "list", out); !strings.Contains(listing, "baseline") {
+		t.Errorf("reverted image no longer lists the snapshot:\n%s", listing)
+	}
+
+	// Reverting to a nonexistent snapshot is an error.
+	if _, _, code := run(t, "snapshot", "revert", base, "--name", "nope", "-O", filepath.Join(dir, "x.dmg")); code == 0 {
+		t.Errorf("revert to a nonexistent snapshot should fail")
 	}
 }
