@@ -140,19 +140,15 @@ func (v *Volume) OpenRead(reader io.ReaderAt, fileOffset int64) error {
 	// Create encryption context if volume has keybag
 	var encryptionContext *EncryptionContext
 
-	// Note: Volume keybag reading
-	// The volume superblock contains keybag block number and size in Unknown24/Unknown25 fields
-	// However, volume key bags use a different structure than container key bags
-	// Volume key bags are wrapped with different encryption and need volume-specific unwrapping
-	//
-	// Current implementation uses ContainerKeybag which is designed for container-level keys
-	// Volume-specific keybag implementation requires:
-	// 1. Volume keybag structure definition (different from container keybag)
-	// 2. Volume-specific key unwrapping algorithms
-	// 3. Integration with volume-level encryption context
-	//
-	// For now, encryption context is created without volume keybag, using container keys
-	// This matches the behavior when volume keybag reading fails in C library
+	// Note: the volume keybag is not read yet, so encryptionContext stays nil
+	// here and VolumeKeybag is never populated. The volume's keybag is located
+	// through the container keybag entry of type KeybagEntryTypeVolumeKeyExtent
+	// (nx_keylocker points at the container keybag, not the volume's), and it
+	// uses a different structure and unwrapping path from the container keybag.
+	// Completing this needs:
+	// 1. the volume keybag structure, distinct from the container keybag
+	// 2. volume-specific key unwrapping
+	// 3. wiring the result into a volume-level encryption context
 
 	// Create object map B-tree with encryption context
 	objectMapBTree, err := NewObjectMapBTree(

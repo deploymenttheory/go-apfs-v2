@@ -31,7 +31,7 @@ Examples:
 func runCat(cmd *cobra.Command, args []string) error {
 	imagePath := args[0]
 
-	volume, closer, err := openFilesystem(imagePath)
+	volume, closer, err := openFileSystem(imagePath)
 	if err != nil {
 		return err
 	}

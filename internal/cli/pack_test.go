@@ -35,7 +35,7 @@ func rawSHA256(t *testing.T, dmg string) (string, int) {
 	return hex.EncodeToString(sum[:]), len(raw)
 }
 
-// TestPackRoundTripFixtures proves the fidelity invariant on both filesystems:
+// TestPackRoundTripFixtures proves the fidelity invariant on both file systems:
 // pack via the CLI, then the raw file system image is preserved bit-for-bit.
 func TestPackRoundTripFixtures(t *testing.T) {
 	for fsName, src := range packFixtures(t) {

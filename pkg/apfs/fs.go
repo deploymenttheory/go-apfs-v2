@@ -3,7 +3,7 @@
 // testing/fstest and passed to anything that consumes an fs.FS.
 //
 // Symlinks are never followed: Stat and Open return the link itself, like
-// archive-backed filesystems. Use Readlink to resolve targets.
+// archive-backed file systems. Use Readlink to resolve targets.
 package apfs
 
 import (

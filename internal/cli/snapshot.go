@@ -419,7 +419,7 @@ func openAPFSContainer(imagePath string) (*apfs.Container, func(), error) {
 	if offset != 0 {
 		base = io.NewSectionReader(reader, offset, math.MaxInt64-offset)
 	}
-	if sniffFilesystem(base) != "apfs" {
+	if sniffFileSystem(base) != "apfs" {
 		closer.Close()
 		return nil, nil, withCode(ExitUnsupported, fmt.Errorf("%s is not an APFS image; snapshots are APFS-only", imagePath))
 	}

@@ -110,7 +110,7 @@ func runInfo(cmd *cobra.Command, args []string) error {
 
 	var info *containerInfo
 
-	switch sniffFilesystem(base) {
+	switch sniffFileSystem(base) {
 	case "apfs":
 		container, err := apfs.Open(base, &apfs.OpenOptions{
 			Password:         opts.Password,

@@ -103,7 +103,7 @@ const (
 
 // Snapshot on-disk sizes.
 const (
-	sizeofSnapMetadataVal = 50 // extentref_oid(8)+sblock_oid(8)+create(8)+change(8)+inum(8)+extref_type(4)+flags(4)+name_len(2)
+	sizeofSnapMetadataVal = 50 // extentref_oid(8)+sblock_oid(8)+create(8)+change(8)+inum(8)+extentref_type(4)+flags(4)+name_len(2)
 	sizeofOmapSnapshot    = 16 // oms_flags(4)+oms_pad(4)+oms_oid(8)
 )
 

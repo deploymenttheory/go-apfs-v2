@@ -37,7 +37,7 @@ var rootCmd = &cobra.Command{
 	Use:   "apfs",
 	Short: "Read, extract and build Apple File System (APFS) and HFS+ disk images",
 	Long: `A cross-platform, self-contained toolkit for Apple disk images. It reads
-APFS and HFS+ filesystems directly from DMGs (zlib, bzip2, ADC, LZFSE or LZMA
+APFS and HFS+ file systems directly from DMGs (zlib, bzip2, ADC, LZFSE or LZMA
 compressed), GPT- or Apple-Partition-Map raw images, or bare containers —
 without mounting and without macOS — and can also build and repack DMGs.
 

@@ -1,8 +1,8 @@
 # apfs
 
 A cross-platform, self-contained **pure-Go toolkit for Apple disk images**. It
-reads **APFS** and **HFS+** filesystems directly from `.dmg` files, raw images
-and bare containers — without mounting, without kernel extensions, and without
+reads **APFS** and **HFS+** file systems directly from `.dmg` files, raw images
+and containers without a partition map — without mounting, without kernel extensions, and without
 macOS — and can also **build and repack** disk images.
 
 It parses on-disk structures directly, which makes it useful for data recovery,
@@ -39,7 +39,7 @@ $ apfs extract Firefox.dmg -C ./out --verify
 | Create a formatted volume (`create`) | ✅ | ✅ |
 | APFS snapshots: create, list, revert (`snapshot`) | ✅ | — |
 
-Both filesystems can be written as well as read: `pack <dir>` builds a populated
+Both file systems can be written as well as read: `pack <dir>` builds a populated
 volume (files, symlinks, nested directories) and `create` formats an empty one.
 The APFS writer is a pure-Go, MIT-licensed package (`pkg/apfswrite`); created
 containers are validated against Apple's `fsck_apfs`/`hdiutil` and Linux
@@ -47,7 +47,7 @@ containers are validated against Apple's `fsck_apfs`/`hdiutil` and Linux
 
 **Image formats read:** UDIF DMGs compressed with zlib (UDZO), bzip2 (UDBZ),
 ADC, LZFSE (ULFO) or LZMA (ULMO); GPT-partitioned and Apple-Partition-Map
-layouts; and bare raw filesystem images. Images are detected by content, not by
+layouts; and raw file system images. Images are detected by content, not by
 file extension.
 
 ## Install
@@ -76,9 +76,9 @@ apply to all commands.
 apfs info IMAGE [--hierarchy] [--bodyfile FILE] [--md5] [--entry ID] [--file-path PATH]
 ```
 
-Prints the filesystem type (APFS or HFS+), container/volume UUIDs, sizes, and
+Prints the file system type (APFS or HFS+), container/volume UUIDs, sizes, and
 file/directory/symlink counts. With `-o json`, emits a single document
-including a `filesystem` field.
+including a `fileSystem` field.
 
 ```console
 apfs info image.dmg
@@ -121,7 +121,7 @@ apfs cat image.dmg /etc/hosts
 apfs cat image.dmg /App.app/Contents/Info.plist | plutil -p -
 ```
 
-### `extract` — extract files to the local filesystem
+### `extract` — extract files to the local file system
 
 ```
 apfs extract IMAGE [PATH] -C DIR [-r|--recursive] [--pattern REGEX]
@@ -150,9 +150,9 @@ apfs extract image.dmg -C ./out --preserve-meta --verify
 ### `inspect` — low-level structural inspection
 
 ```
-apfs inspect IMAGE                 # structural walk (superblock, checkpoints, omaps, volumes)
+apfs inspect IMAGE                 # structural walk (superblock, checkpoints, object maps, volumes)
 apfs inspect IMAGE block N         # decode one block by physical address (decimal or 0x hex)
-apfs inspect IMAGE btree           # interactively explore the file-system B-tree
+apfs inspect IMAGE fstree          # interactively explore the file-system tree
 ```
 
 Debugging/forensics view of the on-disk structures. Text output only.
@@ -161,7 +161,7 @@ Debugging/forensics view of the on-disk structures. Text output only.
 apfs inspect image.dmg
 apfs inspect image.dmg block 0
 apfs inspect image.dmg block 0x1b0c1
-apfs inspect image.dmg btree
+apfs inspect image.dmg fstree
 ```
 
 ### `mount` — mount read-only via FUSE
@@ -186,12 +186,12 @@ apfs pack SOURCE OUT.dmg [--fs hfs+|apfs] [--volname NAME] [--compression zlib|n
 Two modes, chosen by what `SOURCE` is:
 
 - **`SOURCE` is a directory** → its contents are written into a new volume and
-  wrapped in a DMG (the inverse of `extract`). `--fs` chooses the filesystem:
+  wrapped in a DMG (the inverse of `extract`). `--fs` chooses the file system:
   `hfs+` (default) or `apfs`.
 - **`SOURCE` is a DMG** → it is **repacked** losslessly: the exact block layout
   is preserved and the chunks recompressed. The result is not byte-identical to
   the original (different compressors produce different container bytes), but
-  the **raw filesystem image round-trips bit-for-bit** and mounts under both
+  the **raw file system image round-trips bit-for-bit** and mounts under both
   this tool and macOS.
 
 ```console
@@ -207,7 +207,7 @@ apfs pack original.dmg smaller.dmg --compression none
 apfs create OUT.dmg --fs hfs+|apfs [--volname NAME] [--size MiB] [--case-sensitive]
 ```
 
-Creates a new DMG containing a freshly formatted, **empty** volume (the mkfs
+Creates a new DMG containing a freshly formatted, **empty** volume (the format
 operation). Both `--fs hfs+` and `--fs apfs` are supported.
 
 ```console
@@ -287,7 +287,7 @@ pipelines stay clean.
 ## Using it as a library
 
 The read side is exposed as MIT-licensed packages. Volumes implement
-`io/fs.FS`, so they plug into any code that consumes a filesystem:
+`io/fs.FS`, so they plug into any code that consumes a file system:
 
 ```go
 import (

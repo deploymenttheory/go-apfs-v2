@@ -47,7 +47,7 @@ func TestCreateAPFSEmpty(t *testing.T) {
 	}
 }
 
-func TestCreateBadFilesystem(t *testing.T) {
+func TestCreateBadFileSystem(t *testing.T) {
 	_, _, code := run(t, "create", filepath.Join(t.TempDir(), "x.dmg"), "--fs", "zfs")
 	if code != 2 {
 		t.Errorf("create --fs zfs exited %d, want 2 (usage)", code)

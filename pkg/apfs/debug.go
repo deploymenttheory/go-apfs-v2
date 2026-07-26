@@ -538,6 +538,4 @@ func PrintData(data []byte, groupData bool) {
 		}
 		notifyPrintf("|\n")
 	}
-
-	_ = stream // Mark as used
 }

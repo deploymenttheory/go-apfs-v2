@@ -62,7 +62,7 @@ func runExtract(cmd *cobra.Command, args []string) error {
 		volumePath = args[1]
 	}
 
-	volume, closer, err := openFilesystem(imagePath)
+	volume, closer, err := openFileSystem(imagePath)
 	if err != nil {
 		return err
 	}

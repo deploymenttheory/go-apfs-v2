@@ -18,8 +18,8 @@ func requireHFSFixture(t *testing.T) {
 	}
 }
 
-// TestHFSInfoReportsFilesystem confirms the CLI detects and reports HFS+.
-func TestHFSInfoReportsFilesystem(t *testing.T) {
+// TestHFSInfoReportsFileSystem confirms the CLI detects and reports HFS+.
+func TestHFSInfoReportsFileSystem(t *testing.T) {
 	requireHFSFixture(t)
 	out := mustRun(t, "info", "-o", "json", fixtureHFS)
 	if !strings.Contains(out, `"fileSystem":"hfs+"`) {

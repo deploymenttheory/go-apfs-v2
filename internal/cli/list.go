@@ -59,7 +59,7 @@ func runList(cmd *cobra.Command, args []string) error {
 		startPath = args[1]
 	}
 
-	volume, closer, err := openFilesystem(imagePath)
+	volume, closer, err := openFileSystem(imagePath)
 	if err != nil {
 		return err
 	}

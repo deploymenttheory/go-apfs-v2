@@ -15,7 +15,7 @@ taste — they are not.
 `pkg/apfswrite` as a port of [apfsprogs/mkapfs][apfsprogs]. Both inherited their
 donor project's vocabulary rather than Apple's, and the two disagreed with each
 other about what to call the same on-disk structure. Worse, several names came
-from **HFS+**, a different filesystem: "catalog" and "CNID" appear **zero** times
+from **HFS+**, a different file system: "catalog" and "CNID" appear **zero** times
 in Apple's APFS reference.
 
 [libfsapfs]: https://github.com/libyal/libfsapfs
@@ -140,12 +140,14 @@ sections of the changelog and roadmap.
 ## Checking
 
 ```sh
-grep -rin 'catalog\|cnid\|key bag\|filesystem\|\bextref\|\bbno\b' \
+grep -rn 'catalog\|Catalog\|cnid\|CNID\|key bag\|Key Bag\|filesystem\|Filesystem\|\bextref\|\bbno\b' \
   --include='*.go' --include='*.md' . \
-  | grep -v '^./pkg/hfsplus/' | grep -v '^./spec/'
+  | grep -Ev '(^|\./)(pkg/hfsplus/|spec/|docs/spec/|docs/terminology\.md)'
 ```
 
-Hits outside `pkg/hfsplus` and genuine HFS+ documentation rows are regressions.
+Hits are regressions except in genuine HFS+ context, which at the time of
+writing is `pkg/hfsplus`, the HFS+ reader row in `CHANGELOG.md`, the HFS+
+attribution in `NOTICE`, and the HFS+ case-folding item in `TOOLS_ROADMAP.md`.
 
 ## Go-level abstractions with no Apple counterpart
 
