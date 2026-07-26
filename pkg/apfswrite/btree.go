@@ -27,14 +27,14 @@ const (
 )
 
 // putNloc writes an apfs_nloc {off, len} pair at the given block offset.
-func putNloc(block []byte, off int, nloc_off, nloc_len uint16) {
-	binary.LittleEndian.PutUint16(block[off:], nloc_off)
-	binary.LittleEndian.PutUint16(block[off+2:], nloc_len)
+func putNloc(block []byte, off int, nlocOff, nlocLen uint16) {
+	binary.LittleEndian.PutUint16(block[off:], nlocOff)
+	binary.LittleEndian.PutUint16(block[off+2:], nlocLen)
 }
 
 // writeLeafHeader fills the apfs_btree_node_phys header shared by the leaf nodes
-// this file builds. level stays 0 (all nodes here are leaves; the catalog index
-// node is built in catalog.go). tocLen sizes the table-of-contents extent that
+// this file builds. level stays 0 (all nodes here are leaves; the file-system tree index
+// node is built in file-system tree.go). tocLen sizes the table-of-contents extent that
 // starts right after the header; keyEnd/freeLen describe the free-space extent
 // that follows the packed keys. Both freelists are marked invalid — a freshly
 // built node has no reclaimed fragments.
@@ -50,7 +50,7 @@ func writeLeafHeader(block []byte, flags uint16, nkeys, tocLen, keyEnd, freeLen 
 // fixedKVSizes reports the key and value sizes for a fixed-layout B-tree of the
 // given subtype, and whether the subtype is fixed-layout at all. Free-queue
 // values are eight bytes because the queues written here hold no ghost entries.
-// Variable-layout trees (the catalog) return ok=false.
+// Variable-layout trees (the file-system tree) return ok=false.
 func fixedKVSizes(subtype uint32) (keySize, valSize int, ok bool) {
 	switch subtype {
 	case objectTypeOmap:
@@ -115,7 +115,7 @@ func (b *builder) writeEmptyTreeFooter(info []byte, subtype uint32) {
 // the snapshot-metadata tree and the extentref tree (via file.go) all
 // begin this way. subtype selects the fixed/variable layout and the storage
 // class (free queues are ephemeral, the rest physical).
-func (b *builder) writeEmptyTree(bno, oid uint64, subtype uint32) error {
+func (b *builder) writeEmptyTree(paddr, oid uint64, subtype uint32) error {
 	root := b.zeroedBlock()
 	infoLen := sizeofBtreeInfo
 
@@ -137,7 +137,7 @@ func (b *builder) writeEmptyTree(bno, oid uint64, subtype uint32) error {
 		typ |= objPhysical
 	}
 	setObjectHeader(root, int(b.blocksize), oid, typ, subtype)
-	return b.writeBlock(root, bno)
+	return b.writeBlock(root, paddr)
 }
 
 // omapEntry is one (oid -> physical block) mapping stored in an object map, at a
@@ -164,20 +164,20 @@ func (b *builder) writeOmapFooter(info []byte, nkeys int) {
 
 // omapEntries returns the mappings an object map must hold. The container omap
 // maps only the volume superblock's virtual oid — at the live xid, since the
-// live superblock is the current one. The volume omap maps the catalog root
-// and, when the catalog spans two levels, every catalog leaf node, all at the
-// base xid (the mkfs state a snapshot captures).
+// live superblock is the current one. The volume omap maps the file-system tree root
+// and, when the file-system tree spans two levels, every file-system tree leaf node, all at the
+// base xid (the format state a snapshot captures).
 func (b *builder) omapEntries(isVol bool) []omapEntry {
 	if !isVol {
-		return []omapEntry{{firstVolOID, b.firstVolBno, b.liveXID, 0}}
+		return []omapEntry{{firstVolOID, b.firstVolPaddr, b.liveXID, 0}}
 	}
-	// The catalog root (and any leaves) are shared by the live volume and the
+	// The file-system tree root (and any leaves) are shared by the live volume and the
 	// snapshots, so they carry no OMAP_VAL_SAVED flag (that would mark them as
 	// superseded in the live volume, which is not the case here).
-	entries := []omapEntry{{firstVolCatRootOID, b.firstVolCatRootBno, mkfsXID, 0}}
-	if b.catTwoLevel {
-		for i := uint64(0); i < b.numCatLeaves; i++ {
-			entries = append(entries, omapEntry{catLeafOIDBase + i, b.catLeafBase + i, mkfsXID, 0})
+	entries := []omapEntry{{firstVolFSTreeRootOID, b.firstVolFSTreeRootPaddr, formatXID, 0}}
+	if b.fsTreeTwoLevel {
+		for i := uint64(0); i < b.numFSTreeLeaves; i++ {
+			entries = append(entries, omapEntry{fsTreeLeafOIDBase + i, b.fsTreeLeafBase + i, formatXID, 0})
 		}
 	}
 	return entries
@@ -186,7 +186,7 @@ func (b *builder) omapEntries(isVol bool) []omapEntry {
 // writeObjectMapRoot writes the root node of an object map. Records are fixed-size
 // (omap_key, omap_val) pairs sorted by oid; keys pack forward from the end of
 // the table of contents and values pack backward from the start of the footer.
-func (b *builder) writeObjectMapRoot(bno uint64, isVol bool) error {
+func (b *builder) writeObjectMapRoot(paddr uint64, isVol bool) error {
 	entries := b.omapEntries(isVol)
 	sort.Slice(entries, func(i, j int) bool { return entries[i].oid < entries[j].oid })
 
@@ -218,14 +218,14 @@ func (b *builder) writeObjectMapRoot(bno uint64, isVol bool) error {
 	writeLeafHeader(root, btnodeRoot|btnodeLeaf|btnodeFixedKVSize, nkeys, tocLen, usedKeys, freeLen)
 
 	b.writeOmapFooter(root[int(b.blocksize)-infoLen:], nkeys)
-	setObjectHeader(root, int(b.blocksize), bno, objectTypeBtree|objPhysical, objectTypeOmap)
-	return b.writeBlock(root, bno)
+	setObjectHeader(root, int(b.blocksize), paddr, objectTypeBtree|objPhysical, objectTypeOmap)
+	return b.writeBlock(root, paddr)
 }
 
 // writeObjectMap writes an object map: the omap_phys object that points at its
 // root plus the root node itself. The container omap is manually managed; the
 // volume omap is not.
-func (b *builder) writeObjectMap(bno uint64, isVol bool) error {
+func (b *builder) writeObjectMap(paddr uint64, isVol bool) error {
 	omap := &omapPhys{}
 	if !isVol {
 		omap.Flags = omapManuallyManaged
@@ -237,21 +237,21 @@ func (b *builder) writeObjectMap(bno uint64, isVol bool) error {
 	// the snapshot count and the most recent snapshot xid.
 	if isVol && len(b.snapshots) > 0 {
 		omap.SnapCount = uint32(len(b.snapshots))
-		omap.SnapshotTreeOID = b.volSnapTreeBno
+		omap.SnapshotTreeOID = b.volSnapTreePaddr
 		omap.MostRecentSnap = b.snapshots[len(b.snapshots)-1].xid
 	}
 
-	rootBno := b.mainOmapRootBno
+	rootPaddr := b.mainOmapRootPaddr
 	if isVol {
-		rootBno = b.firstVolOmapRootBno
+		rootPaddr = b.firstVolOmapRootPaddr
 	}
-	omap.TreeOID = rootBno
-	if err := b.writeObjectMapRoot(rootBno, isVol); err != nil {
+	omap.TreeOID = rootPaddr
+	if err := b.writeObjectMapRoot(rootPaddr, isVol); err != nil {
 		return err
 	}
 
 	block := b.zeroedBlock()
 	marshalInto(block, omap)
-	setObjectHeader(block, int(b.blocksize), bno, objPhysical|objectTypeOmap, objectTypeInvalid)
-	return b.writeBlock(block, bno)
+	setObjectHeader(block, int(b.blocksize), paddr, objPhysical|objectTypeOmap, objectTypeInvalid)
+	return b.writeBlock(block, paddr)
 }

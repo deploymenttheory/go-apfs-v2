@@ -142,7 +142,7 @@ func TestCreateContainerEmptyFile(t *testing.T) {
 }
 
 // TestCreateContainerManyExtents writes enough files to overflow a single
-// extent-reference leaf, forcing the extref tree to grow to two physical
+// extent-reference leaf, forcing the extentref tree to grow to two physical
 // levels, and verifies every file still reads back correctly. Runs on every OS.
 func TestCreateContainerManyExtents(t *testing.T) {
 	const nFiles = 200

@@ -18,7 +18,7 @@ import (
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfswrite"
 )
 
-// wantEntry is an expected filesystem path collected from the input tree.
+// wantEntry is an expected file system path collected from the input tree.
 type wantEntry struct {
 	isDir bool
 	data  []byte
@@ -131,10 +131,10 @@ func TestCreateContainerWithTree(t *testing.T) {
 	walkAndAssert(t, v, collectWants(root))
 }
 
-// TestCreateContainerMultiLeafCatalog writes enough files that the catalog can
+// TestCreateContainerMultiLeafFSTree writes enough files that the file-system tree can
 // no longer fit in a single leaf node, forcing B-tree growth to a 2-level tree,
 // then verifies the whole tree still reads back with matching sha256s.
-func TestCreateContainerMultiLeafCatalog(t *testing.T) {
+func TestCreateContainerMultiLeafFSTree(t *testing.T) {
 	const nFiles = 60
 	children := make([]*apfswrite.Entry, 0, nFiles)
 	for i := 0; i < nFiles; i++ {
@@ -203,7 +203,7 @@ func TestCreateContainerTreeFsckClean(t *testing.T) {
 	}
 }
 
-// TestCreateContainerMultiLeafFsckClean forces catalog B-tree growth and checks
+// TestCreateContainerMultiLeafFsckClean forces file-system tree growth and checks
 // fsck_apfs is still clean (macOS only).
 func TestCreateContainerMultiLeafFsckClean(t *testing.T) {
 	if runtime.GOOS != "darwin" {

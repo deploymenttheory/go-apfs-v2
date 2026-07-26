@@ -13,8 +13,8 @@ import (
 )
 
 // setTree resolves the caller's directory tree (Root plus the RootFiles
-// convenience) into a flat list of catalog entries with assigned cnids, then
-// decides the catalog B-tree shape (single leaf vs a 2-level index+leaves
+// convenience) into a flat list of file-system tree entries with assigned oids, then
+// decides the file-system tree shape (single leaf vs a 2-level index+leaves
 // tree). Physical block numbers are assigned later, in the space manager.
 func (b *builder) setTree(opts *CreateOptions) error {
 	// Build the effective root directory: Root's children plus any RootFiles.
@@ -30,7 +30,7 @@ func (b *builder) setTree(opts *CreateOptions) error {
 	}
 
 	// Deterministic order: sort siblings by name at every level.
-	nextCNID := uint64(minUserInoNum)
+	nextOID := uint64(minUserInoNum)
 	var walk func(parent uint64, children []*Entry) (uint32, error)
 	walk = func(parent uint64, children []*Entry) (uint32, error) {
 		sorted := make([]*Entry, len(children))
@@ -53,14 +53,14 @@ func (b *builder) setTree(opts *CreateOptions) error {
 			}
 			be := &builderEntry{
 				name:   e.Name,
-				cnid:   nextCNID,
+				oid:    nextOID,
 				parent: parent,
 				mode:   e.resolvedMode(),
 				uid:    e.UID,
 				gid:    e.GID,
 				mtime:  mtime,
 			}
-			nextCNID++
+			nextOID++
 			b.entries = append(b.entries, be)
 
 			switch {
@@ -74,7 +74,7 @@ func (b *builder) setTree(opts *CreateOptions) error {
 				b.numSymlinks++
 			case e.isDirEntry():
 				be.isDir = true
-				n, err := walk(be.cnid, e.Children)
+				n, err := walk(be.oid, e.Children)
 				if err != nil {
 					return 0, err
 				}
@@ -105,43 +105,43 @@ func (b *builder) setTree(opts *CreateOptions) error {
 		b.fileDataBlocks += f.blocks
 	}
 
-	// Decide the catalog shape from the record sizes. Block numbers are not yet
+	// Decide the file-system tree shape from the record sizes. Block numbers are not yet
 	// known but do not affect record sizes, so the packing decided here matches
 	// the one recomputed at write time.
-	recs := b.buildCatRecords()
-	leaves := packCatLeaves(recs, int(b.blocksize), sizeofBtreeInfo)
+	recs := b.buildFSTreeRecords()
+	leaves := packFSTreeLeaves(recs, int(b.blocksize), sizeofBtreeInfo)
 	if len(leaves) > 1 {
-		b.catTwoLevel = true
+		b.fsTreeTwoLevel = true
 		// Repack leaves without the root footer (only the index root carries it).
-		leaves = packCatLeaves(recs, int(b.blocksize), 0)
-		b.numCatLeaves = uint64(len(leaves))
-		if b.numCatLeaves > maxCatLeaves {
-			return fmt.Errorf("apfswrite: catalog needs %d leaf nodes; only a 2-level tree up to %d leaves is supported", b.numCatLeaves, maxCatLeaves)
+		leaves = packFSTreeLeaves(recs, int(b.blocksize), 0)
+		b.numFSTreeLeaves = uint64(len(leaves))
+		if b.numFSTreeLeaves > maxFSTreeLeaves {
+			return fmt.Errorf("apfswrite: file-system tree needs %d leaf nodes; only a 2-level tree up to %d leaves is supported", b.numFSTreeLeaves, maxFSTreeLeaves)
 		}
 	}
 
 	// Decide the extentref tree shape. One physical-extent record per file
 	// that owns a physical extent (empty files own none). When they overflow a
 	// single leaf the tree grows to two physical levels (an index root plus
-	// leaves), the same way the catalog grows.
+	// leaves), the same way the file-system tree grows.
 	nExtents := len(b.physFiles())
-	if perLeaf := extrefRecordsPerLeaf(int(b.blocksize)); nExtents > perLeaf {
-		b.extrefTwoLevel = true
-		b.numExtrefLeaves = uint64(divRoundUp(uint64(nExtents), uint64(perLeaf)))
-		if b.numExtrefLeaves > maxExtrefLeaves {
-			return fmt.Errorf("apfswrite: extentref tree needs %d leaf nodes; only a 2-level tree up to %d leaves is supported", b.numExtrefLeaves, maxExtrefLeaves)
+	if perLeaf := extentrefRecordsPerLeaf(int(b.blocksize)); nExtents > perLeaf {
+		b.extentrefTwoLevel = true
+		b.numExtentrefLeaves = uint64(divRoundUp(uint64(nExtents), uint64(perLeaf)))
+		if b.numExtentrefLeaves > maxExtentrefLeaves {
+			return fmt.Errorf("apfswrite: extentref tree needs %d leaf nodes; only a 2-level tree up to %d leaves is supported", b.numExtentrefLeaves, maxExtentrefLeaves)
 		}
 	}
 	return nil
 }
 
-// maxCatLeaves caps the 2-level catalog: L leaves need L index records in one
+// maxFSTreeLeaves caps the 2-level file-system tree: L leaves need L index records in one
 // root node and L omap entries in one omap leaf; both fit comfortably here.
-const maxCatLeaves = 64
+const maxFSTreeLeaves = 64
 
-// maxExtrefLeaves caps the 2-level extentref tree: its L index records
+// maxExtentrefLeaves caps the 2-level extentref tree: its L index records
 // must fit in the single index root node.
-const maxExtrefLeaves = 100
+const maxExtentrefLeaves = 100
 
 // physFiles returns the stream files that own a physical extent (blocks > 0),
 // i.e. every regular file except the 0-byte ones.
@@ -171,12 +171,12 @@ func validateName(name string) error {
 // hasFiles reports whether any user entries are being written.
 
 // nextObjID returns the volume's next free object id: one past the highest user
-// cnid in use (APFS_MIN_USER_INO_NUM when there are no entries).
+// oid in use (APFS_MIN_USER_INO_NUM when there are no entries).
 func (b *builder) nextObjID() uint64 {
 	next := uint64(minUserInoNum)
 	for _, e := range b.entries {
-		if e.cnid+1 > next {
-			next = e.cnid + 1
+		if e.oid+1 > next {
+			next = e.oid + 1
 		}
 	}
 	return next
@@ -198,13 +198,13 @@ func (b *builder) writeFileData() error {
 	return nil
 }
 
-// --- catalog record generation ---
+// --- file-system tree record generation ---
 //
 // Each record is materialized as (key, value) byte slices plus the fields the
-// catalog key comparator needs. buildCatRecords returns the whole catalog in
+// file-system tree key comparator needs. buildFSTreeRecords returns the whole file-system tree in
 // globally sorted order.
 
-type catRecord struct {
+type fsTreeRecord struct {
 	id      uint64 // object id (low 60 bits of the key header)
 	typ     uint8  // record type (APFS_TYPE_*)
 	hash    uint32 // DIR_REC: name_len_and_hash, for ordering
@@ -214,24 +214,24 @@ type catRecord struct {
 	val     []byte
 }
 
-// buildCatRecords generates every catalog record — the special root and
+// buildFSTreeRecords generates every file-system tree record — the special root and
 // private-dir records plus one dentry+inode (and, for files, dstream-id and
-// file-extent) per user entry — and returns them sorted by the catalog key
+// file-extent) per user entry — and returns them sorted by the file-system tree key
 // comparator.
-func (b *builder) buildCatRecords() []catRecord {
-	recs := make([]catRecord, 0, 4+4*len(b.entries))
+func (b *builder) buildFSTreeRecords() []fsTreeRecord {
+	recs := make([]fsTreeRecord, 0, 4+4*len(b.entries))
 
 	// Special directory dentries live under the virtual root parent (id 1).
 	recs = append(recs, b.dentryRecord(rootDirParent, "root", rootDirInoNum, dtDir))
 	recs = append(recs, b.dentryRecord(rootDirParent, "private-dir", privDirInoNum, dtDir))
 	// Root inode (id 2): nchildren = number of top-level entries.
 	recs = append(recs, b.inodeRecord(&builderEntry{
-		name: "root", isDir: true, cnid: rootDirInoNum, parent: rootDirParent,
+		name: "root", isDir: true, oid: rootDirInoNum, parent: rootDirParent,
 		nchildren: b.rootChildCount(),
 	}))
 	// Private-dir inode (id 3).
 	recs = append(recs, b.inodeRecord(&builderEntry{
-		name: "private-dir", isDir: true, cnid: privDirInoNum, parent: rootDirParent,
+		name: "private-dir", isDir: true, oid: privDirInoNum, parent: rootDirParent,
 	}))
 
 	for _, e := range b.entries {
@@ -242,7 +242,7 @@ func (b *builder) buildCatRecords() []catRecord {
 		case e.isSymlink:
 			dt = dtLnk
 		}
-		recs = append(recs, b.dentryRecord(e.parent, e.name, e.cnid, uint16(dt)))
+		recs = append(recs, b.dentryRecord(e.parent, e.name, e.oid, uint16(dt)))
 		recs = append(recs, b.inodeRecord(e))
 		if e.isSymlink {
 			// The symlink target lives in a com.apple.fs.symlink xattr record.
@@ -258,11 +258,11 @@ func (b *builder) buildCatRecords() []catRecord {
 		}
 	}
 
-	sort.SliceStable(recs, func(i, j int) bool { return catLess(recs[i], recs[j]) })
+	sort.SliceStable(recs, func(i, j int) bool { return fsTreeRecordLess(recs[i], recs[j]) })
 	return recs
 }
 
-// rootChildCount counts the direct children of the volume root (cnid 2).
+// rootChildCount counts the direct children of the volume root (oid 2).
 func (b *builder) rootChildCount() uint32 {
 	n := uint32(0)
 	for _, e := range b.entries {
@@ -273,10 +273,10 @@ func (b *builder) rootChildCount() uint32 {
 	return n
 }
 
-// catLess is the catalog key comparator: object id ascending, then record type
+// fsTreeRecordLess is the file-system tree key comparator: object id ascending, then record type
 // ascending, then the type-specific key (DIR_REC by name hash then name;
 // FILE_EXTENT by logical address).
-func catLess(a, b catRecord) bool {
+func fsTreeRecordLess(a, b fsTreeRecord) bool {
 	if a.id != b.id {
 		return a.id < b.id
 	}
@@ -299,22 +299,22 @@ func catLess(a, b catRecord) bool {
 
 // dentryRecord builds a hashed dentry record: key (parent, DIR_REC, hash(name)),
 // value j_drec_hashed_val pointing at childID with directory-entry type dt.
-func (b *builder) dentryRecord(parent uint64, name string, childID uint64, dt uint16) catRecord {
+func (b *builder) dentryRecord(parent uint64, name string, childID uint64, dt uint16) fsTreeRecord {
 	key, hash := b.buildHashedDrecKey(parent, name)
 	val := make([]byte, sizeofDrecVal)
 	binary.LittleEndian.PutUint64(val[0:], childID)     // file_id
 	binary.LittleEndian.PutUint64(val[8:], b.timestamp) // date_added
 	binary.LittleEndian.PutUint16(val[16:], dt)         // flags (dir-entry type)
-	return catRecord{id: parent, typ: typeDirRec, hash: hash, name: name, key: key, val: val}
+	return fsTreeRecord{id: parent, typ: typeDirRec, hash: hash, name: name, key: key, val: val}
 }
 
-// inodeRecord builds an inode record: key (cnid, INODE), value j_inode_val with
+// inodeRecord builds an inode record: key (oid, INODE), value j_inode_val with
 // a NAME xfield and, for stream files, a DSTREAM xfield.
-func (b *builder) inodeRecord(e *builderEntry) catRecord {
+func (b *builder) inodeRecord(e *builderEntry) fsTreeRecord {
 	key := make([]byte, sizeofInodeKey)
-	setKeyHeader(key, 0, e.cnid, typeInode)
+	setKeyHeader(key, 0, e.oid, typeInode)
 	val := b.inodeValue(e)
-	return catRecord{id: e.cnid, typ: typeInode, key: key, val: val}
+	return fsTreeRecord{id: e.oid, typ: typeInode, key: key, val: val}
 }
 
 // inodeValue serializes a j_inode_val for a directory or regular file.
@@ -332,7 +332,7 @@ func (b *builder) inodeValue(e *builderEntry) []byte {
 	val := make([]byte, valLen)
 
 	binary.LittleEndian.PutUint64(val[0:], e.parent) // parent_id
-	binary.LittleEndian.PutUint64(val[8:], e.cnid)   // private_id
+	binary.LittleEndian.PutUint64(val[8:], e.oid)    // private_id
 
 	// Resolve mode and timestamp, applying deterministic defaults for entries
 	// (like the special root/private-dir inodes) that carry neither.
@@ -401,28 +401,28 @@ func (b *builder) inodeValue(e *builderEntry) []byte {
 	return val
 }
 
-// dstreamIDRecord builds the data-stream id record: key (cnid, DSTREAM_ID),
+// dstreamIDRecord builds the data-stream id record: key (oid, DSTREAM_ID),
 // value j_dstream_id_val (refcnt).
-func (b *builder) dstreamIDRecord(e *builderEntry) catRecord {
+func (b *builder) dstreamIDRecord(e *builderEntry) fsTreeRecord {
 	key := make([]byte, sizeofInodeKey)
-	setKeyHeader(key, 0, e.cnid, typeDstreamID)
+	setKeyHeader(key, 0, e.oid, typeDstreamID)
 	val := make([]byte, sizeofDstreamIDVal)
 	binary.LittleEndian.PutUint32(val[0:], 1) // refcnt = 1
-	return catRecord{id: e.cnid, typ: typeDstreamID, key: key, val: val}
+	return fsTreeRecord{id: e.oid, typ: typeDstreamID, key: key, val: val}
 }
 
 // fileExtentRecord builds the file-extent record mapping logical offset 0 to
-// the file's physical data block: key (cnid, FILE_EXTENT, 0), value
+// the file's physical data block: key (oid, FILE_EXTENT, 0), value
 // j_file_extent_val.
-func (b *builder) fileExtentRecord(e *builderEntry) catRecord {
+func (b *builder) fileExtentRecord(e *builderEntry) fsTreeRecord {
 	key := make([]byte, sizeofFileExtentKey)
-	setKeyHeader(key, 0, e.cnid, typeFileExtent)
+	setKeyHeader(key, 0, e.oid, typeFileExtent)
 	binary.LittleEndian.PutUint64(key[8:], 0) // logical_addr = 0
 	val := make([]byte, sizeofFileExtentVal)
 	binary.LittleEndian.PutUint64(val[0:], e.allocedSize) // len_and_flags (block-aligned length)
 	binary.LittleEndian.PutUint64(val[8:], e.dataBlock)   // phys_block_num
 	// crypto_id (16) = 0.
-	return catRecord{id: e.cnid, typ: typeFileExtent, logical: 0, key: key, val: val}
+	return fsTreeRecord{id: e.oid, typ: typeFileExtent, logical: 0, key: key, val: val}
 }
 
 // buildHashedDrecKey builds a hashed dentry key and returns the key bytes and
@@ -454,11 +454,11 @@ const symlinkName = "com.apple.fs.symlink"
 // data stream): j_xattr_val_t flags = XATTR_DATA_EMBEDDED | XATTR_FILE_SYSTEM_OWNED,
 // data = target bytes followed by a NUL terminator. This is the representation
 // the reader's GetSymbolicLinkTarget expects and that fsck_apfs accepts.
-func (b *builder) symlinkXattrRecord(e *builderEntry) catRecord {
-	// Key: header (cnid, XATTR) + name_len(2) + NUL-terminated attribute name.
+func (b *builder) symlinkXattrRecord(e *builderEntry) fsTreeRecord {
+	// Key: header (oid, XATTR) + name_len(2) + NUL-terminated attribute name.
 	nameLen := len(symlinkName) + 1
 	key := make([]byte, sizeofXattrKeyFixed+nameLen)
-	setKeyHeader(key, 0, e.cnid, typeXattr)
+	setKeyHeader(key, 0, e.oid, typeXattr)
 	binary.LittleEndian.PutUint16(key[8:], uint16(nameLen))
 	copy(key[sizeofXattrKeyFixed:], symlinkName)
 
@@ -470,16 +470,16 @@ func (b *builder) symlinkXattrRecord(e *builderEntry) catRecord {
 	binary.LittleEndian.PutUint16(val[2:], uint16(len(xdata)))
 	copy(val[sizeofXattrValFixed:], xdata)
 
-	return catRecord{id: e.cnid, typ: typeXattr, name: symlinkName, key: key, val: val}
+	return fsTreeRecord{id: e.oid, typ: typeXattr, name: symlinkName, key: key, val: val}
 }
 
-// packCatLeaves greedily packs sorted records into leaf nodes of blocksize,
+// packFSTreeLeaves greedily packs sorted records into leaf nodes of blocksize,
 // reserving footer bytes at the end of each node (sizeofBtreeInfo for a node
 // that also serves as the tree root, 0 for a plain leaf). Each record costs its
 // key + value bytes plus one kvloc table entry.
-func packCatLeaves(recs []catRecord, blocksize, footer int) [][]catRecord {
-	var leaves [][]catRecord
-	var cur []catRecord
+func packFSTreeLeaves(recs []fsTreeRecord, blocksize, footer int) [][]fsTreeRecord {
+	var leaves [][]fsTreeRecord
+	var cur []fsTreeRecord
 	keys, vals := 0, 0
 
 	flush := func() {
@@ -523,9 +523,9 @@ func roundUpInt(x, y int) int {
 	return ((x + y - 1) / y) * y
 }
 
-// extrefRecordsPerLeaf returns how many physical-extent records fit in one
+// extentrefRecordsPerLeaf returns how many physical-extent records fit in one
 // plain (non-root) blockref leaf of blocksize bytes.
-func extrefRecordsPerLeaf(blocksize int) int {
+func extentrefRecordsPerLeaf(blocksize int) int {
 	n := 0
 	for {
 		used := sizeofBtreeNodePhys + tocBytesFor(n+1) + (n+1)*(sizeofPhysExtKey+sizeofPhysExtVal)
@@ -537,55 +537,55 @@ func extrefRecordsPerLeaf(blocksize int) int {
 	return n
 }
 
-// makeExtrefRoot builds the volume's extent-reference (blockref) tree. Each
+// makeExtentrefRoot builds the volume's extent-reference (blockref) tree. Each
 // file that owns a physical extent contributes one record: key (phys_block,
 // EXTENT), value j_phys_ext_val (len_and_kind = KIND_NEW|blocks, owning_obj_id
-// = file cnid, refcnt = 1). Records sort by physical block address, which our
+// = file oid, refcnt = 1). Records sort by physical block address, which our
 // contiguous layout already produces in stream-file order. When they fit in one
 // node the tree is a single root-leaf; when they overflow it grows to two
 // physical levels: an index root plus one leaf per group of records. All nodes
 // are physical objects whose oid equals their block number.
-func (b *builder) makeExtrefRoot(bno, oid uint64) error {
+func (b *builder) makeExtentrefRoot(paddr, oid uint64) error {
 	phys := b.physFiles()
 	if len(phys) == 0 {
-		return b.writeEmptyTree(bno, oid, objectTypeBlockrefTree)
+		return b.writeEmptyTree(paddr, oid, objectTypeBlockrefTree)
 	}
 
 	extents := make([]*builderEntry, len(phys))
 	copy(extents, phys)
 	sort.Slice(extents, func(i, j int) bool { return extents[i].dataBlock < extents[j].dataBlock })
 
-	if !b.extrefTwoLevel {
-		return b.writeExtrefNode(bno, extents, true /* root */, 0 /* level */, 1 /* nodeCount */)
+	if !b.extentrefTwoLevel {
+		return b.writeExtentrefNode(paddr, extents, true /* root */, 0 /* level */, 1 /* nodeCount */)
 	}
 
 	// Two levels: split the records into leaves, then build an index root whose
 	// records map each leaf's first key to that leaf's physical block number.
-	perLeaf := extrefRecordsPerLeaf(int(b.blocksize))
-	idx := make([]catRecord, 0, b.numExtrefLeaves)
+	perLeaf := extentrefRecordsPerLeaf(int(b.blocksize))
+	idx := make([]fsTreeRecord, 0, b.numExtentrefLeaves)
 	for i := 0; i < len(extents); i += perLeaf {
 		end := i + perLeaf
 		if end > len(extents) {
 			end = len(extents)
 		}
 		leaf := extents[i:end]
-		leafBno := b.extrefLeafBase + uint64(i/perLeaf)
-		if err := b.writeExtrefNode(leafBno, leaf, false /* leaf */, 0 /* level */, 0); err != nil {
+		leafPaddr := b.extentrefLeafBase + uint64(i/perLeaf)
+		if err := b.writeExtentrefNode(leafPaddr, leaf, false /* leaf */, 0 /* level */, 0); err != nil {
 			return err
 		}
 		key := make([]byte, sizeofPhysExtKey)
 		setKeyHeader(key, 0, leaf[0].dataBlock, typeExtent)
 		val := make([]byte, 8)
-		binary.LittleEndian.PutUint64(val, leafBno)
-		idx = append(idx, catRecord{key: key, val: val})
+		binary.LittleEndian.PutUint64(val, leafPaddr)
+		idx = append(idx, fsTreeRecord{key: key, val: val})
 	}
 	nodeCount := 1 + len(idx)
-	return b.writeExtrefIndex(bno, idx, len(extents), nodeCount)
+	return b.writeExtentrefIndex(paddr, idx, len(extents), nodeCount)
 }
 
-// writeExtrefNode writes one blockref leaf holding the given physical extents.
+// writeExtentrefNode writes one blockref leaf holding the given physical extents.
 // isRoot marks a single-node tree, which carries the btree_info footer.
-func (b *builder) writeExtrefNode(bno uint64, extents []*builderEntry, isRoot bool, level uint16, nodeCount int) error {
+func (b *builder) writeExtentrefNode(paddr uint64, extents []*builderEntry, isRoot bool, level uint16, nodeCount int) error {
 	block := b.zeroedBlock()
 	headLen := sizeofBtreeNodePhys
 	infoLen := 0
@@ -602,7 +602,7 @@ func (b *builder) writeExtrefNode(bno uint64, extents []*builderEntry, isRoot bo
 	tocLen := tocBytesFor(nkeys)
 	putNloc(block, btnOffTableSpace, 0, uint16(tocLen))
 
-	cur := &catCursor{
+	cur := &fsTreeCursor{
 		b:          b,
 		block:      block,
 		tocOff:     headLen,
@@ -617,7 +617,7 @@ func (b *builder) writeExtrefNode(bno uint64, extents []*builderEntry, isRoot bo
 		val := make([]byte, sizeofPhysExtVal)
 		lenAndKind := (uint64(pextKindNew) << pextKindShift) | f.blocks
 		binary.LittleEndian.PutUint64(val[0:], lenAndKind)
-		binary.LittleEndian.PutUint64(val[8:], f.cnid)              // owning_obj_id
+		binary.LittleEndian.PutUint64(val[8:], f.oid)               // owning_obj_id
 		binary.LittleEndian.PutUint32(val[16:], b.extentRefcount()) // refcnt
 		cur.putRecord(key, val)
 	}
@@ -632,17 +632,17 @@ func (b *builder) writeExtrefNode(bno uint64, extents []*builderEntry, isRoot bo
 	objType := uint32(objectTypeBtreeNode) | objPhysical
 	if isRoot {
 		objType = objectTypeBtree | objPhysical
-		b.setExtrefInfo(block[int(b.blocksize)-infoLen:], nkeys, nodeCount)
+		b.setExtentrefInfo(block[int(b.blocksize)-infoLen:], nkeys, nodeCount)
 	}
-	setObjectHeader(block, int(b.blocksize), bno, objType, objectTypeBlockrefTree)
-	return b.writeBlock(block, bno)
+	setObjectHeader(block, int(b.blocksize), paddr, objType, objectTypeBlockrefTree)
+	return b.writeBlock(block, paddr)
 }
 
-// writeExtrefIndex writes the blockref index root (level 1). Each record maps a
+// writeExtentrefIndex writes the blockref index root (level 1). Each record maps a
 // child leaf's first key (phys_block, EXTENT) to that leaf's physical block
 // number (an 8-byte value). Being a physical tree, child pointers are block
 // numbers resolved directly, without an object map.
-func (b *builder) writeExtrefIndex(bno uint64, idx []catRecord, keyCount, nodeCount int) error {
+func (b *builder) writeExtentrefIndex(paddr uint64, idx []fsTreeRecord, keyCount, nodeCount int) error {
 	block := b.zeroedBlock()
 	headLen := sizeofBtreeNodePhys
 	infoLen := sizeofBtreeInfo
@@ -654,7 +654,7 @@ func (b *builder) writeExtrefIndex(bno uint64, idx []catRecord, keyCount, nodeCo
 	tocLen := tocBytesFor(len(idx))
 	putNloc(block, btnOffTableSpace, 0, uint16(tocLen))
 
-	cur := &catCursor{
+	cur := &fsTreeCursor{
 		b:          b,
 		block:      block,
 		tocOff:     headLen,
@@ -674,14 +674,14 @@ func (b *builder) writeExtrefIndex(bno uint64, idx []catRecord, keyCount, nodeCo
 	putNloc(block, btnOffKeyFreeList, btoffInvalid, 0)
 	putNloc(block, btnOffValFreeList, btoffInvalid, 0)
 
-	b.setExtrefInfo(block[int(b.blocksize)-infoLen:], keyCount, nodeCount)
-	setObjectHeader(block, int(b.blocksize), bno,
+	b.setExtentrefInfo(block[int(b.blocksize)-infoLen:], keyCount, nodeCount)
+	setObjectHeader(block, int(b.blocksize), paddr,
 		objectTypeBtree|objPhysical, objectTypeBlockrefTree)
-	return b.writeBlock(block, bno)
+	return b.writeBlock(block, paddr)
 }
 
-// setExtrefInfo sets the info footer for a populated blockref-tree root.
-func (b *builder) setExtrefInfo(info []byte, keyCount, nodeCount int) {
+// setExtentrefInfo sets the info footer for a populated blockref-tree root.
+func (b *builder) setExtentrefInfo(info []byte, keyCount, nodeCount int) {
 	binary.LittleEndian.PutUint32(info[0:], btreePhysical|btreeKVNonaligned) // bt_flags
 	binary.LittleEndian.PutUint32(info[4:], b.blocksize)                     // bt_node_size
 	binary.LittleEndian.PutUint32(info[16:], sizeofPhysExtKey)               // bt_longest_key

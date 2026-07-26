@@ -18,7 +18,7 @@ import (
 )
 
 // memImage is a growable in-memory io.WriterAt / io.ReaderAt used to build and
-// then read back a container without touching the filesystem.
+// then read back a container without touching the file system.
 type memImage struct {
 	data []byte
 }

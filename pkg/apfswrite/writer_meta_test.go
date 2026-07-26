@@ -205,7 +205,7 @@ func TestCreateContainerFromDir(t *testing.T) {
 	// The exec bit is captured from the on-disk source file's mode. Windows
 	// has no Unix execute permission, so a file created there reports 0666 and
 	// the writer faithfully stores that — only assert the exec bit where the
-	// source filesystem can carry it.
+	// source file system can carry it.
 	if runtime.GOOS != "windows" {
 		if fe, err := v.FileEntryByPath("bin/run.sh"); err != nil {
 			t.Errorf("bin/run.sh: %v", err)

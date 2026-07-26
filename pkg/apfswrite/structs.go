@@ -82,8 +82,8 @@ type wrappedMetaCryptoState struct {
 	Unused          uint16
 }
 
-// modifiedBy is the on-disk apfs_modified_by.
-type modifiedBy struct {
+// apfsModifiedBy is the on-disk apfs_modified_by.
+type apfsModifiedBy struct {
 	ID        [32]byte
 	Timestamp uint64
 	LastXID   uint64
@@ -122,8 +122,8 @@ type apfsSuperblock struct {
 	VolUUID                    [16]byte
 	LastModTime                uint64
 	FsFlags                    uint64
-	FormattedBy                modifiedBy
-	ModifiedBy                 [8]modifiedBy
+	FormattedBy                apfsModifiedBy
+	ModifiedBy                 [8]apfsModifiedBy
 	Volname                    [volnameLen]byte
 	NextDocID                  uint32
 	Role                       uint16
