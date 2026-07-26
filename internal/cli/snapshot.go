@@ -108,7 +108,7 @@ func runSnapshotCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return withCode(ExitBadImage, fmt.Errorf("unable to open volume %q: %w", sel, err))
 	}
-	volName, _ := volume.GetUTF8Name()
+	volName, _ := volume.UTF8Name()
 
 	tree, err := entryTreeFromVolume(volume)
 	if err != nil {
@@ -227,13 +227,13 @@ func runSnapshotVerify(cmd *cobra.Command, args []string) error {
 	var verified int
 	var problems []string
 	for vi, volume := range volumes {
-		n, err := volume.GetNumberOfSnapshots()
+		n, err := volume.NumberOfSnapshots()
 		if err != nil {
 			problems = append(problems, fmt.Sprintf("volume %d: %v", vi, err))
 			continue
 		}
 		for i := 0; i < n; i++ {
-			snap, err := volume.GetSnapshot(i)
+			snap, err := volume.Snapshot(i)
 			if err != nil {
 				problems = append(problems, fmt.Sprintf("volume %d snapshot %d: %v", vi, i, err))
 				continue
@@ -288,10 +288,10 @@ offset zero (as produced by 'create'/'pack').`,
 // superblock for the given volume object id, mirroring how the container opens
 // a volume (checkpoint map first, then the object map).
 func resolveLiveVolumeBlock(c *apfs.Container, volID uint64) (uint64, error) {
-	if addr, err := c.CheckpointMap.GetPhysicalAddressByObjectIdentifier(volID); err == nil && addr != 0 {
+	if addr, err := c.CheckpointMap.PhysicalAddressByObjectIdentifier(volID); err == nil && addr != 0 {
 		return addr, nil
 	}
-	desc, err := c.ObjectMapBTree.GetDescriptorByObjectIdentifier(c.Reader, volID, c.Superblock.XID)
+	desc, err := c.ObjectMapBTree.DescriptorByObjectIdentifier(c.Reader, volID, c.Superblock.XID)
 	if err != nil {
 		return 0, err
 	}
@@ -315,7 +315,7 @@ func runSnapshotRevert(cmd *cobra.Command, args []string) error {
 
 	// Find the named snapshot (its xid and frozen superblock block) and the live
 	// volume's superblock block.
-	volIDs, err := container.GetVolumeObjectIdentifiers()
+	volIDs, err := container.VolumeObjectIdentifiers()
 	if err != nil || len(volIDs) == 0 {
 		cleanup()
 		return withCode(ExitBadImage, fmt.Errorf("unable to read volumes: %w", err))
@@ -329,13 +329,13 @@ func runSnapshotRevert(cmd *cobra.Command, args []string) error {
 
 	var snapXID, snapSblock uint64
 	found := false
-	if n, _ := volume.GetNumberOfSnapshots(); n > 0 {
+	if n, _ := volume.NumberOfSnapshots(); n > 0 {
 		for i := 0; i < n; i++ {
-			snap, err := volume.GetSnapshot(i)
+			snap, err := volume.Snapshot(i)
 			if err != nil {
 				continue
 			}
-			if name, _ := snap.GetUTF8Name(); name == snapRevertName && snap.SnapshotMetadata != nil {
+			if name, _ := snap.UTF8Name(); name == snapRevertName && snap.SnapshotMetadata != nil {
 				snapXID = snap.SnapshotMetadata.XID
 				snapSblock = snap.SnapshotMetadata.VolumeSuperblockOID
 				found = true
@@ -432,7 +432,7 @@ func openAPFSContainer(imagePath string) (*apfs.Container, func(), error) {
 		closer.Close()
 		return nil, nil, withCode(ExitBadImage, fmt.Errorf("unable to open APFS container: %w", err))
 	}
-	return container, func() { container.Free(); closer.Close() }, nil
+	return container, func() { container.Close(); closer.Close() }, nil
 }
 
 // snapshotJSON is one snapshot in the JSON output.
@@ -458,17 +458,17 @@ func runSnapshotList(cmd *cobra.Command, args []string) error {
 
 	var out []snapshotJSON
 	for vi, volume := range volumes {
-		volName, _ := volume.GetUTF8Name()
-		n, err := volume.GetNumberOfSnapshots()
+		volName, _ := volume.UTF8Name()
+		n, err := volume.NumberOfSnapshots()
 		if err != nil {
 			return fmt.Errorf("volume %d: unable to read snapshots: %w", vi, err)
 		}
 		for i := 0; i < n; i++ {
-			snap, err := volume.GetSnapshot(i)
+			snap, err := volume.Snapshot(i)
 			if err != nil {
 				return fmt.Errorf("volume %d snapshot %d: %w", vi, i, err)
 			}
-			name, _ := snap.GetUTF8Name()
+			name, _ := snap.UTF8Name()
 			s := snapshotJSON{Volume: vi, VolumeName: volName, Name: name}
 			if snap.SnapshotMetadata != nil {
 				s.XID = snap.SnapshotMetadata.XID

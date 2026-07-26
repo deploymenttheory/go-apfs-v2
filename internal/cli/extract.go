@@ -118,7 +118,7 @@ func runExtract(cmd *cobra.Command, args []string) error {
 
 	extractor.FinishProgress()
 
-	files, bytes := extractor.GetStats()
+	files, bytes := extractor.Stats()
 
 	if opts.Output == "json" {
 		summary := map[string]any{

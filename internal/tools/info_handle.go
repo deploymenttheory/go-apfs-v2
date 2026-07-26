@@ -261,13 +261,13 @@ func (ih *InfoHandle) OpenInput(filename string) error {
 	// If we have passwords, set them on all volumes for later unlocking
 	// Note: Passwords need to be set per-volume, not at container level
 	if ih.UserPassword != "" || ih.RecoveryPassword != "" {
-		numberOfVolumes, err := container.GetNumberOfVolumes()
+		numberOfVolumes, err := container.NumberOfVolumes()
 		if err != nil {
 			return fmt.Errorf("unable to get number of volumes: %w", err)
 		}
 
 		for i := 0; i < numberOfVolumes; i++ {
-			volume, err := container.GetVolume(i)
+			volume, err := container.Volume(i)
 			if err != nil {
 				continue // Skip volumes that can't be retrieved
 			}
@@ -318,7 +318,7 @@ func (ih *InfoHandle) CloseInput() error {
 	}
 
 	// Free container resources
-	if err := ih.InputContainer.Free(); err != nil {
+	if err := ih.InputContainer.Close(); err != nil {
 		return fmt.Errorf("unable to free container: %w", err)
 	}
 
@@ -332,14 +332,14 @@ func (ih *InfoHandle) CloseInput() error {
 	return nil
 }
 
-// GetVolumeByIndex retrieves a volume by its index
+// VolumeByIndex retrieves a volume by its index
 // Corresponds to info_handle_get_volume_by_index
-func (ih *InfoHandle) GetVolumeByIndex(volumeIndex int) (*apfs.Volume, error) {
+func (ih *InfoHandle) VolumeByIndex(volumeIndex int) (*apfs.Volume, error) {
 	if ih.InputContainer == nil {
 		return nil, fmt.Errorf("invalid info handle - input container not set")
 	}
 
-	numberOfVolumes, err := ih.InputContainer.GetNumberOfVolumes()
+	numberOfVolumes, err := ih.InputContainer.NumberOfVolumes()
 	if err != nil {
 		return nil, fmt.Errorf("unable to retrieve number of volumes: %w", err)
 	}
@@ -348,7 +348,7 @@ func (ih *InfoHandle) GetVolumeByIndex(volumeIndex int) (*apfs.Volume, error) {
 		return nil, fmt.Errorf("invalid volume index: %d (available: 0-%d)", volumeIndex, numberOfVolumes-1)
 	}
 
-	volume, err := ih.InputContainer.GetVolume(volumeIndex)
+	volume, err := ih.InputContainer.Volume(volumeIndex)
 	if err != nil {
 		return nil, fmt.Errorf("unable to retrieve volume: %w", err)
 	}
@@ -377,20 +377,20 @@ func (ih *InfoHandle) PrintContainerInfo() error {
 	fmt.Fprintf(ih.NotifyStream, "Apple File System (APFS) information:\n\n")
 
 	// Print container identifier
-	identifier, err := ih.InputContainer.GetIdentifier()
+	identifier, err := ih.InputContainer.Identifier()
 	if err == nil {
 		fmt.Fprintf(ih.NotifyStream, "Container identifier:\t\t%s\n", formatUUID(identifier))
 	}
 
 	// Print number of volumes
-	numberOfVolumes, err := ih.InputContainer.GetNumberOfVolumes()
+	numberOfVolumes, err := ih.InputContainer.NumberOfVolumes()
 	if err != nil {
 		return fmt.Errorf("unable to retrieve number of volumes: %w", err)
 	}
 	fmt.Fprintf(ih.NotifyStream, "Number of volumes:\t\t%d\n", numberOfVolumes)
 
 	// Print container size
-	size, err := ih.InputContainer.GetSize()
+	size, err := ih.InputContainer.Size()
 	if err == nil {
 		fmt.Fprintf(ih.NotifyStream, "Container size:\t\t\t%d bytes\n", size)
 	}
@@ -401,7 +401,7 @@ func (ih *InfoHandle) PrintContainerInfo() error {
 	if ih.FSIndex == -1 {
 		// Print all volumes
 		for i := 0; i < numberOfVolumes; i++ {
-			volume, err := ih.GetVolumeByIndex(i)
+			volume, err := ih.VolumeByIndex(i)
 			if err != nil {
 				return fmt.Errorf("unable to retrieve volume %d: %w", i, err)
 			}
@@ -420,7 +420,7 @@ func (ih *InfoHandle) PrintContainerInfo() error {
 			return fmt.Errorf("file system index %d out of range (0-%d)", ih.FSIndex, numberOfVolumes-1)
 		}
 
-		volume, err := ih.GetVolumeByIndex(ih.FSIndex)
+		volume, err := ih.VolumeByIndex(ih.FSIndex)
 		if err != nil {
 			return fmt.Errorf("unable to retrieve volume %d: %w", ih.FSIndex, err)
 		}
@@ -441,8 +441,8 @@ func (ih *InfoHandle) PrintVolumeInfo(volumeIndex int, volume *apfs.Volume) erro
 	}
 
 	// Get volume name and identifier
-	name, _ := volume.GetUTF8Name()
-	identifier, _ := volume.GetIdentifier()
+	name, _ := volume.UTF8Name()
+	identifier, _ := volume.Identifier()
 
 	// Print boxed header
 	headerText := fmt.Sprintf("Volume %d", volumeIndex+1)
@@ -458,7 +458,7 @@ func (ih *InfoHandle) PrintVolumeInfo(volumeIndex int, volume *apfs.Volume) erro
 
 	// Storage section
 	fmt.Fprintf(ih.NotifyStream, "  Storage\n")
-	if size, err := volume.GetSize(); err == nil {
+	if size, err := volume.Size(); err == nil {
 		fmt.Fprintf(ih.NotifyStream, "    %-20s  %s (%s bytes)\n", "Size", formatBytes(size), formatNumber(size))
 	}
 	if isLocked, err := volume.IsLocked(); err == nil {
@@ -469,7 +469,7 @@ func (ih *InfoHandle) PrintVolumeInfo(volumeIndex int, volume *apfs.Volume) erro
 		fmt.Fprintf(ih.NotifyStream, "    %-20s  %s\n", "Locked", lockedStr)
 	}
 	if volume.Superblock != nil {
-		if unmountTime, err := volume.Superblock.GetUnmountTime(); err == nil && unmountTime != 0 {
+		if unmountTime := volume.Superblock.UnmountTime; unmountTime != 0 {
 			t := time.Unix(0, int64(unmountTime))
 			fmt.Fprintf(ih.NotifyStream, "    %-20s  %s\n", "Last unmounted", t.Format("2006-01-02 15:04:05"))
 		}
@@ -479,19 +479,13 @@ func (ih *InfoHandle) PrintVolumeInfo(volumeIndex int, volume *apfs.Volume) erro
 	// Contents section
 	fmt.Fprintf(ih.NotifyStream, "  Contents\n")
 	if volume.Superblock != nil {
-		if numFiles, err := volume.Superblock.GetNumberOfFiles(); err == nil {
-			fmt.Fprintf(ih.NotifyStream, "    %-20s  %s\n", "Files", formatNumber(numFiles))
-		}
-		if numDirs, err := volume.Superblock.GetNumberOfDirectories(); err == nil {
-			fmt.Fprintf(ih.NotifyStream, "    %-20s  %s\n", "Directories", formatNumber(numDirs))
-		}
-		if numSymlinks, err := volume.Superblock.GetNumberOfSymlinks(); err == nil {
-			fmt.Fprintf(ih.NotifyStream, "    %-20s  %s\n", "Symlinks", formatNumber(numSymlinks))
-		}
-		if numOther, err := volume.Superblock.GetNumberOfOtherFileSystemObjects(); err == nil && numOther > 0 {
+		fmt.Fprintf(ih.NotifyStream, "    %-20s  %s\n", "Files", formatNumber(volume.Superblock.NumberOfFiles))
+		fmt.Fprintf(ih.NotifyStream, "    %-20s  %s\n", "Directories", formatNumber(volume.Superblock.NumberOfDirectories))
+		fmt.Fprintf(ih.NotifyStream, "    %-20s  %s\n", "Symlinks", formatNumber(volume.Superblock.NumberOfSymlinks))
+		if numOther := volume.Superblock.NumberOfOtherFileSystemObjects; numOther > 0 {
 			fmt.Fprintf(ih.NotifyStream, "    %-20s  %s\n", "Other objects", formatNumber(numOther))
 		}
-		if numSnapshots, err := volume.Superblock.GetNumberOfSnapshots(); err == nil && numSnapshots > 0 {
+		if numSnapshots, err := volume.Superblock.NumberOfSnapshots(); err == nil && numSnapshots > 0 {
 			fmt.Fprintf(ih.NotifyStream, "    %-20s  %s\n", "Snapshots", formatNumber(numSnapshots))
 		}
 	}
@@ -499,17 +493,17 @@ func (ih *InfoHandle) PrintVolumeInfo(volumeIndex int, volume *apfs.Volume) erro
 
 	// Features section
 	fmt.Fprintf(ih.NotifyStream, "  Features\n")
-	if compatibleNames, err := volume.GetCompatibleFeatureNames(); err == nil && len(compatibleNames) > 0 {
+	if compatibleNames, err := volume.CompatibleFeatureNames(); err == nil && len(compatibleNames) > 0 {
 		for _, name := range compatibleNames {
 			fmt.Fprintf(ih.NotifyStream, "    ✓ %s\n", name)
 		}
 	}
-	if incompatibleNames, err := volume.GetIncompatibleFeatureNames(); err == nil && len(incompatibleNames) > 0 {
+	if incompatibleNames, err := volume.IncompatibleFeatureNames(); err == nil && len(incompatibleNames) > 0 {
 		for _, name := range incompatibleNames {
 			fmt.Fprintf(ih.NotifyStream, "    ✓ %s\n", name)
 		}
 	}
-	if readOnlyNames, err := volume.GetReadOnlyCompatibleFeatureNames(); err == nil && len(readOnlyNames) > 0 {
+	if readOnlyNames, err := volume.ReadOnlyCompatibleFeatureNames(); err == nil && len(readOnlyNames) > 0 {
 		for _, name := range readOnlyNames {
 			fmt.Fprintf(ih.NotifyStream, "    ✓ %s\n", name)
 		}
@@ -531,9 +525,9 @@ func (ih *InfoHandle) PrintFileSystemHierarchy() error {
 
 	if ih.FSIndex == -1 {
 		// Default to first volume if "all" was specified
-		volume, err = ih.GetVolumeByIndex(0)
+		volume, err = ih.VolumeByIndex(0)
 	} else {
-		volume, err = ih.GetVolumeByIndex(ih.FSIndex)
+		volume, err = ih.VolumeByIndex(ih.FSIndex)
 	}
 
 	if err != nil {
@@ -541,7 +535,7 @@ func (ih *InfoHandle) PrintFileSystemHierarchy() error {
 	}
 
 	// Get root file entry
-	rootEntry, err := volume.GetRootDirectory()
+	rootEntry, err := volume.RootDirectory()
 	if err != nil {
 		return fmt.Errorf("unable to get root directory: %w", err)
 	}
@@ -570,8 +564,8 @@ func (ih *InfoHandle) printFileEntryRecursiveWithPrefix(entry *apfs.FileEntry, p
 	)
 
 	// Get file name and mode
-	name, _ := entry.GetUTF8Name()
-	fileMode, err := entry.GetFileMode()
+	name, _ := entry.UTF8Name()
+	fileMode, err := entry.FileMode()
 	if err != nil {
 		return err
 	}
@@ -617,18 +611,18 @@ func (ih *InfoHandle) printFileEntryRecursiveWithPrefix(entry *apfs.FileEntry, p
 	// Process children if directory
 	isDirectory := (fileMode & 0x4000) != 0
 	if isDirectory {
-		numberOfSubEntries, err := entry.GetNumberOfSubFileEntries()
+		numberOfSubEntries, err := entry.NumberOfSubFileEntries()
 		if err != nil {
 			return err
 		}
 
 		for i := 0; i < numberOfSubEntries; i++ {
-			subEntry, err := entry.GetSubFileEntryByIndex(i)
+			subEntry, err := entry.SubFileEntryByIndex(i)
 			if err != nil {
 				continue
 			}
 
-			subName, _ := subEntry.GetUTF8Name()
+			subName, _ := subEntry.UTF8Name()
 			subPath := path
 			if path != "/" {
 				subPath += "/"
@@ -669,9 +663,9 @@ func (ih *InfoHandle) PrintFileEntryByIdentifier(identifier uint64) error {
 	var err error
 
 	if ih.FSIndex == -1 {
-		volume, err = ih.GetVolumeByIndex(0)
+		volume, err = ih.VolumeByIndex(0)
 	} else {
-		volume, err = ih.GetVolumeByIndex(ih.FSIndex)
+		volume, err = ih.VolumeByIndex(ih.FSIndex)
 	}
 
 	if err != nil {
@@ -679,7 +673,7 @@ func (ih *InfoHandle) PrintFileEntryByIdentifier(identifier uint64) error {
 	}
 
 	// Get file entry by identifier
-	fileEntry, err := volume.GetFileEntryByIdentifier(identifier)
+	fileEntry, err := volume.FileEntryByIdentifier(identifier)
 	if err != nil {
 		return fmt.Errorf("unable to get file entry by identifier %d: %w", identifier, err)
 	}
@@ -699,9 +693,9 @@ func (ih *InfoHandle) PrintFileEntryByPath(path string) error {
 	var err error
 
 	if ih.FSIndex == -1 {
-		volume, err = ih.GetVolumeByIndex(0)
+		volume, err = ih.VolumeByIndex(0)
 	} else {
-		volume, err = ih.GetVolumeByIndex(ih.FSIndex)
+		volume, err = ih.VolumeByIndex(ih.FSIndex)
 	}
 
 	if err != nil {
@@ -709,7 +703,7 @@ func (ih *InfoHandle) PrintFileEntryByPath(path string) error {
 	}
 
 	// Get file entry by path
-	fileEntry, err := volume.GetFileEntryByPath(path)
+	fileEntry, err := volume.FileEntryByPath(path)
 	if err != nil {
 		return fmt.Errorf("unable to get file entry by path %s: %w", path, err)
 	}
@@ -725,62 +719,62 @@ func (ih *InfoHandle) printFileEntryInfo(entry *apfs.FileEntry, path string) err
 
 	// Get name if path not provided
 	if path == "" {
-		name, _ := entry.GetUTF8Name()
+		name, _ := entry.UTF8Name()
 		path = name
 	}
 
 	fmt.Fprintf(ih.NotifyStream, "File entry: %s\n", path)
 
 	// Print identifier
-	if identifier, err := entry.GetIdentifier(); err == nil {
+	if identifier, err := entry.Identifier(); err == nil {
 		fmt.Fprintf(ih.NotifyStream, "\tIdentifier:\t\t%d\n", identifier)
 	}
 
 	// Print parent identifier
-	if parentID, err := entry.GetParentIdentifier(); err == nil {
+	if parentID, err := entry.ParentIdentifier(); err == nil {
 		fmt.Fprintf(ih.NotifyStream, "\tParent identifier:\t%d\n", parentID)
 	}
 
 	// Print file mode
-	if fileMode, err := entry.GetFileMode(); err == nil {
+	if fileMode, err := entry.FileMode(); err == nil {
 		fmt.Fprintf(ih.NotifyStream, "\tFile mode:\t\t0%o\n", fileMode)
 	}
 
 	// Print owner/group
-	if uid, err := entry.GetOwnerIdentifier(); err == nil {
+	if uid, err := entry.OwnerIdentifier(); err == nil {
 		fmt.Fprintf(ih.NotifyStream, "\tOwner UID:\t\t%d\n", uid)
 	}
-	if gid, err := entry.GetGroupIdentifier(); err == nil {
+	if gid, err := entry.GroupIdentifier(); err == nil {
 		fmt.Fprintf(ih.NotifyStream, "\tGroup GID:\t\t%d\n", gid)
 	}
 
 	// Print size
-	if size, err := entry.GetSize(); err == nil {
+	if size, err := entry.Size(); err == nil {
 		fmt.Fprintf(ih.NotifyStream, "\tSize:\t\t\t%d bytes\n", size)
 	}
 
 	// Print number of links
-	if links, err := entry.GetNumberOfLinks(); err == nil {
+	if links, err := entry.NumberOfLinks(); err == nil {
 		fmt.Fprintf(ih.NotifyStream, "\tNumber of links:\t%d\n", links)
 	}
 
 	// Print timestamps
-	if ctime, err := entry.GetCreationTime(); err == nil {
+	if ctime, err := entry.CreationTime(); err == nil {
 		fmt.Fprintf(ih.NotifyStream, "\tCreation time:\t\t%s\n", FormatTimestamp(ctime))
 	}
-	if mtime, err := entry.GetModificationTime(); err == nil {
+	if mtime, err := entry.ModificationTime(); err == nil {
 		fmt.Fprintf(ih.NotifyStream, "\tModification time:\t%s\n", FormatTimestamp(mtime))
 	}
-	if atime, err := entry.GetAccessTime(); err == nil {
+	if atime, err := entry.AccessTime(); err == nil {
 		fmt.Fprintf(ih.NotifyStream, "\tAccess time:\t\t%s\n", FormatTimestamp(atime))
 	}
-	if itime, err := entry.GetInodeChangeTime(); err == nil {
+	if itime, err := entry.InodeChangeTime(); err == nil {
 		fmt.Fprintf(ih.NotifyStream, "\tInode change time:\t%s\n", FormatTimestamp(itime))
 	}
 
 	// Calculate MD5 if requested
 	if ih.CalculateMD5 {
-		fileMode, _ := entry.GetFileMode()
+		fileMode, _ := entry.FileMode()
 		isRegularFile := (fileMode & 0x8000) != 0
 		if isRegularFile {
 			md5Hash, err := CalculateMD5Hash(entry)
@@ -809,9 +803,9 @@ func (ih *InfoHandle) PrintFileEntries() error {
 	var err error
 
 	if ih.FSIndex == -1 {
-		volume, err = ih.GetVolumeByIndex(0)
+		volume, err = ih.VolumeByIndex(0)
 	} else {
-		volume, err = ih.GetVolumeByIndex(ih.FSIndex)
+		volume, err = ih.VolumeByIndex(ih.FSIndex)
 	}
 
 	if err != nil {
@@ -819,7 +813,7 @@ func (ih *InfoHandle) PrintFileEntries() error {
 	}
 
 	// Get root directory
-	rootEntry, err := volume.GetRootDirectory()
+	rootEntry, err := volume.RootDirectory()
 	if err != nil {
 		return fmt.Errorf("unable to get root directory: %w", err)
 	}
@@ -846,25 +840,25 @@ func (ih *InfoHandle) printFileEntriesRecursive(entry *apfs.FileEntry, path stri
 	}
 
 	// Process subdirectories
-	fileMode, err := entry.GetFileMode()
+	fileMode, err := entry.FileMode()
 	if err != nil {
 		return err
 	}
 
 	isDirectory := (fileMode & 0x4000) != 0
 	if isDirectory {
-		numberOfSubEntries, err := entry.GetNumberOfSubFileEntries()
+		numberOfSubEntries, err := entry.NumberOfSubFileEntries()
 		if err != nil {
 			return err
 		}
 
 		for i := 0; i < numberOfSubEntries; i++ {
-			subEntry, err := entry.GetSubFileEntryByIndex(i)
+			subEntry, err := entry.SubFileEntryByIndex(i)
 			if err != nil {
 				continue
 			}
 
-			subName, _ := subEntry.GetUTF8Name()
+			subName, _ := subEntry.UTF8Name()
 			subPath := path
 			if path != "/" {
 				subPath += "/"

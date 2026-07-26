@@ -24,17 +24,6 @@ func NewContainerDataHandle(ioHandle *IOHandle) (*ContainerDataHandle, error) {
 	}, nil
 }
 
-// Free releases resources associated with the container data handle
-// In Go, this is primarily for API consistency with the C implementation
-func (cdh *ContainerDataHandle) Free() error {
-	if cdh == nil {
-		return fmt.Errorf("invalid container data handle")
-	}
-
-	// Nothing to free in Go, but method exists for API consistency
-	return nil
-}
-
 // ReadDataBlock reads a data block from the container
 // This is a callback function for a data block vector
 //

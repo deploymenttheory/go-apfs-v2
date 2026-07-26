@@ -24,16 +24,6 @@ func NewReaper() (*Reaper, error) {
 	}, nil
 }
 
-// Free releases resources associated with the reaper
-func (cr *Reaper) Free() error {
-	if cr == nil {
-		return fmt.Errorf("invalid reaper")
-	}
-
-	// Nothing to free currently
-	return nil
-}
-
 // ReadFrom reads the reaper from a file
 func (cr *Reaper) ReadFrom(
 	reader io.ReaderAt,

@@ -61,8 +61,8 @@ func NewInode() (*Inode, error) {
 	return &Inode{}, nil
 }
 
-// Free releases resources associated with the inode
-func (i *Inode) Free() error {
+// Close releases resources associated with the inode
+func (i *Inode) Close() error {
 	if i == nil {
 		return fmt.Errorf("invalid inode")
 	}
@@ -84,8 +84,8 @@ func (i *Inode) ReadKeyData(data []byte) error {
 	}
 
 	// Debug output
-	if IsVerbose() {
-		Printf("Inode key data:\n")
+	if isVerbose() {
+		notifyPrintf("Inode key data:\n")
 		PrintData(data, true)
 	}
 
@@ -93,9 +93,9 @@ func (i *Inode) ReadKeyData(data []byte) error {
 	fileSystemIdentifier := binary.LittleEndian.Uint64(data[0:8])
 
 	// Debug output
-	if IsVerbose() {
-		Printf("identifier\t\t\t\t: 0x%08x\n", fileSystemIdentifier)
-		Printf("\n")
+	if isVerbose() {
+		notifyPrintf("identifier\t\t\t\t: 0x%08x\n", fileSystemIdentifier)
+		notifyPrintf("\n")
 	}
 
 	// Extract the identifier (lower 60 bits)
@@ -126,8 +126,8 @@ func (i *Inode) ReadValueData(data []byte) error {
 	}
 
 	// Debug output
-	if IsVerbose() {
-		Printf("Inode value data:\n")
+	if isVerbose() {
+		notifyPrintf("Inode value data:\n")
 		PrintData(data, true)
 	}
 
@@ -148,9 +148,9 @@ func (i *Inode) ReadValueData(data []byte) error {
 	// Extended fields (xfields[]) start at offset 92
 
 	// Debug output
-	if IsVerbose() {
-		Printf("parent identifier\t\t\t: %d\n", i.ParentIdentifier)
-		Printf("data stream identifier\t\t\t: %d\n", i.DataStreamIdentifier)
+	if isVerbose() {
+		notifyPrintf("parent identifier\t\t\t: %d\n", i.ParentIdentifier)
+		notifyPrintf("data stream identifier\t\t\t: %d\n", i.DataStreamIdentifier)
 
 		timeBytes := make([]byte, 8)
 		binary.LittleEndian.PutUint64(timeBytes, i.ModificationTime)
@@ -165,19 +165,19 @@ func (i *Inode) ReadValueData(data []byte) error {
 		binary.LittleEndian.PutUint64(timeBytes, i.AccessTime)
 		PrintPOSIXTimeValue("Inode.ReadValueData", "access time\t\t\t\t", timeBytes, binary.LittleEndian, "nanoseconds")
 
-		Printf("inode flags\t\t\t\t: 0x%08x\n", i.Flags)
+		notifyPrintf("inode flags\t\t\t\t: 0x%08x\n", i.Flags)
 		PrintInodeFlags(i.Flags)
-		Printf("\n")
+		notifyPrintf("\n")
 
 		if (i.FileMode & 0xf000) == uint16(FileTypeDirectory) {
-			Printf("number of children\t\t\t: %d\n", i.NumberOfLinks)
+			notifyPrintf("number of children\t\t\t: %d\n", i.NumberOfLinks)
 		} else {
-			Printf("number of links\t\t\t: %d\n", i.NumberOfLinks)
+			notifyPrintf("number of links\t\t\t: %d\n", i.NumberOfLinks)
 		}
 
-		Printf("owner identifier\t\t\t: %d\n", i.OwnerIdentifier)
-		Printf("group identifier\t\t\t: %d\n", i.GroupIdentifier)
-		Printf("file mode\t\t\t\t: %o\n", i.FileMode)
+		notifyPrintf("owner identifier\t\t\t: %d\n", i.OwnerIdentifier)
+		notifyPrintf("group identifier\t\t\t: %d\n", i.GroupIdentifier)
+		notifyPrintf("file mode\t\t\t\t: %o\n", i.FileMode)
 	}
 
 	// Parse extended fields if present
@@ -192,9 +192,9 @@ func (i *Inode) ReadValueData(data []byte) error {
 		numberOfExtendedFields := binary.LittleEndian.Uint16(data[dataOffset : dataOffset+2])
 		extendedFieldValueDataSize := binary.LittleEndian.Uint16(data[dataOffset+2 : dataOffset+4])
 
-		if IsVerbose() {
-			Printf("number of extended fields\t\t: %d\n", numberOfExtendedFields)
-			Printf("extended field value data size\t\t: %d\n", extendedFieldValueDataSize)
+		if isVerbose() {
+			notifyPrintf("number of extended fields\t\t: %d\n", numberOfExtendedFields)
+			notifyPrintf("extended field value data size\t\t: %d\n", extendedFieldValueDataSize)
 		}
 
 		dataOffset += 4
@@ -209,12 +209,12 @@ func (i *Inode) ReadValueData(data []byte) error {
 			extendedFieldFlags := data[dataOffset+1]
 			valueDataSize := binary.LittleEndian.Uint16(data[dataOffset+2 : dataOffset+4])
 
-			if IsVerbose() {
-				Printf("extended field: %d type\t\t\t: %d %s\n", extendedFieldIndex, extendedFieldType, GetInodeExtendedFieldTypeName(extendedFieldType))
-				Printf("extended field: %d flags\t\t: 0x%02x\n", extendedFieldIndex, extendedFieldFlags)
+			if isVerbose() {
+				notifyPrintf("extended field: %d type\t\t\t: %d %s\n", extendedFieldIndex, extendedFieldType, InodeExtendedFieldTypeName(extendedFieldType))
+				notifyPrintf("extended field: %d flags\t\t: 0x%02x\n", extendedFieldIndex, extendedFieldFlags)
 				PrintExtendedFieldFlags(extendedFieldFlags)
-				Printf("\n")
-				Printf("extended field: %d value data size\t: %d\n", extendedFieldIndex, valueDataSize)
+				notifyPrintf("\n")
+				notifyPrintf("extended field: %d value data size\t: %d\n", extendedFieldIndex, valueDataSize)
 			}
 
 			dataOffset += 4
@@ -230,8 +230,8 @@ func (i *Inode) ReadValueData(data []byte) error {
 
 			valueData := data[valueDataOffset : valueDataOffset+int(valueDataSize)]
 
-			if IsVerbose() {
-				Printf("extended field: %d value data:\n", extendedFieldIndex)
+			if isVerbose() {
+				notifyPrintf("extended field: %d value data:\n", extendedFieldIndex)
 				PrintData(valueData, false)
 			}
 
@@ -249,8 +249,8 @@ func (i *Inode) ReadValueData(data []byte) error {
 				i.Name = make([]byte, valueDataSize)
 				copy(i.Name, valueData)
 
-				if IsVerbose() {
-					Printf("name\t\t\t\t\t: %s\n", string(i.Name))
+				if isVerbose() {
+					notifyPrintf("name\t\t\t\t\t: %s\n", string(i.Name))
 				}
 
 			case 8: // INO_EXT_TYPE_DSTREAM
@@ -264,17 +264,17 @@ func (i *Inode) ReadValueData(data []byte) error {
 
 				i.DataStreamSize = binary.LittleEndian.Uint64(valueData[0:8])
 
-				if IsVerbose() {
-					Printf("used size\t\t\t\t: %d\n", i.DataStreamSize)
+				if isVerbose() {
+					notifyPrintf("used size\t\t\t\t: %d\n", i.DataStreamSize)
 					allocatedSize := binary.LittleEndian.Uint64(valueData[8:16])
-					Printf("allocated size\t\t\t\t: %d\n", allocatedSize)
+					notifyPrintf("allocated size\t\t\t\t: %d\n", allocatedSize)
 					encryptionIdentifier := binary.LittleEndian.Uint64(valueData[16:24])
-					Printf("encryption identifier\t\t\t: %d\n", encryptionIdentifier)
+					notifyPrintf("encryption identifier\t\t\t: %d\n", encryptionIdentifier)
 					bytesWritten := binary.LittleEndian.Uint64(valueData[24:32])
-					Printf("number of bytes written\t\t: %d\n", bytesWritten)
+					notifyPrintf("number of bytes written\t\t: %d\n", bytesWritten)
 					bytesRead := binary.LittleEndian.Uint64(valueData[32:40])
-					Printf("number of bytes read\t\t\t: %d\n", bytesRead)
-					Printf("\n")
+					notifyPrintf("number of bytes read\t\t\t: %d\n", bytesRead)
+					notifyPrintf("\n")
 				}
 
 			case 14: // INO_EXT_TYPE_RDEV
@@ -285,9 +285,9 @@ func (i *Inode) ReadValueData(data []byte) error {
 
 				i.DeviceIdentifier = binary.LittleEndian.Uint32(valueData[0:4])
 
-				if IsVerbose() {
-					Printf("device identifier\t\t\t: 0x%08x\n", i.DeviceIdentifier)
-					Printf("\n")
+				if isVerbose() {
+					notifyPrintf("device identifier\t\t\t: 0x%08x\n", i.DeviceIdentifier)
+					notifyPrintf("\n")
 				}
 
 			default:
@@ -305,99 +305,23 @@ func (i *Inode) ReadValueData(data []byte) error {
 					trailingDataSize = len(data) - valueDataOffset
 				}
 
-				if IsVerbose() && trailingDataSize > 0 {
-					Printf("extended field: %d trailing data:\n", extendedFieldIndex)
+				if isVerbose() && trailingDataSize > 0 {
+					notifyPrintf("extended field: %d trailing data:\n", extendedFieldIndex)
 					PrintData(data[valueDataOffset:valueDataOffset+trailingDataSize], false)
 				}
 
 				valueDataOffset += trailingDataSize
 			}
 		}
-	} else if IsVerbose() {
-		Printf("\n")
+	} else if isVerbose() {
+		notifyPrintf("\n")
 	}
 
 	return nil
 }
 
-// GetIdentifier retrieves the identifier
-func (i *Inode) GetIdentifier() (uint64, error) {
-	if i == nil {
-		return 0, fmt.Errorf("invalid inode")
-	}
-	return i.Identifier, nil
-}
-
-// GetParentIdentifier retrieves the parent identifier
-func (i *Inode) GetParentIdentifier() (uint64, error) {
-	if i == nil {
-		return 0, fmt.Errorf("invalid inode")
-	}
-	return i.ParentIdentifier, nil
-}
-
-// GetCreationTime retrieves the creation time
-// The timestamp is a signed 64-bit POSIX date and time value in number of nano seconds
-func (i *Inode) GetCreationTime() (int64, error) {
-	if i == nil {
-		return 0, fmt.Errorf("invalid inode")
-	}
-	return int64(i.CreationTime), nil
-}
-
-// GetModificationTime retrieves the modification time
-// The timestamp is a signed 64-bit POSIX date and time value in number of nano seconds
-func (i *Inode) GetModificationTime() (int64, error) {
-	if i == nil {
-		return 0, fmt.Errorf("invalid inode")
-	}
-	return int64(i.ModificationTime), nil
-}
-
-// GetInodeChangeTime retrieves the inode change time
-// The timestamp is a signed 64-bit POSIX date and time value in number of nano seconds
-func (i *Inode) GetInodeChangeTime() (int64, error) {
-	if i == nil {
-		return 0, fmt.Errorf("invalid inode")
-	}
-	return int64(i.InodeChangeTime), nil
-}
-
-// GetAccessTime retrieves the access time
-// The timestamp is a signed 64-bit POSIX date and time value in number of nano seconds
-func (i *Inode) GetAccessTime() (int64, error) {
-	if i == nil {
-		return 0, fmt.Errorf("invalid inode")
-	}
-	return int64(i.AccessTime), nil
-}
-
-// GetOwnerIdentifier retrieves the owner identifier
-func (i *Inode) GetOwnerIdentifier() (uint32, error) {
-	if i == nil {
-		return 0, fmt.Errorf("invalid inode")
-	}
-	return i.OwnerIdentifier, nil
-}
-
-// GetGroupIdentifier retrieves the group identifier
-func (i *Inode) GetGroupIdentifier() (uint32, error) {
-	if i == nil {
-		return 0, fmt.Errorf("invalid inode")
-	}
-	return i.GroupIdentifier, nil
-}
-
-// GetDeviceIdentifier retrieves the device identifier
-func (i *Inode) GetDeviceIdentifier() (uint32, error) {
-	if i == nil {
-		return 0, fmt.Errorf("invalid inode")
-	}
-	return i.DeviceIdentifier, nil
-}
-
-// GetDeviceNumber retrieves the device number
-func (i *Inode) GetDeviceNumber() (uint32, uint32, error) {
+// DeviceNumber retrieves the device number
+func (i *Inode) DeviceNumber() (uint32, uint32, error) {
 	if i == nil {
 		return 0, 0, fmt.Errorf("invalid inode")
 	}
@@ -409,24 +333,8 @@ func (i *Inode) GetDeviceNumber() (uint32, uint32, error) {
 	return majorDeviceNumber, minorDeviceNumber, nil
 }
 
-// GetFileMode retrieves the file mode
-func (i *Inode) GetFileMode() (uint16, error) {
-	if i == nil {
-		return 0, fmt.Errorf("invalid inode")
-	}
-	return i.FileMode, nil
-}
-
-// GetNumberOfLinks retrieves the number of links
-func (i *Inode) GetNumberOfLinks() (uint32, error) {
-	if i == nil {
-		return 0, fmt.Errorf("invalid inode")
-	}
-	return i.NumberOfLinks, nil
-}
-
-// GetUTF8NameSize retrieves the UTF-8 name size
-func (i *Inode) GetUTF8NameSize() (int, error) {
+// UTF8NameSize retrieves the UTF-8 name size
+func (i *Inode) UTF8NameSize() (int, error) {
 	if i == nil {
 		return 0, fmt.Errorf("invalid inode")
 	}
@@ -439,8 +347,8 @@ func (i *Inode) GetUTF8NameSize() (int, error) {
 	return len(i.Name) + 1, nil
 }
 
-// GetUTF8Name retrieves the UTF-8 name
-func (i *Inode) GetUTF8Name() ([]byte, error) {
+// UTF8Name retrieves the UTF-8 name
+func (i *Inode) UTF8Name() ([]byte, error) {
 	if i == nil {
 		return nil, fmt.Errorf("invalid inode")
 	}
@@ -454,30 +362,6 @@ func (i *Inode) GetUTF8Name() ([]byte, error) {
 	copy(name, i.Name)
 
 	return name, nil
-}
-
-// GetFlags retrieves the flags
-func (i *Inode) GetFlags() (uint64, error) {
-	if i == nil {
-		return 0, fmt.Errorf("invalid inode")
-	}
-	return i.Flags, nil
-}
-
-// GetDataStreamIdentifier retrieves the data stream identifier
-func (i *Inode) GetDataStreamIdentifier() (uint64, error) {
-	if i == nil {
-		return 0, fmt.Errorf("invalid inode")
-	}
-	return i.DataStreamIdentifier, nil
-}
-
-// GetDataStreamSize retrieves the data stream size
-func (i *Inode) GetDataStreamSize() (uint64, error) {
-	if i == nil {
-		return 0, fmt.Errorf("invalid inode")
-	}
-	return i.DataStreamSize, nil
 }
 
 // IsDirectory returns true if this inode represents a directory
@@ -495,12 +379,12 @@ func (i *Inode) IsSymbolicLink() bool {
 	return (i.FileMode & 0xf000) == uint16(FileTypeSymbolicLink)
 }
 
-// GetPermissions returns the permission bits (lower 12 bits of file mode)
-func (i *Inode) GetPermissions() uint16 {
+// Permissions returns the permission bits (lower 12 bits of file mode)
+func (i *Inode) Permissions() uint16 {
 	return i.FileMode & 0x0fff
 }
 
-// GetFileType returns the file type bits (upper 4 bits of file mode)
-func (i *Inode) GetFileType() uint16 {
+// FileType returns the file type bits (upper 4 bits of file mode)
+func (i *Inode) FileType() uint16 {
 	return i.FileMode & 0xf000
 }

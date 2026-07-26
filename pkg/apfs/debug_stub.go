@@ -63,8 +63,8 @@ func DirectoryEntryExtendedFieldTypeName(extendedFieldType uint8) string {
 	return "Unknown"
 }
 
-// GetInodeExtendedFieldTypeName returns the name of the inode extended field type
-func GetInodeExtendedFieldTypeName(extendedFieldType uint8) string {
+// InodeExtendedFieldTypeName returns the name of the inode extended field type
+func InodeExtendedFieldTypeName(extendedFieldType uint8) string {
 	switch extendedFieldType {
 	case 1:
 		return "(INO_EXT_TYPE_SNAP_XID)"

@@ -19,7 +19,7 @@ func revertToXID(t *testing.T, image string) uint64 {
 		t.Fatalf("open %s: %v", image, err)
 	}
 	defer closer.Close()
-	defer c.Free()
+	defer c.Close()
 	v, err := c.VolumeBySelector("0")
 	if err != nil {
 		t.Fatalf("volume: %v", err)

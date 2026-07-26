@@ -35,9 +35,9 @@ func NewDataBlock(size int) (*DataBlock, error) {
 	}, nil
 }
 
-// Free releases resources associated with the data block
+// Close releases resources associated with the data block
 // This method clears sensitive data before allowing garbage collection
-func (db *DataBlock) Free() error {
+func (db *DataBlock) Close() error {
 	if db == nil {
 		return fmt.Errorf("invalid data block")
 	}

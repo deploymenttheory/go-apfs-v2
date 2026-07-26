@@ -259,7 +259,7 @@ func (r *dataBlockReader) Seek(offset int64, whence int) (int64, error) {
 // Close implements io.Closer interface
 func (r *dataBlockReader) Close() error {
 	if r.dataHandle != nil {
-		return r.dataHandle.Free()
+		return r.dataHandle.Close()
 	}
 	return nil
 }
@@ -359,7 +359,7 @@ func (r *compressedDataReader) Seek(offset int64, whence int) (int64, error) {
 // Close implements io.Closer interface
 func (r *compressedDataReader) Close() error {
 	if r.dataHandle != nil {
-		return r.dataHandle.Free()
+		return r.dataHandle.Close()
 	}
 	return nil
 }

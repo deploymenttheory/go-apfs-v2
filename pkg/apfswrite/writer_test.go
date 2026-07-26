@@ -76,7 +76,7 @@ func TestCreateContainerReadRoundTrip(t *testing.T) {
 			}
 
 			// Container UUID.
-			gotCUUID, err := container.GetIdentifier()
+			gotCUUID, err := container.Identifier()
 			if err != nil {
 				t.Fatalf("container GetIdentifier: %v", err)
 			}
@@ -95,7 +95,7 @@ func TestCreateContainerReadRoundTrip(t *testing.T) {
 			v := volumes[0]
 
 			// Name.
-			name, err := v.GetUTF8Name()
+			name, err := v.UTF8Name()
 			if err != nil {
 				t.Fatalf("GetUTF8Name: %v", err)
 			}
@@ -104,7 +104,7 @@ func TestCreateContainerReadRoundTrip(t *testing.T) {
 			}
 
 			// Volume UUID.
-			gotVUUID, err := v.GetIdentifier()
+			gotVUUID, err := v.Identifier()
 			if err != nil {
 				t.Fatalf("volume GetIdentifier: %v", err)
 			}

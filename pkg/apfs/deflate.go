@@ -53,7 +53,7 @@ func BuildDynamicHuffmanTrees(bitStream *BitStream, literalsTree *HuffmanTree, d
 	codeSizeArray := make([]uint8, 316)
 
 	// Read number of code sizes (14 bits total)
-	numberOfCodeSizes, err := bitStream.GetValue(14)
+	numberOfCodeSizes, err := bitStream.Value(14)
 	if err != nil {
 		return fmt.Errorf("unable to retrieve value from bit stream: %w", err)
 	}
@@ -79,7 +79,7 @@ func BuildDynamicHuffmanTrees(bitStream *BitStream, literalsTree *HuffmanTree, d
 
 	// Read code sizes for the code size tree
 	for codeSizeIndex := uint32(0); codeSizeIndex < numberOfCodeSizes; codeSizeIndex++ {
-		codeSize, err := bitStream.GetValue(3)
+		codeSize, err := bitStream.Value(3)
 		if err != nil {
 			return fmt.Errorf("unable to retrieve value from bit stream: %w", err)
 		}
@@ -99,7 +99,7 @@ func BuildDynamicHuffmanTrees(bitStream *BitStream, literalsTree *HuffmanTree, d
 	if err != nil {
 		return fmt.Errorf("unable to build codes tree: %w", err)
 	}
-	defer codesTree.Free()
+	defer codesTree.Close()
 
 	success, err := codesTree.Build(codeSizeArray, 19)
 	if err != nil {
@@ -114,7 +114,7 @@ func BuildDynamicHuffmanTrees(bitStream *BitStream, literalsTree *HuffmanTree, d
 	codeSizeIndex := uint32(0)
 
 	for codeSizeIndex < totalCodeSizes {
-		symbol, err := codesTree.GetSymbolFromBitStream(bitStream)
+		symbol, err := codesTree.SymbolFromBitStream(bitStream)
 		if err != nil {
 			return fmt.Errorf("unable to retrieve literal value from bit stream: %w", err)
 		}
@@ -135,21 +135,21 @@ func BuildDynamicHuffmanTrees(bitStream *BitStream, literalsTree *HuffmanTree, d
 
 			codeSize = uint32(codeSizeArray[codeSizeIndex-1])
 
-			value, err := bitStream.GetValue(2)
+			value, err := bitStream.Value(2)
 			if err != nil {
 				return fmt.Errorf("unable to retrieve value from bit stream: %w", err)
 			}
 			timesToRepeat = value + 3
 
 		} else if symbol == 17 {
-			value, err := bitStream.GetValue(3)
+			value, err := bitStream.Value(3)
 			if err != nil {
 				return fmt.Errorf("unable to retrieve value from bit stream: %w", err)
 			}
 			timesToRepeat = value + 3
 
 		} else if symbol == 18 {
-			value, err := bitStream.GetValue(7)
+			value, err := bitStream.Value(7)
 			if err != nil {
 				return fmt.Errorf("unable to retrieve value from bit stream: %w", err)
 			}
@@ -249,7 +249,7 @@ func DecodeHuffman(bitStream *BitStream, literalsTree *HuffmanTree, distancesTre
 	dataOffset := *uncompressedDataOffset
 
 	for {
-		symbol, err := literalsTree.GetSymbolFromBitStream(bitStream)
+		symbol, err := literalsTree.SymbolFromBitStream(bitStream)
 		if err != nil {
 			return fmt.Errorf("unable to retrieve literal value from bit stream: %w", err)
 		}
@@ -268,7 +268,7 @@ func DecodeHuffman(bitStream *BitStream, literalsTree *HuffmanTree, distancesTre
 
 			numberOfExtraBits := deflateLiteralCodesNumberOfExtraBits[symbol]
 
-			extraBits, err := bitStream.GetValue(uint8(numberOfExtraBits))
+			extraBits, err := bitStream.Value(uint8(numberOfExtraBits))
 			if err != nil {
 				return fmt.Errorf("unable to retrieve literal extra value from bit stream: %w", err)
 			}
@@ -276,14 +276,14 @@ func DecodeHuffman(bitStream *BitStream, literalsTree *HuffmanTree, distancesTre
 			compressionSize := deflateLiteralCodesBase[symbol] + uint16(extraBits)
 
 			// Get distance symbol
-			distanceSymbol, err := distancesTree.GetSymbolFromBitStream(bitStream)
+			distanceSymbol, err := distancesTree.SymbolFromBitStream(bitStream)
 			if err != nil {
 				return fmt.Errorf("unable to retrieve distance value from bit stream: %w", err)
 			}
 
 			numberOfExtraBits = deflateDistanceCodesNumberOfExtraBits[distanceSymbol]
 
-			extraBits, err = bitStream.GetValue(uint8(numberOfExtraBits))
+			extraBits, err = bitStream.Value(uint8(numberOfExtraBits))
 			if err != nil {
 				return fmt.Errorf("unable to retrieve distance extra value from bit stream: %w", err)
 			}
@@ -498,7 +498,7 @@ func ReadBlockHeader(bitStream *BitStream, blockType *uint8, lastBlockFlag *uint
 		return fmt.Errorf("invalid last block flag")
 	}
 
-	value32bit, err := bitStream.GetValue(3)
+	value32bit, err := bitStream.Value(3)
 	if err != nil {
 		return fmt.Errorf("unable to retrieve value from bit stream: %w", err)
 	}
@@ -532,14 +532,14 @@ func ReadBlock(bitStream *BitStream, blockType uint8, fixedHuffmanLiteralsTree *
 		skipBits := bitStream.BitBufferSize & 0x07
 
 		if skipBits > 0 {
-			_, err := bitStream.GetValue(skipBits)
+			_, err := bitStream.Value(skipBits)
 			if err != nil {
 				return fmt.Errorf("unable to retrieve value from bit stream: %w", err)
 			}
 		}
 
 		// Read block size (32 bits)
-		blockSize, err := bitStream.GetValue(32)
+		blockSize, err := bitStream.Value(32)
 		if err != nil {
 			return fmt.Errorf("unable to retrieve value from bit stream: %w", err)
 		}
@@ -584,13 +584,13 @@ func ReadBlock(bitStream *BitStream, blockType uint8, fixedHuffmanLiteralsTree *
 		if err != nil {
 			return fmt.Errorf("unable to build dynamic literals Huffman tree: %w", err)
 		}
-		defer dynamicHuffmanLiteralsTree.Free()
+		defer dynamicHuffmanLiteralsTree.Close()
 
 		dynamicHuffmanDistancesTree, err := NewHuffmanTree(30, 15)
 		if err != nil {
 			return fmt.Errorf("unable to build dynamic distances Huffman tree: %w", err)
 		}
-		defer dynamicHuffmanDistancesTree.Free()
+		defer dynamicHuffmanDistancesTree.Close()
 
 		err = BuildDynamicHuffmanTrees(bitStream, dynamicHuffmanLiteralsTree, dynamicHuffmanDistancesTree)
 		if err != nil {
@@ -663,7 +663,7 @@ func DeflateDecompress(compressedData []byte, compressedDataSize int, uncompress
 				fixedHuffmanDistancesTree, err = NewHuffmanTree(30, 15)
 				if err != nil {
 					if fixedHuffmanLiteralsTree != nil {
-						fixedHuffmanLiteralsTree.Free()
+						fixedHuffmanLiteralsTree.Close()
 					}
 					return fmt.Errorf("unable to build fixed distances Huffman tree: %w", err)
 				}
@@ -671,10 +671,10 @@ func DeflateDecompress(compressedData []byte, compressedDataSize int, uncompress
 				err = BuildFixedHuffmanTrees(fixedHuffmanLiteralsTree, fixedHuffmanDistancesTree)
 				if err != nil {
 					if fixedHuffmanLiteralsTree != nil {
-						fixedHuffmanLiteralsTree.Free()
+						fixedHuffmanLiteralsTree.Close()
 					}
 					if fixedHuffmanDistancesTree != nil {
-						fixedHuffmanDistancesTree.Free()
+						fixedHuffmanDistancesTree.Close()
 					}
 					return fmt.Errorf("unable to build fixed Huffman trees: %w", err)
 				}
@@ -684,10 +684,10 @@ func DeflateDecompress(compressedData []byte, compressedDataSize int, uncompress
 		err = ReadBlock(bitStream, blockType, fixedHuffmanLiteralsTree, fixedHuffmanDistancesTree, uncompressedData, safeUncompressedDataSize, &uncompressedDataOffset)
 		if err != nil {
 			if fixedHuffmanDistancesTree != nil {
-				fixedHuffmanDistancesTree.Free()
+				fixedHuffmanDistancesTree.Close()
 			}
 			if fixedHuffmanLiteralsTree != nil {
-				fixedHuffmanLiteralsTree.Free()
+				fixedHuffmanLiteralsTree.Close()
 			}
 			return fmt.Errorf("unable to read block of compressed data: %w", err)
 		}
@@ -698,10 +698,10 @@ func DeflateDecompress(compressedData []byte, compressedDataSize int, uncompress
 	}
 
 	if fixedHuffmanDistancesTree != nil {
-		fixedHuffmanDistancesTree.Free()
+		fixedHuffmanDistancesTree.Close()
 	}
 	if fixedHuffmanLiteralsTree != nil {
-		fixedHuffmanLiteralsTree.Free()
+		fixedHuffmanLiteralsTree.Close()
 	}
 
 	*uncompressedDataSize = uncompressedDataOffset
@@ -765,7 +765,7 @@ func DeflateDecompressZlib(compressedData []byte, compressedDataSize int, uncomp
 				fixedHuffmanDistancesTree, err = NewHuffmanTree(30, 15)
 				if err != nil {
 					if fixedHuffmanLiteralsTree != nil {
-						fixedHuffmanLiteralsTree.Free()
+						fixedHuffmanLiteralsTree.Close()
 					}
 					return fmt.Errorf("unable to build fixed distances Huffman tree: %w", err)
 				}
@@ -773,10 +773,10 @@ func DeflateDecompressZlib(compressedData []byte, compressedDataSize int, uncomp
 				err = BuildFixedHuffmanTrees(fixedHuffmanLiteralsTree, fixedHuffmanDistancesTree)
 				if err != nil {
 					if fixedHuffmanLiteralsTree != nil {
-						fixedHuffmanLiteralsTree.Free()
+						fixedHuffmanLiteralsTree.Close()
 					}
 					if fixedHuffmanDistancesTree != nil {
-						fixedHuffmanDistancesTree.Free()
+						fixedHuffmanDistancesTree.Close()
 					}
 					return fmt.Errorf("unable to build fixed Huffman trees: %w", err)
 				}
@@ -786,10 +786,10 @@ func DeflateDecompressZlib(compressedData []byte, compressedDataSize int, uncomp
 		err = ReadBlock(bitStream, blockType, fixedHuffmanLiteralsTree, fixedHuffmanDistancesTree, uncompressedData, safeUncompressedDataSize, &uncompressedDataOffset)
 		if err != nil {
 			if fixedHuffmanDistancesTree != nil {
-				fixedHuffmanDistancesTree.Free()
+				fixedHuffmanDistancesTree.Close()
 			}
 			if fixedHuffmanLiteralsTree != nil {
-				fixedHuffmanLiteralsTree.Free()
+				fixedHuffmanLiteralsTree.Close()
 			}
 			return fmt.Errorf("unable to read block of compressed data: %w", err)
 		}
@@ -812,30 +812,30 @@ func DeflateDecompressZlib(compressedData []byte, compressedDataSize int, uncomp
 		calculatedChecksum, err := CalculateAdler32(uncompressedData, uncompressedDataOffset, 1)
 		if err != nil {
 			if fixedHuffmanDistancesTree != nil {
-				fixedHuffmanDistancesTree.Free()
+				fixedHuffmanDistancesTree.Close()
 			}
 			if fixedHuffmanLiteralsTree != nil {
-				fixedHuffmanLiteralsTree.Free()
+				fixedHuffmanLiteralsTree.Close()
 			}
 			return fmt.Errorf("unable to calculate checksum: %w", err)
 		}
 
 		if storedChecksum != calculatedChecksum {
 			if fixedHuffmanDistancesTree != nil {
-				fixedHuffmanDistancesTree.Free()
+				fixedHuffmanDistancesTree.Close()
 			}
 			if fixedHuffmanLiteralsTree != nil {
-				fixedHuffmanLiteralsTree.Free()
+				fixedHuffmanLiteralsTree.Close()
 			}
 			return fmt.Errorf("checksum does not match (stored: 0x%08x, calculated: 0x%08x)", storedChecksum, calculatedChecksum)
 		}
 	}
 
 	if fixedHuffmanDistancesTree != nil {
-		fixedHuffmanDistancesTree.Free()
+		fixedHuffmanDistancesTree.Close()
 	}
 	if fixedHuffmanLiteralsTree != nil {
-		fixedHuffmanLiteralsTree.Free()
+		fixedHuffmanLiteralsTree.Close()
 	}
 
 	*uncompressedDataSize = uncompressedDataOffset

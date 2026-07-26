@@ -205,16 +205,6 @@ func NewContainerSuperblock() (*ContainerSuperblock, error) {
 	return &ContainerSuperblock{}, nil
 }
 
-// Free releases resources associated with the container superblock
-func (csb *ContainerSuperblock) Free() error {
-	if csb == nil {
-		return fmt.Errorf("invalid container superblock")
-	}
-
-	// Nothing to free currently
-	return nil
-}
-
 // ReadFrom reads the container superblock from a file
 func (csb *ContainerSuperblock) ReadFrom(
 	reader io.ReaderAt,
@@ -385,8 +375,8 @@ func (csb *ContainerSuperblock) ReadData(data []byte) error {
 	return nil
 }
 
-// GetContainerIdentifier retrieves the container identifier (UUID)
-func (csb *ContainerSuperblock) GetContainerIdentifier() ([]byte, error) {
+// ContainerIdentifier retrieves the container identifier (UUID)
+func (csb *ContainerSuperblock) ContainerIdentifier() ([]byte, error) {
 	if csb == nil {
 		return nil, fmt.Errorf("invalid container superblock")
 	}
@@ -397,9 +387,9 @@ func (csb *ContainerSuperblock) GetContainerIdentifier() ([]byte, error) {
 	return identifier, nil
 }
 
-// GetVolumeObjectIdentifiers returns the array of volume object identifiers
+// VolumeObjectIdentifiers returns the array of volume object identifiers
 // Returns a slice of uint64 values (non-zero entries only)
-func (csb *ContainerSuperblock) GetVolumeObjectIdentifiers() ([]uint64, error) {
+func (csb *ContainerSuperblock) VolumeObjectIdentifiers() ([]uint64, error) {
 	if csb == nil {
 		return nil, fmt.Errorf("invalid container superblock")
 	}

@@ -86,14 +86,14 @@ func OpenImage(path string, opts *OpenOptions) (*Container, io.Closer, error) {
 // Volumes returns all volumes in the container. Encrypted volumes are
 // unlocked with the passwords given at open time when possible.
 func (c *Container) Volumes() ([]*Volume, error) {
-	count, err := c.GetNumberOfVolumes()
+	count, err := c.NumberOfVolumes()
 	if err != nil {
 		return nil, err
 	}
 
 	volumes := make([]*Volume, 0, count)
 	for index := range count {
-		volume, err := c.GetVolume(index)
+		volume, err := c.Volume(index)
 		if err != nil {
 			return nil, fmt.Errorf("unable to open volume %d: %w", index, err)
 		}
@@ -113,7 +113,7 @@ func (c *Container) VolumeBySelector(selector string) (*Volume, error) {
 
 	// Numeric selector: volume index
 	if index, err := strconv.Atoi(selector); err == nil {
-		volume, err := c.GetVolume(index)
+		volume, err := c.Volume(index)
 		if err != nil {
 			return nil, err
 		}
@@ -127,10 +127,10 @@ func (c *Container) VolumeBySelector(selector string) (*Volume, error) {
 	}
 
 	for _, volume := range volumes {
-		if name, err := volume.GetUTF8Name(); err == nil && name == selector {
+		if name, err := volume.UTF8Name(); err == nil && name == selector {
 			return volume, nil
 		}
-		if uuid, err := volume.GetIdentifier(); err == nil && formatVolumeUUID(uuid) == strings.ToLower(selector) {
+		if uuid, err := volume.Identifier(); err == nil && formatVolumeUUID(uuid) == strings.ToLower(selector) {
 			return volume, nil
 		}
 	}

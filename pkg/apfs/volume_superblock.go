@@ -228,15 +228,6 @@ func NewVolumeSuperblock() *VolumeSuperblock {
 	return &VolumeSuperblock{}
 }
 
-// Free releases resources associated with the volume superblock
-func (vs *VolumeSuperblock) Free() error {
-	if vs == nil {
-		return fmt.Errorf("invalid volume superblock")
-	}
-	// Go's garbage collector handles memory cleanup
-	return nil
-}
-
 // ReadFrom reads the volume superblock from a file at the specified offset
 func (vs *VolumeSuperblock) ReadFrom(reader io.ReaderAt, fileOffset int64, isSnapshot bool) error {
 	if vs == nil {
@@ -396,105 +387,49 @@ func (vs *VolumeSuperblock) ReadData(data []byte, isSnapshot bool) error {
 	return nil
 }
 
-// GetVolumeIdentifier retrieves the volume identifier (UUID)
-func (vs *VolumeSuperblock) GetVolumeIdentifier() ([16]byte, error) {
+// VolumeIdentifier retrieves the volume identifier (UUID)
+func (vs *VolumeSuperblock) VolumeIdentifier() ([16]byte, error) {
 	if vs == nil {
 		return [16]byte{}, fmt.Errorf("invalid volume superblock")
 	}
 	return vs.VolumeUUID, nil
 }
 
-// GetFileSystemIndex retrieves the file system index
-func (vs *VolumeSuperblock) GetFileSystemIndex() (uint32, error) {
+// FileSystemIndex retrieves the file system index
+func (vs *VolumeSuperblock) FileSystemIndex() (uint32, error) {
 	if vs == nil {
 		return 0, fmt.Errorf("invalid volume superblock")
 	}
 	return vs.FSIndex, nil
 }
 
-// GetUnmountTime retrieves the last unmount time (nanoseconds since Unix epoch)
-func (vs *VolumeSuperblock) GetUnmountTime() (uint64, error) {
-	if vs == nil {
-		return 0, fmt.Errorf("invalid volume superblock")
-	}
-	return vs.UnmountTime, nil
-}
-
-// GetRevertToTransactionIdentifier retrieves the revert-to transaction identifier
-func (vs *VolumeSuperblock) GetRevertToTransactionIdentifier() (uint64, error) {
+// RevertToTransactionIdentifier retrieves the revert-to transaction identifier
+func (vs *VolumeSuperblock) RevertToTransactionIdentifier() (uint64, error) {
 	if vs == nil {
 		return 0, fmt.Errorf("invalid volume superblock")
 	}
 	return vs.RevertToXID, nil
 }
 
-// GetRevertToSuperblockObjectIdentifier retrieves the revert-to superblock object identifier
-func (vs *VolumeSuperblock) GetRevertToSuperblockObjectIdentifier() (uint64, error) {
+// RevertToSuperblockObjectIdentifier retrieves the revert-to superblock object identifier
+func (vs *VolumeSuperblock) RevertToSuperblockObjectIdentifier() (uint64, error) {
 	if vs == nil {
 		return 0, fmt.Errorf("invalid volume superblock")
 	}
 	return vs.RevertToSblockOID, nil
 }
 
-// GetNumberOfFiles retrieves the number of regular files
-func (vs *VolumeSuperblock) GetNumberOfFiles() (uint64, error) {
-	if vs == nil {
-		return 0, fmt.Errorf("invalid volume superblock")
-	}
-	return vs.NumberOfFiles, nil
-}
-
-// GetNumberOfDirectories retrieves the number of directories
-func (vs *VolumeSuperblock) GetNumberOfDirectories() (uint64, error) {
-	if vs == nil {
-		return 0, fmt.Errorf("invalid volume superblock")
-	}
-	return vs.NumberOfDirectories, nil
-}
-
-// GetNumberOfSymlinks retrieves the number of symbolic links
-func (vs *VolumeSuperblock) GetNumberOfSymlinks() (uint64, error) {
-	if vs == nil {
-		return 0, fmt.Errorf("invalid volume superblock")
-	}
-	return vs.NumberOfSymlinks, nil
-}
-
-// GetNumberOfOtherFileSystemObjects retrieves the number of other file system objects
-func (vs *VolumeSuperblock) GetNumberOfOtherFileSystemObjects() (uint64, error) {
-	if vs == nil {
-		return 0, fmt.Errorf("invalid volume superblock")
-	}
-	return vs.NumberOfOtherFileSystemObjects, nil
-}
-
-// GetNumberOfSnapshots retrieves the number of snapshots
-func (vs *VolumeSuperblock) GetNumberOfSnapshots() (uint64, error) {
+// NumberOfSnapshots retrieves the number of snapshots
+func (vs *VolumeSuperblock) NumberOfSnapshots() (uint64, error) {
 	if vs == nil {
 		return 0, fmt.Errorf("invalid volume superblock")
 	}
 	return vs.SnapshotCount, nil
 }
 
-// GetTotalBlocksAllocated retrieves the total blocks ever allocated
-func (vs *VolumeSuperblock) GetTotalBlocksAllocated() (uint64, error) {
-	if vs == nil {
-		return 0, fmt.Errorf("invalid volume superblock")
-	}
-	return vs.TotalBlocksAllocated, nil
-}
-
-// GetTotalBlocksFreed retrieves the total blocks ever freed
-func (vs *VolumeSuperblock) GetTotalBlocksFreed() (uint64, error) {
-	if vs == nil {
-		return 0, fmt.Errorf("invalid volume superblock")
-	}
-	return vs.TotalBlocksFreed, nil
-}
-
-// GetUTF8VolumeNameSize retrieves the size of the UTF-8 encoded volume name
+// UTF8VolumeNameSize retrieves the size of the UTF-8 encoded volume name
 // The returned size includes the end of string character
-func (vs *VolumeSuperblock) GetUTF8VolumeNameSize() (int, error) {
+func (vs *VolumeSuperblock) UTF8VolumeNameSize() (int, error) {
 	if vs == nil {
 		return 0, fmt.Errorf("invalid volume superblock")
 	}
@@ -502,17 +437,17 @@ func (vs *VolumeSuperblock) GetUTF8VolumeNameSize() (int, error) {
 	return len(vs.volumeName) + 1, nil
 }
 
-// GetUTF8VolumeName retrieves the UTF-8 encoded volume name
-func (vs *VolumeSuperblock) GetUTF8VolumeName() (string, error) {
+// UTF8VolumeName retrieves the UTF-8 encoded volume name
+func (vs *VolumeSuperblock) UTF8VolumeName() (string, error) {
 	if vs == nil {
 		return "", fmt.Errorf("invalid volume superblock")
 	}
 	return vs.volumeName, nil
 }
 
-// GetUTF16VolumeNameSize retrieves the size of the UTF-16 encoded volume name
+// UTF16VolumeNameSize retrieves the size of the UTF-16 encoded volume name
 // The returned size includes the end of string character
-func (vs *VolumeSuperblock) GetUTF16VolumeNameSize() (int, error) {
+func (vs *VolumeSuperblock) UTF16VolumeNameSize() (int, error) {
 	if vs == nil {
 		return 0, fmt.Errorf("invalid volume superblock")
 	}
@@ -525,8 +460,8 @@ func (vs *VolumeSuperblock) GetUTF16VolumeNameSize() (int, error) {
 	return len(utf16Data) + 1, nil
 }
 
-// GetUTF16VolumeName retrieves the UTF-16 encoded volume name
-func (vs *VolumeSuperblock) GetUTF16VolumeName() ([]uint16, error) {
+// UTF16VolumeName retrieves the UTF-16 encoded volume name
+func (vs *VolumeSuperblock) UTF16VolumeName() ([]uint16, error) {
 	if vs == nil {
 		return nil, fmt.Errorf("invalid volume superblock")
 	}
@@ -543,8 +478,8 @@ func (vs *VolumeSuperblock) GetUTF16VolumeName() ([]uint16, error) {
 	return result, nil
 }
 
-// GetFormattedBy retrieves who formatted this volume
-func (vs *VolumeSuperblock) GetFormattedBy() string {
+// FormattedByString retrieves who formatted this volume
+func (vs *VolumeSuperblock) FormattedByString() string {
 	if vs == nil {
 		return ""
 	}
@@ -557,8 +492,8 @@ func (vs *VolumeSuperblock) GetFormattedBy() string {
 	return string(vs.FormattedBy.ID[:])
 }
 
-// GetLastModifiedBy retrieves who last modified this volume (most recent entry)
-func (vs *VolumeSuperblock) GetLastModifiedBy() string {
+// LastModifiedBy retrieves who last modified this volume (most recent entry)
+func (vs *VolumeSuperblock) LastModifiedBy() string {
 	if vs == nil {
 		return ""
 	}
@@ -585,9 +520,9 @@ func (vs *VolumeSuperblock) GetLastModifiedBy() string {
 	return ""
 }
 
-// GetModifiedByHistory retrieves the full modification history
+// ModifiedByHistory retrieves the full modification history
 // Returns a slice of strings from most recent to oldest, excluding empty entries
-func (vs *VolumeSuperblock) GetModifiedByHistory() []string {
+func (vs *VolumeSuperblock) ModifiedByHistory() []string {
 	if vs == nil {
 		return nil
 	}

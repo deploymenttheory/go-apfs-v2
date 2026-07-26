@@ -101,8 +101,8 @@ func NewContainerKeybag() (*ContainerKeybag, error) {
 	}, nil
 }
 
-// Free releases resources associated with the container keybag
-func (ckb *ContainerKeybag) Free() error {
+// Close releases resources associated with the container keybag
+func (ckb *ContainerKeybag) Close() error {
 	if ckb == nil {
 		return fmt.Errorf("invalid container keybag")
 	}
@@ -275,9 +275,9 @@ func (ckb *ContainerKeybag) ReadData(data []byte) error {
 	return nil
 }
 
-// GetVolumeKeybagExtentByIdentifier retrieves the volume keybag extent for a specific volume
+// VolumeKeybagExtentByIdentifier retrieves the volume keybag extent for a specific volume
 // Returns block number and number of blocks, or error
-func (ckb *ContainerKeybag) GetVolumeKeybagExtentByIdentifier(
+func (ckb *ContainerKeybag) VolumeKeybagExtentByIdentifier(
 	volumeIdentifier []byte,
 ) (blockNumber uint64, numberOfBlocks uint64, found bool, err error) {
 	if ckb == nil {
@@ -315,9 +315,9 @@ func (ckb *ContainerKeybag) GetVolumeKeybagExtentByIdentifier(
 	return 0, 0, false, nil // Not found
 }
 
-// GetVolumeMasterKeyByIdentifier retrieves the volume master key for a specific volume
+// VolumeMasterKeyByIdentifier retrieves the volume master key for a specific volume
 // Returns the decrypted master key, or error
-func (ckb *ContainerKeybag) GetVolumeMasterKeyByIdentifier(
+func (ckb *ContainerKeybag) VolumeMasterKeyByIdentifier(
 	volumeIdentifier []byte,
 	volumeKey []byte,
 ) (masterKey []byte, found bool, err error) {

@@ -12,7 +12,7 @@ import (
 // This wraps apfs.FileEntry and provides additional mount-specific functionality
 type MountFileEntry struct {
 	FileSystem *MountFileSystem
-	Name       string
+	name       string
 	FileEntry  *apfs.FileEntry
 }
 
@@ -27,31 +27,31 @@ func NewMountFileEntry(fs *MountFileSystem, name string, entry *apfs.FileEntry) 
 
 	return &MountFileEntry{
 		FileSystem: fs,
-		Name:       name,
+		name:       name,
 		FileEntry:  entry,
 	}, nil
 }
 
 // Free frees the mount file entry resources
-func (mfe *MountFileEntry) Free() error {
+func (mfe *MountFileEntry) Close() error {
 	// File entry cleanup is handled by the APFS library
 	mfe.FileEntry = nil
 	mfe.FileSystem = nil
 	return nil
 }
 
-// GetParentFileEntry returns the parent file entry
-func (mfe *MountFileEntry) GetParentFileEntry() (*MountFileEntry, error) {
+// ParentFileEntry returns the parent file entry
+func (mfe *MountFileEntry) ParentFileEntry() (*MountFileEntry, error) {
 	if mfe.FileEntry == nil {
 		return nil, fmt.Errorf("file entry not initialized")
 	}
 
-	parentEntry, err := mfe.FileEntry.GetParentFileEntry()
+	parentEntry, err := mfe.FileEntry.ParentFileEntry()
 	if err != nil {
 		return nil, fmt.Errorf("unable to get parent file entry: %w", err)
 	}
 
-	parentName, err := mfe.FileSystem.GetFilenameFromFileEntry(parentEntry)
+	parentName, err := mfe.FileSystem.FilenameFromFileEntry(parentEntry)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get parent filename: %w", err)
 	}
@@ -59,72 +59,72 @@ func (mfe *MountFileEntry) GetParentFileEntry() (*MountFileEntry, error) {
 	return NewMountFileEntry(mfe.FileSystem, parentName, parentEntry)
 }
 
-// GetCreationTime returns the creation time in nanoseconds since epoch
-func (mfe *MountFileEntry) GetCreationTime() (int64, error) {
+// CreationTime returns the creation time in nanoseconds since epoch
+func (mfe *MountFileEntry) CreationTime() (int64, error) {
 	if mfe.FileEntry == nil {
 		return 0, fmt.Errorf("file entry not initialized")
 	}
-	return mfe.FileEntry.GetCreationTime()
+	return mfe.FileEntry.CreationTime()
 }
 
-// GetAccessTime returns the access time in nanoseconds since epoch
-func (mfe *MountFileEntry) GetAccessTime() (int64, error) {
+// AccessTime returns the access time in nanoseconds since epoch
+func (mfe *MountFileEntry) AccessTime() (int64, error) {
 	if mfe.FileEntry == nil {
 		return 0, fmt.Errorf("file entry not initialized")
 	}
-	return mfe.FileEntry.GetAccessTime()
+	return mfe.FileEntry.AccessTime()
 }
 
-// GetModificationTime returns the modification time in nanoseconds since epoch
-func (mfe *MountFileEntry) GetModificationTime() (int64, error) {
+// ModificationTime returns the modification time in nanoseconds since epoch
+func (mfe *MountFileEntry) ModificationTime() (int64, error) {
 	if mfe.FileEntry == nil {
 		return 0, fmt.Errorf("file entry not initialized")
 	}
-	return mfe.FileEntry.GetModificationTime()
+	return mfe.FileEntry.ModificationTime()
 }
 
-// GetInodeChangeTime returns the inode change time in nanoseconds since epoch
-func (mfe *MountFileEntry) GetInodeChangeTime() (int64, error) {
+// InodeChangeTime returns the inode change time in nanoseconds since epoch
+func (mfe *MountFileEntry) InodeChangeTime() (int64, error) {
 	if mfe.FileEntry == nil {
 		return 0, fmt.Errorf("file entry not initialized")
 	}
-	return mfe.FileEntry.GetInodeChangeTime()
+	return mfe.FileEntry.InodeChangeTime()
 }
 
-// GetFileMode returns the file mode (permissions)
-func (mfe *MountFileEntry) GetFileMode() (uint16, error) {
+// FileMode returns the file mode (permissions)
+func (mfe *MountFileEntry) FileMode() (uint16, error) {
 	if mfe.FileEntry == nil {
 		return 0, fmt.Errorf("file entry not initialized")
 	}
-	return mfe.FileEntry.GetFileMode()
+	return mfe.FileEntry.FileMode()
 }
 
-// GetName returns the name of the file entry
-func (mfe *MountFileEntry) GetName() (string, error) {
-	if mfe.Name != "" {
-		return mfe.Name, nil
+// Name returns the name of the file entry
+func (mfe *MountFileEntry) Name() (string, error) {
+	if mfe.name != "" {
+		return mfe.name, nil
 	}
 
 	if mfe.FileEntry == nil {
 		return "", fmt.Errorf("file entry not initialized")
 	}
 
-	name, err := mfe.FileEntry.GetUTF8Name()
+	name, err := mfe.FileEntry.UTF8Name()
 	if err != nil {
 		return "", fmt.Errorf("unable to get file entry name: %w", err)
 	}
 
-	mfe.Name = string(name)
-	return mfe.Name, nil
+	mfe.name = string(name)
+	return mfe.name, nil
 }
 
-// GetSymbolicLinkTarget returns the target of a symbolic link
-func (mfe *MountFileEntry) GetSymbolicLinkTarget() (string, error) {
+// SymbolicLinkTarget returns the target of a symbolic link
+func (mfe *MountFileEntry) SymbolicLinkTarget() (string, error) {
 	if mfe.FileEntry == nil {
 		return "", fmt.Errorf("file entry not initialized")
 	}
 
-	target, err := mfe.FileEntry.GetSymbolicLinkTarget()
+	target, err := mfe.FileEntry.SymbolicLinkTarget()
 	if err != nil {
 		return "", fmt.Errorf("unable to get symbolic link target: %w", err)
 	}
@@ -132,26 +132,26 @@ func (mfe *MountFileEntry) GetSymbolicLinkTarget() (string, error) {
 	return target, nil
 }
 
-// GetNumberOfSubFileEntries returns the number of sub-entries (for directories)
-func (mfe *MountFileEntry) GetNumberOfSubFileEntries() (int, error) {
+// NumberOfSubFileEntries returns the number of sub-entries (for directories)
+func (mfe *MountFileEntry) NumberOfSubFileEntries() (int, error) {
 	if mfe.FileEntry == nil {
 		return 0, fmt.Errorf("file entry not initialized")
 	}
-	return mfe.FileEntry.GetNumberOfSubFileEntries()
+	return mfe.FileEntry.NumberOfSubFileEntries()
 }
 
-// GetSubFileEntryByIndex returns a sub-entry by its index
-func (mfe *MountFileEntry) GetSubFileEntryByIndex(index int) (*MountFileEntry, error) {
+// SubFileEntryByIndex returns a sub-entry by its index
+func (mfe *MountFileEntry) SubFileEntryByIndex(index int) (*MountFileEntry, error) {
 	if mfe.FileEntry == nil {
 		return nil, fmt.Errorf("file entry not initialized")
 	}
 
-	subEntry, err := mfe.FileEntry.GetSubFileEntryByIndex(index)
+	subEntry, err := mfe.FileEntry.SubFileEntryByIndex(index)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get sub-entry %d: %w", index, err)
 	}
 
-	subName, err := mfe.FileSystem.GetFilenameFromFileEntry(subEntry)
+	subName, err := mfe.FileSystem.FilenameFromFileEntry(subEntry)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get sub-entry filename: %w", err)
 	}
@@ -184,20 +184,20 @@ func (mfe *MountFileEntry) ReadBufferAtOffset(buffer []byte, offset int64) (int,
 	return n, nil
 }
 
-// GetSize returns the size of the file
-func (mfe *MountFileEntry) GetSize() (uint64, error) {
+// Size returns the size of the file
+func (mfe *MountFileEntry) Size() (uint64, error) {
 	if mfe.FileEntry == nil {
 		return 0, fmt.Errorf("file entry not initialized")
 	}
 
 	// Try to get data size first (for files)
-	size, err := mfe.FileEntry.GetDataSize()
+	size, err := mfe.FileEntry.DataSize()
 	if err == nil {
 		return uint64(size), nil
 	}
 
 	// Fall back to regular size
-	regularSize, err := mfe.FileEntry.GetSize()
+	regularSize, err := mfe.FileEntry.Size()
 	if err != nil {
 		return 0, err
 	}
@@ -206,7 +206,7 @@ func (mfe *MountFileEntry) GetSize() (uint64, error) {
 
 // IsDirectory checks if the entry is a directory
 func (mfe *MountFileEntry) IsDirectory() (bool, error) {
-	fileMode, err := mfe.GetFileMode()
+	fileMode, err := mfe.FileMode()
 	if err != nil {
 		return false, err
 	}
@@ -215,7 +215,7 @@ func (mfe *MountFileEntry) IsDirectory() (bool, error) {
 
 // IsRegularFile checks if the entry is a regular file
 func (mfe *MountFileEntry) IsRegularFile() (bool, error) {
-	fileMode, err := mfe.GetFileMode()
+	fileMode, err := mfe.FileMode()
 	if err != nil {
 		return false, err
 	}
@@ -224,41 +224,41 @@ func (mfe *MountFileEntry) IsRegularFile() (bool, error) {
 
 // IsSymbolicLink checks if the entry is a symbolic link
 func (mfe *MountFileEntry) IsSymbolicLink() (bool, error) {
-	fileMode, err := mfe.GetFileMode()
+	fileMode, err := mfe.FileMode()
 	if err != nil {
 		return false, err
 	}
 	return (fileMode & 0xA000) == 0xA000, nil // S_IFLNK
 }
 
-// GetIdentifier returns the file entry identifier (inode number)
-func (mfe *MountFileEntry) GetIdentifier() (uint64, error) {
+// Identifier returns the file entry identifier (inode number)
+func (mfe *MountFileEntry) Identifier() (uint64, error) {
 	if mfe.FileEntry == nil {
 		return 0, fmt.Errorf("file entry not initialized")
 	}
-	return mfe.FileEntry.GetIdentifier()
+	return mfe.FileEntry.Identifier()
 }
 
-// GetOwnerIdentifier returns the owner ID
-func (mfe *MountFileEntry) GetOwnerIdentifier() (uint32, error) {
+// OwnerIdentifier returns the owner ID
+func (mfe *MountFileEntry) OwnerIdentifier() (uint32, error) {
 	if mfe.FileEntry == nil {
 		return 0, fmt.Errorf("file entry not initialized")
 	}
-	return mfe.FileEntry.GetOwnerIdentifier()
+	return mfe.FileEntry.OwnerIdentifier()
 }
 
-// GetGroupIdentifier returns the group ID
-func (mfe *MountFileEntry) GetGroupIdentifier() (uint32, error) {
+// GroupIdentifier returns the group ID
+func (mfe *MountFileEntry) GroupIdentifier() (uint32, error) {
 	if mfe.FileEntry == nil {
 		return 0, fmt.Errorf("file entry not initialized")
 	}
-	return mfe.FileEntry.GetGroupIdentifier()
+	return mfe.FileEntry.GroupIdentifier()
 }
 
-// GetNumberOfHardLinks returns the number of hard links
-func (mfe *MountFileEntry) GetNumberOfHardLinks() (uint32, error) {
+// NumberOfHardLinks returns the number of hard links
+func (mfe *MountFileEntry) NumberOfHardLinks() (uint32, error) {
 	if mfe.FileEntry == nil {
 		return 0, fmt.Errorf("file entry not initialized")
 	}
-	return mfe.FileEntry.GetNumberOfLinks()
+	return mfe.FileEntry.NumberOfLinks()
 }

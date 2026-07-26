@@ -234,16 +234,16 @@ func (n *BTreeNode) HasFixedKVSize() bool {
 	return n.NodeHeader.HasFixedKVSize()
 }
 
-// GetNumberOfEntries returns the number of entries in this node
-func (n *BTreeNode) GetNumberOfEntries() int {
+// NumberOfEntries returns the number of entries in this node
+func (n *BTreeNode) NumberOfEntries() int {
 	if n == nil {
 		return 0
 	}
 	return len(n.Entries)
 }
 
-// GetEntryByIndex returns the entry at the specified index
-func (n *BTreeNode) GetEntryByIndex(index int) (*BTreeEntry, error) {
+// EntryByIndex returns the entry at the specified index
+func (n *BTreeNode) EntryByIndex(index int) (*BTreeEntry, error) {
 	if n == nil {
 		return nil, fmt.Errorf("invalid B-tree node")
 	}

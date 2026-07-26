@@ -31,16 +31,6 @@ func NewCompressedDataHeader() (*CompressedDataHeader, error) {
 	}, nil
 }
 
-// Free releases resources associated with the compressed data header
-// In Go, this is primarily for consistency with the C API
-func (cdh *CompressedDataHeader) Free() error {
-	if cdh == nil {
-		return fmt.Errorf("invalid compressed data header")
-	}
-	// Nothing to free in Go, but method exists for API consistency
-	return nil
-}
-
 // ReadData reads the compressed data header from a byte slice
 // Returns true if successful, false if the signature does not match
 func (cdh *CompressedDataHeader) ReadData(data []byte) (bool, error) {

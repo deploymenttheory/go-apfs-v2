@@ -39,8 +39,8 @@ func NewSnapshotMetadataTree(
 	}, nil
 }
 
-// Free releases resources associated with the snapshot metadata tree
-func (t *SnapshotMetadataTree) Free() error {
+// Close releases resources associated with the snapshot metadata tree
+func (t *SnapshotMetadataTree) Close() error {
 	if t == nil {
 		return fmt.Errorf("invalid snapshot metadata tree")
 	}
@@ -72,13 +72,13 @@ func (t *SnapshotMetadataTree) SubNodeOIDFromEntry(
 	// Parse sub node object identifier
 	subNodeObjectIdentifier := binary.LittleEndian.Uint64(entry.ValueData)
 
-	if IsVerbose() {
-		Printf("%s: sub node object identifier: %d (transaction: %d)\n",
+	if isVerbose() {
+		notifyPrintf("%s: sub node object identifier: %d (transaction: %d)\n",
 			"SubNodeOIDFromEntry", subNodeObjectIdentifier, xid)
 	}
 
 	// Get the physical block number from the object map
-	descriptor, err := t.ObjectMapBTree.GetDescriptorByObjectIdentifier(
+	descriptor, err := t.ObjectMapBTree.DescriptorByObjectIdentifier(
 		reader,
 		subNodeObjectIdentifier,
 		xid,
@@ -92,20 +92,20 @@ func (t *SnapshotMetadataTree) SubNodeOIDFromEntry(
 		return 0, nil
 	}
 
-	physicalAddress, err := descriptor.GetPhysicalAddress()
+	physicalAddress, err := descriptor.PhysicalAddress()
 	if err != nil {
 		return 0, fmt.Errorf("unable to get physical address: %w", err)
 	}
 
-	if IsVerbose() {
-		Printf("%s: sub node block number: %d\n", "SubNodeOIDFromEntry", physicalAddress)
+	if isVerbose() {
+		notifyPrintf("%s: sub node block number: %d\n", "SubNodeOIDFromEntry", physicalAddress)
 	}
 
 	return physicalAddress, nil
 }
 
-// GetRootNode retrieves the snapshot metadata tree root node
-func (t *SnapshotMetadataTree) GetRootNode(
+// RootNode retrieves the snapshot metadata tree root node
+func (t *SnapshotMetadataTree) RootNode(
 	reader io.ReaderAt,
 	rootNodeOID uint64,
 ) (*BTreeNode, error) {
@@ -203,8 +203,8 @@ func (t *SnapshotMetadataTree) GetRootNode(
 	return node, nil
 }
 
-// GetSubNode retrieves a snapshot metadata tree sub node
-func (t *SnapshotMetadataTree) GetSubNode(
+// SubNode retrieves a snapshot metadata tree sub node
+func (t *SnapshotMetadataTree) SubNode(
 	reader io.ReaderAt,
 	subNodeOID uint64,
 ) (*BTreeNode, error) {
@@ -285,8 +285,8 @@ func (t *SnapshotMetadataTree) GetSubNode(
 	return node, nil
 }
 
-// GetEntryFromNodeByIdentifier retrieves a B-tree entry from a node by object identifier
-func (t *SnapshotMetadataTree) GetEntryFromNodeByIdentifier(
+// EntryFromNodeByIdentifier retrieves a B-tree entry from a node by object identifier
+func (t *SnapshotMetadataTree) EntryFromNodeByIdentifier(
 	node *BTreeNode,
 	oid uint64,
 ) (*BTreeEntry, error) {
@@ -318,8 +318,8 @@ func (t *SnapshotMetadataTree) GetEntryFromNodeByIdentifier(
 	return nil, nil
 }
 
-// GetEntryByIdentifier retrieves a B-tree entry by object identifier
-func (t *SnapshotMetadataTree) GetEntryByIdentifier(
+// EntryByIdentifier retrieves a B-tree entry by object identifier
+func (t *SnapshotMetadataTree) EntryByIdentifier(
 	reader io.ReaderAt,
 	oid uint64,
 ) (*BTreeNode, *BTreeEntry, error) {
@@ -328,7 +328,7 @@ func (t *SnapshotMetadataTree) GetEntryByIdentifier(
 	}
 
 	// Get the root node
-	node, err := t.GetRootNode(reader, t.RootNodeOID)
+	node, err := t.RootNode(reader, t.RootNodeOID)
 	if err != nil {
 		return nil, nil, fmt.Errorf("unable to get root node: %w", err)
 	}
@@ -344,7 +344,7 @@ func (t *SnapshotMetadataTree) GetEntryByIdentifier(
 
 		if isLeaf {
 			// Search for the entry in the leaf node
-			entry, err := t.GetEntryFromNodeByIdentifier(node, oid)
+			entry, err := t.EntryFromNodeByIdentifier(node, oid)
 			if err != nil {
 				return nil, nil, fmt.Errorf("unable to get entry from node: %w", err)
 			}
@@ -379,7 +379,7 @@ func (t *SnapshotMetadataTree) GetEntryByIdentifier(
 		}
 
 		// Get the sub node
-		node, err = t.GetSubNode(reader, subNodeOID)
+		node, err = t.SubNode(reader, subNodeOID)
 		if err != nil {
 			return nil, nil, fmt.Errorf("unable to get sub node: %w", err)
 		}
@@ -405,8 +405,8 @@ type SnapshotMetadata struct {
 	Name       string
 }
 
-// GetMetadataByObjectIdentifier retrieves snapshot metadata by object identifier
-func (t *SnapshotMetadataTree) GetMetadataByObjectIdentifier(
+// MetadataByObjectIdentifier retrieves snapshot metadata by object identifier
+func (t *SnapshotMetadataTree) MetadataByObjectIdentifier(
 	reader io.ReaderAt,
 	oid uint64,
 ) (*SnapshotMetadata, error) {
@@ -415,7 +415,7 @@ func (t *SnapshotMetadataTree) GetMetadataByObjectIdentifier(
 	}
 
 	// Get the entry
-	_, entry, err := t.GetEntryByIdentifier(reader, oid)
+	_, entry, err := t.EntryByIdentifier(reader, oid)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get entry by identifier: %w", err)
 	}
@@ -443,8 +443,8 @@ func (t *SnapshotMetadataTree) GetMetadataByObjectIdentifier(
 	return metadata, nil
 }
 
-// GetSnapshots retrieves all snapshots from the tree
-func (t *SnapshotMetadataTree) GetSnapshots(
+// Snapshots retrieves all snapshots from the tree
+func (t *SnapshotMetadataTree) Snapshots(
 	reader io.ReaderAt,
 	xid uint64,
 ) ([]*SnapshotMetadata, error) {
@@ -453,7 +453,7 @@ func (t *SnapshotMetadataTree) GetSnapshots(
 	}
 
 	// Get the root node
-	node, err := t.GetRootNode(reader, t.RootNodeOID)
+	node, err := t.RootNode(reader, t.RootNodeOID)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get root node: %w", err)
 	}
@@ -541,14 +541,14 @@ func (t *SnapshotMetadataTree) getSnapshotsFromLeafNode(
 	return nil
 }
 
-// GetNumberOfEntries retrieves the number of snapshot entries in the tree
-func (t *SnapshotMetadataTree) GetNumberOfEntries(reader io.ReaderAt) (int, error) {
+// NumberOfEntries retrieves the number of snapshot entries in the tree
+func (t *SnapshotMetadataTree) NumberOfEntries(reader io.ReaderAt) (int, error) {
 	if t == nil {
 		return 0, fmt.Errorf("invalid snapshot metadata tree")
 	}
 
 	// Get all snapshots
-	snapshots, err := t.GetSnapshots(reader, 0)
+	snapshots, err := t.Snapshots(reader, 0)
 	if err != nil {
 		return 0, fmt.Errorf("unable to get snapshots: %w", err)
 	}
@@ -556,14 +556,14 @@ func (t *SnapshotMetadataTree) GetNumberOfEntries(reader io.ReaderAt) (int, erro
 	return len(snapshots), nil
 }
 
-// GetEntryByIndex retrieves a snapshot metadata entry by index
-func (t *SnapshotMetadataTree) GetEntryByIndex(reader io.ReaderAt, index int) (*SnapshotMetadata, error) {
+// EntryByIndex retrieves a snapshot metadata entry by index
+func (t *SnapshotMetadataTree) EntryByIndex(reader io.ReaderAt, index int) (*SnapshotMetadata, error) {
 	if t == nil {
 		return nil, fmt.Errorf("invalid snapshot metadata tree")
 	}
 
 	// Get all snapshots
-	snapshots, err := t.GetSnapshots(reader, 0)
+	snapshots, err := t.Snapshots(reader, 0)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get snapshots: %w", err)
 	}
@@ -612,7 +612,7 @@ func (t *SnapshotMetadataTree) getSnapshotsFromBranchNode(
 		}
 
 		// Get the sub node
-		subNode, err := t.GetSubNode(reader, subNodeOID)
+		subNode, err := t.SubNode(reader, subNodeOID)
 		if err != nil {
 			return fmt.Errorf("unable to get sub node: %w", err)
 		}

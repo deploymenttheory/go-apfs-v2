@@ -128,13 +128,13 @@ func IsAbsolutePath(path string) bool {
 	return filepath.IsAbs(path)
 }
 
-// GetBasename returns the last element of a path
-func GetBasename(path string) string {
+// Basename returns the last element of a path
+func Basename(path string) string {
 	return filepath.Base(path)
 }
 
-// GetDirname returns the directory portion of a path
-func GetDirname(path string) string {
+// Dirname returns the directory portion of a path
+func Dirname(path string) string {
 	return filepath.Dir(path)
 }
 

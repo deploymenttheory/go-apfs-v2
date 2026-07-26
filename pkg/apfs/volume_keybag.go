@@ -21,8 +21,8 @@ func NewVolumeKeybag() (*VolumeKeybag, error) {
 	}, nil
 }
 
-// Free releases resources associated with the volume keybag
-func (v *VolumeKeybag) Free() error {
+// Close releases resources associated with the volume keybag
+func (v *VolumeKeybag) Close() error {
 	if v == nil {
 		return fmt.Errorf("invalid volume keybag")
 	}
@@ -59,8 +59,8 @@ func (v *VolumeKeybag) ReadFrom(
 	// Read encrypted data
 	encryptedData := make([]byte, dataSize)
 
-	if IsVerbose() {
-		Printf("%s: reading volume keybag data at offset: %d (0x%08x)\n",
+	if isVerbose() {
+		notifyPrintf("%s: reading volume keybag data at offset: %d (0x%08x)\n",
 			"ReadFrom", fileOffset, fileOffset)
 	}
 
@@ -95,8 +95,8 @@ func (v *VolumeKeybag) ReadFrom(
 		return fmt.Errorf("unable to decrypt data: %w", err)
 	}
 
-	if IsVerbose() {
-		Printf("%s: unencrypted volume keybag data:\n", "ReadFrom")
+	if isVerbose() {
+		notifyPrintf("%s: unencrypted volume keybag data:\n", "ReadFrom")
 		PrintData(data, true)
 	}
 
@@ -118,8 +118,8 @@ func (v *VolumeKeybag) ReadData(data []byte) error {
 		return fmt.Errorf("invalid data size value out of bounds")
 	}
 
-	if IsVerbose() {
-		Printf("%s: volume keybag object data:\n", "ReadData")
+	if isVerbose() {
+		notifyPrintf("%s: volume keybag object data:\n", "ReadData")
 		PrintData(data[:32], true)
 	}
 
@@ -136,17 +136,17 @@ func (v *VolumeKeybag) ReadData(data []byte) error {
 		return fmt.Errorf("invalid object subtype: 0x%08x", objectSubtype)
 	}
 
-	if IsVerbose() {
+	if isVerbose() {
 		objectChecksum := binary.LittleEndian.Uint64(data[0:8])
 		oid := binary.LittleEndian.Uint64(data[8:16])
 		objectTransactionIdentifier := binary.LittleEndian.Uint64(data[16:24])
 
-		Printf("%s: object checksum\t\t\t: 0x%08x\n", "ReadData", objectChecksum)
-		Printf("%s: object identifier\t\t\t: %d\n", "ReadData", oid)
-		Printf("%s: object transaction identifier\t: %d\n", "ReadData", objectTransactionIdentifier)
-		Printf("%s: object type\t\t\t\t: 0x%08x\n", "ReadData", objectType)
-		Printf("%s: object subtype\t\t\t\t: 0x%08x\n", "ReadData", objectSubtype)
-		Printf("\n")
+		notifyPrintf("%s: object checksum\t\t\t: 0x%08x\n", "ReadData", objectChecksum)
+		notifyPrintf("%s: object identifier\t\t\t: %d\n", "ReadData", oid)
+		notifyPrintf("%s: object transaction identifier\t: %d\n", "ReadData", objectTransactionIdentifier)
+		notifyPrintf("%s: object type\t\t\t\t: 0x%08x\n", "ReadData", objectType)
+		notifyPrintf("%s: object subtype\t\t\t\t: 0x%08x\n", "ReadData", objectSubtype)
+		notifyPrintf("\n")
 	}
 
 	dataOffset := 32
@@ -191,8 +191,8 @@ func (v *VolumeKeybag) ReadData(data []byte) error {
 				return fmt.Errorf("invalid data size value out of bounds")
 			}
 
-			if IsVerbose() {
-				Printf("%s: alignment padding data:\n", "ReadData")
+			if isVerbose() {
+				notifyPrintf("%s: alignment padding data:\n", "ReadData")
 				PrintData(data[dataOffset:dataOffset+alignmentPaddingSize], true)
 			}
 
@@ -203,9 +203,9 @@ func (v *VolumeKeybag) ReadData(data []byte) error {
 	return nil
 }
 
-// GetVolumeKey retrieves the volume key that can be unlocked with the given passwords
+// VolumeKey retrieves the volume key that can be unlocked with the given passwords
 // Returns true and the key if successful, false if no key could be unlocked
-func (v *VolumeKeybag) GetVolumeKey(
+func (v *VolumeKeybag) VolumeKey(
 	userPassword []byte,
 	recoveryPassword []byte,
 ) ([]byte, bool, error) {

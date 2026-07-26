@@ -129,7 +129,7 @@ func exploreTree(file io.ReaderAt, nodeData []byte, volumeOMap *apfs.ObjectMapBT
 		fmt.Println(strings.Repeat("-", 80))
 		fmt.Println()
 
-		numEntries := node.GetNumberOfEntries()
+		numEntries := node.NumberOfEntries()
 		if numEntries == 0 {
 			fmt.Println("Node has no entries.")
 			return nil
@@ -139,7 +139,7 @@ func exploreTree(file io.ReaderAt, nodeData []byte, volumeOMap *apfs.ObjectMapBT
 
 		// Display all entries
 		for i := 0; i < numEntries; i++ {
-			entry, err := node.GetEntryByIndex(i)
+			entry, err := node.EntryByIndex(i)
 			if err != nil {
 				continue
 			}
@@ -160,7 +160,7 @@ func exploreTree(file io.ReaderAt, nodeData []byte, volumeOMap *apfs.ObjectMapBT
 			continue
 		}
 
-		selectedEntry, _ := node.GetEntryByIndex(idx)
+		selectedEntry, _ := node.EntryByIndex(idx)
 
 		// If leaf node, display record and exit
 		if node.IsLeafNode() {
@@ -179,7 +179,7 @@ func exploreTree(file io.ReaderAt, nodeData []byte, volumeOMap *apfs.ObjectMapBT
 
 		// Resolve through object map
 		maxXID := uint64(0xFFFFFFFFFFFFFFFF)
-		descriptor, err := volumeOMap.GetDescriptorByObjectIdentifier(file, childVirtualOID, maxXID)
+		descriptor, err := volumeOMap.DescriptorByObjectIdentifier(file, childVirtualOID, maxXID)
 		if err != nil || descriptor == nil {
 			fmt.Printf("Need to descend to node with Virtual OID %#x, but the object map lists no objects with this Virtual OID.\n", childVirtualOID)
 			return nil
@@ -259,7 +259,7 @@ func printEntry(idx int, entry *apfs.BTreeEntry, isLeaf bool, nodeData []byte, v
 			fmt.Printf("   ||   Target child node Virtual OID = %#16x", childOID)
 
 			maxXID := uint64(0xFFFFFFFFFFFFFFFF)
-			descriptor, err := volumeOMap.GetDescriptorByObjectIdentifier(file, childOID, maxXID)
+			descriptor, err := volumeOMap.DescriptorByObjectIdentifier(file, childOID, maxXID)
 			if err != nil || descriptor == nil {
 				fmt.Print("  ||  UNRESOLVABLE")
 			} else {
@@ -405,7 +405,7 @@ func resolveVolumeTreeRoots(file io.ReaderAt) (fsAddr, omapAddr uint64, err erro
 	if err != nil {
 		return 0, 0, err
 	}
-	defer container.Free()
+	defer container.Close()
 
 	volume, err := container.VolumeBySelector(opts.Volume)
 	if err != nil {
@@ -418,7 +418,7 @@ func resolveVolumeTreeRoots(file io.ReaderAt) (fsAddr, omapAddr uint64, err erro
 
 	omapAddr = volume.ObjectMapBTree.RootNodeOID
 
-	descriptor, err := volume.ObjectMapBTree.GetDescriptorByObjectIdentifier(
+	descriptor, err := volume.ObjectMapBTree.DescriptorByObjectIdentifier(
 		file,
 		volume.FileSystemBTree.RootNodeOID,
 		volume.FileSystemBTree.VolumeTransactionID,

@@ -391,8 +391,8 @@ func (e *Extractor) NamesRemapped() int {
 	return e.namesRemapped
 }
 
-// GetStats returns extraction statistics
-func (e *Extractor) GetStats() (filesExtracted int, bytesExtracted uint64) {
+// Stats returns extraction statistics
+func (e *Extractor) Stats() (filesExtracted int, bytesExtracted uint64) {
 	return e.filesExtracted, e.bytesExtracted
 }
 

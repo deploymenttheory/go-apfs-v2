@@ -48,9 +48,9 @@ func NewDataBlockDataHandle(
 	}
 
 	// Get the total size from the vector
-	dataSize, err := dataBlockVector.GetSize()
+	dataSize, err := dataBlockVector.Size()
 	if err != nil {
-		dataBlockVector.Free()
+		dataBlockVector.Close()
 		return nil, fmt.Errorf("unable to retrieve size of data block vector: %w", err)
 	}
 
@@ -62,15 +62,15 @@ func NewDataBlockDataHandle(
 	}, nil
 }
 
-// Free releases resources associated with the data block data handle
-func (dh *DataBlockDataHandle) Free() error {
+// Close releases resources associated with the data block data handle
+func (dh *DataBlockDataHandle) Close() error {
 	if dh == nil {
 		return fmt.Errorf("invalid data block data handle")
 	}
 
 	// Free the data block vector (which will also free cached blocks)
 	if dh.DataBlockVector != nil {
-		if err := dh.DataBlockVector.Free(); err != nil {
+		if err := dh.DataBlockVector.Close(); err != nil {
 			return fmt.Errorf("unable to free data block vector: %w", err)
 		}
 		dh.DataBlockVector = nil
@@ -135,7 +135,7 @@ func (dh *DataBlockDataHandle) ReadSegmentData(
 	// Read data block by block
 	for remainingSize > 0 {
 		// Get the data block at the current offset
-		dataBlock, dataBlockOffset, err := dh.DataBlockVector.GetElementValueAtOffset(
+		dataBlock, dataBlockOffset, err := dh.DataBlockVector.ElementValueAtOffset(
 			reader,
 			dh.CurrentOffset,
 		)
@@ -211,8 +211,8 @@ func (dh *DataBlockDataHandle) SeekSegmentOffset(
 	return segmentOffset, nil
 }
 
-// GetSize returns the total data size
-func (dh *DataBlockDataHandle) GetSize() uint64 {
+// Size returns the total data size
+func (dh *DataBlockDataHandle) Size() uint64 {
 	if dh == nil {
 		return 0
 	}

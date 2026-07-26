@@ -19,7 +19,7 @@ func CalculateMD5Hash(entry *apfs.FileEntry) (string, error) {
 	}
 
 	// Get the file size
-	size, err := entry.GetDataSize()
+	size, err := entry.DataSize()
 	if err != nil {
 		return "", fmt.Errorf("unable to get file size: %w", err)
 	}

@@ -22,22 +22,6 @@ func NewProfiler() (*Profiler, error) {
 	}, nil
 }
 
-// Free releases resources associated with the profiler
-func (p *Profiler) Free() error {
-	if p == nil {
-		return fmt.Errorf("invalid profiler")
-	}
-
-	// Close the output stream if it's open
-	if p.outputStream != nil {
-		if err := p.Close(); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
 // Open opens the profiler output file
 func (p *Profiler) Open(filename string) error {
 	if p == nil {

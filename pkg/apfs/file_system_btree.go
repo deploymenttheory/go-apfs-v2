@@ -52,8 +52,8 @@ func NewFileSystemBTree(
 	}
 }
 
-// GetRootNode retrieves the root node of the file system B-tree
-func (bt *FileSystemBTree) GetRootNode(
+// RootNode retrieves the root node of the file system B-tree
+func (bt *FileSystemBTree) RootNode(
 	reader io.ReaderAt,
 ) (*BTreeNode, error) {
 	if bt == nil {
@@ -63,7 +63,7 @@ func (bt *FileSystemBTree) GetRootNode(
 	// RootNodeOID is actually a virtual OID that needs to be resolved
 	// through the volume's object map B-tree to get the physical block address
 	// Per drat: get_btree_phys_omap_entry(vol_omap_root_node, apfs_root_tree_oid, apfs_o.o_xid)
-	descriptor, err := bt.ObjectMapBTree.GetDescriptorByObjectIdentifier(
+	descriptor, err := bt.ObjectMapBTree.DescriptorByObjectIdentifier(
 		reader,
 		bt.RootNodeOID,         // This is a virtual OID
 		bt.VolumeTransactionID, // Use the volume's transaction ID per drat
@@ -87,9 +87,9 @@ func (bt *FileSystemBTree) GetRootNode(
 	return node, nil
 }
 
-// GetSubNode retrieves a sub-node (child node) by block number
+// SubNode retrieves a sub-node (child node) by block number
 // The blockNumber can be either a physical block or virtual OID depending on the B-tree type
-func (bt *FileSystemBTree) GetSubNode(
+func (bt *FileSystemBTree) SubNode(
 	reader io.ReaderAt,
 	blockNumber uint64,
 ) (*BTreeNode, error) {
@@ -155,7 +155,7 @@ func (bt *FileSystemBTree) SubNodeOIDFromEntry(
 		return 0, fmt.Errorf("no object map B-tree available to resolve virtual OID %d", virtualOID)
 	}
 
-	descriptor, err := bt.ObjectMapBTree.GetDescriptorByObjectIdentifier(
+	descriptor, err := bt.ObjectMapBTree.DescriptorByObjectIdentifier(
 		reader,
 		virtualOID,
 		bt.VolumeTransactionID,
@@ -170,8 +170,8 @@ func (bt *FileSystemBTree) SubNodeOIDFromEntry(
 	return descriptor.Value.ObjectPhysicalAddress, nil
 }
 
-// GetFileExtents retrieves file extents for a given identifier
-func (bt *FileSystemBTree) GetFileExtents(
+// FileExtents retrieves file extents for a given identifier
+func (bt *FileSystemBTree) FileExtents(
 	reader io.ReaderAt,
 	identifier uint64,
 	xid uint64,
@@ -181,7 +181,7 @@ func (bt *FileSystemBTree) GetFileExtents(
 	}
 
 	// Use comprehensive tree traversal to get ALL records for this OID
-	allRecords, err := bt.GetAllRecordsForOID(reader, identifier)
+	allRecords, err := bt.AllRecordsForOID(reader, identifier)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get records for OID %d: %w", identifier, err)
 	}
@@ -219,9 +219,9 @@ func (bt *FileSystemBTree) GetFileExtents(
 	return extents, nil
 }
 
-// GetAllRecordsForOID retrieves ALL filesystem records for a given OID
+// AllRecordsForOID retrieves ALL filesystem records for a given OID
 // Implements the algorithm from go-apfs GetFSRecordsForOid with descent and walk phases
-func (bt *FileSystemBTree) GetAllRecordsForOID(
+func (bt *FileSystemBTree) AllRecordsForOID(
 	reader io.ReaderAt,
 	objectID uint64,
 ) ([]*BTreeEntry, error) {
@@ -229,7 +229,7 @@ func (bt *FileSystemBTree) GetAllRecordsForOID(
 		return nil, fmt.Errorf("invalid file system B-tree")
 	}
 
-	rootNode, err := bt.GetRootNode(reader)
+	rootNode, err := bt.RootNode(reader)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get root node: %w", err)
 	}
@@ -279,7 +279,7 @@ func (bt *FileSystemBTree) GetAllRecordsForOID(
 				if err != nil {
 					return nil, err
 				}
-				node, err = bt.GetSubNode(reader, childOID)
+				node, err = bt.SubNode(reader, childOID)
 				if err != nil {
 					return nil, err
 				}
@@ -296,7 +296,7 @@ func (bt *FileSystemBTree) GetAllRecordsForOID(
 			if err != nil {
 				return nil, err
 			}
-			node, err = bt.GetSubNode(reader, childOID)
+			node, err = bt.SubNode(reader, childOID)
 			if err != nil {
 				return nil, err
 			}
@@ -367,7 +367,7 @@ func (bt *FileSystemBTree) GetAllRecordsForOID(
 			if err != nil {
 				return nil, err
 			}
-			node, err = bt.GetSubNode(reader, childOID)
+			node, err = bt.SubNode(reader, childOID)
 			if err != nil {
 				return nil, err
 			}
@@ -398,8 +398,8 @@ func (bt *FileSystemBTree) GetAllRecordsForOID(
 	}
 }
 
-// GetInodeByIdentifier retrieves an inode by identifier
-func (bt *FileSystemBTree) GetInodeByIdentifier(
+// InodeByIdentifier retrieves an inode by identifier
+func (bt *FileSystemBTree) InodeByIdentifier(
 	reader io.ReaderAt,
 	identifier uint64,
 	xid uint64,
@@ -413,7 +413,7 @@ func (bt *FileSystemBTree) GetInodeByIdentifier(
 	}
 
 	// Use comprehensive tree traversal to get ALL records for this OID
-	allRecords, err := bt.GetAllRecordsForOID(reader, identifier)
+	allRecords, err := bt.AllRecordsForOID(reader, identifier)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get records for OID %d: %w", identifier, err)
 	}
@@ -465,8 +465,8 @@ func (bt *FileSystemBTree) GetInodeByIdentifier(
 	return nil, fmt.Errorf("inode not found: %d", identifier)
 }
 
-// GetDirectoryEntries retrieves directory entries for a parent identifier
-func (bt *FileSystemBTree) GetDirectoryEntries(
+// DirectoryEntries retrieves directory entries for a parent identifier
+func (bt *FileSystemBTree) DirectoryEntries(
 	reader io.ReaderAt,
 	parentIdentifier uint64,
 	xid uint64,
@@ -477,7 +477,7 @@ func (bt *FileSystemBTree) GetDirectoryEntries(
 
 	// Directory records for one parent can span many leaf nodes; use the
 	// full multi-leaf traversal and filter for directory entry records
-	allRecords, err := bt.GetAllRecordsForOID(reader, parentIdentifier)
+	allRecords, err := bt.AllRecordsForOID(reader, parentIdentifier)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get records for OID %d: %w", parentIdentifier, err)
 	}
@@ -510,8 +510,8 @@ func (bt *FileSystemBTree) GetDirectoryEntries(
 	return entries, nil
 }
 
-// GetAttributes retrieves extended attributes for an identifier
-func (bt *FileSystemBTree) GetAttributes(
+// Attributes retrieves extended attributes for an identifier
+func (bt *FileSystemBTree) Attributes(
 	reader io.ReaderAt,
 	identifier uint64,
 	xid uint64,
@@ -522,7 +522,7 @@ func (bt *FileSystemBTree) GetAttributes(
 
 	// Extended attributes for one file can span leaf nodes; use the full
 	// multi-leaf traversal and filter for extended attribute records
-	allRecords, err := bt.GetAllRecordsForOID(reader, identifier)
+	allRecords, err := bt.AllRecordsForOID(reader, identifier)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get records for OID %d: %w", identifier, err)
 	}
@@ -555,8 +555,8 @@ func (bt *FileSystemBTree) GetAttributes(
 	return attributes, nil
 }
 
-// GetEntryFromNodeByIdentifier retrieves an entry from a node by identifier and data type
-func (bt *FileSystemBTree) GetEntryFromNodeByIdentifier(
+// EntryFromNodeByIdentifier retrieves an entry from a node by identifier and data type
+func (bt *FileSystemBTree) EntryFromNodeByIdentifier(
 	node *BTreeNode,
 	identifier uint64,
 	dataType uint8,
@@ -570,7 +570,7 @@ func (bt *FileSystemBTree) GetEntryFromNodeByIdentifier(
 	}
 
 	if DebugOutput {
-		fmt.Printf("FileSystemBTree.GetEntryFromNodeByIdentifier: retrieving B-tree entry identifier: %d, data type: 0x%02x\n",
+		fmt.Printf("FileSystemBTree.EntryFromNodeByIdentifier: retrieving B-tree entry identifier: %d, data type: 0x%02x\n",
 			identifier, dataType)
 	}
 
@@ -614,8 +614,8 @@ func (bt *FileSystemBTree) GetEntryFromNodeByIdentifier(
 	return nil, fmt.Errorf("entry not found for identifier: %d, data type: 0x%02x", identifier, dataType)
 }
 
-// GetEntryByIdentifier retrieves an entry by identifier and data type, navigating the tree
-func (bt *FileSystemBTree) GetEntryByIdentifier(
+// EntryByIdentifier retrieves an entry by identifier and data type, navigating the tree
+func (bt *FileSystemBTree) EntryByIdentifier(
 	reader io.ReaderAt,
 	identifier uint64,
 	dataType uint8,
@@ -626,14 +626,14 @@ func (bt *FileSystemBTree) GetEntryByIdentifier(
 	}
 
 	// Get root node
-	node, err := bt.GetRootNode(reader)
+	node, err := bt.RootNode(reader)
 	if err != nil {
 		return nil, nil, fmt.Errorf("unable to read root node: %w", err)
 	}
 
 	// Navigate to the correct node
 	for !node.IsLeafNode() {
-		entry, err := bt.GetEntryFromNodeByIdentifier(node, identifier, dataType)
+		entry, err := bt.EntryFromNodeByIdentifier(node, identifier, dataType)
 		if err != nil {
 			return nil, nil, fmt.Errorf("unable to get entry from node: %w", err)
 		}
@@ -645,14 +645,14 @@ func (bt *FileSystemBTree) GetEntryByIdentifier(
 		}
 
 		// Read child node
-		node, err = bt.GetSubNode(reader, childBlockNumber)
+		node, err = bt.SubNode(reader, childBlockNumber)
 		if err != nil {
 			return nil, nil, fmt.Errorf("unable to read sub-node: %w", err)
 		}
 	}
 
 	// Now we're at the leaf node, get the entry
-	entry, err := bt.GetEntryFromNodeByIdentifier(node, identifier, dataType)
+	entry, err := bt.EntryFromNodeByIdentifier(node, identifier, dataType)
 	if err != nil {
 		return nil, nil, fmt.Errorf("unable to get entry from leaf node: %w", err)
 	}
@@ -660,8 +660,8 @@ func (bt *FileSystemBTree) GetEntryByIdentifier(
 	return node, entry, nil
 }
 
-// GetDirectoryEntryRecordByUTF8Name retrieves a directory entry record by UTF-8 name
-func (bt *FileSystemBTree) GetDirectoryEntryRecordByUTF8Name(
+// DirectoryEntryRecordByUTF8Name retrieves a directory entry record by UTF-8 name
+func (bt *FileSystemBTree) DirectoryEntryRecordByUTF8Name(
 	reader io.ReaderAt,
 	parentIdentifier uint64,
 	name string,
@@ -683,7 +683,7 @@ func (bt *FileSystemBTree) GetDirectoryEntryRecordByUTF8Name(
 	// part of the directory but not the searched name. Use the full
 	// multi-leaf traversal (served from the node cache) and match by hash
 	// and name.
-	allRecords, err := bt.GetAllRecordsForOID(reader, parentIdentifier)
+	allRecords, err := bt.AllRecordsForOID(reader, parentIdentifier)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get records for OID %d: %w", parentIdentifier, err)
 	}
@@ -712,8 +712,8 @@ func (bt *FileSystemBTree) GetDirectoryEntryRecordByUTF8Name(
 	return nil, fmt.Errorf("directory entry record not found")
 }
 
-// GetDirectoryEntryRecordByUTF16Name retrieves a directory entry record by UTF-16 name
-func (bt *FileSystemBTree) GetDirectoryEntryRecordByUTF16Name(
+// DirectoryEntryRecordByUTF16Name retrieves a directory entry record by UTF-16 name
+func (bt *FileSystemBTree) DirectoryEntryRecordByUTF16Name(
 	reader io.ReaderAt,
 	parentIdentifier uint64,
 	name []uint16,
@@ -730,11 +730,11 @@ func (bt *FileSystemBTree) GetDirectoryEntryRecordByUTF16Name(
 	// Convert UTF-16 to UTF-8 and delegate to the multi-leaf UTF-8 search
 	utf8Name := UTF16ToString(name)
 
-	return bt.GetDirectoryEntryRecordByUTF8Name(reader, parentIdentifier, utf8Name, xid)
+	return bt.DirectoryEntryRecordByUTF8Name(reader, parentIdentifier, utf8Name, xid)
 }
 
-// GetInodeByUTF8Name retrieves an inode and directory entry record by UTF-8 name
-func (bt *FileSystemBTree) GetInodeByUTF8Name(
+// InodeByUTF8Name retrieves an inode and directory entry record by UTF-8 name
+func (bt *FileSystemBTree) InodeByUTF8Name(
 	reader io.ReaderAt,
 	parentIdentifier uint64,
 	name string,
@@ -745,13 +745,13 @@ func (bt *FileSystemBTree) GetInodeByUTF8Name(
 	}
 
 	// First get the directory entry record
-	dirRecord, err := bt.GetDirectoryEntryRecordByUTF8Name(reader, parentIdentifier, name, xid)
+	dirRecord, err := bt.DirectoryEntryRecordByUTF8Name(reader, parentIdentifier, name, xid)
 	if err != nil {
 		return nil, nil, fmt.Errorf("unable to get directory entry record: %w", err)
 	}
 
 	// Then get the inode using the identifier from the directory entry record
-	inode, err := bt.GetInodeByIdentifier(reader, dirRecord.Identifier, xid)
+	inode, err := bt.InodeByIdentifier(reader, dirRecord.Identifier, xid)
 	if err != nil {
 		return nil, nil, fmt.Errorf("unable to get inode: %w", err)
 	}
@@ -759,8 +759,8 @@ func (bt *FileSystemBTree) GetInodeByUTF8Name(
 	return inode, dirRecord, nil
 }
 
-// GetInodeByUTF8Path retrieves an inode and directory entry record by UTF-8 path
-func (bt *FileSystemBTree) GetInodeByUTF8Path(
+// InodeByUTF8Path retrieves an inode and directory entry record by UTF-8 path
+func (bt *FileSystemBTree) InodeByUTF8Path(
 	reader io.ReaderAt,
 	parentIdentifier uint64,
 	path string,
@@ -788,7 +788,7 @@ func (bt *FileSystemBTree) GetInodeByUTF8Path(
 			continue
 		}
 
-		currentInode, currentDirRecord, err = bt.GetInodeByUTF8Name(reader, currentParentID, segment, xid)
+		currentInode, currentDirRecord, err = bt.InodeByUTF8Name(reader, currentParentID, segment, xid)
 		if err != nil {
 			return nil, nil, fmt.Errorf("unable to get inode for path segment '%s': %w", segment, err)
 		}
@@ -800,8 +800,8 @@ func (bt *FileSystemBTree) GetInodeByUTF8Path(
 	return currentInode, currentDirRecord, nil
 }
 
-// GetInodeByUTF16Name retrieves an inode and directory entry record by UTF-16 name
-func (bt *FileSystemBTree) GetInodeByUTF16Name(
+// InodeByUTF16Name retrieves an inode and directory entry record by UTF-16 name
+func (bt *FileSystemBTree) InodeByUTF16Name(
 	reader io.ReaderAt,
 	parentIdentifier uint64,
 	name []uint16,
@@ -812,13 +812,13 @@ func (bt *FileSystemBTree) GetInodeByUTF16Name(
 	}
 
 	// First get the directory entry record
-	dirRecord, err := bt.GetDirectoryEntryRecordByUTF16Name(reader, parentIdentifier, name, xid)
+	dirRecord, err := bt.DirectoryEntryRecordByUTF16Name(reader, parentIdentifier, name, xid)
 	if err != nil {
 		return nil, nil, fmt.Errorf("unable to get directory entry record: %w", err)
 	}
 
 	// Then get the inode using the identifier from the directory entry record
-	inode, err := bt.GetInodeByIdentifier(reader, dirRecord.Identifier, xid)
+	inode, err := bt.InodeByIdentifier(reader, dirRecord.Identifier, xid)
 	if err != nil {
 		return nil, nil, fmt.Errorf("unable to get inode: %w", err)
 	}
@@ -826,8 +826,8 @@ func (bt *FileSystemBTree) GetInodeByUTF16Name(
 	return inode, dirRecord, nil
 }
 
-// GetInodeByUTF16Path retrieves an inode and directory entry record by UTF-16 path
-func (bt *FileSystemBTree) GetInodeByUTF16Path(
+// InodeByUTF16Path retrieves an inode and directory entry record by UTF-16 path
+func (bt *FileSystemBTree) InodeByUTF16Path(
 	reader io.ReaderAt,
 	parentIdentifier uint64,
 	path []uint16,
@@ -841,7 +841,7 @@ func (bt *FileSystemBTree) GetInodeByUTF16Path(
 	utf8Path := UTF16ToString(path)
 
 	// Use UTF-8 path function
-	return bt.GetInodeByUTF8Path(reader, parentIdentifier, utf8Path, xid)
+	return bt.InodeByUTF8Path(reader, parentIdentifier, utf8Path, xid)
 }
 
 // splitPath splits a path string by '/' separator

@@ -294,17 +294,9 @@ func (dr *DirectoryEntryRecord) Clone() (*DirectoryEntryRecord, error) {
 	return clone, nil
 }
 
-// GetIdentifier retrieves the identifier (inode number)
-func (dr *DirectoryEntryRecord) GetIdentifier() (uint64, error) {
-	if dr == nil {
-		return 0, fmt.Errorf("invalid directory entry record")
-	}
-	return dr.Identifier, nil
-}
-
-// GetUTF8NameSize retrieves the size of the UTF-8 encoded name
+// UTF8NameSize retrieves the size of the UTF-8 encoded name
 // The returned size includes the end-of-string character
-func (dr *DirectoryEntryRecord) GetUTF8NameSize() (int, error) {
+func (dr *DirectoryEntryRecord) UTF8NameSize() (int, error) {
 	if dr == nil {
 		return 0, fmt.Errorf("invalid directory entry record")
 	}
@@ -312,8 +304,8 @@ func (dr *DirectoryEntryRecord) GetUTF8NameSize() (int, error) {
 	return len(dr.Name) + 1, nil
 }
 
-// GetUTF8Name retrieves the UTF-8 encoded name
-func (dr *DirectoryEntryRecord) GetUTF8Name() (string, error) {
+// UTF8Name retrieves the UTF-8 encoded name
+func (dr *DirectoryEntryRecord) UTF8Name() (string, error) {
 	if dr == nil {
 		return "", fmt.Errorf("invalid directory entry record")
 	}
@@ -323,9 +315,9 @@ func (dr *DirectoryEntryRecord) GetUTF8Name() (string, error) {
 	return string(dr.Name), nil
 }
 
-// GetUTF16NameSize retrieves the size of the UTF-16 encoded name
+// UTF16NameSize retrieves the size of the UTF-16 encoded name
 // The returned size includes the end-of-string character
-func (dr *DirectoryEntryRecord) GetUTF16NameSize() (int, error) {
+func (dr *DirectoryEntryRecord) UTF16NameSize() (int, error) {
 	if dr == nil {
 		return 0, fmt.Errorf("invalid directory entry record")
 	}
@@ -350,8 +342,8 @@ func (dr *DirectoryEntryRecord) GetUTF16NameSize() (int, error) {
 	return utf16Count + 1, nil
 }
 
-// GetUTF16Name retrieves the UTF-16 encoded name
-func (dr *DirectoryEntryRecord) GetUTF16Name() ([]uint16, error) {
+// UTF16Name retrieves the UTF-16 encoded name
+func (dr *DirectoryEntryRecord) UTF16Name() ([]uint16, error) {
 	if dr == nil {
 		return nil, fmt.Errorf("invalid directory entry record")
 	}
@@ -419,17 +411,8 @@ func (dr *DirectoryEntryRecord) CompareNameWithUTF16String(utf16String []uint16,
 	return 0
 }
 
-// GetAddedTime retrieves the added time
-// The timestamp is a signed 64-bit POSIX date and time value in nanoseconds
-func (dr *DirectoryEntryRecord) GetAddedTime() (int64, error) {
-	if dr == nil {
-		return 0, fmt.Errorf("invalid directory entry record")
-	}
-	return int64(dr.AddedTime), nil
-}
-
-// GetName returns the name as a string (convenience method)
-func (dr *DirectoryEntryRecord) GetName() string {
+// Name returns the name as a string (convenience method)
+func (dr *DirectoryEntryRecord) NameString() string {
 	if dr == nil || dr.Name == nil {
 		return ""
 	}

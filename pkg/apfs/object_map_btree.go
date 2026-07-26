@@ -73,15 +73,6 @@ func NewObjectMapDescriptor() (*ObjectMapDescriptor, error) {
 	return &ObjectMapDescriptor{}, nil
 }
 
-// Free releases resources associated with the object map descriptor
-func (d *ObjectMapDescriptor) Free() error {
-	if d == nil {
-		return fmt.Errorf("invalid object map descriptor")
-	}
-	// Go's garbage collector handles cleanup
-	return nil
-}
-
 // ReadKeyData reads the object map descriptor B-tree key data
 func (d *ObjectMapDescriptor) ReadKeyData(data []byte) error {
 	if d == nil {
@@ -92,8 +83,8 @@ func (d *ObjectMapDescriptor) ReadKeyData(data []byte) error {
 		return fmt.Errorf("invalid data size value out of bounds: %d", len(data))
 	}
 
-	if IsVerbose() {
-		Printf("%s: object map B-tree key data:\n", "ReadKeyData")
+	if isVerbose() {
+		notifyPrintf("%s: object map B-tree key data:\n", "ReadKeyData")
 		PrintData(data[:ObjectMapBTreeKeySize], true)
 	}
 
@@ -105,10 +96,10 @@ func (d *ObjectMapDescriptor) ReadKeyData(data []byte) error {
 
 	d.Key = key
 
-	if IsVerbose() {
-		Printf("%s: object identifier\t\t: %d\n", "ReadKeyData", d.Key.OID)
-		Printf("%s: object transaction identifier\t: %d\n", "ReadKeyData", d.Key.XID)
-		Printf("\n")
+	if isVerbose() {
+		notifyPrintf("%s: object identifier\t\t: %d\n", "ReadKeyData", d.Key.OID)
+		notifyPrintf("%s: object transaction identifier\t: %d\n", "ReadKeyData", d.Key.XID)
+		notifyPrintf("\n")
 	}
 
 	return nil
@@ -124,8 +115,8 @@ func (d *ObjectMapDescriptor) ReadValueData(data []byte) error {
 		return fmt.Errorf("invalid data size value out of bounds: %d", len(data))
 	}
 
-	if IsVerbose() {
-		Printf("%s: object map B-tree value data:\n", "ReadValueData")
+	if isVerbose() {
+		notifyPrintf("%s: object map B-tree value data:\n", "ReadValueData")
 		PrintData(data[:ObjectMapBTreeValueSize], true)
 	}
 
@@ -137,18 +128,18 @@ func (d *ObjectMapDescriptor) ReadValueData(data []byte) error {
 
 	d.Value = value
 
-	if IsVerbose() {
-		Printf("%s: object flags\t\t\t: 0x%04x\n", "ReadValueData", d.Value.ObjectFlags)
-		Printf("%s: object size\t\t\t: %d\n", "ReadValueData", d.Value.ObjectSize)
-		Printf("%s: object physical address\t: %d\n", "ReadValueData", d.Value.ObjectPhysicalAddress)
-		Printf("\n")
+	if isVerbose() {
+		notifyPrintf("%s: object flags\t\t\t: 0x%04x\n", "ReadValueData", d.Value.ObjectFlags)
+		notifyPrintf("%s: object size\t\t\t: %d\n", "ReadValueData", d.Value.ObjectSize)
+		notifyPrintf("%s: object physical address\t: %d\n", "ReadValueData", d.Value.ObjectPhysicalAddress)
+		notifyPrintf("\n")
 	}
 
 	return nil
 }
 
-// GetIdentifier returns the object identifier
-func (d *ObjectMapDescriptor) GetIdentifier() (uint64, error) {
+// Identifier returns the object identifier
+func (d *ObjectMapDescriptor) Identifier() (uint64, error) {
 	if d == nil {
 		return 0, fmt.Errorf("invalid object map descriptor")
 	}
@@ -158,8 +149,8 @@ func (d *ObjectMapDescriptor) GetIdentifier() (uint64, error) {
 	return d.Key.OID, nil
 }
 
-// GetTransactionIdentifier returns the transaction identifier
-func (d *ObjectMapDescriptor) GetTransactionIdentifier() (uint64, error) {
+// TransactionIdentifier returns the transaction identifier
+func (d *ObjectMapDescriptor) TransactionIdentifier() (uint64, error) {
 	if d == nil {
 		return 0, fmt.Errorf("invalid object map descriptor")
 	}
@@ -169,8 +160,8 @@ func (d *ObjectMapDescriptor) GetTransactionIdentifier() (uint64, error) {
 	return d.Key.XID, nil
 }
 
-// GetPhysicalAddress returns the physical address
-func (d *ObjectMapDescriptor) GetPhysicalAddress() (uint64, error) {
+// PhysicalAddress returns the physical address
+func (d *ObjectMapDescriptor) PhysicalAddress() (uint64, error) {
 	if d == nil {
 		return 0, fmt.Errorf("invalid object map descriptor")
 	}
@@ -180,8 +171,8 @@ func (d *ObjectMapDescriptor) GetPhysicalAddress() (uint64, error) {
 	return d.Value.ObjectPhysicalAddress, nil
 }
 
-// GetFlags returns the object flags
-func (d *ObjectMapDescriptor) GetFlags() (uint32, error) {
+// Flags returns the object flags
+func (d *ObjectMapDescriptor) Flags() (uint32, error) {
 	if d == nil {
 		return 0, fmt.Errorf("invalid object map descriptor")
 	}
@@ -191,8 +182,8 @@ func (d *ObjectMapDescriptor) GetFlags() (uint32, error) {
 	return d.Value.ObjectFlags, nil
 }
 
-// GetSize returns the object size
-func (d *ObjectMapDescriptor) GetSize() (uint32, error) {
+// Size returns the object size
+func (d *ObjectMapDescriptor) Size() (uint32, error) {
 	if d == nil {
 		return 0, fmt.Errorf("invalid object map descriptor")
 	}
@@ -219,17 +210,8 @@ func NewObjectMapBTree(
 	}, nil
 }
 
-// Free releases resources associated with the object map B-tree
-func (bt *ObjectMapBTree) Free() error {
-	if bt == nil {
-		return fmt.Errorf("invalid object map B-tree")
-	}
-	// Go's garbage collector handles cleanup
-	return nil
-}
-
-// GetRootNode retrieves the root node of the B-tree
-func (bt *ObjectMapBTree) GetRootNode(
+// RootNode retrieves the root node of the B-tree
+func (bt *ObjectMapBTree) RootNode(
 	reader io.ReaderAt,
 	rootNodeOID uint64,
 ) (*BTreeNode, error) {
@@ -276,8 +258,8 @@ func (bt *ObjectMapBTree) GetRootNode(
 	return node, nil
 }
 
-// GetSubNode retrieves a sub-node (child node) by block number
-func (bt *ObjectMapBTree) GetSubNode(
+// SubNode retrieves a sub-node (child node) by block number
+func (bt *ObjectMapBTree) SubNode(
 	reader io.ReaderAt,
 	subNodeOID uint64,
 ) (*BTreeNode, error) {
@@ -310,7 +292,7 @@ func (bt *ObjectMapBTree) GetSubNode(
 }
 
 // GetEntryFromNodeByIdentifier finds an entry in a specific node by identifier
-func (bt *ObjectMapBTree) GetEntryFromNodeByIdentifier(
+func (bt *ObjectMapBTree) EntryFromNodeByIdentifier(
 	node *BTreeNode,
 	oid uint64,
 	xid uint64,
@@ -323,8 +305,8 @@ func (bt *ObjectMapBTree) GetEntryFromNodeByIdentifier(
 		return nil, fmt.Errorf("invalid B-tree node")
 	}
 
-	if IsVerbose() {
-		Printf("%s: retrieving B-tree entry identifier: %d (transaction: %d).\n",
+	if isVerbose() {
+		notifyPrintf("%s: retrieving B-tree entry identifier: %d (transaction: %d).\n",
 			"GetEntryFromNodeByIdentifier", oid, xid)
 	}
 
@@ -345,8 +327,8 @@ func (bt *ObjectMapBTree) GetEntryFromNodeByIdentifier(
 		objectMapIdentifier := binary.LittleEndian.Uint64(entry.KeyData[0:8])
 		objectMapTransaction := binary.LittleEndian.Uint64(entry.KeyData[8:16])
 
-		if IsVerbose() {
-			Printf("%s: B-tree entry: %d, identifier: %d (transaction: %d)\n",
+		if isVerbose() {
+			notifyPrintf("%s: B-tree entry: %d, identifier: %d (transaction: %d)\n",
 				"GetEntryFromNodeByIdentifier", entryIndex, objectMapIdentifier, objectMapTransaction)
 		}
 
@@ -377,8 +359,8 @@ func (bt *ObjectMapBTree) GetEntryFromNodeByIdentifier(
 	return previousEntry, nil
 }
 
-// GetEntryByIdentifier retrieves a B-tree entry by object and transaction identifier
-func (bt *ObjectMapBTree) GetEntryByIdentifier(
+// EntryByIdentifier retrieves a B-tree entry by object and transaction identifier
+func (bt *ObjectMapBTree) EntryByIdentifier(
 	reader io.ReaderAt,
 	oid uint64,
 	xid uint64,
@@ -388,7 +370,7 @@ func (bt *ObjectMapBTree) GetEntryByIdentifier(
 	}
 
 	// Read root node
-	node, err := bt.GetRootNode(reader, bt.RootNodeOID)
+	node, err := bt.RootNode(reader, bt.RootNodeOID)
 	if err != nil {
 		return nil, nil, fmt.Errorf("unable to retrieve B-tree root node: %w", err)
 	}
@@ -405,7 +387,7 @@ func (bt *ObjectMapBTree) GetEntryByIdentifier(
 		isLeafNode := node.IsLeafNode()
 
 		// Search for entry in this node
-		entry, err := bt.GetEntryFromNodeByIdentifier(node, oid, xid)
+		entry, err := bt.EntryFromNodeByIdentifier(node, oid, xid)
 		if err != nil {
 			// Entry not found
 			return nil, nil, nil
@@ -423,13 +405,13 @@ func (bt *ObjectMapBTree) GetEntryByIdentifier(
 
 		subNodeOID := binary.LittleEndian.Uint64(entry.ValueData[0:8])
 
-		if IsVerbose() {
-			Printf("%s: B-tree sub node block number: %d\n",
+		if isVerbose() {
+			notifyPrintf("%s: B-tree sub node block number: %d\n",
 				"GetEntryByIdentifier", subNodeOID)
 		}
 
 		// Read the sub-node
-		node, err = bt.GetSubNode(reader, subNodeOID)
+		node, err = bt.SubNode(reader, subNodeOID)
 		if err != nil {
 			return nil, nil, fmt.Errorf("unable to retrieve B-tree sub node from block: %d: %w", subNodeOID, err)
 		}
@@ -438,8 +420,8 @@ func (bt *ObjectMapBTree) GetEntryByIdentifier(
 	}
 }
 
-// GetDescriptorByObjectIdentifier retrieves the object map descriptor of a specific object identifier
-func (bt *ObjectMapBTree) GetDescriptorByObjectIdentifier(
+// DescriptorByObjectIdentifier retrieves the object map descriptor of a specific object identifier
+func (bt *ObjectMapBTree) DescriptorByObjectIdentifier(
 	reader io.ReaderAt,
 	oid uint64,
 	xid uint64,
@@ -449,7 +431,7 @@ func (bt *ObjectMapBTree) GetDescriptorByObjectIdentifier(
 	}
 
 	// Find the entry
-	_, entry, err := bt.GetEntryByIdentifier(reader, oid, xid)
+	_, entry, err := bt.EntryByIdentifier(reader, oid, xid)
 	if err != nil {
 		return nil, fmt.Errorf("unable to retrieve entry from B-tree: %w", err)
 	}
@@ -485,7 +467,7 @@ func (bt *ObjectMapBTree) PhysicalAddressForOID(
 	oid uint64,
 	xid uint64,
 ) (uint64, error) {
-	descriptor, err := bt.GetDescriptorByObjectIdentifier(reader, oid, xid)
+	descriptor, err := bt.DescriptorByObjectIdentifier(reader, oid, xid)
 	if err != nil {
 		return 0, fmt.Errorf("unable to retrieve descriptor for object %d: %w", oid, err)
 	}

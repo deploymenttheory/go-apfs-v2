@@ -40,23 +40,14 @@ func NewObjectHeader() (*ObjectHeader, error) {
 	return &ObjectHeader{}, nil
 }
 
-// Free releases resources associated with the object
-func (o *ObjectHeader) Free() error {
-	if o == nil {
-		return fmt.Errorf("invalid object")
-	}
-	// Nothing to free in Go
-	return nil
-}
-
 // ReadFrom reads the object from a file at the specified offset
 func (o *ObjectHeader) ReadFrom(reader io.ReaderAt, fileOffset int64) error {
 	if o == nil {
 		return fmt.Errorf("invalid object")
 	}
 
-	if IsVerbose() {
-		Printf("%s: reading object at offset: %d (0x%08x)\n",
+	if isVerbose() {
+		notifyPrintf("%s: reading object at offset: %d (0x%08x)\n",
 			"ReadFrom", fileOffset, fileOffset)
 	}
 
@@ -91,8 +82,8 @@ func (o *ObjectHeader) ReadData(data []byte) error {
 		return fmt.Errorf("invalid data size value out of bounds")
 	}
 
-	if IsVerbose() {
-		Printf("%s: object data:\n", "ReadData")
+	if isVerbose() {
+		notifyPrintf("%s: object data:\n", "ReadData")
 		PrintData(data[:ObjectHeaderSize], true)
 	}
 
@@ -103,46 +94,22 @@ func (o *ObjectHeader) ReadData(data []byte) error {
 	o.Type = binary.LittleEndian.Uint32(data[24:28])
 	o.Subtype = binary.LittleEndian.Uint32(data[28:32])
 
-	if IsVerbose() {
-		Printf("%s: checksum\t\t\t\t\t: 0x%08x\n", "ReadData", o.Checksum)
-		Printf("%s: identifier\t\t\t\t\t: %d\n", "ReadData", o.Identifier)
-		Printf("%s: transaction identifier\t\t\t: %d\n", "ReadData", o.XID)
-		Printf("%s: type\t\t\t\t\t: 0x%08x\n", "ReadData", o.Type)
-		Printf("%s: subtype\t\t\t\t\t: 0x%08x\n", "ReadData", o.Subtype)
-		Printf("\n")
+	if isVerbose() {
+		notifyPrintf("%s: checksum\t\t\t\t\t: 0x%08x\n", "ReadData", o.Checksum)
+		notifyPrintf("%s: identifier\t\t\t\t\t: %d\n", "ReadData", o.Identifier)
+		notifyPrintf("%s: transaction identifier\t\t\t: %d\n", "ReadData", o.XID)
+		notifyPrintf("%s: type\t\t\t\t\t: 0x%08x\n", "ReadData", o.Type)
+		notifyPrintf("%s: subtype\t\t\t\t\t: 0x%08x\n", "ReadData", o.Subtype)
+		notifyPrintf("\n")
 	}
 
 	return nil
 }
 
-// GetIdentifier retrieves the object identifier
-func (o *ObjectHeader) GetIdentifier() (uint64, error) {
-	if o == nil {
-		return 0, fmt.Errorf("invalid object")
-	}
-	return o.Identifier, nil
-}
-
-// GetTransactionIdentifier retrieves the transaction identifier
-func (o *ObjectHeader) GetTransactionIdentifier() (uint64, error) {
+// TransactionIdentifier retrieves the transaction identifier
+func (o *ObjectHeader) TransactionIdentifier() (uint64, error) {
 	if o == nil {
 		return 0, fmt.Errorf("invalid object")
 	}
 	return o.XID, nil
-}
-
-// GetType retrieves the object type
-func (o *ObjectHeader) GetType() (uint32, error) {
-	if o == nil {
-		return 0, fmt.Errorf("invalid object")
-	}
-	return o.Type, nil
-}
-
-// GetSubtype retrieves the object subtype
-func (o *ObjectHeader) GetSubtype() (uint32, error) {
-	if o == nil {
-		return 0, fmt.Errorf("invalid object")
-	}
-	return o.Subtype, nil
 }

@@ -71,7 +71,7 @@ func runMount(cmd *cobra.Command, args []string) error {
 	}
 	defer mountHandle.Close()
 
-	numVolumes, err := mountHandle.GetNumberOfVolumes()
+	numVolumes, err := mountHandle.NumberOfVolumes()
 	if err != nil {
 		return fmt.Errorf("unable to get number of volumes: %w", err)
 	}

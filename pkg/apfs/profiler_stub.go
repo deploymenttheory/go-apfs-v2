@@ -16,14 +16,6 @@ func NewProfiler() (*Profiler, error) {
 	return &Profiler{}, nil
 }
 
-// Free releases resources associated with the profiler (no-op when profiling is disabled)
-func (p *Profiler) Free() error {
-	if p == nil {
-		return fmt.Errorf("invalid profiler")
-	}
-	return nil
-}
-
 // Open opens the profiler output file (no-op when profiling is disabled)
 func (p *Profiler) Open(filename string) error {
 	if p == nil {

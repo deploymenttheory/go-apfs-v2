@@ -48,8 +48,8 @@ var incompatibleFeatures = []FeatureDescription{
 	{VolumeIncompatSealedVolume, "Sealed Volume", "Sealed volume"},
 }
 
-// GetCompatibleFeatureNames returns human-readable names of set compatible features
-func (v *Volume) GetCompatibleFeatureNames() ([]string, error) {
+// CompatibleFeatureNames returns human-readable names of set compatible features
+func (v *Volume) CompatibleFeatureNames() ([]string, error) {
 	if v == nil {
 		return nil, fmt.Errorf("invalid volume")
 	}
@@ -68,8 +68,8 @@ func (v *Volume) GetCompatibleFeatureNames() ([]string, error) {
 	return names, nil
 }
 
-// GetIncompatibleFeatureNames returns human-readable names of set incompatible features
-func (v *Volume) GetIncompatibleFeatureNames() ([]string, error) {
+// IncompatibleFeatureNames returns human-readable names of set incompatible features
+func (v *Volume) IncompatibleFeatureNames() ([]string, error) {
 	if v == nil {
 		return nil, fmt.Errorf("invalid volume")
 	}
@@ -88,8 +88,8 @@ func (v *Volume) GetIncompatibleFeatureNames() ([]string, error) {
 	return names, nil
 }
 
-// GetReadOnlyCompatibleFeatureNames returns human-readable names of set read-only compatible features
-func (v *Volume) GetReadOnlyCompatibleFeatureNames() ([]string, error) {
+// ReadOnlyCompatibleFeatureNames returns human-readable names of set read-only compatible features
+func (v *Volume) ReadOnlyCompatibleFeatureNames() ([]string, error) {
 	if v == nil {
 		return nil, fmt.Errorf("invalid volume")
 	}

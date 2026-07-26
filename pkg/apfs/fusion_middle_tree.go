@@ -44,15 +44,6 @@ func NewFusionMiddleTree() (*FusionMiddleTree, error) {
 	return &FusionMiddleTree{}, nil
 }
 
-// Free releases resources associated with the Fusion middle tree
-func (f *FusionMiddleTree) Free() error {
-	if f == nil {
-		return fmt.Errorf("invalid Fusion middle tree")
-	}
-	// Nothing to free in Go
-	return nil
-}
-
 // ReadFrom reads the Fusion middle tree from a file at the specified offset
 func (f *FusionMiddleTree) ReadFrom(reader io.ReaderAt, fileOffset int64) error {
 	if f == nil {
@@ -113,17 +104,17 @@ func (f *FusionMiddleTree) ReadData(data []byte) error {
 	}
 
 	// Debug output
-	if IsVerbose() {
-		Printf("Fusion middle tree data:\n")
+	if isVerbose() {
+		notifyPrintf("Fusion middle tree data:\n")
 		PrintData(data, true)
 
-		Printf("object checksum\t\t\t: 0x%08x\n", f.Checksum)
-		Printf("object identifier\t\t: %d\n", f.OID)
-		Printf("object transaction identifier\t: %d\n", f.XID)
-		Printf("object type\t\t\t: 0x%08x\n", f.ObjectType)
-		Printf("object subtype\t\t\t: 0x%08x\n", f.ObjectSubtype)
-		Printf("unknown1\t\t\t: 0x%08x\n", f.Unknown1)
-		Printf("\n")
+		notifyPrintf("object checksum\t\t\t: 0x%08x\n", f.Checksum)
+		notifyPrintf("object identifier\t\t: %d\n", f.OID)
+		notifyPrintf("object transaction identifier\t: %d\n", f.XID)
+		notifyPrintf("object type\t\t\t: 0x%08x\n", f.ObjectType)
+		notifyPrintf("object subtype\t\t\t: 0x%08x\n", f.ObjectSubtype)
+		notifyPrintf("unknown1\t\t\t: 0x%08x\n", f.Unknown1)
+		notifyPrintf("\n")
 	}
 
 	return nil

@@ -62,21 +62,21 @@ func TestCreateContainerMetadata(t *testing.T) {
 
 	check := func(path string, wantMode uint16, wantUID, wantGID uint32) {
 		t.Helper()
-		fe, err := v.GetFileEntryByPath(path)
+		fe, err := v.FileEntryByPath(path)
 		if err != nil {
 			t.Fatalf("GetFileEntryByPath(%q): %v", path, err)
 		}
-		mode, err := fe.GetFileMode()
+		mode, err := fe.FileMode()
 		if err != nil {
 			t.Fatalf("%q GetFileMode: %v", path, err)
 		}
 		if mode != wantMode {
 			t.Errorf("%q mode = %o, want %o", path, mode, wantMode)
 		}
-		if uid, _ := fe.GetOwnerIdentifier(); uid != wantUID {
+		if uid, _ := fe.OwnerIdentifier(); uid != wantUID {
 			t.Errorf("%q uid = %d, want %d", path, uid, wantUID)
 		}
-		if gid, _ := fe.GetGroupIdentifier(); gid != wantGID {
+		if gid, _ := fe.GroupIdentifier(); gid != wantGID {
 			t.Errorf("%q gid = %d, want %d", path, gid, wantGID)
 		}
 		if got := fe.Inode.ModificationTime; got != uint64(modTime.UnixNano()) {
@@ -107,18 +107,18 @@ func TestCreateContainerSymlink(t *testing.T) {
 
 	check := func(path, wantTarget string) {
 		t.Helper()
-		fe, err := v.GetFileEntryByPath(path)
+		fe, err := v.FileEntryByPath(path)
 		if err != nil {
 			t.Fatalf("GetFileEntryByPath(%q): %v", path, err)
 		}
-		mode, err := fe.GetFileMode()
+		mode, err := fe.FileMode()
 		if err != nil {
 			t.Fatalf("%q GetFileMode: %v", path, err)
 		}
 		if mode&sIFMT != sIFLNK {
 			t.Errorf("%q file type = %o, want S_IFLNK (%o)", path, mode&sIFMT, sIFLNK)
 		}
-		target, err := fe.GetSymbolicLinkTarget()
+		target, err := fe.SymbolicLinkTarget()
 		if err != nil {
 			t.Fatalf("%q GetSymbolicLinkTarget: %v", path, err)
 		}
@@ -207,18 +207,18 @@ func TestCreateContainerFromDir(t *testing.T) {
 	// the writer faithfully stores that — only assert the exec bit where the
 	// source filesystem can carry it.
 	if runtime.GOOS != "windows" {
-		if fe, err := v.GetFileEntryByPath("bin/run.sh"); err != nil {
+		if fe, err := v.FileEntryByPath("bin/run.sh"); err != nil {
 			t.Errorf("bin/run.sh: %v", err)
-		} else if mode, _ := fe.GetFileMode(); mode&0o111 == 0 {
+		} else if mode, _ := fe.FileMode(); mode&0o111 == 0 {
 			t.Errorf("bin/run.sh not executable: mode %o", mode)
 		}
 	}
 	if haveSymlink {
-		fe, err := v.GetFileEntryByPath("link")
+		fe, err := v.FileEntryByPath("link")
 		if err != nil {
 			t.Fatalf("link: %v", err)
 		}
-		target, err := fe.GetSymbolicLinkTarget()
+		target, err := fe.SymbolicLinkTarget()
 		if err != nil {
 			t.Fatalf("link GetSymbolicLinkTarget: %v", err)
 		}

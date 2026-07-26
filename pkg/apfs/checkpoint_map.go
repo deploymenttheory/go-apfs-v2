@@ -181,9 +181,9 @@ func (cm *CheckpointMap) ReadData(data []byte) error {
 	return nil
 }
 
-// GetPhysicalAddressByObjectIdentifier retrieves the physical address for a specific object identifier
+// PhysicalAddressByObjectIdentifier retrieves the physical address for a specific object identifier
 // Returns the physical address and a boolean indicating if found
-func (cm *CheckpointMap) GetPhysicalAddressByObjectIdentifier(oid uint64) (uint64, error) {
+func (cm *CheckpointMap) PhysicalAddressByObjectIdentifier(oid uint64) (uint64, error) {
 	if cm == nil {
 		return 0, fmt.Errorf("invalid checkpoint map")
 	}

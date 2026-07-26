@@ -68,7 +68,7 @@ func (ea *ExtendedAttribute) getDataStream() error {
 	}
 
 	// Get data stream from attribute values
-	dataStream, err := ea.AttributeValues.GetDataStream(
+	dataStream, err := ea.AttributeValues.DataStream(
 		ea.IOHandle,
 		ea.FileHandle,
 		ea.EncryptionContext,
@@ -83,17 +83,9 @@ func (ea *ExtendedAttribute) getDataStream() error {
 	return nil
 }
 
-// GetIdentifier retrieves the identifier
-func (ea *ExtendedAttribute) GetIdentifier() (uint64, error) {
-	if ea == nil {
-		return 0, fmt.Errorf("invalid extended attribute")
-	}
-	return ea.Identifier, nil
-}
-
-// GetUTF8NameSize retrieves the size of the UTF-8 encoded name
+// UTF8NameSize retrieves the size of the UTF-8 encoded name
 // The returned size includes the end-of-string character
-func (ea *ExtendedAttribute) GetUTF8NameSize() (int, error) {
+func (ea *ExtendedAttribute) UTF8NameSize() (int, error) {
 	if ea == nil {
 		return 0, fmt.Errorf("invalid extended attribute")
 	}
@@ -106,8 +98,8 @@ func (ea *ExtendedAttribute) GetUTF8NameSize() (int, error) {
 	return len(ea.AttributeValues.Name) + 1, nil
 }
 
-// GetUTF8Name retrieves the UTF-8 encoded name
-func (ea *ExtendedAttribute) GetUTF8Name() (string, error) {
+// UTF8Name retrieves the UTF-8 encoded name
+func (ea *ExtendedAttribute) UTF8Name() (string, error) {
 	if ea == nil {
 		return "", fmt.Errorf("invalid extended attribute")
 	}
@@ -116,12 +108,12 @@ func (ea *ExtendedAttribute) GetUTF8Name() (string, error) {
 		return "", fmt.Errorf("invalid attribute values")
 	}
 
-	return ea.AttributeValues.GetName(), nil
+	return ea.AttributeValues.NameString(), nil
 }
 
-// GetUTF16NameSize retrieves the size of the UTF-16 encoded name
+// UTF16NameSize retrieves the size of the UTF-16 encoded name
 // The returned size includes the end-of-string character
-func (ea *ExtendedAttribute) GetUTF16NameSize() (int, error) {
+func (ea *ExtendedAttribute) UTF16NameSize() (int, error) {
 	if ea == nil {
 		return 0, fmt.Errorf("invalid extended attribute")
 	}
@@ -150,8 +142,8 @@ func (ea *ExtendedAttribute) GetUTF16NameSize() (int, error) {
 	return utf16Count + 1, nil
 }
 
-// GetUTF16Name retrieves the UTF-16 encoded name
-func (ea *ExtendedAttribute) GetUTF16Name() ([]uint16, error) {
+// UTF16Name retrieves the UTF-16 encoded name
+func (ea *ExtendedAttribute) UTF16Name() ([]uint16, error) {
 	if ea == nil {
 		return nil, fmt.Errorf("invalid extended attribute")
 	}
@@ -244,7 +236,7 @@ func (ea *ExtendedAttribute) Seek(offset int64, whence int) (int64, error) {
 	}
 
 	// Get the data stream size for calculations
-	size, err := ea.GetSize()
+	size, err := ea.Size()
 	if err != nil {
 		return 0, fmt.Errorf("unable to get data stream size: %w", err)
 	}
@@ -271,8 +263,8 @@ func (ea *ExtendedAttribute) Seek(offset int64, whence int) (int64, error) {
 	return newOffset, nil
 }
 
-// GetOffset retrieves the current offset
-func (ea *ExtendedAttribute) GetOffset() (int64, error) {
+// Offset retrieves the current offset
+func (ea *ExtendedAttribute) Offset() (int64, error) {
 	if ea == nil {
 		return 0, fmt.Errorf("invalid extended attribute")
 	}
@@ -280,8 +272,8 @@ func (ea *ExtendedAttribute) GetOffset() (int64, error) {
 	return ea.currentOffset, nil
 }
 
-// GetSize retrieves the size
-func (ea *ExtendedAttribute) GetSize() (uint64, error) {
+// Size retrieves the size
+func (ea *ExtendedAttribute) Size() (uint64, error) {
 	if ea == nil {
 		return 0, fmt.Errorf("invalid extended attribute")
 	}
@@ -301,8 +293,8 @@ func (ea *ExtendedAttribute) GetSize() (uint64, error) {
 	return ea.DataStream.Size(), nil
 }
 
-// GetNumberOfExtents retrieves the number of extents
-func (ea *ExtendedAttribute) GetNumberOfExtents() (int, error) {
+// NumberOfExtents retrieves the number of extents
+func (ea *ExtendedAttribute) NumberOfExtents() (int, error) {
 	if ea == nil {
 		return 0, fmt.Errorf("invalid extended attribute")
 	}
@@ -312,11 +304,11 @@ func (ea *ExtendedAttribute) GetNumberOfExtents() (int, error) {
 	}
 
 	// Get number of extents from attribute values
-	return ea.AttributeValues.GetNumberOfExtents(), nil
+	return ea.AttributeValues.NumberOfExtents(), nil
 }
 
-// GetExtentByIndex retrieves an extent by index
-func (ea *ExtendedAttribute) GetExtentByIndex(index int) (offset int64, size uint64, flags uint32, err error) {
+// ExtentByIndex retrieves an extent by index
+func (ea *ExtendedAttribute) ExtentByIndex(index int) (offset int64, size uint64, flags uint32, err error) {
 	if ea == nil {
 		return 0, 0, 0, fmt.Errorf("invalid extended attribute")
 	}
@@ -326,7 +318,7 @@ func (ea *ExtendedAttribute) GetExtentByIndex(index int) (offset int64, size uin
 	}
 
 	// Get extent from attribute values
-	extent, err := ea.AttributeValues.GetExtentByIndex(index)
+	extent, err := ea.AttributeValues.ExtentByIndex(index)
 	if err != nil {
 		return 0, 0, 0, fmt.Errorf("unable to retrieve extent %d: %w", index, err)
 	}

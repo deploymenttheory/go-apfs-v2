@@ -119,7 +119,7 @@ func runInfo(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return withCode(ExitBadImage, fmt.Errorf("unable to open APFS container: %w", err))
 		}
-		defer container.Free()
+		defer container.Close()
 		info, err = collectContainerInfo(container)
 		if err != nil {
 			return err
@@ -189,12 +189,12 @@ func collectHFSInfo(volume *hfsplus.Volume) *containerInfo {
 }
 
 func collectContainerInfo(container *apfs.Container) (*containerInfo, error) { //nolint:unparam
-	uuid, err := container.GetIdentifier()
+	uuid, err := container.Identifier()
 	if err != nil {
 		return nil, fmt.Errorf("unable to get container identifier: %w", err)
 	}
 
-	size, err := container.GetSize()
+	size, err := container.Size()
 	if err != nil {
 		return nil, fmt.Errorf("unable to get container size: %w", err)
 	}
@@ -218,10 +218,10 @@ func collectContainerInfo(container *apfs.Container) (*containerInfo, error) { /
 	for index, volume := range volumes {
 		vi := volumeInfo{Index: index}
 
-		if name, err := volume.GetUTF8Name(); err == nil {
+		if name, err := volume.UTF8Name(); err == nil {
 			vi.Name = name
 		}
-		if volUUID, err := volume.GetIdentifier(); err == nil {
+		if volUUID, err := volume.Identifier(); err == nil {
 			vi.UUID = formatUUIDBytes(volUUID[:])
 		}
 		if ci, err := volume.IsCaseInsensitive(); err == nil {

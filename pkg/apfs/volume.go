@@ -73,88 +73,6 @@ func NewVolume(
 	}, nil
 }
 
-// Free releases resources associated with the volume
-func (v *Volume) Free() error {
-	if v == nil {
-		return fmt.Errorf("invalid volume")
-	}
-
-	// Free snapshot metadata tree
-	if v.SnapshotMetadataTree != nil {
-		if err := v.SnapshotMetadataTree.Free(); err != nil {
-			return fmt.Errorf("unable to free snapshot metadata tree: %w", err)
-		}
-		v.SnapshotMetadataTree = nil
-	}
-
-	// Free extentref tree
-	if v.ExtentrefTree != nil {
-
-		v.ExtentrefTree = nil
-	}
-
-	// Free file system B-tree
-	if v.FileSystemBTree != nil {
-
-		v.FileSystemBTree = nil
-	}
-
-	// Free encryption context
-	if v.EncryptionContext != nil {
-
-		v.EncryptionContext = nil
-	}
-
-	// Free volume keybag
-	if v.VolumeKeybag != nil {
-		if err := v.VolumeKeybag.Free(); err != nil {
-			return fmt.Errorf("unable to free volume keybag: %w", err)
-		}
-		v.VolumeKeybag = nil
-	}
-
-	// Free object map B-tree
-	if v.ObjectMapBTree != nil {
-		if err := v.ObjectMapBTree.Free(); err != nil {
-			return fmt.Errorf("unable to free object map B-tree: %w", err)
-		}
-		v.ObjectMapBTree = nil
-	}
-
-	// Free container data handle
-	if v.ContainerDataHandle != nil {
-		if err := v.ContainerDataHandle.Free(); err != nil {
-			return fmt.Errorf("unable to free container data handle: %w", err)
-		}
-		v.ContainerDataHandle = nil
-	}
-
-	// Free volume superblock
-	if v.Superblock != nil {
-		if err := v.Superblock.Free(); err != nil {
-			return fmt.Errorf("unable to free volume superblock: %w", err)
-		}
-		v.Superblock = nil
-	}
-
-	// Zero out passwords before freeing
-	if v.UserPassword != nil {
-		for i := range v.UserPassword {
-			v.UserPassword[i] = 0
-		}
-		v.UserPassword = nil
-	}
-
-	if v.RecoveryPassword != nil {
-		for i := range v.RecoveryPassword {
-			v.RecoveryPassword[i] = 0
-		}
-		v.RecoveryPassword = nil
-	}
-
-	return nil
-}
-
 // OpenRead opens a volume for reading
 func (v *Volume) OpenRead(reader io.ReaderAt, fileOffset int64) error {
 	if v == nil {
@@ -208,12 +126,10 @@ func (v *Volume) OpenRead(reader io.ReaderAt, fileOffset int64) error {
 	}
 
 	if err := objectMap.ReadFrom(reader, objectMapOffset); err != nil {
-		objectMap.Free()
 		return fmt.Errorf("unable to read object map at offset %d: %w", objectMapOffset, err)
 	}
 
 	if objectMap.TreeOID == 0 {
-		objectMap.Free()
 		return fmt.Errorf("missing object map B-tree block number")
 	}
 
@@ -245,13 +161,11 @@ func (v *Volume) OpenRead(reader io.ReaderAt, fileOffset int64) error {
 		objectMap.TreeOID,
 	)
 	if err != nil {
-		objectMap.Free()
 		return fmt.Errorf("unable to create object map B-tree: %w", err)
 	}
 	v.ObjectMapBTree = objectMapBTree
 
 	// Free the object map as we only needed it to get the B-tree block number
-	objectMap.Free()
 
 	// Read file system B-tree
 	fileSystemRootObjectID := v.Superblock.RootTreeOID
@@ -353,34 +267,31 @@ func (v *Volume) Close() error {
 
 	// Free volume keybag
 	if v.VolumeKeybag != nil {
-		v.VolumeKeybag.Free()
+		v.VolumeKeybag.Close()
 		v.VolumeKeybag = nil
 	}
 
 	// Free object map B-tree
 	if v.ObjectMapBTree != nil {
-		v.ObjectMapBTree.Free()
 		v.ObjectMapBTree = nil
 	}
 
 	// Free container data handle
 	if v.ContainerDataHandle != nil {
-		v.ContainerDataHandle.Free()
 		v.ContainerDataHandle = nil
 	}
 
 	// Free volume superblock
 	if v.Superblock != nil {
-		v.Superblock.Free()
 		v.Superblock = nil
 	}
 
 	return nil
 }
 
-// GetUTF8NameSize retrieves the size of the UTF-8 encoded volume name
+// UTF8NameSize retrieves the size of the UTF-8 encoded volume name
 // The returned size includes the end of string character
-func (v *Volume) GetUTF8NameSize() (int, error) {
+func (v *Volume) UTF8NameSize() (int, error) {
 	if v == nil {
 		return 0, fmt.Errorf("invalid volume")
 	}
@@ -389,11 +300,11 @@ func (v *Volume) GetUTF8NameSize() (int, error) {
 		return 0, fmt.Errorf("invalid volume - missing superblock")
 	}
 
-	return v.Superblock.GetUTF8VolumeNameSize()
+	return v.Superblock.UTF8VolumeNameSize()
 }
 
-// GetUTF8Name retrieves the UTF-8 encoded volume name
-func (v *Volume) GetUTF8Name() (string, error) {
+// UTF8Name retrieves the UTF-8 encoded volume name
+func (v *Volume) UTF8Name() (string, error) {
 	if v == nil {
 		return "", fmt.Errorf("invalid volume")
 	}
@@ -402,12 +313,12 @@ func (v *Volume) GetUTF8Name() (string, error) {
 		return "", fmt.Errorf("invalid volume - missing superblock")
 	}
 
-	return v.Superblock.GetUTF8VolumeName()
+	return v.Superblock.UTF8VolumeName()
 }
 
-// GetUTF16NameSize retrieves the size of the UTF-16 encoded volume name
+// UTF16NameSize retrieves the size of the UTF-16 encoded volume name
 // The returned size includes the end of string character
-func (v *Volume) GetUTF16NameSize() (int, error) {
+func (v *Volume) UTF16NameSize() (int, error) {
 	if v == nil {
 		return 0, fmt.Errorf("invalid volume")
 	}
@@ -416,11 +327,11 @@ func (v *Volume) GetUTF16NameSize() (int, error) {
 		return 0, fmt.Errorf("invalid volume - missing superblock")
 	}
 
-	return v.Superblock.GetUTF16VolumeNameSize()
+	return v.Superblock.UTF16VolumeNameSize()
 }
 
-// GetUTF16Name retrieves the UTF-16 encoded volume name
-func (v *Volume) GetUTF16Name() ([]uint16, error) {
+// UTF16Name retrieves the UTF-16 encoded volume name
+func (v *Volume) UTF16Name() ([]uint16, error) {
 	if v == nil {
 		return nil, fmt.Errorf("invalid volume")
 	}
@@ -429,11 +340,11 @@ func (v *Volume) GetUTF16Name() ([]uint16, error) {
 		return nil, fmt.Errorf("invalid volume - missing superblock")
 	}
 
-	return v.Superblock.GetUTF16VolumeName()
+	return v.Superblock.UTF16VolumeName()
 }
 
-// GetIdentifier retrieves the volume identifier (UUID)
-func (v *Volume) GetIdentifier() ([16]byte, error) {
+// Identifier retrieves the volume identifier (UUID)
+func (v *Volume) Identifier() ([16]byte, error) {
 	if v == nil {
 		return [16]byte{}, fmt.Errorf("invalid volume")
 	}
@@ -442,7 +353,7 @@ func (v *Volume) GetIdentifier() ([16]byte, error) {
 		return [16]byte{}, fmt.Errorf("invalid volume - missing superblock")
 	}
 
-	return v.Superblock.GetVolumeIdentifier()
+	return v.Superblock.VolumeIdentifier()
 }
 
 // IsLocked checks if the volume is locked (encrypted)
@@ -459,8 +370,8 @@ func (v *Volume) IsLocked() (bool, error) {
 	return v.VolumeKeybag.IsLocked, nil
 }
 
-// GetNumberOfSnapshots retrieves the number of snapshots
-func (v *Volume) GetNumberOfSnapshots() (int, error) {
+// NumberOfSnapshots retrieves the number of snapshots
+func (v *Volume) NumberOfSnapshots() (int, error) {
 	if v == nil {
 		return 0, fmt.Errorf("invalid volume")
 	}
@@ -469,11 +380,11 @@ func (v *Volume) GetNumberOfSnapshots() (int, error) {
 		return 0, nil
 	}
 
-	return v.SnapshotMetadataTree.GetNumberOfEntries(v.Reader)
+	return v.SnapshotMetadataTree.NumberOfEntries(v.Reader)
 }
 
-// GetSnapshot retrieves a snapshot by index
-func (v *Volume) GetSnapshot(index int) (*Snapshot, error) {
+// Snapshot retrieves a snapshot by index
+func (v *Volume) Snapshot(index int) (*Snapshot, error) {
 	if v == nil {
 		return nil, fmt.Errorf("invalid volume")
 	}
@@ -483,7 +394,7 @@ func (v *Volume) GetSnapshot(index int) (*Snapshot, error) {
 	}
 
 	// Get snapshot metadata by index
-	snapshotMetadata, err := v.SnapshotMetadataTree.GetEntryByIndex(v.Reader, index)
+	snapshotMetadata, err := v.SnapshotMetadataTree.EntryByIndex(v.Reader, index)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get snapshot metadata at index %d: %w", index, err)
 	}
@@ -502,15 +413,15 @@ func (v *Volume) GetSnapshot(index int) (*Snapshot, error) {
 	offset := int64(blockNumber) * int64(v.IOHandle.BlockSize)
 	err = snapshot.OpenRead(v.Reader, offset)
 	if err != nil {
-		snapshot.Free()
+		snapshot.Close()
 		return nil, fmt.Errorf("unable to open snapshot: %w", err)
 	}
 
 	return snapshot, nil
 }
 
-// GetRootDirectory retrieves the root directory file entry
-func (v *Volume) GetRootDirectory() (*FileEntry, error) {
+// RootDirectory retrieves the root directory file entry
+func (v *Volume) RootDirectory() (*FileEntry, error) {
 	if v == nil {
 		return nil, fmt.Errorf("invalid volume")
 	}
@@ -521,11 +432,11 @@ func (v *Volume) GetRootDirectory() (*FileEntry, error) {
 
 	// Root directory inode is always 2 in APFS
 	// (Inode 1 is the private directory and may not exist)
-	return v.GetFileEntryByIdentifier(2)
+	return v.FileEntryByIdentifier(2)
 }
 
-// GetFileEntryByIdentifier retrieves a file entry by inode number
-func (v *Volume) GetFileEntryByIdentifier(identifier uint64) (*FileEntry, error) {
+// FileEntryByIdentifier retrieves a file entry by inode number
+func (v *Volume) FileEntryByIdentifier(identifier uint64) (*FileEntry, error) {
 	if v == nil {
 		return nil, fmt.Errorf("invalid volume")
 	}
@@ -535,7 +446,7 @@ func (v *Volume) GetFileEntryByIdentifier(identifier uint64) (*FileEntry, error)
 	}
 
 	// Get inode from file system B-tree
-	inode, err := v.FileSystemBTree.GetInodeByIdentifier(v.Reader, identifier, 0)
+	inode, err := v.FileSystemBTree.InodeByIdentifier(v.Reader, identifier, 0)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get inode %d: %w", identifier, err)
 	}
@@ -562,8 +473,8 @@ func (v *Volume) GetFileEntryByIdentifier(identifier uint64) (*FileEntry, error)
 	return fileEntry, nil
 }
 
-// GetFileEntryByPath retrieves a file entry by path
-func (v *Volume) GetFileEntryByPath(path string) (*FileEntry, error) {
+// FileEntryByPath retrieves a file entry by path
+func (v *Volume) FileEntryByPath(path string) (*FileEntry, error) {
 	if v == nil {
 		return nil, fmt.Errorf("invalid volume")
 	}
@@ -574,12 +485,12 @@ func (v *Volume) GetFileEntryByPath(path string) (*FileEntry, error) {
 
 	// If path is empty or root, return root directory
 	if path == "" || path == "/" {
-		return v.GetRootDirectory()
+		return v.RootDirectory()
 	}
 
-	// Use FileSystemBTree.GetInodeByUTF8Path to traverse the path
+	// Use FileSystemBTree.InodeByUTF8Path to traverse the path
 	// This starts from the root (identifier 2, not 1 which is private-dir)
-	inode, directoryEntryRecord, err := v.FileSystemBTree.GetInodeByUTF8Path(
+	inode, directoryEntryRecord, err := v.FileSystemBTree.InodeByUTF8Path(
 		v.Reader,
 		2, // Start from root directory (identifier 2)
 		path,
@@ -634,8 +545,8 @@ func (v *Volume) SetUTF8Password(password []byte) error {
 	v.UserPassword = make([]byte, len(password))
 	copy(v.UserPassword, password)
 
-	if IsVerbose() {
-		Printf("SetUTF8Password: password set (length: %d)\n", len(password))
+	if isVerbose() {
+		notifyPrintf("SetUTF8Password: password set (length: %d)\n", len(password))
 	}
 
 	return nil
@@ -681,8 +592,8 @@ func (v *Volume) SetUTF8RecoveryPassword(password []byte) error {
 	v.RecoveryPassword = make([]byte, len(password))
 	copy(v.RecoveryPassword, password)
 
-	if IsVerbose() {
-		Printf("SetUTF8RecoveryPassword: recovery password set (length: %d)\n", len(password))
+	if isVerbose() {
+		notifyPrintf("SetUTF8RecoveryPassword: recovery password set (length: %d)\n", len(password))
 	}
 
 	return nil
@@ -744,8 +655,8 @@ func (v *Volume) Unlock() (bool, error) {
 	return false, fmt.Errorf("volume unlock requires volume keybag reading - not yet fully implemented")
 }
 
-// GetFeaturesFlags retrieves the volume feature flags
-func (v *Volume) GetFeaturesFlags() (compatible, incompatible, readOnlyCompatible uint64, err error) {
+// FeaturesFlags retrieves the volume feature flags
+func (v *Volume) FeaturesFlags() (compatible, incompatible, readOnlyCompatible uint64, err error) {
 	if v == nil {
 		return 0, 0, 0, fmt.Errorf("invalid volume")
 	}
@@ -761,8 +672,8 @@ func (v *Volume) GetFeaturesFlags() (compatible, incompatible, readOnlyCompatibl
 	return compatible, incompatible, readOnlyCompatible, nil
 }
 
-// GetSize retrieves the size of the volume in bytes
-func (v *Volume) GetSize() (uint64, error) {
+// Size retrieves the size of the volume in bytes
+func (v *Volume) Size() (uint64, error) {
 	if v == nil {
 		return 0, fmt.Errorf("invalid volume")
 	}
@@ -782,8 +693,8 @@ func (v *Volume) GetSize() (uint64, error) {
 	return volumeSize, nil
 }
 
-// GetNextFileEntryIdentifier retrieves the next file entry identifier
-func (v *Volume) GetNextFileEntryIdentifier() (uint64, error) {
+// NextFileEntryIdentifier retrieves the next file entry identifier
+func (v *Volume) NextFileEntryIdentifier() (uint64, error) {
 	if v == nil {
 		return 0, fmt.Errorf("invalid volume")
 	}

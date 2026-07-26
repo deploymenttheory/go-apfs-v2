@@ -36,8 +36,8 @@ func NewHuffmanTree(numberOfSymbols int, maximumCodeSize uint8) (*HuffmanTree, e
 	return ht, nil
 }
 
-// Free releases resources associated with the Huffman tree
-func (ht *HuffmanTree) Free() error {
+// Close releases resources associated with the Huffman tree
+func (ht *HuffmanTree) Close() error {
 	if ht == nil {
 		return fmt.Errorf("invalid Huffman tree")
 	}
@@ -133,8 +133,8 @@ func (ht *HuffmanTree) Build(codeSizesArray []uint8, numberOfCodeSizes int) (boo
 	return true, nil
 }
 
-// GetSymbolFromBitStream retrieves a symbol based on the Huffman code read from the bit-stream
-func (ht *HuffmanTree) GetSymbolFromBitStream(bitStream *BitStream) (uint16, error) {
+// SymbolFromBitStream retrieves a symbol based on the Huffman code read from the bit-stream
+func (ht *HuffmanTree) SymbolFromBitStream(bitStream *BitStream) (uint16, error) {
 	if ht == nil {
 		return 0, fmt.Errorf("invalid Huffman tree")
 	}
@@ -155,7 +155,7 @@ func (ht *HuffmanTree) GetSymbolFromBitStream(bitStream *BitStream) (uint16, err
 	// Performance profiling should be done before optimizing
 
 	for bitIndex := uint8(1); bitIndex <= ht.MaximumCodeSize; bitIndex++ {
-		value32bit, err := bitStream.GetValue(1)
+		value32bit, err := bitStream.Value(1)
 		if err != nil {
 			return 0, fmt.Errorf("unable to retrieve value from bit stream: %w", err)
 		}

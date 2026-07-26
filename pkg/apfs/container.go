@@ -52,15 +52,15 @@ func NewContainer(ioHandle *IOHandle) (*Container, error) {
 	}, nil
 }
 
-// Free releases resources associated with the container
-func (c *Container) Free() error {
+// Close releases resources associated with the container
+func (c *Container) Close() error {
 	if c == nil {
 		return fmt.Errorf("invalid container")
 	}
 
 	// Free keybag
 	if c.Keybag != nil {
-		if err := c.Keybag.Free(); err != nil {
+		if err := c.Keybag.Close(); err != nil {
 			return fmt.Errorf("unable to free keybag: %w", err)
 		}
 		c.Keybag = nil
@@ -68,9 +68,6 @@ func (c *Container) Free() error {
 
 	// Free space manager
 	if c.SpaceManager != nil {
-		if err := c.SpaceManager.Free(); err != nil {
-			return fmt.Errorf("unable to free space manager: %w", err)
-		}
 		c.SpaceManager = nil
 	}
 
@@ -79,9 +76,6 @@ func (c *Container) Free() error {
 
 	// Free container data handle
 	if c.ContainerDataHandle != nil {
-		if err := c.ContainerDataHandle.Free(); err != nil {
-			return fmt.Errorf("unable to free container data handle: %w", err)
-		}
 		c.ContainerDataHandle = nil
 	}
 
@@ -93,9 +87,6 @@ func (c *Container) Free() error {
 
 	// Free superblock
 	if c.Superblock != nil {
-		if err := c.Superblock.Free(); err != nil {
-			return fmt.Errorf("unable to free superblock: %w", err)
-		}
 		c.Superblock = nil
 	}
 
@@ -180,7 +171,6 @@ func (c *Container) OpenRead(reader io.ReaderAt, fileOffset int64) error {
 		fusionMiddleTreeOffset := int64(superblock.FusionMtOID) * int64(c.IOHandle.BlockSize)
 
 		if err := fusionMiddleTree.ReadFrom(reader, fusionMiddleTreeOffset); err != nil {
-			fusionMiddleTree.Free()
 			return fmt.Errorf("unable to read Fusion middle tree at offset %d: %w", fusionMiddleTreeOffset, err)
 		}
 
@@ -195,7 +185,6 @@ func (c *Container) OpenRead(reader io.ReaderAt, fileOffset int64) error {
 	if err != nil {
 		return fmt.Errorf("unable to create object: %w", err)
 	}
-	defer object.Free()
 
 	scanOffset := int64(superblock.XPDescBase) * int64(c.IOHandle.BlockSize)
 
@@ -221,16 +210,13 @@ func (c *Container) OpenRead(reader io.ReaderAt, fileOffset int64) error {
 			}
 
 			if err := backupSuperblock.ReadFrom(reader, scanOffset); err != nil {
-				backupSuperblock.Free()
 				return fmt.Errorf("unable to read backup container superblock at offset %d: %w", scanOffset, err)
 			}
 
 			// Use the superblock with the highest transaction identifier
 			if backupSuperblock.XID > c.Superblock.XID {
-				c.Superblock.Free()
 				c.Superblock = backupSuperblock
 			} else {
-				backupSuperblock.Free()
 			}
 		}
 
@@ -272,12 +258,10 @@ func (c *Container) OpenRead(reader io.ReaderAt, fileOffset int64) error {
 	}
 
 	if err := objectMap.ReadFrom(reader, objectMapOffset); err != nil {
-		objectMap.Free()
 		return fmt.Errorf("unable to read object map at offset %d: %w", objectMapOffset, err)
 	}
 
 	if objectMap.TreeOID == 0 {
-		objectMap.Free()
 		return fmt.Errorf("missing object map B-tree block number")
 	}
 
@@ -289,13 +273,11 @@ func (c *Container) OpenRead(reader io.ReaderAt, fileOffset int64) error {
 		objectMap.TreeOID,
 	)
 	if err != nil {
-		objectMap.Free()
 		return fmt.Errorf("unable to create object map B-tree: %w", err)
 	}
 	c.ObjectMapBTree = objectMapBTree
 
 	// Free the object map as we only needed it to get the B-tree block number
-	objectMap.Free()
 
 	// Read container keybag if present
 	if c.Superblock.KeylockerStartPaddr > 0 && c.Superblock.KeylockerBlockCount > 0 {
@@ -307,9 +289,9 @@ func (c *Container) OpenRead(reader io.ReaderAt, fileOffset int64) error {
 		keybagOffset := int64(c.Superblock.KeylockerStartPaddr) * int64(c.IOHandle.BlockSize)
 		keybagSize := c.Superblock.KeylockerBlockCount * uint64(c.IOHandle.BlockSize)
 
-		containerIdentifier, err := c.Superblock.GetContainerIdentifier()
+		containerIdentifier, err := c.Superblock.ContainerIdentifier()
 		if err != nil {
-			keybag.Free()
+			keybag.Close()
 			return fmt.Errorf("unable to get container identifier: %w", err)
 		}
 
@@ -332,7 +314,7 @@ func (c *Container) OpenRead(reader io.ReaderAt, fileOffset int64) error {
 	// Read space manager if present (only for debug output in C library)
 	if DebugOutput && c.Superblock.SpacemanOID > 0 {
 		// Get space manager block number from checkpoint map
-		spaceManagerBlockNumber, err := c.CheckpointMap.GetPhysicalAddressByObjectIdentifier(c.Superblock.SpacemanOID)
+		spaceManagerBlockNumber, err := c.CheckpointMap.PhysicalAddressByObjectIdentifier(c.Superblock.SpacemanOID)
 		if err == nil {
 			spaceManagerOffset := int64(spaceManagerBlockNumber) * int64(c.IOHandle.BlockSize)
 
@@ -352,8 +334,8 @@ func (c *Container) OpenRead(reader io.ReaderAt, fileOffset int64) error {
 	return nil
 }
 
-// GetSize retrieves the size of the container
-func (c *Container) GetSize() (uint64, error) {
+// Size retrieves the size of the container
+func (c *Container) Size() (uint64, error) {
 	if c == nil {
 		return 0, fmt.Errorf("invalid container")
 	}
@@ -365,8 +347,8 @@ func (c *Container) GetSize() (uint64, error) {
 	return c.IOHandle.ContainerSize, nil
 }
 
-// GetIdentifier retrieves the container identifier (UUID)
-func (c *Container) GetIdentifier() ([]byte, error) {
+// Identifier retrieves the container identifier (UUID)
+func (c *Container) Identifier() ([]byte, error) {
 	if c == nil {
 		return nil, fmt.Errorf("invalid container")
 	}
@@ -375,7 +357,7 @@ func (c *Container) GetIdentifier() ([]byte, error) {
 		return nil, fmt.Errorf("invalid container - missing superblock")
 	}
 
-	return c.Superblock.GetContainerIdentifier()
+	return c.Superblock.ContainerIdentifier()
 }
 
 // IsLocked checks if the container is locked (encrypted)
@@ -392,8 +374,8 @@ func (c *Container) IsLocked() (bool, error) {
 	return c.Keybag.IsLocked, nil
 }
 
-// GetNumberOfVolumes retrieves the number of volumes in the container
-func (c *Container) GetNumberOfVolumes() (int, error) {
+// NumberOfVolumes retrieves the number of volumes in the container
+func (c *Container) NumberOfVolumes() (int, error) {
 	if c == nil {
 		return 0, fmt.Errorf("invalid container")
 	}
@@ -402,7 +384,7 @@ func (c *Container) GetNumberOfVolumes() (int, error) {
 		return 0, fmt.Errorf("invalid container - missing superblock")
 	}
 
-	volumeIDs, err := c.Superblock.GetVolumeObjectIdentifiers()
+	volumeIDs, err := c.Superblock.VolumeObjectIdentifiers()
 	if err != nil {
 		return 0, fmt.Errorf("unable to get volume object identifiers: %w", err)
 	}
@@ -410,8 +392,8 @@ func (c *Container) GetNumberOfVolumes() (int, error) {
 	return len(volumeIDs), nil
 }
 
-// GetVolumeObjectIdentifiers retrieves all volume object identifiers
-func (c *Container) GetVolumeObjectIdentifiers() ([]uint64, error) {
+// VolumeObjectIdentifiers retrieves all volume object identifiers
+func (c *Container) VolumeObjectIdentifiers() ([]uint64, error) {
 	if c == nil {
 		return nil, fmt.Errorf("invalid container")
 	}
@@ -420,11 +402,11 @@ func (c *Container) GetVolumeObjectIdentifiers() ([]uint64, error) {
 		return nil, fmt.Errorf("invalid container - missing superblock")
 	}
 
-	return c.Superblock.GetVolumeObjectIdentifiers()
+	return c.Superblock.VolumeObjectIdentifiers()
 }
 
-// GetVolume retrieves a volume by index
-func (c *Container) GetVolume(index int) (*Volume, error) {
+// Volume retrieves a volume by index
+func (c *Container) Volume(index int) (*Volume, error) {
 	if c == nil {
 		return nil, fmt.Errorf("invalid container")
 	}
@@ -437,7 +419,7 @@ func (c *Container) GetVolume(index int) (*Volume, error) {
 		return nil, fmt.Errorf("invalid container - missing object map B-tree")
 	}
 
-	volumeIDs, err := c.GetVolumeObjectIdentifiers()
+	volumeIDs, err := c.VolumeObjectIdentifiers()
 	if err != nil {
 		return nil, fmt.Errorf("unable to get volume object identifiers: %w", err)
 	}
@@ -453,12 +435,12 @@ func (c *Container) GetVolume(index int) (*Volume, error) {
 	var physicalAddress uint64
 
 	// First try the checkpoint map
-	checkpointAddr, checkpointErr := c.CheckpointMap.GetPhysicalAddressByObjectIdentifier(volumeObjectID)
+	checkpointAddr, checkpointErr := c.CheckpointMap.PhysicalAddressByObjectIdentifier(volumeObjectID)
 	if checkpointErr == nil && checkpointAddr != 0 {
 		physicalAddress = checkpointAddr
 	} else {
 		// Fall back to object map B-tree for older transactions
-		descriptor, err := c.ObjectMapBTree.GetDescriptorByObjectIdentifier(
+		descriptor, err := c.ObjectMapBTree.DescriptorByObjectIdentifier(
 			c.Reader,
 			volumeObjectID,
 			c.Superblock.XID,
@@ -490,7 +472,7 @@ func (c *Container) GetVolume(index int) (*Volume, error) {
 
 	err = volume.OpenRead(c.Reader, offset)
 	if err != nil {
-		volume.Free()
+		volume.Close()
 		return nil, fmt.Errorf("unable to open volume at offset %d: %w", offset, err)
 	}
 

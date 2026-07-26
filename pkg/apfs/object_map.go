@@ -79,23 +79,14 @@ func NewObjectMap() (*ObjectMap, error) {
 	return &ObjectMap{}, nil
 }
 
-// Free releases resources associated with the object map
-func (om *ObjectMap) Free() error {
-	if om == nil {
-		return fmt.Errorf("invalid object map")
-	}
-	// Nothing to free in Go
-	return nil
-}
-
 // ReadFrom reads the object map from a file at the specified offset
 func (om *ObjectMap) ReadFrom(reader io.ReaderAt, fileOffset int64) error {
 	if om == nil {
 		return fmt.Errorf("invalid object map")
 	}
 
-	if IsVerbose() {
-		Printf("%s: reading object map at offset: %d (0x%08x)\n",
+	if isVerbose() {
+		notifyPrintf("%s: reading object map at offset: %d (0x%08x)\n",
 			"ReadFrom", fileOffset, fileOffset)
 	}
 
@@ -130,8 +121,8 @@ func (om *ObjectMap) ReadData(data []byte) error {
 		return fmt.Errorf("invalid data size value out of bounds")
 	}
 
-	if IsVerbose() {
-		Printf("%s: object map data:\n", "ReadData")
+	if isVerbose() {
+		notifyPrintf("%s: object map data:\n", "ReadData")
 		PrintData(data[:ObjectMapSize], true)
 	}
 
@@ -165,29 +156,29 @@ func (om *ObjectMap) ReadData(data []byte) error {
 	om.Unknown2 = binary.LittleEndian.Uint64(data[72:80])
 	om.Unknown3 = binary.LittleEndian.Uint64(data[80:88])
 
-	if IsVerbose() {
-		Printf("%s: object checksum\t\t\t\t: 0x%08x\n", "ReadData", om.Checksum)
-		Printf("%s: object identifier\t\t\t: %d\n", "ReadData", om.OID)
-		Printf("%s: object transaction identifier\t\t: %d\n", "ReadData", om.XID)
-		Printf("%s: object type\t\t\t\t: 0x%08x\n", "ReadData", om.ObjectType)
-		Printf("%s: object subtype\t\t\t\t: 0x%08x\n", "ReadData", om.ObjectSubtype)
-		Printf("%s: flags\t\t\t\t\t: 0x%08x\n", "ReadData", om.Flags)
-		Printf("%s: number of snapshots\t\t\t: %d\n", "ReadData", om.SnapshotCount)
-		Printf("%s: B-tree type\t\t\t\t: 0x%08x\n", "ReadData", om.TreeType)
-		Printf("%s: snapshots B-tree type\t\t\t: 0x%08x\n", "ReadData", om.SnapshotTreeType)
-		Printf("%s: B-tree block number\t\t\t: %d\n", "ReadData", om.TreeOID)
-		Printf("%s: snapshots B-tree block number\t\t: %d\n", "ReadData", om.SnapshotTreeOID)
-		Printf("%s: most recent snapshot identifier\t\t: %d\n", "ReadData", om.MostRecentSnapXID)
-		Printf("%s: unknown2\t\t\t\t: %d\n", "ReadData", om.Unknown2)
-		Printf("%s: unknown3\t\t\t\t: %d\n", "ReadData", om.Unknown3)
-		Printf("\n")
+	if isVerbose() {
+		notifyPrintf("%s: object checksum\t\t\t\t: 0x%08x\n", "ReadData", om.Checksum)
+		notifyPrintf("%s: object identifier\t\t\t: %d\n", "ReadData", om.OID)
+		notifyPrintf("%s: object transaction identifier\t\t: %d\n", "ReadData", om.XID)
+		notifyPrintf("%s: object type\t\t\t\t: 0x%08x\n", "ReadData", om.ObjectType)
+		notifyPrintf("%s: object subtype\t\t\t\t: 0x%08x\n", "ReadData", om.ObjectSubtype)
+		notifyPrintf("%s: flags\t\t\t\t\t: 0x%08x\n", "ReadData", om.Flags)
+		notifyPrintf("%s: number of snapshots\t\t\t: %d\n", "ReadData", om.SnapshotCount)
+		notifyPrintf("%s: B-tree type\t\t\t\t: 0x%08x\n", "ReadData", om.TreeType)
+		notifyPrintf("%s: snapshots B-tree type\t\t\t: 0x%08x\n", "ReadData", om.SnapshotTreeType)
+		notifyPrintf("%s: B-tree block number\t\t\t: %d\n", "ReadData", om.TreeOID)
+		notifyPrintf("%s: snapshots B-tree block number\t\t: %d\n", "ReadData", om.SnapshotTreeOID)
+		notifyPrintf("%s: most recent snapshot identifier\t\t: %d\n", "ReadData", om.MostRecentSnapXID)
+		notifyPrintf("%s: unknown2\t\t\t\t: %d\n", "ReadData", om.Unknown2)
+		notifyPrintf("%s: unknown3\t\t\t\t: %d\n", "ReadData", om.Unknown3)
+		notifyPrintf("\n")
 	}
 
 	return nil
 }
 
-// GetNumberOfSnapshots retrieves the number of snapshots
-func (om *ObjectMap) GetNumberOfSnapshots() (uint32, error) {
+// NumberOfSnapshots retrieves the number of snapshots
+func (om *ObjectMap) NumberOfSnapshots() (uint32, error) {
 	if om == nil {
 		return 0, fmt.Errorf("invalid object map")
 	}

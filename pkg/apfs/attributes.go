@@ -5,8 +5,8 @@ import (
 	"io"
 )
 
-// GetFileExtents retrieves the attribute value data file extents
-func (av *AttributeValues) GetFileExtents(
+// FileExtents retrieves the attribute value data file extents
+func (av *AttributeValues) FileExtents(
 	reader io.ReaderAt,
 	fileSystemBTree *FileSystemBTree,
 	xid uint64,
@@ -20,7 +20,7 @@ func (av *AttributeValues) GetFileExtents(
 	}
 
 	// Get file extents from the B-tree
-	extents, err := fileSystemBTree.GetFileExtents(
+	extents, err := fileSystemBTree.FileExtents(
 		reader,
 		av.ValueDataStreamIdentifier,
 		xid,
@@ -35,8 +35,8 @@ func (av *AttributeValues) GetFileExtents(
 	return nil
 }
 
-// GetDataStream retrieves the attribute value data stream
-func (av *AttributeValues) GetDataStream(
+// DataStream retrieves the attribute value data stream
+func (av *AttributeValues) DataStream(
 	ioHandle *IOHandle,
 	reader io.ReaderAt,
 	encryptionContext *EncryptionContext,
@@ -48,7 +48,7 @@ func (av *AttributeValues) GetDataStream(
 	if (av.Flags & ExtendedAttributeFlagDataStream) != 0 {
 		// Retrieve file extents if not already loaded
 		if av.ValueDataFileExtents == nil {
-			err := av.GetFileExtents(reader, fileSystemBTree, xid)
+			err := av.FileExtents(reader, fileSystemBTree, xid)
 			if err != nil {
 				return nil, fmt.Errorf("unable to retrieve attribute value data file extents: %w", err)
 			}

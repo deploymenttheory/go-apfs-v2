@@ -59,7 +59,7 @@ func runInspectWalk(imagePath string, inspectVolume int, inspectVerbose bool) er
 	fmt.Println()
 
 	// List volumes
-	volumeOIDs, err := nxsb.GetVolumeObjectIdentifiers()
+	volumeOIDs, err := nxsb.VolumeObjectIdentifiers()
 	if err != nil {
 		return fmt.Errorf("unable to get volume object identifiers: %w", err)
 	}
@@ -82,7 +82,7 @@ func runInspectWalk(imagePath string, inspectVolume int, inspectVerbose bool) er
 
 	for volIdx := startVol; volIdx < endVol; volIdx++ {
 		// Get volume
-		volume, err := container.GetVolume(volIdx)
+		volume, err := container.Volume(volIdx)
 		if err != nil {
 			fmt.Printf("Error: unable to get volume %d: %v\n\n", volIdx, err)
 			continue
@@ -114,24 +114,22 @@ func runInspectWalk(imagePath string, inspectVolume int, inspectVerbose bool) er
 
 		// Storage section
 		fmt.Println("  Storage")
-		volumeSize, _ := volume.GetSize()
+		volumeSize, _ := volume.Size()
 		fmt.Printf("    %-30s  %s (%s bytes)\n", "Size", formatBytes(volumeSize), formatNumber(volumeSize))
 		fmt.Printf("    %-30s  %s\n", "Allocated blocks", formatNumber(vsb.NumberOfAllocatedBlocks))
 		fmt.Printf("    %-30s  %s\n", "Reserved blocks", formatNumber(vsb.NumberOfReservedBlocks))
 		fmt.Printf("    %-30s  %s\n", "Quota blocks", formatNumber(vsb.NumberOfQuotaBlocks))
 
-		totalAllocated, _ := vsb.GetTotalBlocksAllocated()
-		totalFreed, _ := vsb.GetTotalBlocksFreed()
-		fmt.Printf("    %-30s  %s\n", "Total blocks allocated ever", formatNumber(totalAllocated))
-		fmt.Printf("    %-30s  %s\n", "Total blocks freed ever", formatNumber(totalFreed))
+		fmt.Printf("    %-30s  %s\n", "Total blocks allocated", formatNumber(vsb.TotalBlocksAllocated))
+		fmt.Printf("    %-30s  %s\n", "Total blocks freed", formatNumber(vsb.TotalBlocksFreed))
 		fmt.Println()
 
 		// Contents section
 		fmt.Println("  Contents")
-		numFiles, _ := vsb.GetNumberOfFiles()
-		numDirs, _ := vsb.GetNumberOfDirectories()
-		numSymlinks, _ := vsb.GetNumberOfSymlinks()
-		numSnapshots, _ := vsb.GetNumberOfSnapshots()
+		numFiles := vsb.NumberOfFiles
+		numDirs := vsb.NumberOfDirectories
+		numSymlinks := vsb.NumberOfSymlinks
+		numSnapshots := vsb.SnapshotCount
 
 		fmt.Printf("    %-30s  %s\n", "Files", formatNumber(numFiles))
 		fmt.Printf("    %-30s  %s\n", "Directories", formatNumber(numDirs))
@@ -141,8 +139,8 @@ func runInspectWalk(imagePath string, inspectVolume int, inspectVerbose bool) er
 		}
 
 		// Try to get root directory
-		if rootEntry, err := volume.GetRootDirectory(); err == nil {
-			if numRootEntries, err := rootEntry.GetNumberOfSubFileEntries(); err == nil {
+		if rootEntry, err := volume.RootDirectory(); err == nil {
+			if numRootEntries, err := rootEntry.NumberOfSubFileEntries(); err == nil {
 				fmt.Printf("    %-30s  %s entries\n", "Root directory", formatNumber(uint64(numRootEntries)))
 			}
 		}
@@ -150,15 +148,15 @@ func runInspectWalk(imagePath string, inspectVolume int, inspectVerbose bool) er
 
 		// Features section
 		fmt.Println("  Features")
-		compatFeatures, _ := volume.GetCompatibleFeatureNames()
+		compatFeatures, _ := volume.CompatibleFeatureNames()
 		for _, feature := range compatFeatures {
 			fmt.Printf("    ✓ %s\n", feature)
 		}
-		incompatFeatures, _ := volume.GetIncompatibleFeatureNames()
+		incompatFeatures, _ := volume.IncompatibleFeatureNames()
 		for _, feature := range incompatFeatures {
 			fmt.Printf("    ✓ %s\n", feature)
 		}
-		roCompatFeatures, _ := volume.GetReadOnlyCompatibleFeatureNames()
+		roCompatFeatures, _ := volume.ReadOnlyCompatibleFeatureNames()
 		for _, feature := range roCompatFeatures {
 			fmt.Printf("    ✓ %s\n", feature)
 		}
@@ -180,12 +178,12 @@ func runInspectWalk(imagePath string, inspectVolume int, inspectVerbose bool) er
 			encryptedStr = "Yes"
 		}
 		fmt.Printf("    %-30s  %s\n", "Encrypted", encryptedStr)
-		fmt.Printf("    %-30s  %s\n", "Formatted by", vsb.GetFormattedBy())
-		fmt.Printf("    %-30s  %s\n", "Last modified by", vsb.GetLastModifiedBy())
+		fmt.Printf("    %-30s  %s\n", "Formatted by", vsb.FormattedByString())
+		fmt.Printf("    %-30s  %s\n", "Last modified by", vsb.LastModifiedBy())
 		fmt.Println()
 
 		// Modification History section
-		modHistory := vsb.GetModifiedByHistory()
+		modHistory := vsb.ModifiedByHistory()
 		if len(modHistory) > 1 {
 			fmt.Println("  Modification History")
 			for i, entry := range modHistory {

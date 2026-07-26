@@ -8,13 +8,8 @@ import (
 	"os"
 )
 
-// GetVersion returns the library version
-func GetVersion() string {
-	return Version
-}
-
-// GetAccessFlagsRead returns the access flags for reading
-func GetAccessFlagsRead() AccessFlags {
+// AccessFlagsRead returns the access flags for reading
+func AccessFlagsRead() AccessFlags {
 	return AccessFlagRead
 }
 

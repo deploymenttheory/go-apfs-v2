@@ -25,7 +25,7 @@ func NewMountFileSystem() *MountFileSystem {
 }
 
 // Free frees the mount filesystem resources
-func (mfs *MountFileSystem) Free() error {
+func (mfs *MountFileSystem) Close() error {
 	if mfs.Volume != nil {
 		// Note: Volume cleanup is handled by the mount handle
 		mfs.Volume = nil
@@ -52,27 +52,14 @@ func (mfs *MountFileSystem) SetVolume(volume *apfs.Volume) error {
 	return nil
 }
 
-// GetVolume returns the APFS volume
-func (mfs *MountFileSystem) GetVolume() (*apfs.Volume, error) {
-	if mfs.Volume == nil {
-		return nil, fmt.Errorf("no volume set")
-	}
-	return mfs.Volume, nil
-}
-
-// GetMountedTimestamp returns the timestamp when the filesystem was mounted
-func (mfs *MountFileSystem) GetMountedTimestamp() time.Time {
-	return mfs.MountedTimestamp
-}
-
-// GetFileEntryByPath retrieves a file entry by its path
-func (mfs *MountFileSystem) GetFileEntryByPath(path string) (*apfs.FileEntry, error) {
+// FileEntryByPath retrieves a file entry by its path
+func (mfs *MountFileSystem) FileEntryByPath(path string) (*apfs.FileEntry, error) {
 	if mfs.Volume == nil {
 		return nil, fmt.Errorf("no volume mounted")
 	}
 
 	// Get the root directory
-	root, err := mfs.Volume.GetRootDirectory()
+	root, err := mfs.Volume.RootDirectory()
 	if err != nil {
 		return nil, fmt.Errorf("unable to get root directory: %w", err)
 	}
@@ -100,7 +87,7 @@ func (mfs *MountFileSystem) GetFileEntryByPath(path string) (*apfs.FileEntry, er
 		}
 
 		// Get the number of sub-entries
-		numSubEntries, err := currentEntry.GetNumberOfSubFileEntries()
+		numSubEntries, err := currentEntry.NumberOfSubFileEntries()
 		if err != nil {
 			return nil, fmt.Errorf("unable to get number of sub-entries at level %d: %w", i, err)
 		}
@@ -108,12 +95,12 @@ func (mfs *MountFileSystem) GetFileEntryByPath(path string) (*apfs.FileEntry, er
 		// Search for the segment
 		found := false
 		for j := 0; j < numSubEntries; j++ {
-			subEntry, err := currentEntry.GetSubFileEntryByIndex(j)
+			subEntry, err := currentEntry.SubFileEntryByIndex(j)
 			if err != nil {
 				continue
 			}
 
-			name, err := subEntry.GetUTF8Name()
+			name, err := subEntry.UTF8Name()
 			if err != nil {
 				continue
 			}
@@ -133,13 +120,13 @@ func (mfs *MountFileSystem) GetFileEntryByPath(path string) (*apfs.FileEntry, er
 	return currentEntry, nil
 }
 
-// GetFilenameFromFileEntry retrieves the filename from a file entry
-func (mfs *MountFileSystem) GetFilenameFromFileEntry(fileEntry *apfs.FileEntry) (string, error) {
+// FilenameFromFileEntry retrieves the filename from a file entry
+func (mfs *MountFileSystem) FilenameFromFileEntry(fileEntry *apfs.FileEntry) (string, error) {
 	if fileEntry == nil {
 		return "", fmt.Errorf("file entry cannot be nil")
 	}
 
-	name, err := fileEntry.GetUTF8Name()
+	name, err := fileEntry.UTF8Name()
 	if err != nil {
 		return "", fmt.Errorf("unable to get file entry name: %w", err)
 	}
@@ -147,13 +134,13 @@ func (mfs *MountFileSystem) GetFilenameFromFileEntry(fileEntry *apfs.FileEntry) 
 	return string(name), nil
 }
 
-// GetRootFileEntry returns the root directory entry
-func (mfs *MountFileSystem) GetRootFileEntry() (*apfs.FileEntry, error) {
+// RootFileEntry returns the root directory entry
+func (mfs *MountFileSystem) RootFileEntry() (*apfs.FileEntry, error) {
 	if mfs.Volume == nil {
 		return nil, fmt.Errorf("no volume mounted")
 	}
 
-	return mfs.Volume.GetRootDirectory()
+	return mfs.Volume.RootDirectory()
 }
 
 // IsVolumeSet returns whether a volume has been set

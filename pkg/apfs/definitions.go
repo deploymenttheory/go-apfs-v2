@@ -1,11 +1,8 @@
 // APFS definitions and constants
 package apfs
 
-// Version information
-const (
-	Version       = "1.0.0"
-	VersionString = "1.0.0"
-)
+// Version is the version of this package.
+const Version = "1.0.0"
 
 // AccessFlags represents file access modes
 // Corresponds to LIBFSAPFS_ACCESS_FLAGS

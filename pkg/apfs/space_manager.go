@@ -248,15 +248,6 @@ func NewSpaceManager() *SpaceManager {
 	return &SpaceManager{}
 }
 
-// Free releases resources associated with the space manager
-func (sm *SpaceManager) Free() error {
-	if sm == nil {
-		return fmt.Errorf("invalid space manager")
-	}
-	// Go's garbage collector handles memory cleanup
-	return nil
-}
-
 // ReadFrom reads the space manager from a file at the specified offset
 func (sm *SpaceManager) ReadFrom(reader io.ReaderAt, fileOffset int64) error {
 	if sm == nil {

@@ -114,8 +114,8 @@ func NewDataBlockVector(
 	return vector, nil
 }
 
-// GetSize returns the total size of the data in the vector
-func (v *DataBlockVector) GetSize() (uint64, error) {
+// Size returns the total size of the data in the vector
+func (v *DataBlockVector) Size() (uint64, error) {
 	if v == nil {
 		return 0, fmt.Errorf("invalid data block vector")
 	}
@@ -123,9 +123,9 @@ func (v *DataBlockVector) GetSize() (uint64, error) {
 	return v.TotalSize, nil
 }
 
-// GetElementValueAtOffset retrieves the data block at a given logical offset
+// ElementValueAtOffset retrieves the data block at a given logical offset
 // Returns the data block and the offset within that block
-func (v *DataBlockVector) GetElementValueAtOffset(
+func (v *DataBlockVector) ElementValueAtOffset(
 	reader io.ReaderAt,
 	logicalOffset int64,
 ) (*DataBlock, int64, error) {
@@ -222,8 +222,8 @@ func (v *DataBlockVector) cacheBlock(offset int64, dataBlock *DataBlock) {
 	v.cacheSize++
 }
 
-// Free releases resources associated with the vector
-func (v *DataBlockVector) Free() error {
+// Close releases resources associated with the vector
+func (v *DataBlockVector) Close() error {
 	if v == nil {
 		return fmt.Errorf("invalid data block vector")
 	}

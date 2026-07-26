@@ -23,25 +23,25 @@ var (
 	notifyMutex sync.RWMutex
 )
 
-// SetVerbose sets the verbose notification level
+// setVerbose sets the verbose notification level
 // This controls all debug output in the library
-func SetVerbose(verbose bool) {
+func setVerbose(verbose bool) {
 	notifyMutex.Lock()
 	defer notifyMutex.Unlock()
 
 	notifyVerbose = verbose
 }
 
-// GetVerbose returns the current verbose notification level
-func GetVerbose() bool {
+// verbose returns the current verbose notification level
+func verbose() bool {
 	notifyMutex.RLock()
 	defer notifyMutex.RUnlock()
 
 	return notifyVerbose
 }
 
-// SetStream sets the notification output stream
-func SetStream(stream io.Writer) error {
+// setStream sets the notification output stream
+func setStream(stream io.Writer) error {
 	if stream == nil {
 		return fmt.Errorf("invalid stream")
 	}
@@ -54,17 +54,17 @@ func SetStream(stream io.Writer) error {
 	return nil
 }
 
-// GetStream returns the current notification output stream
-func GetStream() io.Writer {
+// stream returns the current notification output stream
+func stream() io.Writer {
 	notifyMutex.RLock()
 	defer notifyMutex.RUnlock()
 
 	return notifyStream
 }
 
-// OpenStream opens a notification stream using a filename
+// openStream opens a notification stream using a filename
 // The stream is opened in append mode
-func OpenStream(filename string) error {
+func openStream(filename string) error {
 	if filename == "" {
 		return fmt.Errorf("invalid filename")
 	}
@@ -90,8 +90,8 @@ func OpenStream(filename string) error {
 	return nil
 }
 
-// CloseStream closes the notification stream if opened using a filename
-func CloseStream() error {
+// closeStream closes the notification stream if opened using a filename
+func closeStream() error {
 	notifyMutex.Lock()
 	defer notifyMutex.Unlock()
 
@@ -108,10 +108,9 @@ func CloseStream() error {
 	return nil
 }
 
-// Printf writes a formatted notification message to the notification stream
+// printf writes a formatted notification message to the notification stream
 // This function is thread-safe and respects the verbose setting
-// Corresponds to libcnotify_printf
-func Printf(format string, args ...interface{}) {
+func notifyPrintf(format string, args ...interface{}) {
 	notifyMutex.RLock()
 	verbose := notifyVerbose
 	stream := notifyStream
@@ -124,9 +123,9 @@ func Printf(format string, args ...interface{}) {
 	fmt.Fprintf(stream, format, args...)
 }
 
-// Println writes a notification message with a newline to the notification stream
+// println writes a notification message with a newline to the notification stream
 // This function is thread-safe and respects the verbose setting
-func Println(args ...interface{}) {
+func notifyPrintln(args ...interface{}) {
 	notifyMutex.RLock()
 	verbose := notifyVerbose
 	stream := notifyStream
@@ -139,9 +138,9 @@ func Println(args ...interface{}) {
 	fmt.Fprintln(stream, args...)
 }
 
-// Print writes a notification message to the notification stream
+// print writes a notification message to the notification stream
 // This function is thread-safe and respects the verbose setting
-func Print(args ...interface{}) {
+func notifyPrint(args ...interface{}) {
 	notifyMutex.RLock()
 	verbose := notifyVerbose
 	stream := notifyStream
@@ -154,9 +153,9 @@ func Print(args ...interface{}) {
 	fmt.Fprint(stream, args...)
 }
 
-// IsVerbose checks if verbose mode or debug output is enabled
-// This mimics the libcnotify_verbose != 0 check in C code
-func IsVerbose() bool {
+// isVerbose checks if verbose mode or debug output is enabled
+// Reports whether verbose debug output is enabled.
+func isVerbose() bool {
 	notifyMutex.RLock()
 	verbose := notifyVerbose
 	notifyMutex.RUnlock()

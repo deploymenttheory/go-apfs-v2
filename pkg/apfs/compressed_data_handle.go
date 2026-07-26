@@ -92,9 +92,9 @@ func NewCompressedDataHandle(
 	return handle, nil
 }
 
-// Free releases resources associated with the compressed data handle
+// Close releases resources associated with the compressed data handle
 // In Go, this is primarily for explicit cleanup if needed
-func (cdh *CompressedDataHandle) Free() error {
+func (cdh *CompressedDataHandle) Close() error {
 	if cdh == nil {
 		return fmt.Errorf("invalid compressed data handle")
 	}
@@ -107,8 +107,8 @@ func (cdh *CompressedDataHandle) Free() error {
 	return nil
 }
 
-// GetCompressedBlockOffsets determines the compressed block offsets
-func (cdh *CompressedDataHandle) GetCompressedBlockOffsets(reader io.ReaderAt) error {
+// loadCompressedBlockOffsets determines the compressed block offsets
+func (cdh *CompressedDataHandle) loadCompressedBlockOffsets(reader io.ReaderAt) error {
 	if cdh == nil {
 		return fmt.Errorf("invalid compressed data handle")
 	}
@@ -289,7 +289,7 @@ func (cdh *CompressedDataHandle) ReadSegmentData(
 
 	// Get compressed block offsets if not already loaded
 	if cdh.CompressedBlockOffsets == nil {
-		if err := cdh.GetCompressedBlockOffsets(reader); err != nil {
+		if err := cdh.loadCompressedBlockOffsets(reader); err != nil {
 			return 0, fmt.Errorf("unable to determine compressed block offsets: %w", err)
 		}
 	}

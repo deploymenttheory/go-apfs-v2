@@ -22,7 +22,7 @@ func TestVolumeFS(t *testing.T) {
 		t.Fatalf("unable to open image: %v", err)
 	}
 	defer closer.Close()
-	defer container.Free()
+	defer container.Close()
 
 	volumes, err := container.Volumes()
 	if err != nil {

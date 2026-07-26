@@ -41,7 +41,7 @@ func (m multiCloser) Close() error {
 // freeCloser adapts the APFS container's Free method to io.Closer.
 type freeCloser struct{ container *apfs.Container }
 
-func (f freeCloser) Close() error { return f.container.Free() }
+func (f freeCloser) Close() error { return f.container.Close() }
 
 // sniffFilesystem identifies the filesystem at the start of a
 // partition-relative reader: "apfs", "hfsplus" or "".
@@ -90,7 +90,7 @@ func openFilesystem(imagePath string) (volumeFS, io.Closer, error) {
 		}
 		volume, err := openVolume(container)
 		if err != nil {
-			container.Free()
+			container.Close()
 			closer.Close()
 			return nil, nil, err
 		}
