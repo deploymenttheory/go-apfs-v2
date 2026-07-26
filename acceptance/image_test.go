@@ -4,7 +4,7 @@
 // Windows. On macOS the extraction is additionally verified file-by-file
 // against an hdiutil mount of the same image — the platform ground truth.
 // Observed values are reported to the pipeline via GITHUB_STEP_SUMMARY.
-package cli_test
+package acceptance
 
 import (
 	"bufio"
@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/disk"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/exitcode"
 )
 
 // Expected facts about the acceptance image (default: Firefox 150),
@@ -209,7 +210,7 @@ func TestAcceptanceCatMainBinaryIsMachO(t *testing.T) {
 		binary = strings.TrimSuffix(acceptanceAppBundle, ".app")
 	}
 	out, stderr, code := run(t, "cat", dmg, "/"+acceptanceAppBundle+"/Contents/MacOS/"+binary)
-	if code != 0 {
+	if code != exitcode.OK {
 		t.Fatalf("cat main binary exited %d: %s", code, stderr)
 	}
 	if len(out) < 4 {
@@ -251,7 +252,7 @@ func TestAcceptanceExtractVerified(t *testing.T) {
 	}
 
 	out, stderr, code := run(t, "extract", dmg, "-C", dest, "--verify")
-	if code != 0 {
+	if code != exitcode.OK {
 		t.Fatalf("extract exited %d\nstderr: %s\n%s", code, stderr, out)
 	}
 	if !strings.Contains(out, "All files verified successfully") {

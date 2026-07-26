@@ -1,16 +1,12 @@
-// CLI acceptance tests: build the real binary and run it against the
-// committed fixtures in testdata/cli, asserting output and exit codes.
-// These run on Linux, macOS and Windows in CI.
-package cli_test
+// Acceptance tests for the apfs command against the committed fixtures in
+// testdata/cli. These run on Linux, macOS and Windows in CI.
+package acceptance
 
 import (
 	"bufio"
-	"compress/gzip"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,188 +14,9 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/deploymenttheory/go-apfs-v2/pkg/exitcode"
 )
-
-var (
-	binPath      string
-	repoRoot     string
-	fixtureDMG   string
-	fixtureBZ2   string
-	fixtureLZFSE string
-	fixtureRaw   string // decompressed from basic.img.gz into a temp dir
-	fixtureHFS   string // committed HFS+ fixture DMG
-	manifest     fixtureManifest
-	hfsManifest  fixtureManifest
-)
-
-type fixtureManifest struct {
-	VolumeName string                  `json:"volumeName"`
-	Files      map[string]manifestFile `json:"files"`
-}
-
-type manifestFile struct {
-	Type   string `json:"type"`
-	Size   int64  `json:"size"`
-	SHA256 string `json:"sha256"`
-	Mode   string `json:"mode"`
-	Target string `json:"target"`
-}
-
-func TestMain(m *testing.M) {
-	var err error
-	repoRoot, err = findRepoRoot()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "unable to find repo root: %v\n", err)
-		os.Exit(1)
-	}
-
-	tempDir, err := os.MkdirTemp("", "apfs-acceptance")
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
-	defer os.RemoveAll(tempDir)
-
-	// Build the CLI binary under test
-	binPath = filepath.Join(tempDir, "apfs")
-	if runtime.GOOS == "windows" {
-		binPath += ".exe"
-	}
-	build := exec.Command("go", "build", "-o", binPath, "./cmd/apfs")
-	build.Dir = repoRoot
-	if out, err := build.CombinedOutput(); err != nil {
-		fmt.Fprintf(os.Stderr, "unable to build CLI: %v\n%s", err, out)
-		os.Exit(1)
-	}
-
-	fixtureDMG = filepath.Join(repoRoot, "testdata", "cli", "basic.dmg")
-	fixtureBZ2 = filepath.Join(repoRoot, "testdata", "cli", "basic-bz2.dmg")
-	fixtureLZFSE = filepath.Join(repoRoot, "testdata", "cli", "basic-lzfse.dmg")
-
-	// Decompress the raw GPT image fixture
-	fixtureRaw = filepath.Join(tempDir, "basic.img")
-	if err := gunzipFile(filepath.Join(repoRoot, "testdata", "cli", "basic.img.gz"), fixtureRaw); err != nil {
-		fmt.Fprintf(os.Stderr, "unable to decompress raw fixture: %v\n", err)
-		os.Exit(1)
-	}
-
-	// Load the expected-contents manifest
-	manifestData, err := os.ReadFile(filepath.Join(repoRoot, "testdata", "cli", "manifest.json"))
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "unable to read manifest: %v\n", err)
-		os.Exit(1)
-	}
-	if err := json.Unmarshal(manifestData, &manifest); err != nil {
-		fmt.Fprintf(os.Stderr, "unable to parse manifest: %v\n", err)
-		os.Exit(1)
-	}
-
-	// The committed HFS+ fixture and its manifest (may be absent in older
-	// checkouts; the HFS+ tests skip when it is).
-	fixtureHFS = filepath.Join(repoRoot, "testdata", "cli", "hfs-basic.dmg")
-	if data, err := os.ReadFile(filepath.Join(repoRoot, "testdata", "cli", "hfs-manifest.json")); err == nil {
-		json.Unmarshal(data, &hfsManifest)
-	}
-
-	os.Exit(m.Run())
-}
-
-func findRepoRoot() (string, error) {
-	dir, err := os.Getwd()
-	if err != nil {
-		return "", err
-	}
-	for {
-		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
-			return dir, nil
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			return "", fmt.Errorf("go.mod not found above %s", dir)
-		}
-		dir = parent
-	}
-}
-
-func gunzipFile(src, dst string) error {
-	in, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer in.Close()
-	gz, err := gzip.NewReader(in)
-	if err != nil {
-		return err
-	}
-	defer gz.Close()
-	out, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-	_, err = io.Copy(out, gz)
-	return err
-}
-
-// run executes the CLI and returns stdout, stderr and the exit code.
-func run(t *testing.T, args ...string) (string, string, int) {
-	t.Helper()
-	cmd := exec.Command(binPath, args...)
-	cmd.Env = append(os.Environ(), "APFS_OUTPUT=") // isolate from ambient config
-	var stdout, stderr strings.Builder
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	err := cmd.Run()
-	exitCode := 0
-	if exitErr, ok := err.(*exec.ExitError); ok {
-		exitCode = exitErr.ExitCode()
-	} else if err != nil {
-		t.Fatalf("unable to run %v: %v", args, err)
-	}
-	return stdout.String(), stderr.String(), exitCode
-}
-
-// mustRun executes the CLI and fails the test on a non-zero exit.
-// runWithStdin is run() with input piped to the command's stdin, for the
-// interactive `inspect IMAGE fstree` explorer.
-func runWithStdin(t *testing.T, stdin string, args ...string) (string, string, int) {
-	t.Helper()
-	cmd := exec.Command(binPath, args...)
-	cmd.Env = append(os.Environ(), "APFS_OUTPUT=")
-	cmd.Stdin = strings.NewReader(stdin)
-	var stdout, stderr strings.Builder
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	err := cmd.Run()
-	exitCode := 0
-	if exitErr, ok := err.(*exec.ExitError); ok {
-		exitCode = exitErr.ExitCode()
-	} else if err != nil {
-		t.Fatalf("unable to run %v: %v", args, err)
-	}
-	return stdout.String(), stderr.String(), exitCode
-}
-
-func mustRun(t *testing.T, args ...string) string {
-	t.Helper()
-	stdout, stderr, code := run(t, args...)
-	if code != 0 {
-		t.Fatalf("%v exited %d\nstderr: %s", args, code, stderr)
-	}
-	return stdout
-}
-
-// manifestFilePaths returns the sorted paths of regular files in the manifest.
-func manifestFilePaths() []string {
-	var paths []string
-	for p, f := range manifest.Files {
-		if f.Type == "file" {
-			paths = append(paths, p)
-		}
-	}
-	sort.Strings(paths)
-	return paths
-}
 
 // --- info ---
 
@@ -345,7 +162,7 @@ func TestCatContentsMatchManifest(t *testing.T) {
 	for _, path := range manifestFilePaths() {
 		expected := manifest.Files[path]
 		out, stderr, code := run(t, "cat", fixtureDMG, "/"+path)
-		if code != 0 {
+		if code != exitcode.OK {
 			t.Errorf("cat %s exited %d: %s", path, code, stderr)
 			continue
 		}
@@ -358,7 +175,7 @@ func TestCatContentsMatchManifest(t *testing.T) {
 
 func TestCatDirectoryIsUsageError(t *testing.T) {
 	_, _, code := run(t, "cat", fixtureDMG, "/dir1")
-	if code != 2 {
+	if code != exitcode.Usage {
 		t.Errorf("cat on a directory exited %d, want 2", code)
 	}
 }
@@ -371,7 +188,7 @@ func TestExtractFullVolume(t *testing.T) {
 
 	// Default (auto) symlink handling degrades unsupported symlinks to files,
 	// so extraction completes cleanly on every OS including Windows.
-	if code != 0 {
+	if code != exitcode.OK {
 		t.Fatalf("extract exited %d\nstderr: %s", code, stderr)
 	}
 
@@ -454,7 +271,7 @@ func TestExtractSymlinkAsFile(t *testing.T) {
 
 	dest := t.TempDir()
 	_, stderr, code := run(t, "extract", fixtureDMG, "-C", dest, "--symlinks", "file")
-	if code != 0 {
+	if code != exitcode.OK {
 		t.Fatalf("extract --symlinks file exited %d: %s", code, stderr)
 	}
 
@@ -512,7 +329,7 @@ func TestExtractJSONSummary(t *testing.T) {
 
 func TestExtractVerify(t *testing.T) {
 	out, stderr, code := run(t, "extract", fixtureDMG, "/random.bin", "-C", t.TempDir(), "--verify")
-	if code != 0 {
+	if code != exitcode.OK {
 		t.Fatalf("extract --verify exited %d: %s", code, stderr)
 	}
 	if !strings.Contains(out, "All files verified successfully") {
@@ -545,7 +362,7 @@ func TestInspectBlockZero(t *testing.T) {
 // reaches a leaf record and returns.
 func TestInspectFSTree(t *testing.T) {
 	out, stderr, code := runWithStdin(t, strings.Repeat("0\n", 8), "inspect", fixtureDMG, "fstree")
-	if code != 0 {
+	if code != exitcode.OK {
 		t.Fatalf("inspect fstree exited %d\nstderr: %s", code, stderr)
 	}
 	for _, want := range []string{"file-system tree", "object map", "Object identifier"} {
@@ -559,7 +376,7 @@ func TestInspectFSTree(t *testing.T) {
 // with a usage error rather than silently doing nothing.
 func TestInspectRejectsOldBtreeMode(t *testing.T) {
 	_, stderr, code := run(t, "inspect", fixtureDMG, "btree")
-	if code != 2 { // ExitUsage
+	if code != exitcode.Usage {
 		t.Errorf("inspect btree exit code = %d, want 2 (usage)", code)
 	}
 	if !strings.Contains(stderr, "fstree") {
@@ -580,20 +397,21 @@ func TestExitCodes(t *testing.T) {
 		args []string
 		want int
 	}{
-		{"missing image", []string{"info", filepath.Join(t.TempDir(), "nope.dmg")}, 3},
-		{"not apfs", []string{"info", notAPFS}, 3},
-		{"unknown flag", []string{"info", "--definitely-not-a-flag", fixtureDMG}, 2},
-		{"bad output format", []string{"info", "-o", "yaml", fixtureDMG}, 2},
-		{"unknown volume", []string{"list", "--volume", "NoSuchVolume", fixtureDMG}, 2},
-		{"missing args", []string{"cat", fixtureDMG}, 2},
-		{"success", []string{"info", fixtureDMG}, 0},
+		{"missing image", []string{"info", filepath.Join(t.TempDir(), "nope.dmg")}, exitcode.BadImage},
+		{"not apfs", []string{"info", notAPFS}, exitcode.BadImage},
+		{"unknown flag", []string{"info", "--definitely-not-a-flag", fixtureDMG}, exitcode.Usage},
+		{"bad output format", []string{"info", "-o", "yaml", fixtureDMG}, exitcode.Usage},
+		{"unknown volume", []string{"list", "--volume", "NoSuchVolume", fixtureDMG}, exitcode.Usage},
+		{"missing args", []string{"cat", fixtureDMG}, exitcode.Usage},
+		{"success", []string{"info", fixtureDMG}, exitcode.OK},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			_, stderr, code := run(t, tc.args...)
 			if code != tc.want {
-				t.Errorf("%v exited %d, want %d\nstderr: %s", tc.args, code, tc.want, stderr)
+				t.Errorf("%v exited %d (%s), want %d (%s)\nstderr: %s",
+					tc.args, code, exitcode.Name(code), tc.want, exitcode.Name(tc.want), stderr)
 			}
 		})
 	}
@@ -606,40 +424,4 @@ func TestVolumeSelectorByName(t *testing.T) {
 	if !strings.Contains(out, "hello.txt") {
 		t.Errorf("list --volume %q failed:\n%s", manifest.VolumeName, out)
 	}
-}
-
-// --- helpers ---
-
-func nonEmptyLines(s string) []string {
-	var lines []string
-	for _, line := range strings.Split(s, "\n") {
-		if strings.TrimSpace(line) != "" {
-			lines = append(lines, line)
-		}
-	}
-	return lines
-}
-
-// containsLinePrefix reports whether any line equals want or begins with
-// want followed by a space (symlink lines are "name -> target").
-func containsLinePrefix(lines []string, want string) bool {
-	for _, line := range lines {
-		if line == want || strings.HasPrefix(line, want+" ") {
-			return true
-		}
-	}
-	return false
-}
-
-func fileSHA256(path string) (string, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-	h := sha256.New()
-	if _, err := io.Copy(h, f); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(h.Sum(nil)), nil
 }

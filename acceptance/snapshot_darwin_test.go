@@ -1,6 +1,6 @@
 //go:build darwin
 
-package cli_test
+package acceptance
 
 import (
 	"os"

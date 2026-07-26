@@ -1,5 +1,5 @@
 // CLI acceptance tests for `apfs snapshot`, exercised through the built binary.
-package cli_test
+package acceptance
 
 import (
 	"os"
@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/exitcode"
 )
 
 // revertToXID opens image with the reader and returns the first volume's
@@ -61,7 +62,7 @@ func TestSnapshotListRejectsNonAPFS(t *testing.T) {
 	mustRun(t, "create", dmg, "--fs", "hfs+", "--volname", "HfsVol", "--size", "8")
 
 	_, stderr, code := run(t, "snapshot", "list", dmg)
-	if code != 5 {
+	if code != exitcode.Unsupported {
 		t.Errorf("snapshot list on HFS+ exited %d, want 5 (unsupported)\nstderr: %s", code, stderr)
 	}
 }
@@ -106,7 +107,7 @@ func TestSnapshotCreateRefusesOverwrite(t *testing.T) {
 	mustRun(t, "create", dmg, "--fs", "apfs", "--volname", "V", "--snapshot", "s0")
 
 	_, _, code := run(t, "snapshot", "create", dmg, "--name", "s1")
-	if code != 2 {
+	if code != exitcode.Usage {
 		t.Errorf("snapshot create without --output/--force exited %d, want 2 (usage)", code)
 	}
 }
@@ -157,7 +158,7 @@ func TestSnapshotRevertRefusesOverwrite(t *testing.T) {
 	dmg := filepath.Join(dir, "img.dmg")
 	mustRun(t, "create", dmg, "--fs", "apfs", "--volname", "V", "--snapshot", "baseline")
 
-	if _, _, code := run(t, "snapshot", "revert", dmg, "--name", "baseline"); code != 2 {
+	if _, _, code := run(t, "snapshot", "revert", dmg, "--name", "baseline"); code != exitcode.Usage {
 		t.Errorf("revert without --output/--force exited %d, want 2 (usage)", code)
 	}
 }

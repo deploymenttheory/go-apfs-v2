@@ -319,9 +319,17 @@ expression. See `NOTICE` and `pkg/apfswrite/README.md` for the full provenance.
 ## Development
 
 ```console
-go test ./...      # unit + fixture acceptance tests
-go build ./...     # build everything
+go build ./...            # build everything
+go test ./pkg/... ./internal/...   # unit tests
+go test -v ./acceptance/  # acceptance suite against the committed fixtures
 ```
+
+The acceptance suite lives in its own root package, `acceptance/`. It contains
+no production code: every test builds the real binary and drives it as a
+subprocess, so it exercises the tool exactly as a pipeline would. Its
+vendor-image tier runs against a published application DMG and is skipped
+unless `APFS_ACCEPTANCE_DMG` is set — see `go doc ./acceptance` for the
+environment it reads.
 
 CI runs the build matrix and the test suite on
 Linux, macOS and Windows. Correctness is cross-checked against the platforms'

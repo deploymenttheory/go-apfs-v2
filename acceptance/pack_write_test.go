@@ -1,6 +1,6 @@
 // CLI acceptance tests for the write/inverse direction: `apfs pack <dir> out.dmg`
 // builds an HFS+ volume from a directory. These exercise the built binary.
-package cli_test
+package acceptance
 
 import (
 	"crypto/rand"

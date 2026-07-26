@@ -1,12 +1,14 @@
 // CLI acceptance tests for `apfs create`, exercised through the built binary.
 // Both HFS+ and APFS creation are part of the default build; the APFS writer
 // itself is covered in depth by pkg/apfswrite.
-package cli_test
+package acceptance
 
 import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/deploymenttheory/go-apfs-v2/pkg/exitcode"
 )
 
 // TestCreateHFSEmpty creates an empty HFS+ volume and reads it back.
@@ -49,7 +51,7 @@ func TestCreateAPFSEmpty(t *testing.T) {
 
 func TestCreateBadFileSystem(t *testing.T) {
 	_, _, code := run(t, "create", filepath.Join(t.TempDir(), "x.dmg"), "--fs", "zfs")
-	if code != 2 {
+	if code != exitcode.Usage {
 		t.Errorf("create --fs zfs exited %d, want 2 (usage)", code)
 	}
 }
