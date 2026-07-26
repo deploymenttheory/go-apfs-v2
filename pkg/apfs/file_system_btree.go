@@ -69,11 +69,11 @@ func (bt *FileSystemBTree) RootNode(
 		bt.VolumeTransactionID, // Use the volume's transaction ID per drat
 	)
 	if err != nil {
-		return nil, fmt.Errorf("unable to resolve filesystem root tree OID %d: %w", bt.RootNodeOID, err)
+		return nil, fmt.Errorf("unable to resolve file system root tree OID %d: %w", bt.RootNodeOID, err)
 	}
 
 	if descriptor == nil {
-		return nil, fmt.Errorf("filesystem root tree OID %d not found in object map", bt.RootNodeOID)
+		return nil, fmt.Errorf("file system root tree OID %d not found in object map", bt.RootNodeOID)
 	}
 
 	physicalAddress := descriptor.Value.ObjectPhysicalAddress
@@ -145,7 +145,7 @@ func (bt *FileSystemBTree) SubNodeOIDFromEntry(
 	}
 
 	// Read the OID (little-endian)
-	// Per drat (btree.c:377-378), in filesystem B-trees, child node references
+	// Per drat (btree.c:377-378), in file system B-trees, child node references
 	// are ALWAYS virtual OIDs that must be resolved through the volume's object map
 	// (unlike container object map B-trees which use bit 63 to indicate virtual vs physical)
 	virtualOID := binary.LittleEndian.Uint64(entry.ValueData[0:8])
@@ -219,7 +219,7 @@ func (bt *FileSystemBTree) FileExtents(
 	return extents, nil
 }
 
-// AllRecordsForOID retrieves ALL filesystem records for a given OID
+// AllRecordsForOID retrieves ALL file system records for a given OID
 // Implements the algorithm from go-apfs GetFSRecordsForOid with descent and walk phases
 func (bt *FileSystemBTree) AllRecordsForOID(
 	reader io.ReaderAt,

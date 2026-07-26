@@ -166,7 +166,7 @@ func TestRepackRoundTrip(t *testing.T) {
 	t.Logf("raw round-trip OK: %d bytes; original DMG %d, repacked DMG %d", len(rawOrig), srcInfo.Size(), dstInfo.Size())
 
 	// Prove the repacked DMG opens through the standard reader path and that
-	// the filesystem signature is present at the partition start.
+	// the file system signature is present at the partition start.
 	reader, off, closer, err := OpenWithOffset(dst)
 	if err != nil {
 		t.Fatalf("OpenWithOffset(repack): %v", err)

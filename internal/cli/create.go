@@ -4,6 +4,7 @@ package cli
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/disk"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/hfsplus"
@@ -35,9 +36,9 @@ Examples:
 }
 
 func init() {
-	createCmd.Flags().StringVar(&createFS, "fs", "apfs", "filesystem to create: apfs or hfs+")
+	createCmd.Flags().StringVar(&createFS, "fs", "apfs", "file system to create: APFS or HFS+ (case-insensitive)")
 	createCmd.Flags().StringVar(&createVolName, "volname", "untitled", "volume name")
-	createCmd.Flags().UintVar(&createSizeMiB, "size", 0, "image size in MiB (0 = minimum for the filesystem)")
+	createCmd.Flags().UintVar(&createSizeMiB, "size", 0, "image size in MiB (0 = minimum for the file system)")
 	createCmd.Flags().BoolVar(&createCaseSens, "case-sensitive", false, "create a case-sensitive volume")
 	createCmd.Flags().StringVar(&createSnapshot, "snapshot", "", "APFS only: also create a snapshot with this name capturing the new volume")
 }
@@ -50,13 +51,13 @@ func runCreate(cmd *cobra.Command, args []string) error {
 		sizeBytes = int64(createSizeMiB) * 1024 * 1024
 	}
 
-	switch createFS {
+	switch strings.ToLower(createFS) {
 	case "hfs+", "hfsx":
 		return createHFS(dstPath, sizeBytes)
 	case "apfs":
 		return createAPFS(dstPath, sizeBytes)
 	default:
-		return usageErrorf("invalid --fs %q: must be apfs or hfs+", createFS)
+		return usageErrorf("invalid --fs %q: must be APFS or HFS+", createFS)
 	}
 }
 
@@ -82,7 +83,7 @@ func createReport(dstPath, fsName string) error {
 	if opts.Output == "json" {
 		return jsonOut(map[string]any{
 			"destination": dstPath,
-			"filesystem":  fsName,
+			"fileSystem":  fsName,
 			"volume":      createVolName,
 			"bytes":       size,
 		})

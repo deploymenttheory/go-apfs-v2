@@ -72,8 +72,8 @@ func TestPackDirRoundTrip(t *testing.T) {
 	mustRun(t, "pack", src, dmg, "--volname", "PACKTEST")
 
 	info := infoJSON(t, dmg)
-	if info.Filesystem != "hfs+" {
-		t.Errorf("packed volume filesystem = %q, want hfs+", info.Filesystem)
+	if info.FileSystem != "hfs+" {
+		t.Errorf("packed volume file system = %q, want hfs+", info.FileSystem)
 	}
 	if info.Volumes[0].Name != "PACKTEST" {
 		t.Errorf("volume name = %q, want PACKTEST", info.Volumes[0].Name)
@@ -147,7 +147,7 @@ func TestPackAddFileByteDelta(t *testing.T) {
 	}
 }
 
-// TestPackDirFsckAndMount validates the created filesystem with Apple's own
+// TestPackDirFsckAndMount validates the created file system with Apple's own
 // tools on macOS: reconstruct the raw HFS+ image from our DMG, run fsck_hfs,
 // and mount it read-only, confirming content.
 func TestPackDirFsckAndMount(t *testing.T) {

@@ -83,7 +83,7 @@ func acceptanceDMG(t *testing.T) string {
 }
 
 type acceptanceInfo struct {
-	Filesystem  string `json:"filesystem"`
+	FileSystem  string `json:"fileSystem"`
 	VolumeCount int    `json:"volumeCount"`
 	Volumes     []struct {
 		Name        string `json:"name"`
@@ -118,7 +118,7 @@ func TestAcceptanceInfo(t *testing.T) {
 	}
 
 	attest(t, "image: %s", filepath.Base(dmg))
-	attest(t, "filesystem: %s", info.Filesystem)
+	attest(t, "file system: %s", info.FileSystem)
 	attest(t, "volume name: %q (expected %q)", info.Volumes[0].Name, acceptanceVolumeName)
 	attest(t, "volume contents: %d files, %d directories, %d symlinks",
 		info.Volumes[0].Files, info.Volumes[0].Directories, info.Volumes[0].Symlinks)
@@ -331,7 +331,7 @@ func TestAcceptanceGroundTruthAgainstHdiutil(t *testing.T) {
 }
 
 // TestAcceptancePackRoundTrip repacks the acceptance image into a new DMG and
-// asserts the fidelity invariant: the raw filesystem image is preserved
+// asserts the fidelity invariant: the raw file system image is preserved
 // bit-for-bit (sha256), even though the DMG container bytes and size differ.
 // It also re-extracts from the repacked image and checks the file content
 // matches the original extraction.

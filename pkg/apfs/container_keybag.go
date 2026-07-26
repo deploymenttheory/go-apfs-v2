@@ -208,7 +208,7 @@ func (ckb *ContainerKeybag) ReadData(data []byte) error {
 	// Verify checksum
 	calculatedChecksum, err := CalculateFletcher64(data[8:], 0)
 	if err != nil {
-		return fmt.Errorf("unable to calculate Fletcher-64 checksum: %w", err)
+		return fmt.Errorf("unable to calculate Fletcher 64 checksum: %w", err)
 	}
 
 	if storedChecksum != calculatedChecksum {

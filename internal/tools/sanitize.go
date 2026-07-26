@@ -1,5 +1,5 @@
 // Filename sanitization for representing source names on the host
-// filesystem. The Windows rules live here (compiled on every platform so
+// file system. The Windows rules live here (compiled on every platform so
 // they are unit-testable); the build-tagged files decide when to apply them.
 package tools
 

@@ -1,5 +1,5 @@
 // Mount path string manipulation utilities for APFS mount operations
-// This differs from path_string.go in that it handles filesystem path separators differently
+// This differs from path_string.go in that it handles file system path separators differently
 package tools
 
 import (

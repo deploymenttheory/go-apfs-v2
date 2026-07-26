@@ -13,7 +13,7 @@ import (
 )
 
 // reconstructToRaw decompresses a DMG to a raw image file (fsck/attach need the
-// raw filesystem image, not the compressed DMG wrapper).
+// raw file system image, not the compressed DMG wrapper).
 func reconstructToRaw(t *testing.T, dmg string) string {
 	t.Helper()
 	raw, err := disk.ReconstructRawImage(dmg)

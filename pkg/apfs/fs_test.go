@@ -34,7 +34,7 @@ func TestVolumeFS(t *testing.T) {
 
 	volume := volumes[0]
 
-	// fstest.TestFS with no expected files asserts an empty filesystem, so
+	// fstest.TestFS with no expected files asserts an empty file system, so
 	// discover a few real paths to pass as expectations first
 	var expected []string
 	err = fs.WalkDir(volume, ".", func(name string, entry fs.DirEntry, err error) error {

@@ -26,11 +26,11 @@ const (
 
 var snapshotCmd = &cobra.Command{
 	Use:   "snapshot",
-	Short: "Inspect APFS volume snapshots",
+	Short: "List, create, verify and revert to APFS volume snapshots",
 	Long: `Work with APFS snapshots.
 
-Snapshots are created at build time with 'create --fs apfs --snapshot NAME' or
-'pack <dir> --fs apfs --snapshot NAME'. This command group inspects them.`,
+Snapshots can also be created at build time with 'create --fs APFS --snapshot
+NAME' or 'pack <dir> --fs APFS --snapshot NAME'.`,
 }
 
 func init() {
@@ -205,7 +205,7 @@ func volumeEntries(vol *apfs.Volume, dir string) ([]*apfswrite.Entry, error) {
 var snapshotVerifyCmd = &cobra.Command{
 	Use:   "verify IMAGE",
 	Short: "Verify that each snapshot in an APFS image is readable",
-	Long: `Open each snapshot on each APFS volume and confirm its frozen superblock and
+	Long: `Open each snapshot on each APFS volume and confirm its volume superblock and
 metadata are readable. Reports the number of snapshots verified; exits non-zero
 if any snapshot cannot be opened.`,
 	Args: exactArgs(1, "IMAGE"),
@@ -313,7 +313,7 @@ func runSnapshotRevert(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Find the named snapshot (its xid and frozen superblock block) and the live
+	// Find the named snapshot (its xid and volume superblock address) and the live
 	// volume's superblock block.
 	volIDs, err := container.VolumeObjectIdentifiers()
 	if err != nil || len(volIDs) == 0 {
@@ -372,7 +372,7 @@ func runSnapshotRevert(cmd *cobra.Command, args []string) error {
 	block := raw[off : off+blockSize]
 	binary.LittleEndian.PutUint64(block[apsbRevertToXIDOffset:], snapXID)
 	binary.LittleEndian.PutUint64(block[apsbRevertToSblockOffset:], snapSblock)
-	// Reseal the block: Fletcher-64 over everything after the 8-byte checksum.
+	// Reseal the block: Fletcher 64 over everything after the 8-byte checksum.
 	cksum, err := apfs.CalculateFletcher64(block[8:], 0)
 	if err != nil {
 		return fmt.Errorf("recomputing superblock checksum: %w", err)

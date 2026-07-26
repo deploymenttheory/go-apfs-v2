@@ -35,7 +35,7 @@ type freeCloser struct{ container *apfs.Container }
 
 func (f freeCloser) Close() error { return f.container.Close() }
 
-// sniffFilesystem identifies the filesystem at the start of a
+// sniffFilesystem identifies the file system at the start of a
 // partition-relative reader: "apfs", "hfsplus" or "".
 func sniffFilesystem(reader io.ReaderAt) string {
 	magic := make([]byte, 4)
@@ -50,7 +50,7 @@ func sniffFilesystem(reader io.ReaderAt) string {
 }
 
 // openFilesystem opens an image and returns the selected volume as a
-// filesystem, dispatching on the detected filesystem type (APFS or HFS+).
+// file system, dispatching on the detected file system type (APFS or HFS+).
 func openFilesystem(imagePath string) (volumeFS, io.Closer, error) {
 	if _, err := os.Stat(imagePath); err != nil {
 		return nil, nil, withCode(ExitBadImage, fmt.Errorf("unable to open image: %w", err))
@@ -102,7 +102,7 @@ func openFilesystem(imagePath string) (volumeFS, io.Closer, error) {
 
 	default:
 		closer.Close()
-		return nil, nil, withCode(ExitBadImage, fmt.Errorf("%s does not contain a recognizable APFS or HFS+ filesystem", imagePath))
+		return nil, nil, withCode(ExitBadImage, fmt.Errorf("%s does not contain a recognizable APFS or HFS+ file system", imagePath))
 	}
 }
 

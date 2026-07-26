@@ -7,7 +7,7 @@ import (
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
 )
 
-// MountFileEntry represents a file entry in the mounted filesystem
+// MountFileEntry represents a file entry in the mounted file system
 // This wraps apfs.FileEntry and provides additional mount-specific functionality
 type MountFileEntry struct {
 	FileSystem *MountFileSystem

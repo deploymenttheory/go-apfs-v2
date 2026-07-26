@@ -1,4 +1,4 @@
-// Mount handle for APFS filesystem mounting
+// Mount handle for APFS file system mounting
 package tools
 
 import (

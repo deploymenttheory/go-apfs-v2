@@ -81,7 +81,7 @@ func runMount(cmd *cobra.Command, args []string) error {
 
 	server, err := tools.MountAPFS(mountHandle, volumeIndex, mountPoint, opts.Verbose)
 	if err != nil {
-		return withCode(ExitUnsupported, fmt.Errorf("unable to mount filesystem: %w", err))
+		return withCode(ExitUnsupported, fmt.Errorf("unable to mount file system: %w", err))
 	}
 
 	if !opts.Quiet {

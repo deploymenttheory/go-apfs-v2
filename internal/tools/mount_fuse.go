@@ -1,6 +1,6 @@
 //go:build linux || darwin
 
-// FUSE filesystem integration for APFS mounting
+// FUSE file system integration for APFS mounting
 // Uses github.com/hanwen/go-fuse/v2 for FUSE operations
 package tools
 
@@ -15,7 +15,7 @@ import (
 	"github.com/hanwen/go-fuse/v2/fuse"
 )
 
-// APFSFileSystem implements the FUSE filesystem interface for APFS
+// APFSFileSystem implements the FUSE file system interface for APFS
 type APFSFileSystem struct {
 	fs.Inode
 	mountHandle    *MountHandle
@@ -26,7 +26,7 @@ type APFSFileSystem struct {
 	nextFileHandle uint64
 }
 
-// NewAPFSFileSystem creates a new APFS FUSE filesystem
+// NewAPFSFileSystem creates a new APFS FUSE file system
 func NewAPFSFileSystem(mountHandle *MountHandle, volumeIndex int) (*APFSFileSystem, error) {
 	if mountHandle == nil {
 		return nil, fmt.Errorf("mount handle cannot be nil")
@@ -345,10 +345,10 @@ func (fh *APFSFileHandle) Read(ctx context.Context, dest []byte, off int64) (fus
 
 // MountAPFS mounts an APFS volume using FUSE
 func MountAPFS(mountHandle *MountHandle, volumeIndex int, mountPoint string, debug bool) (MountServer, error) {
-	// Create the APFS filesystem
+	// Create the APFS file system
 	root, err := NewAPFSFileSystem(mountHandle, volumeIndex)
 	if err != nil {
-		return nil, fmt.Errorf("unable to create APFS filesystem: %w", err)
+		return nil, fmt.Errorf("unable to create APFS file system: %w", err)
 	}
 
 	// Mount options
@@ -362,7 +362,7 @@ func MountAPFS(mountHandle *MountHandle, volumeIndex int, mountPoint string, deb
 		},
 	}
 
-	// Mount the filesystem
+	// Mount the file system
 	server, err := fs.Mount(mountPoint, root, opts)
 	if err != nil {
 		return nil, fmt.Errorf("unable to mount: %w", err)

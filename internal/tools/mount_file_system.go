@@ -8,7 +8,7 @@ import (
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
 )
 
-// MountFileSystem represents a mounted APFS filesystem
+// MountFileSystem represents a mounted APFS file system
 // This is an abstraction layer between the APFS library and FUSE
 type MountFileSystem struct {
 	Volume           *apfs.Volume
@@ -16,14 +16,14 @@ type MountFileSystem struct {
 	abort            bool
 }
 
-// NewMountFileSystem creates a new mount filesystem
+// NewMountFileSystem creates a new mount file system
 func NewMountFileSystem() *MountFileSystem {
 	return &MountFileSystem{
 		MountedTimestamp: time.Now(),
 	}
 }
 
-// Free frees the mount filesystem resources
+// Free frees the mount file system resources
 func (mfs *MountFileSystem) Close() error {
 	if mfs.Volume != nil {
 		// Note: Volume cleanup is handled by the mount handle
@@ -32,17 +32,17 @@ func (mfs *MountFileSystem) Close() error {
 	return nil
 }
 
-// SignalAbort signals the filesystem to abort operations
+// SignalAbort signals the file system to abort operations
 func (mfs *MountFileSystem) SignalAbort() {
 	mfs.abort = true
 }
 
-// IsAborted returns whether the filesystem has been signaled to abort
+// IsAborted returns whether the file system has been signaled to abort
 func (mfs *MountFileSystem) IsAborted() bool {
 	return mfs.abort
 }
 
-// SetVolume sets the APFS volume for this filesystem
+// SetVolume sets the APFS volume for this file system
 func (mfs *MountFileSystem) SetVolume(volume *apfs.Volume) error {
 	if volume == nil {
 		return fmt.Errorf("volume cannot be nil")

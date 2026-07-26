@@ -15,7 +15,7 @@ func TestCreateHFSEmpty(t *testing.T) {
 	mustRun(t, "create", dmg, "--fs", "hfs+", "--volname", "BlankHFS", "--size", "8")
 
 	out := mustRun(t, "info", "-o", "json", dmg)
-	if !strings.Contains(out, `"filesystem":"hfs+"`) {
+	if !strings.Contains(out, `"fileSystem":"hfs+"`) {
 		t.Errorf("created volume is not hfs+:\n%s", out)
 	}
 	if !strings.Contains(out, `"name":"BlankHFS"`) {
@@ -34,7 +34,7 @@ func TestCreateAPFSEmpty(t *testing.T) {
 	mustRun(t, "create", dmg, "--fs", "apfs", "--volname", "BlankAPFS")
 
 	out := mustRun(t, "info", "-o", "json", dmg)
-	if !strings.Contains(out, `"filesystem":"apfs"`) {
+	if !strings.Contains(out, `"fileSystem":"apfs"`) {
 		t.Errorf("created volume is not apfs:\n%s", out)
 	}
 	if !strings.Contains(out, `"name":"BlankAPFS"`) {

@@ -22,8 +22,8 @@ func requireHFSFixture(t *testing.T) {
 func TestHFSInfoReportsFilesystem(t *testing.T) {
 	requireHFSFixture(t)
 	out := mustRun(t, "info", "-o", "json", fixtureHFS)
-	if !strings.Contains(out, `"filesystem":"hfs+"`) {
-		t.Errorf("info did not report hfs+ filesystem:\n%s", out)
+	if !strings.Contains(out, `"fileSystem":"hfs+"`) {
+		t.Errorf("info did not report hfs+ file system:\n%s", out)
 	}
 	if !strings.Contains(out, hfsManifest.VolumeName) {
 		t.Errorf("info missing volume name %q:\n%s", hfsManifest.VolumeName, out)

@@ -166,12 +166,11 @@ func runInspectWalk(imagePath string, inspectVolume int, inspectVerbose bool) er
 		fmt.Println("  Metadata")
 		fmt.Printf("    %-30s  %#x\n", "Object map object identifier", vsb.OmapOID)
 		fmt.Printf("    %-30s  %#x\n", "File-system tree object identifier", vsb.RootTreeOID)
-		caseInsensitive := (vsb.IncompatibleFeaturesFlags & 0x00000001) != 0
 		caseSensitive := "Yes"
-		if caseInsensitive {
+		if vsb.IncompatibleFeaturesFlags&0x00000001 != 0 { // APFS_INCOMPAT_CASE_INSENSITIVE
 			caseSensitive = "No"
 		}
-		fmt.Printf("    %-30s  %s\n", "Case sensitive", caseSensitive)
+		fmt.Printf("    %-30s  %s\n", "Case-sensitive", caseSensitive)
 		encrypted := (vsb.IncompatibleFeaturesFlags & 0x00000004) != 0
 		encryptedStr := "No"
 		if encrypted {

@@ -160,6 +160,26 @@ func run(t *testing.T, args ...string) (string, string, int) {
 }
 
 // mustRun executes the CLI and fails the test on a non-zero exit.
+// runWithStdin is run() with input piped to the command's stdin, for the
+// interactive `inspect IMAGE fstree` explorer.
+func runWithStdin(t *testing.T, stdin string, args ...string) (string, string, int) {
+	t.Helper()
+	cmd := exec.Command(binPath, args...)
+	cmd.Env = append(os.Environ(), "APFS_OUTPUT=")
+	cmd.Stdin = strings.NewReader(stdin)
+	var stdout, stderr strings.Builder
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	exitCode := 0
+	if exitErr, ok := err.(*exec.ExitError); ok {
+		exitCode = exitErr.ExitCode()
+	} else if err != nil {
+		t.Fatalf("unable to run %v: %v", args, err)
+	}
+	return stdout.String(), stderr.String(), exitCode
+}
+
 func mustRun(t *testing.T, args ...string) string {
 	t.Helper()
 	stdout, stderr, code := run(t, args...)
@@ -513,10 +533,37 @@ func TestInspectWalk(t *testing.T) {
 
 func TestInspectBlockZero(t *testing.T) {
 	out := mustRun(t, "inspect", fixtureDMG, "block", "0")
-	for _, want := range []string{"NX_SUPERBLOCK", "Checksum valid"} {
+	for _, want := range []string{"NX_SUPERBLOCK", "Checksum valid", "Object identifier"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("inspect block 0 output missing %q:\n%s", want, out)
 		}
+	}
+}
+
+// TestInspectFSTree covers the mode formerly spelled "inspect IMAGE btree".
+// The explorer is interactive: entry 0 is selected repeatedly until it
+// reaches a leaf record and returns.
+func TestInspectFSTree(t *testing.T) {
+	out, stderr, code := runWithStdin(t, strings.Repeat("0\n", 8), "inspect", fixtureDMG, "fstree")
+	if code != 0 {
+		t.Fatalf("inspect fstree exited %d\nstderr: %s", code, stderr)
+	}
+	for _, want := range []string{"file-system tree", "object map", "Object identifier"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("inspect fstree output missing %q:\n%s", want, out)
+		}
+	}
+}
+
+// TestInspectRejectsOldBtreeMode pins the rename: the old spelling must fail
+// with a usage error rather than silently doing nothing.
+func TestInspectRejectsOldBtreeMode(t *testing.T) {
+	_, stderr, code := run(t, "inspect", fixtureDMG, "btree")
+	if code != 2 { // ExitUsage
+		t.Errorf("inspect btree exit code = %d, want 2 (usage)", code)
+	}
+	if !strings.Contains(stderr, "fstree") {
+		t.Errorf("inspect btree error should point at fstree, got: %s", stderr)
 	}
 }
 

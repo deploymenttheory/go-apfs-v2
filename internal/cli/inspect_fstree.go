@@ -14,10 +14,10 @@ import (
 	"github.com/deploymenttheory/go-apfs-v2/pkg/disk"
 )
 
-// runInspectBTree interactively explores the file-system B-tree of the
+// runInspectFSTree interactively explores the file-system B-tree of the
 // selected volume. The tree root addresses are resolved automatically from
-// the container; exploreFSAddr/exploreOMapAddr override them when non-zero.
-func runInspectBTree(imagePath string, exploreFSAddr, exploreOMapAddr uint64) error {
+// the container; fsTreeRoot/omapRoot override them when non-zero.
+func runInspectFSTree(imagePath string, fsTreeRoot, omapRoot uint64) error {
 	// Open the container image with content-based format detection
 	reader, containerOffset, closer, err := disk.OpenWithOffset(imagePath)
 	if err != nil {
@@ -32,20 +32,20 @@ func runInspectBTree(imagePath string, exploreFSAddr, exploreOMapAddr uint64) er
 		file = io.NewSectionReader(reader, containerOffset, math.MaxInt64-containerOffset)
 	}
 
-	// Resolve the volume's fs-tree and omap-tree root addresses unless the
+	// Resolve the volume file-system tree and object map tree root addresses unless the
 	// caller supplied explicit overrides
-	if exploreFSAddr == 0 || exploreOMapAddr == 0 {
+	if fsTreeRoot == 0 || omapRoot == 0 {
 		fsAddr, omapAddr, err := resolveVolumeTreeRoots(file)
 		if err != nil {
-			return fmt.Errorf("unable to auto-resolve tree roots (pass --fs/--omap explicitly): %w", err)
+			return fmt.Errorf("unable to auto-resolve tree roots (pass --fstree-root/--omap-root explicitly): %w", err)
 		}
-		if exploreFSAddr == 0 {
-			exploreFSAddr = fsAddr
+		if fsTreeRoot == 0 {
+			fsTreeRoot = fsAddr
 		}
-		if exploreOMapAddr == 0 {
-			exploreOMapAddr = omapAddr
+		if omapRoot == 0 {
+			omapRoot = omapAddr
 		}
-		fmt.Printf("Resolved tree roots: fs-tree %#x, omap %#x\n\n", exploreFSAddr, exploreOMapAddr)
+		fmt.Printf("Resolved tree roots: file-system tree %#x, object map %#x\n\n", fsTreeRoot, omapRoot)
 	}
 
 	// Determine block size from block 0
@@ -58,9 +58,9 @@ func runInspectBTree(imagePath string, exploreFSAddr, exploreOMapAddr uint64) er
 		blockSize = 4096
 	}
 
-	// Read filesystem tree root node
-	fmt.Printf("Reading the file-system tree root node (block %#x) ... ", exploreFSAddr)
-	fsRootData, err := readBlock(file, exploreFSAddr, blockSize)
+	// Read file system tree root node
+	fmt.Printf("Reading the file-system tree root node (block %#x) ... ", fsTreeRoot)
+	fsRootData, err := readBlock(file, fsTreeRoot, blockSize)
 	if err != nil {
 		return fmt.Errorf("failed to read fs tree root: %w", err)
 	}
@@ -73,10 +73,10 @@ func runInspectBTree(imagePath string, exploreFSAddr, exploreOMapAddr uint64) er
 	fmt.Println()
 
 	// Read object map tree root node
-	fmt.Printf("Reading the object map root node (block %#x) ... ", exploreOMapAddr)
-	omapRootData, err := readBlock(file, exploreOMapAddr, blockSize)
+	fmt.Printf("Reading the object map root node (block %#x) ... ", omapRoot)
+	omapRootData, err := readBlock(file, omapRoot, blockSize)
 	if err != nil {
-		return fmt.Errorf("failed to read omap tree root: %w", err)
+		return fmt.Errorf("failed to read object map tree root: %w", err)
 	}
 	fmt.Print("validating ... ")
 	if apfs.ValidateChecksum(omapRootData) {
@@ -93,13 +93,13 @@ func runInspectBTree(imagePath string, exploreFSAddr, exploreOMapAddr uint64) er
 	}
 	ioHandle.BlockSize = blockSize
 
-	volumeOMap, err := apfs.NewObjectMapBTree(ioHandle, nil, exploreOMapAddr)
+	volumeOmap, err := apfs.NewObjectMapBTree(ioHandle, nil, omapRoot)
 	if err != nil {
 		return fmt.Errorf("failed to create object map B-tree: %w", err)
 	}
 
 	// Start interactive exploration
-	return exploreTree(file, fsRootData, volumeOMap, blockSize)
+	return exploreTree(file, fsRootData, volumeOmap, blockSize)
 }
 
 func readBlock(file io.ReaderAt, blockAddr uint64, blockSize uint32) ([]byte, error) {
@@ -111,7 +111,7 @@ func readBlock(file io.ReaderAt, blockAddr uint64, blockSize uint32) ([]byte, er
 	return data, nil
 }
 
-func exploreTree(file io.ReaderAt, nodeData []byte, volumeOMap *apfs.ObjectMapBTree, blockSize uint32) error {
+func exploreTree(file io.ReaderAt, nodeData []byte, volumeOmap *apfs.ObjectMapBTree, blockSize uint32) error {
 	reader := bufio.NewReader(os.Stdin)
 	currentData := nodeData
 
@@ -143,7 +143,7 @@ func exploreTree(file io.ReaderAt, nodeData []byte, volumeOMap *apfs.ObjectMapBT
 			if err != nil {
 				continue
 			}
-			printEntry(i, entry, node.IsLeafNode(), currentData, volumeOMap, file, blockSize)
+			printEntry(i, entry, node.IsLeafNode(), currentData, volumeOmap, file, blockSize)
 		}
 
 		// Prompt for entry selection
@@ -179,7 +179,7 @@ func exploreTree(file io.ReaderAt, nodeData []byte, volumeOMap *apfs.ObjectMapBT
 
 		// Resolve through object map
 		maxXID := uint64(0xFFFFFFFFFFFFFFFF)
-		descriptor, err := volumeOMap.DescriptorByObjectIdentifier(file, childVirtualOID, maxXID)
+		descriptor, err := volumeOmap.DescriptorByObjectIdentifier(file, childVirtualOID, maxXID)
 		if err != nil || descriptor == nil {
 			fmt.Printf("Need to descend to node with Virtual OID %#x, but the object map lists no objects with this Virtual OID.\n", childVirtualOID)
 			return nil
@@ -209,8 +209,8 @@ func printNodeInfo(data []byte, node *apfs.BTreeNode) {
 	oid := binary.LittleEndian.Uint64(data[8:16])
 	xid := binary.LittleEndian.Uint64(data[16:24])
 
-	fmt.Printf("  Object ID:              %#x\n", oid)
-	fmt.Printf("  Transaction ID:         %#x\n", xid)
+	fmt.Printf("  Object identifier:      %#x\n", oid)
+	fmt.Printf("  Transaction identifier: %#x\n", xid)
 	fmt.Printf("  Object type:            %#x\n", node.ObjectType)
 	fmt.Printf("  Object subtype:         %#x\n", node.ObjectSubtype)
 
@@ -233,7 +233,7 @@ func printNodeInfo(data []byte, node *apfs.BTreeNode) {
 	}
 }
 
-func printEntry(idx int, entry *apfs.BTreeEntry, isLeaf bool, nodeData []byte, volumeOMap *apfs.ObjectMapBTree, file io.ReaderAt, blockSize uint32) {
+func printEntry(idx int, entry *apfs.BTreeEntry, isLeaf bool, nodeData []byte, volumeOmap *apfs.ObjectMapBTree, file io.ReaderAt, blockSize uint32) {
 	if len(entry.KeyData) < 8 {
 		fmt.Printf("- %3d:  Invalid key\n", idx)
 		return
@@ -259,7 +259,7 @@ func printEntry(idx int, entry *apfs.BTreeEntry, isLeaf bool, nodeData []byte, v
 			fmt.Printf("   ||   Target child node Virtual OID = %#16x", childOID)
 
 			maxXID := uint64(0xFFFFFFFFFFFFFFFF)
-			descriptor, err := volumeOMap.DescriptorByObjectIdentifier(file, childOID, maxXID)
+			descriptor, err := volumeOmap.DescriptorByObjectIdentifier(file, childOID, maxXID)
 			if err != nil || descriptor == nil {
 				fmt.Print("  ||  UNRESOLVABLE")
 			} else {

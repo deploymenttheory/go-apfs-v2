@@ -245,7 +245,7 @@ func (csb *ContainerSuperblock) ReadData(data []byte) error {
 	storedChecksum := binary.LittleEndian.Uint64(data[0:8])
 	calculatedChecksum, err := CalculateFletcher64(data[8:], 0)
 	if err != nil {
-		return fmt.Errorf("unable to calculate Fletcher-64 checksum: %w", err)
+		return fmt.Errorf("unable to calculate Fletcher 64 checksum: %w", err)
 	}
 	if storedChecksum != calculatedChecksum {
 		return fmt.Errorf("checksum mismatch (0x%016x != 0x%016x)", storedChecksum, calculatedChecksum)

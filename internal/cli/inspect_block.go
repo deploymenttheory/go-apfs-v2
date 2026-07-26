@@ -82,14 +82,14 @@ func displayBlockInfo(blockData []byte, blockAddr uint64, verbose bool) error {
 	fmt.Println()
 
 	fmt.Println("  Object Header")
-	fmt.Printf("    %-20s  0x%016x\n", "Checksum", checksum)
+	fmt.Printf("    %-26s  0x%016x\n", "Checksum", checksum)
 	fmt.Printf("    %-26s  0x%016x (%d)\n", "Object identifier", objectID, objectID)
 	fmt.Printf("    %-26s  0x%016x (%d)\n", "Transaction identifier", transactionID, transactionID)
-	fmt.Printf("    %-20s  0x%08x (%s)\n", "Object Type", objectType, getObjectTypeName(objectType))
-	fmt.Printf("    %-20s  0x%08x (%s)\n", "Object Subtype", objectSubtype, getObjectSubtypeName(objectSubtype))
+	fmt.Printf("    %-26s  0x%08x (%s)\n", "Object type", objectType, getObjectTypeName(objectType))
+	fmt.Printf("    %-26s  0x%08x (%s)\n", "Object subtype", objectSubtype, getObjectSubtypeName(objectSubtype))
 	fmt.Println()
 
-	// Validate checksum (Fletcher-64)
+	// Validate checksum (Fletcher 64)
 	// Save original checksum and zero it out for calculation
 	blockDataCopy := make([]byte, len(blockData))
 	copy(blockDataCopy, blockData)
@@ -119,27 +119,30 @@ func displayBlockInfo(blockData []byte, blockAddr uint64, verbose bool) error {
 	return nil
 }
 
-// displayTypeSpecificInfo displays information specific to the object type
+// displayTypeSpecificInfo displays information specific to the object type.
+// Type values are Apple's OBJECT_TYPE_* constants; see objectTypeNames.
 func displayTypeSpecificInfo(blockData []byte, objectType, objectSubtype uint32, verbose bool) error {
 	baseType := objectType & 0x0000FFFF
 
 	switch baseType {
 	case 0x0001: // NX_SUPERBLOCK
 		return displayContainerSuperblock(blockData, verbose)
-	case 0x0002: // BTREE_NODE (generic)
+	case 0x0002, 0x0003: // BTREE, BTREE_NODE
 		return displayBTreeNode(blockData, verbose)
-	case 0x0003: // SPACEMAN
+	case 0x0005: // SPACEMAN
 		return displaySpaceManager(blockData, verbose)
-	case 0x0009: // OMAP
+	case 0x000b: // OMAP
 		return displayObjectMap(blockData, verbose)
-	case 0x000B: // FS (Volume Superblock)
+	case 0x000d: // FS (volume superblock)
 		return displayVolumeSuperblock(blockData, verbose)
-	case 0x000C: // FSTREE (Filesystem B-tree)
+	case 0x000e: // FSTREE (file-system tree)
 		return displayFSTree(blockData, verbose)
-	case 0x000D: // BLOCKREFTREE
-		return displayBTreeNode(blockData, verbose) // Generic B-tree display
-	case 0x000E: // SNAPMETATREE
-		return displayBTreeNode(blockData, verbose) // Generic B-tree display
+	case 0x000f: // BLOCKREFTREE (extentref tree)
+		return displayBTreeNode(blockData, verbose)
+	case 0x0010: // SNAPMETATREE
+		return displayBTreeNode(blockData, verbose)
+	case 0x001f: // FEXT_TREE
+		return displayBTreeNode(blockData, verbose)
 	default:
 		if verbose {
 			fmt.Printf("  Type-specific parsing not implemented for type 0x%08x\n", objectType)
@@ -287,9 +290,9 @@ func displayObjectMap(blockData []byte, verbose bool) error {
 	return nil
 }
 
-// displayFSTree displays filesystem B-tree information
+// displayFSTree displays file system B-tree information
 func displayFSTree(blockData []byte, verbose bool) error {
-	fmt.Println("  Filesystem B-Tree")
+	fmt.Println("  File system B-Tree")
 
 	// First display the B-tree node structure
 	if err := displayBTreeNode(blockData, verbose); err != nil {
@@ -463,49 +466,70 @@ func displayVolumeSuperblock(blockData []byte, verbose bool) error {
 	return nil
 }
 
-// getObjectTypeName returns a human-readable name for an object type
-func getObjectTypeName(objectType uint32) string {
-	typeValue := objectType & 0x0000FFFF
-
-	names := map[uint32]string{
-		0x0000: "INVALID",
-		0x0001: "NX_SUPERBLOCK",
-		0x0002: "BTREE_NODE",
-		0x0003: "SPACEMAN",
-		0x0004: "SPACEMAN_CAB",
-		0x0005: "SPACEMAN_CIB",
-		0x0006: "SPACEMAN_BITMAP",
-		0x0007: "SPACEMAN_FREE_QUEUE",
-		0x0008: "EXTENT_LIST_TREE",
-		0x0009: "OMAP",
-		0x000A: "CHECKPOINT_MAP",
-		0x000B: "FS",
-		0x000C: "FSTREE",
-		0x000D: "BLOCKREFTREE",
-		0x000E: "SNAPMETATREE",
-		0x000F: "NX_REAPER",
-		0x0010: "NX_REAP_LIST",
-		0x0011: "OMAP_SNAPSHOT",
-		0x0012: "EFI_JUMPSTART",
-		0x0013: "FUSION_MIDDLE_TREE",
-		0x0014: "NX_FUSION_WBC",
-		0x0015: "NX_FUSION_WBC_LIST",
-		0x0016: "ER_STATE",
-		0x0017: "GBITMAP",
-		0x0018: "GBITMAP_TREE",
-		0x0019: "GBITMAP_BLOCK",
-	}
-
-	if name, ok := names[typeValue]; ok {
-		return name
-	}
-	return fmt.Sprintf("UNKNOWN_%d", typeValue)
+// objectTypeNames maps the low half of o_type to Apple's OBJECT_TYPE_*
+// constant name. Values are from the "Object Types" section of the Apple File
+// System Reference.
+var objectTypeNames = map[uint32]string{
+	0x0000: "INVALID",
+	0x0001: "NX_SUPERBLOCK",
+	0x0002: "BTREE",
+	0x0003: "BTREE_NODE",
+	0x0005: "SPACEMAN",
+	0x0006: "SPACEMAN_CAB",
+	0x0007: "SPACEMAN_CIB",
+	0x0008: "SPACEMAN_BITMAP",
+	0x0009: "SPACEMAN_FREE_QUEUE",
+	0x000a: "EXTENT_LIST_TREE",
+	0x000b: "OMAP",
+	0x000c: "CHECKPOINT_MAP",
+	0x000d: "FS",
+	0x000e: "FSTREE",
+	0x000f: "BLOCKREFTREE",
+	0x0010: "SNAPMETATREE",
+	0x0011: "NX_REAPER",
+	0x0012: "NX_REAP_LIST",
+	0x0013: "OMAP_SNAPSHOT",
+	0x0014: "EFI_JUMPSTART",
+	0x0015: "FUSION_MIDDLE_TREE",
+	0x0016: "NX_FUSION_WBC",
+	0x0017: "NX_FUSION_WBC_LIST",
+	0x0018: "ER_STATE",
+	0x0019: "GBITMAP",
+	0x001a: "GBITMAP_TREE",
+	0x001b: "GBITMAP_BLOCK",
+	0x001c: "ER_RECOVERY_BLOCK",
+	0x001d: "SNAP_META_EXT",
+	0x001e: "INTEGRITY_META",
+	0x001f: "FEXT_TREE",
+	0x0020: "RESERVED_20",
+	0x00ff: "TEST",
 }
 
-// getObjectSubtypeName returns a human-readable name for an object subtype
+// keybagObjectTypes are the three object types Apple gives as four-character
+// codes rather than small integers, so they do not fit objectTypeNames.
+var keybagObjectTypes = map[uint32]string{
+	0x6b657973: "CONTAINER_KEYBAG", // 'keys'
+	0x72656373: "VOLUME_KEYBAG",    // 'recs'
+	0x6d6b6579: "MEDIA_KEYBAG",     // 'mkey'
+}
+
+// getObjectTypeName returns Apple's OBJECT_TYPE_* name for an object type.
+func getObjectTypeName(objectType uint32) string {
+	if name, ok := keybagObjectTypes[objectType]; ok {
+		return name
+	}
+	typeValue := objectType & 0x0000FFFF
+	if name, ok := objectTypeNames[typeValue]; ok {
+		return name
+	}
+	return fmt.Sprintf("UNKNOWN_%#x", typeValue)
+}
+
+// getObjectSubtypeName returns a human-readable name for an object subtype. In
+// APFS o_subtype holds an object type, so it uses the same table.
 func getObjectSubtypeName(objectSubtype uint32) string {
 	if objectSubtype == 0 {
 		return "NONE"
 	}
-	return fmt.Sprintf("SUBTYPE_%d", objectSubtype)
+	return getObjectTypeName(objectSubtype)
 }

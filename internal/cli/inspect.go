@@ -9,12 +9,12 @@ import (
 )
 
 var (
-	inspectFSAddr   uint64
-	inspectOMapAddr uint64
+	inspectFSTreeRoot uint64
+	inspectOmapRoot   uint64
 )
 
 var inspectCmd = &cobra.Command{
-	Use:   "inspect IMAGE [block N | btree]",
+	Use:   "inspect IMAGE [block N | fstree]",
 	Short: "Low-level structural inspection of a container",
 	Long: `Walk the on-disk structures of an APFS container for debugging and
 forensics. Text output only.
@@ -24,21 +24,23 @@ Modes:
                            maps, volumes (the default)
   inspect IMAGE block N    decode one block by physical address (N accepts
                            decimal or 0x hex)
-  inspect IMAGE btree      interactively explore the file-system B-tree
+  inspect IMAGE fstree     interactively explore the file-system tree
                            (tree roots are resolved automatically)
 
 Examples:
   apfs inspect image.dmg
   apfs inspect image.dmg block 0
   apfs inspect image.dmg block 0x1b0c1
-  apfs inspect image.dmg btree`,
-	Args: rangeArgs(1, 3, "IMAGE [block N | btree]"),
+  apfs inspect image.dmg fstree`,
+	Args: rangeArgs(1, 3, "IMAGE [block N | fstree]"),
 	RunE: runInspect,
 }
 
 func init() {
-	inspectCmd.Flags().Uint64Var(&inspectFSAddr, "fs", 0, "btree mode: override the fs-tree root block address")
-	inspectCmd.Flags().Uint64Var(&inspectOMapAddr, "omap", 0, "btree mode: override the omap-tree root block address")
+	inspectCmd.Flags().Uint64Var(&inspectFSTreeRoot, "fstree-root", 0,
+		"fstree mode: override the physical address of the file-system tree root")
+	inspectCmd.Flags().Uint64Var(&inspectOmapRoot, "omap-root", 0,
+		"fstree mode: override the physical address of the object map tree root")
 }
 
 func runInspect(cmd *cobra.Command, args []string) error {
@@ -71,11 +73,11 @@ func runInspect(cmd *cobra.Command, args []string) error {
 		}
 		return runInspectBlock(imagePath, blockAddr, opts.Verbose)
 
-	case "btree":
-		return runInspectBTree(imagePath, inspectFSAddr, inspectOMapAddr)
+	case "fstree":
+		return runInspectFSTree(imagePath, inspectFSTreeRoot, inspectOmapRoot)
 
 	default:
-		return usageErrorf("unknown inspect mode %q (expected: block or btree)", args[1])
+		return usageErrorf("unknown inspect mode %q (expected: block or fstree)", args[1])
 	}
 }
 

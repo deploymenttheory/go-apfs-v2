@@ -45,7 +45,7 @@ Read commands:
   info     Container and volume summary (text or JSON)
   list     List directory contents (recursive, JSON lines)
   cat      Write file contents to stdout, for pipelines
-  extract  Extract files/directories to the local filesystem
+  extract  Extract files/directories to the local file system
   inspect  Low-level structural inspection (container walk, blocks, B-trees)
   mount    Mount read-only via FUSE (Linux and macOS)
 

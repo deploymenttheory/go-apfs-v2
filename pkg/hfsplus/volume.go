@@ -1,4 +1,4 @@
-// Package hfsplus is a pure-Go, read-only HFS Plus / HFSX filesystem
+// Package hfsplus is a pure-Go, read-only HFS Plus / HFSX file system
 // engine. It parses the volume header and catalog B-tree, reads file
 // content through the data fork's inline extents plus the extents
 // overflow B-tree, and resolves symlinks and hard links.

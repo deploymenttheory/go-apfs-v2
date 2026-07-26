@@ -623,7 +623,7 @@ func (fe *FileEntry) SymbolicLinkTarget() (string, error) {
 	}
 
 	// Trim trailing null bytes and spaces to prevent "invalid argument" errors
-	// when creating symlinks on the filesystem
+	// when creating symlinks on the file system
 	target := string(fe.SymbolicLinkData)
 	target = strings.TrimRight(target, "\x00 \t\r\n")
 
