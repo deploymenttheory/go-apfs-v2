@@ -7,29 +7,27 @@ import (
 	"io"
 )
 
-// Container key bag object type
-const ContainerKeyBagObjectType = 0x6b657973 // 'keys'
+// Container keybag object type
+const ContainerKeybagObjectType = 0x6b657973 // 'keys'
 
-// Key bag entry types
+// Keybag entry types
 const (
-	KeyBagEntryTypeUnknown         = 0
-	KeyBagEntryTypeVolumeKey       = 2 // Volume master key (encrypted)
-	KeyBagEntryTypeVolumeKeyExtent = 3 // Volume key bag extent location
+	KeybagEntryTypeUnknown         = 0
+	KeybagEntryTypeVolumeKey       = 2 // Volume master key (encrypted)
+	KeybagEntryTypeVolumeKeyExtent = 3 // Volume keybag extent location
 )
 
-// ContainerKeyBag represents an APFS container key bag
-// Corresponds to libfsapfs_container_key_bag_t
-type ContainerKeyBag struct {
+// ContainerKeybag represents an APFS container keybag
+type ContainerKeybag struct {
 	// The entries array
-	Entries []*KeyBagEntry
+	Entries []*KeybagEntry
 
-	// Value to indicate if the container key bag is locked
+	// Value to indicate if the container keybag is locked
 	IsLocked bool
 }
 
-// KeyBagEntry represents a single key bag entry
-// Corresponds to libfsapfs_key_bag_entry_t
-type KeyBagEntry struct {
+// KeybagEntry represents a single keybag entry
+type KeybagEntry struct {
 	// The identifier (UUID)
 	Identifier [16]byte
 
@@ -46,10 +44,9 @@ type KeyBagEntry struct {
 	Size int
 }
 
-// NewKeyBagEntry creates a new key bag entry
-// Corresponds to libfsapfs_key_bag_entry_initialize
-func NewKeyBagEntry() (*KeyBagEntry, error) {
-	return &KeyBagEntry{
+// NewKeybagEntry creates a new keybag entry
+func NewKeybagEntry() (*KeybagEntry, error) {
+	return &KeybagEntry{
 		Identifier: [16]byte{},
 		Type:       0,
 		Data:       nil,
@@ -58,11 +55,10 @@ func NewKeyBagEntry() (*KeyBagEntry, error) {
 	}, nil
 }
 
-// ReadData reads a key bag entry from binary data
-// Corresponds to libfsapfs_key_bag_entry_read_data
-func (e *KeyBagEntry) ReadData(data []byte) error {
+// ReadData reads a keybag entry from binary data
+func (e *KeybagEntry) ReadData(data []byte) error {
 	if e == nil {
-		return fmt.Errorf("invalid key bag entry")
+		return fmt.Errorf("invalid keybag entry")
 	}
 
 	if data == nil {
@@ -77,7 +73,7 @@ func (e *KeyBagEntry) ReadData(data []byte) error {
 	copy(e.Identifier[:], data[0:16])
 	e.Type = binary.LittleEndian.Uint16(data[16:18])
 	e.DataSize = binary.LittleEndian.Uint16(data[18:20])
-	// Unknown1 at offset 20-24 is not stored in KeyBagEntry
+	// Unknown1 at offset 20-24 is not stored in KeybagEntry
 
 	// Verify we have enough data for the entry data
 	totalSize := 24 + int(e.DataSize)
@@ -97,19 +93,18 @@ func (e *KeyBagEntry) ReadData(data []byte) error {
 	return nil
 }
 
-// NewContainerKeyBag creates a new container key bag
-// Corresponds to libfsapfs_container_key_bag_initialize
-func NewContainerKeyBag() (*ContainerKeyBag, error) {
-	return &ContainerKeyBag{
-		Entries:  make([]*KeyBagEntry, 0),
+// NewContainerKeybag creates a new container keybag
+func NewContainerKeybag() (*ContainerKeybag, error) {
+	return &ContainerKeybag{
+		Entries:  make([]*KeybagEntry, 0),
 		IsLocked: false,
 	}, nil
 }
 
-// Free releases resources associated with the container key bag
-func (ckb *ContainerKeyBag) Free() error {
+// Free releases resources associated with the container keybag
+func (ckb *ContainerKeybag) Free() error {
 	if ckb == nil {
-		return fmt.Errorf("invalid container key bag")
+		return fmt.Errorf("invalid container keybag")
 	}
 
 	// Clear entries
@@ -117,17 +112,16 @@ func (ckb *ContainerKeyBag) Free() error {
 	return nil
 }
 
-// ReadFileIOHandle reads the container key bag from a file
-// Corresponds to libfsapfs_container_key_bag_read_file_io_handle
-func (ckb *ContainerKeyBag) ReadFileIOHandle(
+// ReadFrom reads the container keybag from a file
+func (ckb *ContainerKeybag) ReadFrom(
 	ioHandle *IOHandle,
-	fileHandle io.ReaderAt,
+	reader io.ReaderAt,
 	fileOffset int64,
 	dataSize uint64,
 	containerIdentifier []byte,
 ) error {
 	if ckb == nil {
-		return fmt.Errorf("invalid container key bag")
+		return fmt.Errorf("invalid container keybag")
 	}
 
 	if ioHandle == nil {
@@ -139,12 +133,12 @@ func (ckb *ContainerKeyBag) ReadFileIOHandle(
 	}
 
 	if dataSize == 0 || dataSize > 0x7FFFFFFF { // Max reasonable size
-		return fmt.Errorf("invalid container key bag size value out of bounds")
+		return fmt.Errorf("invalid container keybag size value out of bounds")
 	}
 
 	// Read encrypted data
 	encryptedData := make([]byte, dataSize)
-	n, err := fileHandle.ReadAt(encryptedData, fileOffset)
+	n, err := reader.ReadAt(encryptedData, fileOffset)
 	if err != nil && err != io.EOF {
 		return fmt.Errorf("unable to read encrypted data at offset %d: %w", fileOffset, err)
 	}
@@ -182,11 +176,10 @@ func (ckb *ContainerKeyBag) ReadFileIOHandle(
 	return ckb.ReadData(data)
 }
 
-// ReadData reads the container key bag from decrypted data
-// Corresponds to libfsapfs_container_key_bag_read_data
-func (ckb *ContainerKeyBag) ReadData(data []byte) error {
+// ReadData reads the container keybag from decrypted data
+func (ckb *ContainerKeybag) ReadData(data []byte) error {
 	if ckb == nil {
-		return fmt.Errorf("invalid container key bag")
+		return fmt.Errorf("invalid container keybag")
 	}
 
 	if data == nil {
@@ -203,8 +196,8 @@ func (ckb *ContainerKeyBag) ReadData(data []byte) error {
 	objectSubtype := binary.LittleEndian.Uint32(data[28:32])
 
 	// Verify object type
-	if objectType != ContainerKeyBagObjectType {
-		return fmt.Errorf("invalid object type: 0x%08x (expected 0x%08x)", objectType, ContainerKeyBagObjectType)
+	if objectType != ContainerKeybagObjectType {
+		return fmt.Errorf("invalid object type: 0x%08x (expected 0x%08x)", objectType, ContainerKeybagObjectType)
 	}
 
 	// Verify object subtype
@@ -224,40 +217,40 @@ func (ckb *ContainerKeyBag) ReadData(data []byte) error {
 
 	dataOffset := 32 // After object header
 
-	// Read key bag header using KeyBagHeader.ReadData()
+	// Read keybag header using KeybagHeader.ReadData()
 	if len(data) < dataOffset+16 {
-		return fmt.Errorf("insufficient data for key bag header")
+		return fmt.Errorf("insufficient data for keybag header")
 	}
 
-	header, err := NewKeyBagHeader()
+	header, err := NewKeybagHeader()
 	if err != nil {
-		return fmt.Errorf("unable to create key bag header: %w", err)
+		return fmt.Errorf("unable to create keybag header: %w", err)
 	}
 
 	if err := header.ReadData(data[dataOffset:]); err != nil {
-		return fmt.Errorf("unable to read key bag header: %w", err)
+		return fmt.Errorf("unable to read keybag header: %w", err)
 	}
 
-	dataOffset += 16 // Key bag header size
+	dataOffset += 16 // Keybag header size
 
 	if int(header.DataSize) > len(data)-dataOffset {
-		return fmt.Errorf("invalid key bag header data size value out of bounds")
+		return fmt.Errorf("invalid keybag header data size value out of bounds")
 	}
 
-	// Read key bag entries using KeyBagEntry.ReadData()
+	// Read keybag entries using KeybagEntry.ReadData()
 	for i := uint16(0); i < header.NumberOfEntries; i++ {
 		if len(data) < dataOffset+24 { // Minimum entry header size
-			return fmt.Errorf("insufficient data for key bag entry %d", i)
+			return fmt.Errorf("insufficient data for keybag entry %d", i)
 		}
 
-		entry, err := NewKeyBagEntry()
+		entry, err := NewKeybagEntry()
 		if err != nil {
-			return fmt.Errorf("unable to create key bag entry %d: %w", i, err)
+			return fmt.Errorf("unable to create keybag entry %d: %w", i, err)
 		}
 
 		// Read entry using the new ReadData method
 		if err := entry.ReadData(data[dataOffset:]); err != nil {
-			return fmt.Errorf("unable to read key bag entry %d: %w", i, err)
+			return fmt.Errorf("unable to read keybag entry %d: %w", i, err)
 		}
 
 		// Advance offset by the entry size
@@ -282,14 +275,13 @@ func (ckb *ContainerKeyBag) ReadData(data []byte) error {
 	return nil
 }
 
-// GetVolumeKeyBagExtentByIdentifier retrieves the volume key bag extent for a specific volume
+// GetVolumeKeybagExtentByIdentifier retrieves the volume keybag extent for a specific volume
 // Returns block number and number of blocks, or error
-// Corresponds to libfsapfs_container_key_bag_get_volume_key_bag_extent_by_identifier
-func (ckb *ContainerKeyBag) GetVolumeKeyBagExtentByIdentifier(
+func (ckb *ContainerKeybag) GetVolumeKeybagExtentByIdentifier(
 	volumeIdentifier []byte,
 ) (blockNumber uint64, numberOfBlocks uint64, found bool, err error) {
 	if ckb == nil {
-		return 0, 0, false, fmt.Errorf("invalid container key bag")
+		return 0, 0, false, fmt.Errorf("invalid container keybag")
 	}
 
 	if len(volumeIdentifier) != 16 {
@@ -299,7 +291,7 @@ func (ckb *ContainerKeyBag) GetVolumeKeyBagExtentByIdentifier(
 	// Search for matching entry
 	for _, entry := range ckb.Entries {
 		// Check if this is a volume key extent entry
-		if entry.Type != KeyBagEntryTypeVolumeKeyExtent {
+		if entry.Type != KeybagEntryTypeVolumeKeyExtent {
 			continue
 		}
 
@@ -325,13 +317,12 @@ func (ckb *ContainerKeyBag) GetVolumeKeyBagExtentByIdentifier(
 
 // GetVolumeMasterKeyByIdentifier retrieves the volume master key for a specific volume
 // Returns the decrypted master key, or error
-// Corresponds to libfsapfs_container_key_bag_get_volume_master_key_by_identifier
-func (ckb *ContainerKeyBag) GetVolumeMasterKeyByIdentifier(
+func (ckb *ContainerKeybag) GetVolumeMasterKeyByIdentifier(
 	volumeIdentifier []byte,
 	volumeKey []byte,
 ) (masterKey []byte, found bool, err error) {
 	if ckb == nil {
-		return nil, false, fmt.Errorf("invalid container key bag")
+		return nil, false, fmt.Errorf("invalid container keybag")
 	}
 
 	if len(volumeIdentifier) != 16 {
@@ -341,7 +332,7 @@ func (ckb *ContainerKeyBag) GetVolumeMasterKeyByIdentifier(
 	// Search for matching entry
 	for _, entry := range ckb.Entries {
 		// Check if this is a volume key entry
-		if entry.Type != KeyBagEntryTypeVolumeKey {
+		if entry.Type != KeybagEntryTypeVolumeKey {
 			continue
 		}
 
@@ -350,20 +341,20 @@ func (ckb *ContainerKeyBag) GetVolumeMasterKeyByIdentifier(
 			continue
 		}
 
-		// Parse key encrypted key from entry data
-		kek, err := NewKeyEncryptedKey()
+		// Parse key encryption key from entry data
+		kek, err := NewKeyEncryptionKey()
 		if err != nil {
-			return nil, false, fmt.Errorf("unable to create key encrypted key: %w", err)
+			return nil, false, fmt.Errorf("unable to create key encryption key: %w", err)
 		}
 
 		if err := kek.ReadData(entry.Data); err != nil {
-			return nil, false, fmt.Errorf("unable to read key encrypted key: %w", err)
+			return nil, false, fmt.Errorf("unable to read key encryption key: %w", err)
 		}
 
-		// Unlock the key encrypted key using the volume key
+		// Unlock the key encryption key using the volume key
 		masterKey, err = kek.UnlockWithKey(volumeKey)
 		if err != nil {
-			return nil, false, fmt.Errorf("unable to unlock key encrypted key: %w", err)
+			return nil, false, fmt.Errorf("unable to unlock key encryption key: %w", err)
 		}
 
 		return masterKey, true, nil

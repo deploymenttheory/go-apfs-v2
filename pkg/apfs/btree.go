@@ -78,8 +78,8 @@ type BTreeVariableSizeEntry struct {
 	ValueDataSize uint16
 }
 
-// BTreeFooter represents the APFS B-tree footer structure
-type BTreeFooter struct {
+// BTreeInfo represents the APFS B-tree info structure
+type BTreeInfo struct {
 	// The flags
 	// Consists of 4 bytes
 	Flags uint32

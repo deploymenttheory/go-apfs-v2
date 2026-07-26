@@ -15,7 +15,7 @@ import (
 func runInspectWalk(imagePath string, inspectVolume int, inspectVerbose bool) error {
 	// Open the container image with content-based format detection
 	fmt.Printf("Opening container: %s\n\n", imagePath)
-	fileHandle, containerOffset, closer, err := disk.OpenWithOffset(imagePath)
+	reader, containerOffset, closer, err := disk.OpenWithOffset(imagePath)
 	if err != nil {
 		return withCode(ExitBadImage, fmt.Errorf("unable to open container: %w", err))
 	}
@@ -24,7 +24,7 @@ func runInspectWalk(imagePath string, inspectVolume int, inspectVerbose bool) er
 	// Read block 0 of the container
 	blockSize := uint32(4096) // Default, will be updated from actual superblock
 	block0Data := make([]byte, blockSize)
-	if _, err := fileHandle.ReadAt(block0Data, containerOffset); err != nil {
+	if _, err := reader.ReadAt(block0Data, containerOffset); err != nil {
 		return fmt.Errorf("failed to read block 0: %w", err)
 	}
 
@@ -44,18 +44,18 @@ func runInspectWalk(imagePath string, inspectVolume int, inspectVerbose bool) er
 	if err != nil {
 		return fmt.Errorf("unable to create container: %w", err)
 	}
-	if err := container.OpenRead(fileHandle, containerOffset); err != nil {
+	if err := container.OpenRead(reader, containerOffset); err != nil {
 		return fmt.Errorf("unable to parse container: %w", err)
 	}
 
 	// Print checkpoint and container info
 	nxsb := container.Superblock
-	xpDescBlocks := nxsb.CheckpointDescriptorAreaNumberOfBlocks & ^uint32(1<<31)
+	xpDescBlocks := nxsb.XPDescBlocks & ^uint32(1<<31)
 
 	fmt.Println("  Container Structure")
 	fmt.Printf("    %-30s  %d blocks\n", "Checkpoint descriptor area", xpDescBlocks)
-	fmt.Printf("    %-30s  %#x\n", "Checkpoint base address", nxsb.CheckpointDescriptorAreaBlockNumber)
-	fmt.Printf("    %-30s  %#x\n", "Object map physical OID", nxsb.ObjectMapBlockNumber)
+	fmt.Printf("    %-30s  %#x\n", "Checkpoint base address", nxsb.XPDescBase)
+	fmt.Printf("    %-30s  %#x\n", "Object map physical OID", nxsb.OmapOID)
 	fmt.Println()
 
 	// List volumes
@@ -104,7 +104,7 @@ func runInspectWalk(imagePath string, inspectVolume int, inspectVerbose bool) er
 		if volumeName != "" {
 			headerText += fmt.Sprintf(": %s", volumeName)
 		}
-		uuid := formatVolumeUUID(vsb.VolumeIdentifier[:])
+		uuid := formatVolumeUUID(vsb.VolumeUUID[:])
 
 		boxWidth := max(len(headerText), len("UUID: "+uuid)) + 2
 		fmt.Printf("╭─%s─╮\n", repeatChar('─', boxWidth))
@@ -166,8 +166,8 @@ func runInspectWalk(imagePath string, inspectVolume int, inspectVerbose bool) er
 
 		// Metadata section
 		fmt.Println("  Metadata")
-		fmt.Printf("    %-30s  %#x\n", "Object map OID", vsb.ObjectMapBlockNumber)
-		fmt.Printf("    %-30s  %#x\n", "File-system tree root OID", vsb.FileSystemRootObjectIdentifier)
+		fmt.Printf("    %-30s  %#x\n", "Object map OID", vsb.OmapOID)
+		fmt.Printf("    %-30s  %#x\n", "File-system tree root OID", vsb.RootTreeOID)
 		caseInsensitive := (vsb.IncompatibleFeaturesFlags & 0x00000001) != 0
 		caseSensitive := "Yes"
 		if caseInsensitive {

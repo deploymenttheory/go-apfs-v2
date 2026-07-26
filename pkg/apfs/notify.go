@@ -1,5 +1,4 @@
 // Notification functions
-// Corresponds to libfsapfs_notify.c and libfsapfs_notify.h
 package apfs
 
 import (
@@ -25,7 +24,6 @@ var (
 )
 
 // SetVerbose sets the verbose notification level
-// Corresponds to libfsapfs_notify_set_verbose
 // This controls all debug output in the library
 func SetVerbose(verbose bool) {
 	notifyMutex.Lock()
@@ -43,7 +41,6 @@ func GetVerbose() bool {
 }
 
 // SetStream sets the notification output stream
-// Corresponds to libfsapfs_notify_set_stream
 func SetStream(stream io.Writer) error {
 	if stream == nil {
 		return fmt.Errorf("invalid stream")
@@ -67,7 +64,6 @@ func GetStream() io.Writer {
 
 // OpenStream opens a notification stream using a filename
 // The stream is opened in append mode
-// Corresponds to libfsapfs_notify_stream_open
 func OpenStream(filename string) error {
 	if filename == "" {
 		return fmt.Errorf("invalid filename")
@@ -95,7 +91,6 @@ func OpenStream(filename string) error {
 }
 
 // CloseStream closes the notification stream if opened using a filename
-// Corresponds to libfsapfs_notify_stream_close
 func CloseStream() error {
 	notifyMutex.Lock()
 	defer notifyMutex.Unlock()

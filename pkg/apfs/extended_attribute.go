@@ -8,7 +8,6 @@ import (
 )
 
 // ExtendedAttribute represents an APFS extended attribute
-// Corresponds to libfsapfs_extended_attribute_t / libfsapfs_internal_extended_attribute_t
 type ExtendedAttribute struct {
 	// IOHandle is the I/O handle
 	IOHandle *IOHandle
@@ -28,8 +27,8 @@ type ExtendedAttribute struct {
 	// AttributeValues contains the attribute values
 	AttributeValues *AttributeValues
 
-	// TransactionIdentifier is the transaction identifier
-	TransactionIdentifier uint64
+	// XID is the transaction identifier
+	XID uint64
 
 	// DataStream is the data stream (lazily initialized)
 	DataStream *DataStream
@@ -39,32 +38,30 @@ type ExtendedAttribute struct {
 }
 
 // NewExtendedAttribute creates a new extended attribute
-// Corresponds to libfsapfs_extended_attribute_initialize
 func NewExtendedAttribute(
 	ioHandle *IOHandle,
-	fileHandle io.ReaderAt,
+	reader io.ReaderAt,
 	encryptionContext *EncryptionContext,
 	fileSystemBTree *FileSystemBTree,
 	attributeValues *AttributeValues,
-	transactionIdentifier uint64,
+	xid uint64,
 ) (*ExtendedAttribute, error) {
 	if attributeValues == nil {
 		return nil, fmt.Errorf("invalid attribute values")
 	}
 
 	return &ExtendedAttribute{
-		IOHandle:              ioHandle,
-		FileHandle:            fileHandle,
-		EncryptionContext:     encryptionContext,
-		FileSystemBTree:       fileSystemBTree,
-		AttributeValues:       attributeValues,
-		TransactionIdentifier: transactionIdentifier,
-		currentOffset:         0,
+		IOHandle:          ioHandle,
+		FileHandle:        reader,
+		EncryptionContext: encryptionContext,
+		FileSystemBTree:   fileSystemBTree,
+		AttributeValues:   attributeValues,
+		XID:               xid,
+		currentOffset:     0,
 	}, nil
 }
 
 // getDataStream retrieves the data stream (lazy initialization)
-// Corresponds to libfsapfs_internal_extended_attribute_get_data_stream
 func (ea *ExtendedAttribute) getDataStream() error {
 	if ea.DataStream != nil {
 		return nil
@@ -76,7 +73,7 @@ func (ea *ExtendedAttribute) getDataStream() error {
 		ea.FileHandle,
 		ea.EncryptionContext,
 		ea.FileSystemBTree,
-		ea.TransactionIdentifier,
+		ea.XID,
 	)
 	if err != nil {
 		return fmt.Errorf("unable to retrieve attribute value data stream: %w", err)
@@ -87,7 +84,6 @@ func (ea *ExtendedAttribute) getDataStream() error {
 }
 
 // GetIdentifier retrieves the identifier
-// Corresponds to libfsapfs_extended_attribute_get_identifier
 func (ea *ExtendedAttribute) GetIdentifier() (uint64, error) {
 	if ea == nil {
 		return 0, fmt.Errorf("invalid extended attribute")
@@ -97,7 +93,6 @@ func (ea *ExtendedAttribute) GetIdentifier() (uint64, error) {
 
 // GetUTF8NameSize retrieves the size of the UTF-8 encoded name
 // The returned size includes the end-of-string character
-// Corresponds to libfsapfs_extended_attribute_get_utf8_name_size
 func (ea *ExtendedAttribute) GetUTF8NameSize() (int, error) {
 	if ea == nil {
 		return 0, fmt.Errorf("invalid extended attribute")
@@ -112,7 +107,6 @@ func (ea *ExtendedAttribute) GetUTF8NameSize() (int, error) {
 }
 
 // GetUTF8Name retrieves the UTF-8 encoded name
-// Corresponds to libfsapfs_extended_attribute_get_utf8_name
 func (ea *ExtendedAttribute) GetUTF8Name() (string, error) {
 	if ea == nil {
 		return "", fmt.Errorf("invalid extended attribute")
@@ -127,7 +121,6 @@ func (ea *ExtendedAttribute) GetUTF8Name() (string, error) {
 
 // GetUTF16NameSize retrieves the size of the UTF-16 encoded name
 // The returned size includes the end-of-string character
-// Corresponds to libfsapfs_extended_attribute_get_utf16_name_size
 func (ea *ExtendedAttribute) GetUTF16NameSize() (int, error) {
 	if ea == nil {
 		return 0, fmt.Errorf("invalid extended attribute")
@@ -158,7 +151,6 @@ func (ea *ExtendedAttribute) GetUTF16NameSize() (int, error) {
 }
 
 // GetUTF16Name retrieves the UTF-16 encoded name
-// Corresponds to libfsapfs_extended_attribute_get_utf16_name
 func (ea *ExtendedAttribute) GetUTF16Name() ([]uint16, error) {
 	if ea == nil {
 		return nil, fmt.Errorf("invalid extended attribute")
@@ -180,7 +172,6 @@ func (ea *ExtendedAttribute) GetUTF16Name() ([]uint16, error) {
 }
 
 // Read reads data at the current offset into a buffer
-// Corresponds to libfsapfs_extended_attribute_read_buffer
 func (ea *ExtendedAttribute) Read(buffer []byte) (int, error) {
 	if ea == nil {
 		return 0, fmt.Errorf("invalid extended attribute")
@@ -210,7 +201,6 @@ func (ea *ExtendedAttribute) Read(buffer []byte) (int, error) {
 }
 
 // ReadAt reads data at a specific offset
-// Corresponds to libfsapfs_extended_attribute_read_buffer_at_offset
 func (ea *ExtendedAttribute) ReadAt(buffer []byte, offset int64) (int, error) {
 	if ea == nil {
 		return 0, fmt.Errorf("invalid extended attribute")
@@ -237,7 +227,6 @@ func (ea *ExtendedAttribute) ReadAt(buffer []byte, offset int64) (int, error) {
 }
 
 // Seek seeks to a certain offset
-// Corresponds to libfsapfs_extended_attribute_seek_offset
 func (ea *ExtendedAttribute) Seek(offset int64, whence int) (int64, error) {
 	if ea == nil {
 		return 0, fmt.Errorf("invalid extended attribute")
@@ -283,7 +272,6 @@ func (ea *ExtendedAttribute) Seek(offset int64, whence int) (int64, error) {
 }
 
 // GetOffset retrieves the current offset
-// Corresponds to libfsapfs_extended_attribute_get_offset
 func (ea *ExtendedAttribute) GetOffset() (int64, error) {
 	if ea == nil {
 		return 0, fmt.Errorf("invalid extended attribute")
@@ -293,7 +281,6 @@ func (ea *ExtendedAttribute) GetOffset() (int64, error) {
 }
 
 // GetSize retrieves the size
-// Corresponds to libfsapfs_extended_attribute_get_size
 func (ea *ExtendedAttribute) GetSize() (uint64, error) {
 	if ea == nil {
 		return 0, fmt.Errorf("invalid extended attribute")
@@ -315,7 +302,6 @@ func (ea *ExtendedAttribute) GetSize() (uint64, error) {
 }
 
 // GetNumberOfExtents retrieves the number of extents
-// Corresponds to libfsapfs_extended_attribute_get_number_of_extents
 func (ea *ExtendedAttribute) GetNumberOfExtents() (int, error) {
 	if ea == nil {
 		return 0, fmt.Errorf("invalid extended attribute")
@@ -330,7 +316,6 @@ func (ea *ExtendedAttribute) GetNumberOfExtents() (int, error) {
 }
 
 // GetExtentByIndex retrieves an extent by index
-// Corresponds to libfsapfs_extended_attribute_get_extent_by_index
 func (ea *ExtendedAttribute) GetExtentByIndex(index int) (offset int64, size uint64, flags uint32, err error) {
 	if ea == nil {
 		return 0, 0, 0, fmt.Errorf("invalid extended attribute")

@@ -132,7 +132,7 @@ sections of the changelog and roadmap.
 | extents overflow | HFS+ | extentref tree |
 | resource fork | HFS+ | — (but `INODE_NO_RSRC_FORK` is a genuine Apple constant; keep it) |
 | data block, `libfdata` vector | libfsapfs / libfdata | extent, data stream |
-| file entry, `*DataHandle`, `FileIOHandle` | libfsapfs / libbfio | — |
+| `FileIOHandle`, `ReadFileIOHandle` | libbfio | `Reader io.ReaderAt`, `ReadFrom` |
 | `bno`, `blkcnt` | mkapfs / BSD | `paddr`, `BlockCount` |
 | `extref` | apfsprogs | `extentref` |
 | internal pool (as prose) | apfsprogs | Apple only has the `sm_ip_*` field prefix; the spec heading is "Internal-Pool Bitmap" |
@@ -146,3 +146,11 @@ grep -rin 'catalog\|cnid\|key bag\|filesystem\|\bextref\|\bbno\b' \
 ```
 
 Hits outside `pkg/hfsplus` and genuine HFS+ documentation rows are regressions.
+
+## Go-level abstractions with no Apple counterpart
+
+`FileEntry`, `DataStream`'s Go wrapper, `IOHandle`, `BufferDataHandle`,
+`ContainerDataHandle`, `FileSystemDataHandle` and `DataBlockVector` are this
+package's own abstractions, not APFS structures. They are allowed, but their doc
+comments must not present them as things Apple defines. Where one corresponds to
+an Apple concept, say so explicitly (`DataStream` ↔ `j_dstream_t`).

@@ -18,7 +18,7 @@ type snapBuild struct {
 	mtime     uint64
 	inum      uint64
 	sblockBno uint64 // frozen volume superblock
-	extrefBno uint64 // the snapshot's own extent-reference tree
+	extrefBno uint64 // the snapshot's own extentref tree
 }
 
 // snapNameObjID is the object-id field used in every snapshot-name key. The
@@ -46,10 +46,10 @@ func (b *builder) setSnapshots(opts *CreateOptions) error {
 	if len(opts.Snapshots) > maxSnapshots {
 		return fmt.Errorf("apfswrite: %d snapshots requested; at most %d are supported", len(opts.Snapshots), maxSnapshots)
 	}
-	// Each snapshot copies the extent-reference tree; only the single-leaf shape
+	// Each snapshot copies the extentref tree; only the single-leaf shape
 	// is supported for now, which covers volumes up to a few thousand extents.
 	if b.extrefTwoLevel {
-		return fmt.Errorf("apfswrite: snapshots are not yet supported for volumes with a 2-level extent-reference tree")
+		return fmt.Errorf("apfswrite: snapshots are not yet supported for volumes with a 2-level extentref tree")
 	}
 	defaultTime := uint64(defaultInodeTime.UnixNano())
 	// Each snapshot is associated with a distinct inode number reserved past the
@@ -79,7 +79,7 @@ func (b *builder) setSnapshots(opts *CreateOptions) error {
 	// transaction id, so the live xid stays at the base xid.
 	b.liveXID = mkfsXID
 	// One shared omap snapshot tree, plus a frozen superblock and an
-	// extent-reference tree copy per snapshot.
+	// extentref tree copy per snapshot.
 	b.snapBlocks = 1 + 2*uint64(len(b.snapshots))
 	return nil
 }
@@ -215,7 +215,7 @@ func (b *builder) writeSnapshots() error {
 		return nil
 	}
 	for _, s := range b.snapshots {
-		// Each snapshot owns a copy of the extent-reference tree so its extent
+		// Each snapshot owns a copy of the extentref tree so its extent
 		// refcounts are checked against its own frozen fsroot, independent of the
 		// live volume's tree.
 		if err := b.makeExtrefRoot(s.extrefBno, s.extrefBno); err != nil {
@@ -234,7 +234,7 @@ func (b *builder) writeSnapshots() error {
 func (b *builder) writeFrozenSblock(s *snapBuild) error {
 	vsb := b.volumeSuperblock()
 	vsb.NumSnapshots = 0               // the state before this snapshot existed
-	vsb.ExtentrefTreeOID = s.extrefBno // the snapshot's own extent-reference tree
+	vsb.ExtentrefTreeOID = s.extrefBno // the snapshot's own extentref tree
 	block := b.zeroedBlock()
 	marshalInto(block, vsb)
 	setObjectHeaderXID(block, int(b.blocksize), s.sblockBno,

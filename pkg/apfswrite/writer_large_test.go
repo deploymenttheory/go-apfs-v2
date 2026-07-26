@@ -161,7 +161,7 @@ func TestCreateContainerManyExtents(t *testing.T) {
 }
 
 // TestCreateContainerManyExtentsFsckClean runs fsck_apfs against a container
-// whose extent-reference tree has grown to two physical levels (macOS only).
+// whose extentref tree has grown to two physical levels (macOS only).
 func TestCreateContainerManyExtentsFsckClean(t *testing.T) {
 	if runtime.GOOS != "darwin" {
 		t.Skip("fsck_apfs is only available on macOS")

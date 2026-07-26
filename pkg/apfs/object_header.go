@@ -10,7 +10,7 @@ import (
 )
 
 // Object represents the APFS object structure
-type Object struct {
+type ObjectHeader struct {
 	// The checksum
 	// Consists of 8 bytes
 	Checksum uint64
@@ -21,7 +21,7 @@ type Object struct {
 
 	// The transaction identifier
 	// Consists of 8 bytes
-	TransactionIdentifier uint64
+	XID uint64
 
 	// The type
 	// Consists of 4 bytes
@@ -35,13 +35,13 @@ type Object struct {
 // ObjectHeaderSize is the size of an APFS object header in bytes
 const ObjectHeaderSize = 32
 
-// NewObject creates a new object
-func NewObject() (*Object, error) {
-	return &Object{}, nil
+// NewObjectHeader creates a new object
+func NewObjectHeader() (*ObjectHeader, error) {
+	return &ObjectHeader{}, nil
 }
 
 // Free releases resources associated with the object
-func (o *Object) Free() error {
+func (o *ObjectHeader) Free() error {
 	if o == nil {
 		return fmt.Errorf("invalid object")
 	}
@@ -49,21 +49,20 @@ func (o *Object) Free() error {
 	return nil
 }
 
-// ReadFileIOHandle reads the object from a file at the specified offset
-// Corresponds to libfsapfs_object_read_file_io_handle
-func (o *Object) ReadFileIOHandle(fileHandle io.ReaderAt, fileOffset int64) error {
+// ReadFrom reads the object from a file at the specified offset
+func (o *ObjectHeader) ReadFrom(reader io.ReaderAt, fileOffset int64) error {
 	if o == nil {
 		return fmt.Errorf("invalid object")
 	}
 
 	if IsVerbose() {
 		Printf("%s: reading object at offset: %d (0x%08x)\n",
-			"ReadFileIOHandle", fileOffset, fileOffset)
+			"ReadFrom", fileOffset, fileOffset)
 	}
 
 	// Read object header (32 bytes)
 	data := make([]byte, ObjectHeaderSize)
-	n, err := fileHandle.ReadAt(data, fileOffset)
+	n, err := reader.ReadAt(data, fileOffset)
 	if err != nil && err != io.EOF {
 		return fmt.Errorf("unable to read object data at offset: %d (0x%08x)", fileOffset, fileOffset)
 	}
@@ -79,8 +78,7 @@ func (o *Object) ReadFileIOHandle(fileHandle io.ReaderAt, fileOffset int64) erro
 }
 
 // ReadData reads the object from binary data
-// Corresponds to libfsapfs_object_read_data
-func (o *Object) ReadData(data []byte) error {
+func (o *ObjectHeader) ReadData(data []byte) error {
 	if o == nil {
 		return fmt.Errorf("invalid object")
 	}
@@ -101,14 +99,14 @@ func (o *Object) ReadData(data []byte) error {
 	// Parse object header
 	o.Checksum = binary.LittleEndian.Uint64(data[0:8])
 	o.Identifier = binary.LittleEndian.Uint64(data[8:16])
-	o.TransactionIdentifier = binary.LittleEndian.Uint64(data[16:24])
+	o.XID = binary.LittleEndian.Uint64(data[16:24])
 	o.Type = binary.LittleEndian.Uint32(data[24:28])
 	o.Subtype = binary.LittleEndian.Uint32(data[28:32])
 
 	if IsVerbose() {
 		Printf("%s: checksum\t\t\t\t\t: 0x%08x\n", "ReadData", o.Checksum)
 		Printf("%s: identifier\t\t\t\t\t: %d\n", "ReadData", o.Identifier)
-		Printf("%s: transaction identifier\t\t\t: %d\n", "ReadData", o.TransactionIdentifier)
+		Printf("%s: transaction identifier\t\t\t: %d\n", "ReadData", o.XID)
 		Printf("%s: type\t\t\t\t\t: 0x%08x\n", "ReadData", o.Type)
 		Printf("%s: subtype\t\t\t\t\t: 0x%08x\n", "ReadData", o.Subtype)
 		Printf("\n")
@@ -118,8 +116,7 @@ func (o *Object) ReadData(data []byte) error {
 }
 
 // GetIdentifier retrieves the object identifier
-// Corresponds to libfsapfs_object_get_identifier
-func (o *Object) GetIdentifier() (uint64, error) {
+func (o *ObjectHeader) GetIdentifier() (uint64, error) {
 	if o == nil {
 		return 0, fmt.Errorf("invalid object")
 	}
@@ -127,17 +124,15 @@ func (o *Object) GetIdentifier() (uint64, error) {
 }
 
 // GetTransactionIdentifier retrieves the transaction identifier
-// Corresponds to libfsapfs_object_get_transaction_identifier
-func (o *Object) GetTransactionIdentifier() (uint64, error) {
+func (o *ObjectHeader) GetTransactionIdentifier() (uint64, error) {
 	if o == nil {
 		return 0, fmt.Errorf("invalid object")
 	}
-	return o.TransactionIdentifier, nil
+	return o.XID, nil
 }
 
 // GetType retrieves the object type
-// Corresponds to libfsapfs_object_get_type
-func (o *Object) GetType() (uint32, error) {
+func (o *ObjectHeader) GetType() (uint32, error) {
 	if o == nil {
 		return 0, fmt.Errorf("invalid object")
 	}
@@ -145,8 +140,7 @@ func (o *Object) GetType() (uint32, error) {
 }
 
 // GetSubtype retrieves the object subtype
-// Corresponds to libfsapfs_object_get_subtype
-func (o *Object) GetSubtype() (uint32, error) {
+func (o *ObjectHeader) GetSubtype() (uint32, error) {
 	if o == nil {
 		return 0, fmt.Errorf("invalid object")
 	}

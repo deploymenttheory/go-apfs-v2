@@ -112,7 +112,7 @@ func (b *builder) writeEmptyTreeFooter(info []byte, subtype uint32) {
 }
 
 // writeEmptyTree writes a tree that is one empty root-leaf. The free queues,
-// the snapshot-metadata tree and the extent-reference tree (via file.go) all
+// the snapshot-metadata tree and the extentref tree (via file.go) all
 // begin this way. subtype selects the fixed/variable layout and the storage
 // class (free queues are ephemeral, the rest physical).
 func (b *builder) writeEmptyTree(bno, oid uint64, subtype uint32) error {

@@ -1,5 +1,4 @@
 // Input/Output (IO) handle functions
-// Corresponds to libfsapfs_io_handle.c and libfsapfs_io_handle.h
 package apfs
 
 import (
@@ -21,14 +20,12 @@ type nodeCacheEntry struct {
 }
 
 // Container and volume signatures
-// Corresponds to fsapfs_container_signature and fsapfs_volume_signature
 var (
 	ContainerSignature = [4]byte{'N', 'X', 'S', 'B'}
 	VolumeSignature    = [4]byte{'A', 'P', 'S', 'B'}
 )
 
 // IOHandle represents the Input/Output handle for APFS operations
-// Corresponds to libfsapfs_io_handle_t
 type IOHandle struct {
 	// The bytes per sector
 	BytesPerSector uint16
@@ -96,7 +93,6 @@ func (io *IOHandle) putCachedNode(blockNumber uint64, node *BTreeNode) {
 }
 
 // NewIOHandle creates a new IO handle with default values
-// Corresponds to libfsapfs_io_handle_initialize
 func NewIOHandle() (*IOHandle, error) {
 	ioHandle := &IOHandle{
 		BytesPerSector: 512,  // Default sector size
@@ -121,7 +117,6 @@ func NewIOHandle() (*IOHandle, error) {
 }
 
 // Clear resets the IO handle to default values
-// Corresponds to libfsapfs_io_handle_clear
 func (io *IOHandle) Clear() error {
 	if io == nil {
 		return nil
@@ -136,7 +131,6 @@ func (io *IOHandle) Clear() error {
 }
 
 // Free releases resources associated with the IO handle
-// Corresponds to libfsapfs_io_handle_free
 func (io *IOHandle) Free() error {
 	if io == nil {
 		return nil

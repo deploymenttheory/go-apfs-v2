@@ -120,7 +120,7 @@ func (b *builder) setTree(opts *CreateOptions) error {
 		}
 	}
 
-	// Decide the extent-reference tree shape. One physical-extent record per file
+	// Decide the extentref tree shape. One physical-extent record per file
 	// that owns a physical extent (empty files own none). When they overflow a
 	// single leaf the tree grows to two physical levels (an index root plus
 	// leaves), the same way the catalog grows.
@@ -129,7 +129,7 @@ func (b *builder) setTree(opts *CreateOptions) error {
 		b.extrefTwoLevel = true
 		b.numExtrefLeaves = uint64(divRoundUp(uint64(nExtents), uint64(perLeaf)))
 		if b.numExtrefLeaves > maxExtrefLeaves {
-			return fmt.Errorf("apfswrite: extent-reference tree needs %d leaf nodes; only a 2-level tree up to %d leaves is supported", b.numExtrefLeaves, maxExtrefLeaves)
+			return fmt.Errorf("apfswrite: extentref tree needs %d leaf nodes; only a 2-level tree up to %d leaves is supported", b.numExtrefLeaves, maxExtrefLeaves)
 		}
 	}
 	return nil
@@ -139,7 +139,7 @@ func (b *builder) setTree(opts *CreateOptions) error {
 // root node and L omap entries in one omap leaf; both fit comfortably here.
 const maxCatLeaves = 64
 
-// maxExtrefLeaves caps the 2-level extent-reference tree: its L index records
+// maxExtrefLeaves caps the 2-level extentref tree: its L index records
 // must fit in the single index root node.
 const maxExtrefLeaves = 100
 

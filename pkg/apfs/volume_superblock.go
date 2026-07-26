@@ -23,15 +23,15 @@ type ModifiedByInfo struct {
 type VolumeSuperblock struct {
 	// The object checksum
 	// Consists of 8 bytes
-	ObjectChecksum uint64
+	Checksum uint64
 
 	// The object identifier
 	// Consists of 8 bytes
-	ObjectIdentifier uint64
+	OID uint64
 
 	// The object transaction identifier
 	// Consists of 8 bytes
-	ObjectTransactionIdentifier uint64
+	XID uint64
 
 	// The object type
 	// Consists of 4 bytes
@@ -48,7 +48,7 @@ type VolumeSuperblock struct {
 
 	// The file system index (apfs_fs_index)
 	// Consists of 4 bytes
-	FileSystemIndex uint32
+	FSIndex uint32
 
 	// Compatible features flags
 	// Consists of 8 bytes
@@ -78,53 +78,56 @@ type VolumeSuperblock struct {
 	// Consists of 8 bytes
 	NumberOfAllocatedBlocks uint64
 
-	// Unknown fields between allocated blocks and tree types
-	// This region may contain wrapped_meta_crypto_state_t
-	// Total: 8 + 4 + 4 + 4 = 20 bytes
-	Unknown9  uint64
-	Unknown10 uint32
-	Unknown11 uint32
-	Unknown12 uint32
+	// Information about how the volume encryption key (VEK) is used to
+	// encrypt a file (apfs_meta_crypto, wrapped_meta_crypto_state_t).
+	// Consists of 20 bytes
+	MetaCryptoMajorVersion    uint16
+	MetaCryptoMinorVersion    uint16
+	MetaCryptoFlags           uint32
+	MetaCryptoPersistentClass uint32
+	MetaCryptoKeyOSVersion    uint32
+	MetaCryptoKeyRevision     uint16
+	MetaCryptoUnused          uint16
 
 	// The file system root tree object type
 	// Consists of 4 bytes
-	FileSystemRootTreeObjectType uint32
+	RootTreeType uint32
 
-	// The extent-reference tree object type
+	// The extentref tree object type
 	// Consists of 4 bytes
-	ExtentReferenceTreeObjectType uint32
+	ExtentrefTreeType uint32
 
 	// The snapshot metadata tree object type
 	// Consists of 4 bytes
-	SnapshotMetadataTreeObjectType uint32
+	SnapMetaTreeType uint32
 
 	// The object map block number
 	// Consists of 8 bytes
-	ObjectMapBlockNumber uint64
+	OmapOID uint64
 
 	// The file system root object identifier
 	// Consists of 8 bytes
-	FileSystemRootObjectIdentifier uint64
+	RootTreeOID uint64
 
-	// The extent-reference tree block number
+	// The extentref tree block number
 	// Consists of 8 bytes
-	ExtentReferenceTreeBlockNumber uint64
+	ExtentrefTreeOID uint64
 
 	// The snapshot metadata tree block number
 	// Consists of 8 bytes
-	SnapshotMetadataTreeBlockNumber uint64
+	SnapMetaTreeOID uint64
 
 	// Revert to transaction identifier (apfs_revert_to_xid)
 	// Consists of 8 bytes
-	RevertToTransactionIdentifier uint64
+	RevertToXID uint64
 
 	// Revert to superblock object identifier (apfs_revert_to_sblock_oid)
 	// Consists of 8 bytes
-	RevertToSuperblockObjectIdentifier uint64
+	RevertToSblockOID uint64
 
 	// The next file system object identifier
 	// Consists of 8 bytes
-	NextFileSystemObjectIdentifier uint64
+	NextObjID uint64
 
 	// Number of regular files (apfs_num_files)
 	// Consists of 8 bytes
@@ -144,7 +147,7 @@ type VolumeSuperblock struct {
 
 	// Number of snapshots (apfs_num_snapshots)
 	// Consists of 8 bytes
-	NumberOfSnapshots uint64
+	SnapshotCount uint64
 
 	// Total blocks allocated ever (apfs_total_block_alloced)
 	// Consists of 8 bytes
@@ -157,7 +160,7 @@ type VolumeSuperblock struct {
 	// The volume identifier
 	// Consists of 16 bytes
 	// Contains an UUID
-	VolumeIdentifier [16]byte
+	VolumeUUID [16]byte
 
 	// The volume (last) modification date and time
 	// Consists of 8 bytes
@@ -181,35 +184,51 @@ type VolumeSuperblock struct {
 
 	// The next (available) document identifier
 	// Consists of 4 bytes
-	NextDocumentIdentifier uint32
+	NextDocID uint32
 
-	// Unknown
-	// Consists of 4 bytes
-	Unknown60 uint32
+	// The volume's role (apfs_role)
+	// Consists of 2 bytes
+	Role uint16
 
-	// Unknown
+	// Reserved (reserved)
+	// Consists of 2 bytes
+	Reserved uint16
+
+	// The transaction identifier of a snapshot that the volume will revert
+	// to (apfs_root_to_xid)
 	// Consists of 8 bytes
-	Unknown61 uint64
+	RootToXID uint64
 
-	// Unknown
-	// Consists of 32 bytes
-	Unknown62 [32]byte
+	// The object identifier of the encryption rolling state (apfs_er_state_oid)
+	// Consists of 8 bytes
+	ERStateOID uint64
+
+	// The largest object identifier used by this volume at the time it was
+	// last cloned (apfs_cloneinfo_id_epoch)
+	// Consists of 8 bytes
+	CloneinfoIDEpoch uint64
+
+	// The transaction identifier matching CloneinfoIDEpoch (apfs_cloneinfo_xid)
+	// Consists of 8 bytes
+	CloneinfoXID uint64
+
+	// The object identifier of the extended snapshot metadata
+	// (apfs_snap_meta_ext_oid)
+	// Consists of 8 bytes
+	SnapMetaExtOID uint64
 
 	// Parsed volume name as string (not part of binary structure)
 	volumeName string
 }
 
 // Volume superblock methods
-// Corresponds to libfsapfs_volume_superblock.c and libfsapfs_volume_superblock.h
 
 // NewVolumeSuperblock creates a new volume superblock
-// Corresponds to libfsapfs_volume_superblock_initialize
 func NewVolumeSuperblock() *VolumeSuperblock {
 	return &VolumeSuperblock{}
 }
 
 // Free releases resources associated with the volume superblock
-// Corresponds to libfsapfs_volume_superblock_free
 func (vs *VolumeSuperblock) Free() error {
 	if vs == nil {
 		return fmt.Errorf("invalid volume superblock")
@@ -218,9 +237,8 @@ func (vs *VolumeSuperblock) Free() error {
 	return nil
 }
 
-// ReadFileIOHandle reads the volume superblock from a file at the specified offset
-// Corresponds to libfsapfs_volume_superblock_read_file_io_handle
-func (vs *VolumeSuperblock) ReadFileIOHandle(fileHandle io.ReaderAt, fileOffset int64, isSnapshot bool) error {
+// ReadFrom reads the volume superblock from a file at the specified offset
+func (vs *VolumeSuperblock) ReadFrom(reader io.ReaderAt, fileOffset int64, isSnapshot bool) error {
 	if vs == nil {
 		return fmt.Errorf("invalid volume superblock")
 	}
@@ -231,7 +249,7 @@ func (vs *VolumeSuperblock) ReadFileIOHandle(fileHandle io.ReaderAt, fileOffset 
 
 	// Read 4096 bytes (size of volume superblock)
 	data := make([]byte, 4096)
-	n, err := fileHandle.ReadAt(data, fileOffset)
+	n, err := reader.ReadAt(data, fileOffset)
 	if err != nil && err != io.EOF {
 		return fmt.Errorf("unable to read volume superblock data at offset %d (0x%08x): %w",
 			fileOffset, fileOffset, err)
@@ -250,7 +268,6 @@ func (vs *VolumeSuperblock) ReadFileIOHandle(fileHandle io.ReaderAt, fileOffset 
 }
 
 // ReadData reads the volume superblock from binary data
-// Corresponds to libfsapfs_volume_superblock_read_data
 func (vs *VolumeSuperblock) ReadData(data []byte, isSnapshot bool) error {
 	if vs == nil {
 		return fmt.Errorf("invalid volume superblock")
@@ -271,9 +288,9 @@ func (vs *VolumeSuperblock) ReadData(data []byte, isSnapshot bool) error {
 	}
 
 	// Parse object header (first 32 bytes)
-	vs.ObjectChecksum = binary.LittleEndian.Uint64(data[0:8])
-	vs.ObjectIdentifier = binary.LittleEndian.Uint64(data[8:16])
-	vs.ObjectTransactionIdentifier = binary.LittleEndian.Uint64(data[16:24])
+	vs.Checksum = binary.LittleEndian.Uint64(data[0:8])
+	vs.OID = binary.LittleEndian.Uint64(data[8:16])
+	vs.XID = binary.LittleEndian.Uint64(data[16:24])
 	vs.ObjectType = binary.LittleEndian.Uint32(data[24:28])
 	vs.ObjectSubtype = binary.LittleEndian.Uint32(data[28:32])
 
@@ -297,7 +314,7 @@ func (vs *VolumeSuperblock) ReadData(data []byte, isSnapshot bool) error {
 	}
 
 	// Parse remaining fields
-	vs.FileSystemIndex = binary.LittleEndian.Uint32(data[36:40])
+	vs.FSIndex = binary.LittleEndian.Uint32(data[36:40])
 	vs.CompatibleFeaturesFlags = binary.LittleEndian.Uint64(data[40:48])
 	vs.ReadOnlyCompatibleFeaturesFlags = binary.LittleEndian.Uint64(data[48:56])
 	vs.IncompatibleFeaturesFlags = binary.LittleEndian.Uint64(data[56:64])
@@ -305,30 +322,34 @@ func (vs *VolumeSuperblock) ReadData(data []byte, isSnapshot bool) error {
 	vs.NumberOfReservedBlocks = binary.LittleEndian.Uint64(data[72:80])
 	vs.NumberOfQuotaBlocks = binary.LittleEndian.Uint64(data[80:88])
 	vs.NumberOfAllocatedBlocks = binary.LittleEndian.Uint64(data[88:96])
-	vs.Unknown9 = binary.LittleEndian.Uint64(data[96:104])
-	vs.Unknown10 = binary.LittleEndian.Uint32(data[104:108])
-	vs.Unknown11 = binary.LittleEndian.Uint32(data[108:112])
-	vs.Unknown12 = binary.LittleEndian.Uint32(data[112:116])
-	vs.FileSystemRootTreeObjectType = binary.LittleEndian.Uint32(data[116:120])
-	vs.ExtentReferenceTreeObjectType = binary.LittleEndian.Uint32(data[120:124])
-	vs.SnapshotMetadataTreeObjectType = binary.LittleEndian.Uint32(data[124:128])
-	vs.ObjectMapBlockNumber = binary.LittleEndian.Uint64(data[128:136])
-	vs.FileSystemRootObjectIdentifier = binary.LittleEndian.Uint64(data[136:144])
-	vs.ExtentReferenceTreeBlockNumber = binary.LittleEndian.Uint64(data[144:152])
-	vs.SnapshotMetadataTreeBlockNumber = binary.LittleEndian.Uint64(data[152:160])
-	vs.RevertToTransactionIdentifier = binary.LittleEndian.Uint64(data[160:168])
-	vs.RevertToSuperblockObjectIdentifier = binary.LittleEndian.Uint64(data[168:176])
-	vs.NextFileSystemObjectIdentifier = binary.LittleEndian.Uint64(data[176:184])
+	// apfs_meta_crypto (wrapped_meta_crypto_state_t), offsets 96..116
+	vs.MetaCryptoMajorVersion = binary.LittleEndian.Uint16(data[96:98])
+	vs.MetaCryptoMinorVersion = binary.LittleEndian.Uint16(data[98:100])
+	vs.MetaCryptoFlags = binary.LittleEndian.Uint32(data[100:104])
+	vs.MetaCryptoPersistentClass = binary.LittleEndian.Uint32(data[104:108])
+	vs.MetaCryptoKeyOSVersion = binary.LittleEndian.Uint32(data[108:112])
+	vs.MetaCryptoKeyRevision = binary.LittleEndian.Uint16(data[112:114])
+	vs.MetaCryptoUnused = binary.LittleEndian.Uint16(data[114:116])
+	vs.RootTreeType = binary.LittleEndian.Uint32(data[116:120])
+	vs.ExtentrefTreeType = binary.LittleEndian.Uint32(data[120:124])
+	vs.SnapMetaTreeType = binary.LittleEndian.Uint32(data[124:128])
+	vs.OmapOID = binary.LittleEndian.Uint64(data[128:136])
+	vs.RootTreeOID = binary.LittleEndian.Uint64(data[136:144])
+	vs.ExtentrefTreeOID = binary.LittleEndian.Uint64(data[144:152])
+	vs.SnapMetaTreeOID = binary.LittleEndian.Uint64(data[152:160])
+	vs.RevertToXID = binary.LittleEndian.Uint64(data[160:168])
+	vs.RevertToSblockOID = binary.LittleEndian.Uint64(data[168:176])
+	vs.NextObjID = binary.LittleEndian.Uint64(data[176:184])
 	vs.NumberOfFiles = binary.LittleEndian.Uint64(data[184:192])
 	vs.NumberOfDirectories = binary.LittleEndian.Uint64(data[192:200])
 	vs.NumberOfSymlinks = binary.LittleEndian.Uint64(data[200:208])
 	vs.NumberOfOtherFileSystemObjects = binary.LittleEndian.Uint64(data[208:216])
-	vs.NumberOfSnapshots = binary.LittleEndian.Uint64(data[216:224])
+	vs.SnapshotCount = binary.LittleEndian.Uint64(data[216:224])
 	vs.TotalBlocksAllocated = binary.LittleEndian.Uint64(data[224:232])
 	vs.TotalBlocksFreed = binary.LittleEndian.Uint64(data[232:240])
 
 	// Volume identifier (offset 240, 16 bytes UUID)
-	copy(vs.VolumeIdentifier[:], data[240:256])
+	copy(vs.VolumeUUID[:], data[240:256])
 
 	// Modification time (offset 256, 8 bytes)
 	vs.ModificationTime = binary.LittleEndian.Uint64(data[256:264])
@@ -362,23 +383,25 @@ func (vs *VolumeSuperblock) ReadData(data []byte, isSnapshot bool) error {
 	}
 
 	// Next document identifier (offset 960, 4 bytes)
-	vs.NextDocumentIdentifier = binary.LittleEndian.Uint32(data[960:964])
+	vs.NextDocID = binary.LittleEndian.Uint32(data[960:964])
 
-	// Parse remaining unknown fields
-	vs.Unknown60 = binary.LittleEndian.Uint32(data[964:968])
-	vs.Unknown61 = binary.LittleEndian.Uint64(data[968:976])
-	copy(vs.Unknown62[:], data[976:1008])
+	vs.Role = binary.LittleEndian.Uint16(data[964:966])
+	vs.Reserved = binary.LittleEndian.Uint16(data[966:968])
+	vs.RootToXID = binary.LittleEndian.Uint64(data[968:976])
+	vs.ERStateOID = binary.LittleEndian.Uint64(data[976:984])
+	vs.CloneinfoIDEpoch = binary.LittleEndian.Uint64(data[984:992])
+	vs.CloneinfoXID = binary.LittleEndian.Uint64(data[992:1000])
+	vs.SnapMetaExtOID = binary.LittleEndian.Uint64(data[1000:1008])
 
 	return nil
 }
 
 // GetVolumeIdentifier retrieves the volume identifier (UUID)
-// Corresponds to libfsapfs_volume_superblock_get_volume_identifier
 func (vs *VolumeSuperblock) GetVolumeIdentifier() ([16]byte, error) {
 	if vs == nil {
 		return [16]byte{}, fmt.Errorf("invalid volume superblock")
 	}
-	return vs.VolumeIdentifier, nil
+	return vs.VolumeUUID, nil
 }
 
 // GetFileSystemIndex retrieves the file system index
@@ -386,7 +409,7 @@ func (vs *VolumeSuperblock) GetFileSystemIndex() (uint32, error) {
 	if vs == nil {
 		return 0, fmt.Errorf("invalid volume superblock")
 	}
-	return vs.FileSystemIndex, nil
+	return vs.FSIndex, nil
 }
 
 // GetUnmountTime retrieves the last unmount time (nanoseconds since Unix epoch)
@@ -402,7 +425,7 @@ func (vs *VolumeSuperblock) GetRevertToTransactionIdentifier() (uint64, error) {
 	if vs == nil {
 		return 0, fmt.Errorf("invalid volume superblock")
 	}
-	return vs.RevertToTransactionIdentifier, nil
+	return vs.RevertToXID, nil
 }
 
 // GetRevertToSuperblockObjectIdentifier retrieves the revert-to superblock object identifier
@@ -410,7 +433,7 @@ func (vs *VolumeSuperblock) GetRevertToSuperblockObjectIdentifier() (uint64, err
 	if vs == nil {
 		return 0, fmt.Errorf("invalid volume superblock")
 	}
-	return vs.RevertToSuperblockObjectIdentifier, nil
+	return vs.RevertToSblockOID, nil
 }
 
 // GetNumberOfFiles retrieves the number of regular files
@@ -450,7 +473,7 @@ func (vs *VolumeSuperblock) GetNumberOfSnapshots() (uint64, error) {
 	if vs == nil {
 		return 0, fmt.Errorf("invalid volume superblock")
 	}
-	return vs.NumberOfSnapshots, nil
+	return vs.SnapshotCount, nil
 }
 
 // GetTotalBlocksAllocated retrieves the total blocks ever allocated
@@ -471,7 +494,6 @@ func (vs *VolumeSuperblock) GetTotalBlocksFreed() (uint64, error) {
 
 // GetUTF8VolumeNameSize retrieves the size of the UTF-8 encoded volume name
 // The returned size includes the end of string character
-// Corresponds to libfsapfs_volume_superblock_get_utf8_volume_name_size
 func (vs *VolumeSuperblock) GetUTF8VolumeNameSize() (int, error) {
 	if vs == nil {
 		return 0, fmt.Errorf("invalid volume superblock")
@@ -481,7 +503,6 @@ func (vs *VolumeSuperblock) GetUTF8VolumeNameSize() (int, error) {
 }
 
 // GetUTF8VolumeName retrieves the UTF-8 encoded volume name
-// Corresponds to libfsapfs_volume_superblock_get_utf8_volume_name
 func (vs *VolumeSuperblock) GetUTF8VolumeName() (string, error) {
 	if vs == nil {
 		return "", fmt.Errorf("invalid volume superblock")
@@ -491,7 +512,6 @@ func (vs *VolumeSuperblock) GetUTF8VolumeName() (string, error) {
 
 // GetUTF16VolumeNameSize retrieves the size of the UTF-16 encoded volume name
 // The returned size includes the end of string character
-// Corresponds to libfsapfs_volume_superblock_get_utf16_volume_name_size
 func (vs *VolumeSuperblock) GetUTF16VolumeNameSize() (int, error) {
 	if vs == nil {
 		return 0, fmt.Errorf("invalid volume superblock")
@@ -506,7 +526,6 @@ func (vs *VolumeSuperblock) GetUTF16VolumeNameSize() (int, error) {
 }
 
 // GetUTF16VolumeName retrieves the UTF-16 encoded volume name
-// Corresponds to libfsapfs_volume_superblock_get_utf16_volume_name
 func (vs *VolumeSuperblock) GetUTF16VolumeName() ([]uint16, error) {
 	if vs == nil {
 		return nil, fmt.Errorf("invalid volume superblock")

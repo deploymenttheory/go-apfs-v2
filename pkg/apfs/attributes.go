@@ -7,9 +7,9 @@ import (
 
 // GetFileExtents retrieves the attribute value data file extents
 func (av *AttributeValues) GetFileExtents(
-	fileHandle io.ReaderAt,
+	reader io.ReaderAt,
 	fileSystemBTree *FileSystemBTree,
-	transactionIdentifier uint64,
+	xid uint64,
 ) error {
 	if av.ValueDataFileExtents != nil {
 		return fmt.Errorf("value data file extents already set")
@@ -21,9 +21,9 @@ func (av *AttributeValues) GetFileExtents(
 
 	// Get file extents from the B-tree
 	extents, err := fileSystemBTree.GetFileExtents(
-		fileHandle,
+		reader,
 		av.ValueDataStreamIdentifier,
-		transactionIdentifier,
+		xid,
 	)
 	if err != nil {
 		return fmt.Errorf("unable to retrieve value data file extents from file system B-tree: %w", err)
@@ -38,17 +38,17 @@ func (av *AttributeValues) GetFileExtents(
 // GetDataStream retrieves the attribute value data stream
 func (av *AttributeValues) GetDataStream(
 	ioHandle *IOHandle,
-	fileHandle io.ReaderAt,
+	reader io.ReaderAt,
 	encryptionContext *EncryptionContext,
 	fileSystemBTree *FileSystemBTree,
-	transactionIdentifier uint64,
+	xid uint64,
 ) (*DataStream, error) {
 
 	// Check if this is a data stream reference (flag 0x0001)
 	if (av.Flags & ExtendedAttributeFlagDataStream) != 0 {
 		// Retrieve file extents if not already loaded
 		if av.ValueDataFileExtents == nil {
-			err := av.GetFileExtents(fileHandle, fileSystemBTree, transactionIdentifier)
+			err := av.GetFileExtents(reader, fileSystemBTree, xid)
 			if err != nil {
 				return nil, fmt.Errorf("unable to retrieve attribute value data file extents: %w", err)
 			}
@@ -68,7 +68,7 @@ func (av *AttributeValues) GetDataStream(
 
 		// The extent-backed reader reads from the container image
 		if dbReader, ok := dataStream.readerAt.(*dataBlockReader); ok {
-			dbReader.SetFileHandle(fileHandle)
+			dbReader.SetFileHandle(reader)
 		}
 
 		return dataStream, nil

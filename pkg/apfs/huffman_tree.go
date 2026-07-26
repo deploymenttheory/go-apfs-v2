@@ -1,5 +1,4 @@
 // Huffman tree functions
-// Corresponds to libfsapfs_huffman_tree.c and libfsapfs_huffman_tree.h
 package apfs
 
 import (
@@ -19,7 +18,6 @@ type HuffmanTree struct {
 }
 
 // NewHuffmanTree creates a new Huffman tree
-// Corresponds to libfsapfs_huffman_tree_initialize
 func NewHuffmanTree(numberOfSymbols int, maximumCodeSize uint8) (*HuffmanTree, error) {
 	if numberOfSymbols < 0 || numberOfSymbols > 1024 {
 		return nil, fmt.Errorf("invalid number of symbols value out of bounds: %d", numberOfSymbols)
@@ -39,7 +37,6 @@ func NewHuffmanTree(numberOfSymbols int, maximumCodeSize uint8) (*HuffmanTree, e
 }
 
 // Free releases resources associated with the Huffman tree
-// Corresponds to libfsapfs_huffman_tree_free
 func (ht *HuffmanTree) Free() error {
 	if ht == nil {
 		return fmt.Errorf("invalid Huffman tree")
@@ -54,7 +51,6 @@ func (ht *HuffmanTree) Free() error {
 
 // Build builds the Huffman tree from code sizes
 // Returns true on success, false if the tree is empty
-// Corresponds to libfsapfs_huffman_tree_build
 func (ht *HuffmanTree) Build(codeSizesArray []uint8, numberOfCodeSizes int) (bool, error) {
 	if ht == nil {
 		return false, fmt.Errorf("invalid Huffman tree")
@@ -138,7 +134,6 @@ func (ht *HuffmanTree) Build(codeSizesArray []uint8, numberOfCodeSizes int) (boo
 }
 
 // GetSymbolFromBitStream retrieves a symbol based on the Huffman code read from the bit-stream
-// Corresponds to libfsapfs_huffman_tree_get_symbol_from_bit_stream
 func (ht *HuffmanTree) GetSymbolFromBitStream(bitStream *BitStream) (uint16, error) {
 	if ht == nil {
 		return 0, fmt.Errorf("invalid Huffman tree")

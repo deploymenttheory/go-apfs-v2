@@ -5,11 +5,7 @@ import (
 	"fmt"
 )
 
-// ObjectSize is the size of the APFS object header in bytes
-const ObjectSize = 32
-
 // BTreeNode represents a B-tree node
-// Corresponds to libfsapfs_btree_node.h
 type BTreeNode struct {
 	// The object type
 	ObjectType uint32
@@ -20,8 +16,8 @@ type BTreeNode struct {
 	// The B-tree node header
 	NodeHeader *BTreeNodeHeader
 
-	// The B-tree footer (only present for root nodes)
-	Footer *BTreeFooter
+	// The B-tree info (only present for root nodes)
+	Info *BTreeInfo
 
 	// The B-tree entries
 	Entries []*BTreeEntry
@@ -40,8 +36,8 @@ func (n *BTreeNode) ReadObjectData(data []byte) error {
 		return fmt.Errorf("invalid B-tree node")
 	}
 
-	if len(data) < ObjectSize {
-		return fmt.Errorf("invalid data size: expected at least %d bytes for object header, got %d", ObjectSize, len(data))
+	if len(data) < ObjectHeaderSize {
+		return fmt.Errorf("invalid data size: expected at least %d bytes for object header, got %d", ObjectHeaderSize, len(data))
 	}
 
 	// Read object type and subtype
@@ -67,7 +63,7 @@ func (n *BTreeNode) ReadData(data []byte) error {
 		return fmt.Errorf("node header already set")
 	}
 
-	minimumDataSize := ObjectSize + BTreeNodeHeaderSize + BTreeFooterSize
+	minimumDataSize := ObjectHeaderSize + BTreeNodeHeaderSize + BTreeInfoSize
 	if len(data) < minimumDataSize {
 		return fmt.Errorf("invalid data size: expected at least %d bytes, got %d", minimumDataSize, len(data))
 	}
@@ -77,7 +73,7 @@ func (n *BTreeNode) ReadData(data []byte) error {
 		return fmt.Errorf("unable to read object data: %w", err)
 	}
 
-	dataOffset := ObjectSize
+	dataOffset := ObjectHeaderSize
 
 	// Read node header
 	n.NodeHeader = NewBTreeNodeHeader()
@@ -99,21 +95,21 @@ func (n *BTreeNode) ReadData(data []byte) error {
 		return fmt.Errorf("invalid entries data size: %d > %d", n.NodeHeader.EntriesDataSize, remainingDataSize)
 	}
 
-	// Determine footer offset
-	footerOffset := len(data)
+	// Determine B-tree info offset
+	infoOffset := len(data)
 
-	// Read footer if this is a root node (flag 0x0001)
+	// Read B-tree info if this is a root node (flag 0x0001)
 	if (n.NodeHeader.Flags & 0x0001) != 0 {
-		n.Footer = NewBTreeFooter()
-		footerDataOffset := len(data) - BTreeFooterSize
-		if err := n.Footer.ReadData(data[footerDataOffset:]); err != nil {
-			return fmt.Errorf("unable to read footer: %w", err)
+		n.Info = NewBTreeInfo()
+		infoDataOffset := len(data) - BTreeInfoSize
+		if err := n.Info.ReadData(data[infoDataOffset:]); err != nil {
+			return fmt.Errorf("unable to read B-tree info: %w", err)
 		}
-		footerOffset -= BTreeFooterSize
+		infoOffset -= BTreeInfoSize
 	}
 
 	// Parse entries
-	if err := n.parseEntries(data, dataOffset, footerOffset); err != nil {
+	if err := n.parseEntries(data, dataOffset, infoOffset); err != nil {
 		return fmt.Errorf("unable to parse entries: %w", err)
 	}
 
@@ -121,7 +117,7 @@ func (n *BTreeNode) ReadData(data []byte) error {
 }
 
 // parseEntries parses B-tree entries from the node data
-func (n *BTreeNode) parseEntries(data []byte, dataOffset int, footerOffset int) error {
+func (n *BTreeNode) parseEntries(data []byte, dataOffset int, infoOffset int) error {
 	// Determine entry size based on fixed/variable flag
 	var entryDataSize int
 	hasFixedSizeKeys := (n.NodeHeader.Flags & 0x0004) != 0
@@ -185,10 +181,10 @@ func (n *BTreeNode) parseEntries(data []byte, dataOffset int, footerOffset int) 
 		// - toc_start = btn_data + table_space.off
 		// - key_start = toc_start + table_space.len  (keys start AFTER the TOC)
 		// - keyDataOffset is relative to key_start
-		// - valueDataOffset is relative to val_end (grows backward from footerOffset)
+		// - valueDataOffset is relative to val_end (grows backward from infoOffset)
 		keyStart := uint16(dataOffset) + n.NodeHeader.EntriesDataOffset + n.NodeHeader.EntriesDataSize
 		absoluteKeyOffset := keyStart + keyDataOffset
-		absoluteValueOffset := uint16(footerOffset) - valueDataOffset
+		absoluteValueOffset := uint16(infoOffset) - valueDataOffset
 
 		// Validate offsets
 		if int(absoluteKeyOffset) > len(data) || int(keyDataSize) > len(data)-int(absoluteKeyOffset) {

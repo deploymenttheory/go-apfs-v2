@@ -14,7 +14,7 @@ import (
 
 // MountHandle manages the state for mounting an APFS container
 type MountHandle struct {
-	FileSystemIndex   int
+	FSIndex           int
 	VolumeOffset      int64
 	UserPassword      string
 	RecoveryPassword  string
@@ -28,9 +28,9 @@ type MountHandle struct {
 // NewMountHandle creates a new mount handle
 func NewMountHandle() *MountHandle {
 	return &MountHandle{
-		FileSystemIndex: -1, // -1 means mount all volumes
-		VolumeOffset:    0,
-		NotifyStream:    os.Stderr,
+		FSIndex:      -1, // -1 means mount all volumes
+		VolumeOffset: 0,
+		NotifyStream: os.Stderr,
 	}
 }
 
@@ -38,7 +38,7 @@ func NewMountHandle() *MountHandle {
 // Accepts a number or "all" to mount all volumes
 func (mh *MountHandle) SetFileSystemIndex(indexStr string) error {
 	if indexStr == "all" {
-		mh.FileSystemIndex = -1 // -1 indicates all volumes
+		mh.FSIndex = -1 // -1 indicates all volumes
 		return nil
 	}
 
@@ -51,7 +51,7 @@ func (mh *MountHandle) SetFileSystemIndex(indexStr string) error {
 		return fmt.Errorf("file system index must be non-negative")
 	}
 
-	mh.FileSystemIndex = index
+	mh.FSIndex = index
 	return nil
 }
 

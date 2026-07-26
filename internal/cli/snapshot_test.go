@@ -24,7 +24,7 @@ func revertToXID(t *testing.T, image string) uint64 {
 	if err != nil {
 		t.Fatalf("volume: %v", err)
 	}
-	return v.Superblock.RevertToTransactionIdentifier
+	return v.Superblock.RevertToXID
 }
 
 // TestSnapshotListCreatedSnapshot creates an APFS volume carrying a snapshot and

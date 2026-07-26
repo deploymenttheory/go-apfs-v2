@@ -403,7 +403,7 @@ func displayBTreeEntries(blockData []byte) error {
 				objIDAndType := binary.LittleEndian.Uint64(blockData[keyAbsoluteOff : keyAbsoluteOff+8])
 				objID := objIDAndType & 0x0FFFFFFFFFFFFFFF
 				objType := (objIDAndType >> 60) & 0xF
-				fmt.Printf("        Key: FSOID=%d, type=0x%x (%s)\n", objID, objType, apfs.GetFSObjectTypeName(uint8(objType)))
+				fmt.Printf("        Key: FSOID=%d, type=0x%x (%s)\n", objID, objType, apfs.FileSystemRecordTypeName(uint8(objType)))
 			}
 
 			// For leaf nodes, show value data

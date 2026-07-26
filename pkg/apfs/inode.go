@@ -1,5 +1,4 @@
 // Inode functions
-// Corresponds to libfsapfs_inode.c and libfsapfs_inode.h
 package apfs
 
 import (
@@ -10,7 +9,6 @@ import (
 )
 
 // Inode represents an APFS inode (file or directory metadata)
-// Corresponds to libfsapfs_inode_t
 type Inode struct {
 	// The identifier
 	Identifier uint64
@@ -59,13 +57,11 @@ type Inode struct {
 }
 
 // NewInode creates a new inode
-// Corresponds to libfsapfs_inode_initialize
 func NewInode() (*Inode, error) {
 	return &Inode{}, nil
 }
 
 // Free releases resources associated with the inode
-// Corresponds to libfsapfs_inode_free
 func (i *Inode) Free() error {
 	if i == nil {
 		return fmt.Errorf("invalid inode")
@@ -78,7 +74,6 @@ func (i *Inode) Free() error {
 }
 
 // ReadKeyData reads the inode key data from a B-tree entry
-// Corresponds to libfsapfs_inode_read_key_data
 func (i *Inode) ReadKeyData(data []byte) error {
 	if i == nil {
 		return fmt.Errorf("invalid inode")
@@ -110,7 +105,6 @@ func (i *Inode) ReadKeyData(data []byte) error {
 }
 
 // ReadValueData reads the inode value data from a B-tree entry
-// Corresponds to libfsapfs_inode_read_value_data
 func (i *Inode) ReadValueData(data []byte) error {
 	if i == nil {
 		return fmt.Errorf("invalid inode")
@@ -160,16 +154,16 @@ func (i *Inode) ReadValueData(data []byte) error {
 
 		timeBytes := make([]byte, 8)
 		binary.LittleEndian.PutUint64(timeBytes, i.ModificationTime)
-		PrintPOSIXTimeValue("libfsapfs_inode_read_value_data", "modification time\t\t\t", timeBytes, binary.LittleEndian, "nanoseconds")
+		PrintPOSIXTimeValue("Inode.ReadValueData", "modification time\t\t\t", timeBytes, binary.LittleEndian, "nanoseconds")
 
 		binary.LittleEndian.PutUint64(timeBytes, i.CreationTime)
-		PrintPOSIXTimeValue("libfsapfs_inode_read_value_data", "creation time\t\t\t\t", timeBytes, binary.LittleEndian, "nanoseconds")
+		PrintPOSIXTimeValue("Inode.ReadValueData", "creation time\t\t\t\t", timeBytes, binary.LittleEndian, "nanoseconds")
 
 		binary.LittleEndian.PutUint64(timeBytes, i.InodeChangeTime)
-		PrintPOSIXTimeValue("libfsapfs_inode_read_value_data", "inode change time\t\t\t", timeBytes, binary.LittleEndian, "nanoseconds")
+		PrintPOSIXTimeValue("Inode.ReadValueData", "inode change time\t\t\t", timeBytes, binary.LittleEndian, "nanoseconds")
 
 		binary.LittleEndian.PutUint64(timeBytes, i.AccessTime)
-		PrintPOSIXTimeValue("libfsapfs_inode_read_value_data", "access time\t\t\t\t", timeBytes, binary.LittleEndian, "nanoseconds")
+		PrintPOSIXTimeValue("Inode.ReadValueData", "access time\t\t\t\t", timeBytes, binary.LittleEndian, "nanoseconds")
 
 		Printf("inode flags\t\t\t\t: 0x%08x\n", i.Flags)
 		PrintInodeFlags(i.Flags)
@@ -327,7 +321,6 @@ func (i *Inode) ReadValueData(data []byte) error {
 }
 
 // GetIdentifier retrieves the identifier
-// Corresponds to libfsapfs_inode_get_identifier
 func (i *Inode) GetIdentifier() (uint64, error) {
 	if i == nil {
 		return 0, fmt.Errorf("invalid inode")
@@ -336,7 +329,6 @@ func (i *Inode) GetIdentifier() (uint64, error) {
 }
 
 // GetParentIdentifier retrieves the parent identifier
-// Corresponds to libfsapfs_inode_get_parent_identifier
 func (i *Inode) GetParentIdentifier() (uint64, error) {
 	if i == nil {
 		return 0, fmt.Errorf("invalid inode")
@@ -346,7 +338,6 @@ func (i *Inode) GetParentIdentifier() (uint64, error) {
 
 // GetCreationTime retrieves the creation time
 // The timestamp is a signed 64-bit POSIX date and time value in number of nano seconds
-// Corresponds to libfsapfs_inode_get_creation_time
 func (i *Inode) GetCreationTime() (int64, error) {
 	if i == nil {
 		return 0, fmt.Errorf("invalid inode")
@@ -356,7 +347,6 @@ func (i *Inode) GetCreationTime() (int64, error) {
 
 // GetModificationTime retrieves the modification time
 // The timestamp is a signed 64-bit POSIX date and time value in number of nano seconds
-// Corresponds to libfsapfs_inode_get_modification_time
 func (i *Inode) GetModificationTime() (int64, error) {
 	if i == nil {
 		return 0, fmt.Errorf("invalid inode")
@@ -366,7 +356,6 @@ func (i *Inode) GetModificationTime() (int64, error) {
 
 // GetInodeChangeTime retrieves the inode change time
 // The timestamp is a signed 64-bit POSIX date and time value in number of nano seconds
-// Corresponds to libfsapfs_inode_get_inode_change_time
 func (i *Inode) GetInodeChangeTime() (int64, error) {
 	if i == nil {
 		return 0, fmt.Errorf("invalid inode")
@@ -376,7 +365,6 @@ func (i *Inode) GetInodeChangeTime() (int64, error) {
 
 // GetAccessTime retrieves the access time
 // The timestamp is a signed 64-bit POSIX date and time value in number of nano seconds
-// Corresponds to libfsapfs_inode_get_access_time
 func (i *Inode) GetAccessTime() (int64, error) {
 	if i == nil {
 		return 0, fmt.Errorf("invalid inode")
@@ -385,7 +373,6 @@ func (i *Inode) GetAccessTime() (int64, error) {
 }
 
 // GetOwnerIdentifier retrieves the owner identifier
-// Corresponds to libfsapfs_inode_get_owner_identifier
 func (i *Inode) GetOwnerIdentifier() (uint32, error) {
 	if i == nil {
 		return 0, fmt.Errorf("invalid inode")
@@ -394,7 +381,6 @@ func (i *Inode) GetOwnerIdentifier() (uint32, error) {
 }
 
 // GetGroupIdentifier retrieves the group identifier
-// Corresponds to libfsapfs_inode_get_group_identifier
 func (i *Inode) GetGroupIdentifier() (uint32, error) {
 	if i == nil {
 		return 0, fmt.Errorf("invalid inode")
@@ -403,7 +389,6 @@ func (i *Inode) GetGroupIdentifier() (uint32, error) {
 }
 
 // GetDeviceIdentifier retrieves the device identifier
-// Corresponds to libfsapfs_inode_get_device_identifier
 func (i *Inode) GetDeviceIdentifier() (uint32, error) {
 	if i == nil {
 		return 0, fmt.Errorf("invalid inode")
@@ -412,7 +397,6 @@ func (i *Inode) GetDeviceIdentifier() (uint32, error) {
 }
 
 // GetDeviceNumber retrieves the device number
-// Corresponds to libfsapfs_inode_get_device_number
 func (i *Inode) GetDeviceNumber() (uint32, uint32, error) {
 	if i == nil {
 		return 0, 0, fmt.Errorf("invalid inode")
@@ -426,7 +410,6 @@ func (i *Inode) GetDeviceNumber() (uint32, uint32, error) {
 }
 
 // GetFileMode retrieves the file mode
-// Corresponds to libfsapfs_inode_get_file_mode
 func (i *Inode) GetFileMode() (uint16, error) {
 	if i == nil {
 		return 0, fmt.Errorf("invalid inode")
@@ -435,7 +418,6 @@ func (i *Inode) GetFileMode() (uint16, error) {
 }
 
 // GetNumberOfLinks retrieves the number of links
-// Corresponds to libfsapfs_inode_get_number_of_links
 func (i *Inode) GetNumberOfLinks() (uint32, error) {
 	if i == nil {
 		return 0, fmt.Errorf("invalid inode")
@@ -444,7 +426,6 @@ func (i *Inode) GetNumberOfLinks() (uint32, error) {
 }
 
 // GetUTF8NameSize retrieves the UTF-8 name size
-// Corresponds to libfsapfs_inode_get_utf8_name_size
 func (i *Inode) GetUTF8NameSize() (int, error) {
 	if i == nil {
 		return 0, fmt.Errorf("invalid inode")
@@ -459,7 +440,6 @@ func (i *Inode) GetUTF8NameSize() (int, error) {
 }
 
 // GetUTF8Name retrieves the UTF-8 name
-// Corresponds to libfsapfs_inode_get_utf8_name
 func (i *Inode) GetUTF8Name() ([]byte, error) {
 	if i == nil {
 		return nil, fmt.Errorf("invalid inode")
@@ -477,7 +457,6 @@ func (i *Inode) GetUTF8Name() ([]byte, error) {
 }
 
 // GetFlags retrieves the flags
-// Corresponds to libfsapfs_inode_get_flags
 func (i *Inode) GetFlags() (uint64, error) {
 	if i == nil {
 		return 0, fmt.Errorf("invalid inode")
@@ -486,7 +465,6 @@ func (i *Inode) GetFlags() (uint64, error) {
 }
 
 // GetDataStreamIdentifier retrieves the data stream identifier
-// Corresponds to libfsapfs_inode_get_data_stream_identifier
 func (i *Inode) GetDataStreamIdentifier() (uint64, error) {
 	if i == nil {
 		return 0, fmt.Errorf("invalid inode")
@@ -495,7 +473,6 @@ func (i *Inode) GetDataStreamIdentifier() (uint64, error) {
 }
 
 // GetDataStreamSize retrieves the data stream size
-// Corresponds to libfsapfs_inode_get_data_stream_size
 func (i *Inode) GetDataStreamSize() (uint64, error) {
 	if i == nil {
 		return 0, fmt.Errorf("invalid inode")

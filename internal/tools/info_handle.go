@@ -86,8 +86,8 @@ func max(a, b int) int {
 // InfoHandle provides functionality for displaying APFS information
 // Corresponds to info_handle_t
 type InfoHandle struct {
-	// FileSystemIndex specifies which file system/volume to show (or -1 for all)
-	FileSystemIndex int
+	// FSIndex specifies which file system/volume to show (or -1 for all)
+	FSIndex int
 
 	// RecoveryPassword for encrypted volumes
 	RecoveryPassword string
@@ -124,7 +124,7 @@ type InfoHandle struct {
 // Corresponds to info_handle_initialize
 func NewInfoHandle(calculateMD5 bool) (*InfoHandle, error) {
 	return &InfoHandle{
-		FileSystemIndex:   -1, // -1 means all file systems
+		FSIndex:           -1, // -1 means all file systems
 		VolumeOffset:      0,
 		CalculateMD5:      calculateMD5,
 		NotifyStream:      os.Stdout,
@@ -153,7 +153,7 @@ func (ih *InfoHandle) SetBodyfile(filename string) error {
 // Corresponds to info_handle_set_file_system_index
 func (ih *InfoHandle) SetFileSystemIndex(indexStr string) error {
 	if indexStr == "all" {
-		ih.FileSystemIndex = -1
+		ih.FSIndex = -1
 		return nil
 	}
 
@@ -166,7 +166,7 @@ func (ih *InfoHandle) SetFileSystemIndex(indexStr string) error {
 		return fmt.Errorf("invalid file system index: must be non-negative")
 	}
 
-	ih.FileSystemIndex = index
+	ih.FSIndex = index
 	return nil
 }
 
@@ -397,8 +397,8 @@ func (ih *InfoHandle) PrintContainerInfo() error {
 
 	fmt.Fprintf(ih.NotifyStream, "\n")
 
-	// Print volume information based on FileSystemIndex
-	if ih.FileSystemIndex == -1 {
+	// Print volume information based on FSIndex
+	if ih.FSIndex == -1 {
 		// Print all volumes
 		for i := 0; i < numberOfVolumes; i++ {
 			volume, err := ih.GetVolumeByIndex(i)
@@ -416,16 +416,16 @@ func (ih *InfoHandle) PrintContainerInfo() error {
 		}
 	} else {
 		// Print specific volume
-		if ih.FileSystemIndex >= numberOfVolumes {
-			return fmt.Errorf("file system index %d out of range (0-%d)", ih.FileSystemIndex, numberOfVolumes-1)
+		if ih.FSIndex >= numberOfVolumes {
+			return fmt.Errorf("file system index %d out of range (0-%d)", ih.FSIndex, numberOfVolumes-1)
 		}
 
-		volume, err := ih.GetVolumeByIndex(ih.FileSystemIndex)
+		volume, err := ih.GetVolumeByIndex(ih.FSIndex)
 		if err != nil {
-			return fmt.Errorf("unable to retrieve volume %d: %w", ih.FileSystemIndex, err)
+			return fmt.Errorf("unable to retrieve volume %d: %w", ih.FSIndex, err)
 		}
 
-		if err := ih.PrintVolumeInfo(ih.FileSystemIndex, volume); err != nil {
+		if err := ih.PrintVolumeInfo(ih.FSIndex, volume); err != nil {
 			return fmt.Errorf("unable to print volume info: %w", err)
 		}
 	}
@@ -529,11 +529,11 @@ func (ih *InfoHandle) PrintFileSystemHierarchy() error {
 	var volume *apfs.Volume
 	var err error
 
-	if ih.FileSystemIndex == -1 {
+	if ih.FSIndex == -1 {
 		// Default to first volume if "all" was specified
 		volume, err = ih.GetVolumeByIndex(0)
 	} else {
-		volume, err = ih.GetVolumeByIndex(ih.FileSystemIndex)
+		volume, err = ih.GetVolumeByIndex(ih.FSIndex)
 	}
 
 	if err != nil {
@@ -668,10 +668,10 @@ func (ih *InfoHandle) PrintFileEntryByIdentifier(identifier uint64) error {
 	var volume *apfs.Volume
 	var err error
 
-	if ih.FileSystemIndex == -1 {
+	if ih.FSIndex == -1 {
 		volume, err = ih.GetVolumeByIndex(0)
 	} else {
-		volume, err = ih.GetVolumeByIndex(ih.FileSystemIndex)
+		volume, err = ih.GetVolumeByIndex(ih.FSIndex)
 	}
 
 	if err != nil {
@@ -698,10 +698,10 @@ func (ih *InfoHandle) PrintFileEntryByPath(path string) error {
 	var volume *apfs.Volume
 	var err error
 
-	if ih.FileSystemIndex == -1 {
+	if ih.FSIndex == -1 {
 		volume, err = ih.GetVolumeByIndex(0)
 	} else {
-		volume, err = ih.GetVolumeByIndex(ih.FileSystemIndex)
+		volume, err = ih.GetVolumeByIndex(ih.FSIndex)
 	}
 
 	if err != nil {
@@ -808,10 +808,10 @@ func (ih *InfoHandle) PrintFileEntries() error {
 	var volume *apfs.Volume
 	var err error
 
-	if ih.FileSystemIndex == -1 {
+	if ih.FSIndex == -1 {
 		volume, err = ih.GetVolumeByIndex(0)
 	} else {
-		volume, err = ih.GetVolumeByIndex(ih.FileSystemIndex)
+		volume, err = ih.GetVolumeByIndex(ih.FSIndex)
 	}
 
 	if err != nil {

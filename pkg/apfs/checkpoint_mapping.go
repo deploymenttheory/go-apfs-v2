@@ -7,16 +7,16 @@ import (
 	"github.com/deploymenttheory/go-apfs-v2/internal/common"
 )
 
-// CheckpointMapEntrySize is the size of the checkpoint map entry in bytes
-const CheckpointMapEntrySize = 40
+// CheckpointMappingSize is the size of the checkpoint map entry in bytes
+const CheckpointMappingSize = 40
 
-// NewCheckpointMapEntry creates a new checkpoint map entry
-func NewCheckpointMapEntry() *CheckpointMapEntry {
-	return &CheckpointMapEntry{}
+// NewCheckpointMapping creates a new checkpoint map entry
+func NewCheckpointMapping() *CheckpointMapping {
+	return &CheckpointMapping{}
 }
 
 // ReadData reads the checkpoint map entry from binary data
-func (cme *CheckpointMapEntry) ReadData(data []byte) error {
+func (cme *CheckpointMapping) ReadData(data []byte) error {
 	if cme == nil {
 		return fmt.Errorf("invalid checkpoint map entry")
 	}
@@ -25,7 +25,7 @@ func (cme *CheckpointMapEntry) ReadData(data []byte) error {
 		return fmt.Errorf("invalid data")
 	}
 
-	if len(data) < CheckpointMapEntrySize || len(data) > common.Int32Max {
+	if len(data) < CheckpointMappingSize || len(data) > common.Int32Max {
 		return fmt.Errorf("invalid data size value out of bounds")
 	}
 
@@ -35,7 +35,7 @@ func (cme *CheckpointMapEntry) ReadData(data []byte) error {
 	cme.Size = binary.LittleEndian.Uint32(data[8:12])
 	cme.Unknown1 = binary.LittleEndian.Uint32(data[12:16])
 	cme.FileSystemObjectIdentifier = binary.LittleEndian.Uint64(data[16:24])
-	cme.ObjectIdentifier = binary.LittleEndian.Uint64(data[24:32])
+	cme.OID = binary.LittleEndian.Uint64(data[24:32])
 	cme.PhysicalAddress = binary.LittleEndian.Uint64(data[32:40])
 
 	return nil

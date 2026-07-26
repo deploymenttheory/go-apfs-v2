@@ -291,7 +291,7 @@ func resolveLiveVolumeBlock(c *apfs.Container, volID uint64) (uint64, error) {
 	if addr, err := c.CheckpointMap.GetPhysicalAddressByObjectIdentifier(volID); err == nil && addr != 0 {
 		return addr, nil
 	}
-	desc, err := c.ObjectMapBTree.GetDescriptorByObjectIdentifier(c.FileIOHandle, volID, c.Superblock.ObjectTransactionIdentifier)
+	desc, err := c.ObjectMapBTree.GetDescriptorByObjectIdentifier(c.Reader, volID, c.Superblock.XID)
 	if err != nil {
 		return 0, err
 	}
@@ -336,8 +336,8 @@ func runSnapshotRevert(cmd *cobra.Command, args []string) error {
 				continue
 			}
 			if name, _ := snap.GetUTF8Name(); name == snapRevertName && snap.SnapshotMetadata != nil {
-				snapXID = snap.SnapshotMetadata.ObjectIdentifier
-				snapSblock = snap.SnapshotMetadata.VolumeSuperblockBlockNumber
+				snapXID = snap.SnapshotMetadata.XID
+				snapSblock = snap.SnapshotMetadata.VolumeSuperblockOID
 				found = true
 				break
 			}
@@ -471,7 +471,7 @@ func runSnapshotList(cmd *cobra.Command, args []string) error {
 			name, _ := snap.GetUTF8Name()
 			s := snapshotJSON{Volume: vi, VolumeName: volName, Name: name}
 			if snap.SnapshotMetadata != nil {
-				s.XID = snap.SnapshotMetadata.ObjectIdentifier
+				s.XID = snap.SnapshotMetadata.XID
 				if t := snap.SnapshotMetadata.CreationTime; t != 0 {
 					s.CreatedTime = time.Unix(0, int64(t)).UTC()
 				}

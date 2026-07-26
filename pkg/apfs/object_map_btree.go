@@ -1,5 +1,4 @@
 // Object map B-tree functions
-// Corresponds to libfsapfs_object_map_btree.c and libfsapfs_object_map_btree.h
 package apfs
 
 import (
@@ -25,7 +24,7 @@ const (
 	BTreeNodeFlagCheckKOffInval = 0x8000
 
 	// Maximum B-tree recursion depth
-	MaxBTreeRecursionDepth = 32
+	MaxObjectMapBTreeDepth = 32
 
 	// Object map B-tree key and value sizes
 	ObjectMapBTreeKeySize   = 16
@@ -34,7 +33,6 @@ const (
 
 // ObjectMapBTree represents the APFS object map B-tree
 // This B-tree maps object identifiers and transaction identifiers to physical block numbers
-// Corresponds to libfsapfs_object_map_btree_t
 type ObjectMapBTree struct {
 	// The IO handle
 	IOHandle *IOHandle
@@ -43,7 +41,7 @@ type ObjectMapBTree struct {
 	EncryptionContext *EncryptionContext
 
 	// The block number of B-tree root node
-	RootNodeBlockNumber uint64
+	RootNodeOID uint64
 
 	// Note: Optional caching layers can be added for performance:
 	// - DataBlockCache: LRU cache for data blocks (currently uncached)
@@ -52,14 +50,12 @@ type ObjectMapBTree struct {
 }
 
 // ObjectMapKey represents a key in the object map B-tree
-// Corresponds to fsapfs_object_map_btree_key (16 bytes)
 type ObjectMapKey struct {
-	ObjectIdentifier            uint64
-	ObjectTransactionIdentifier uint64
+	OID uint64
+	XID uint64
 }
 
 // ObjectMapValue represents a value in the object map B-tree
-// Corresponds to fsapfs_object_map_btree_value (16 bytes)
 type ObjectMapValue struct {
 	ObjectFlags           uint32
 	ObjectSize            uint32
@@ -67,20 +63,17 @@ type ObjectMapValue struct {
 }
 
 // ObjectMapDescriptor contains both key and value data from an object map entry
-// Corresponds to libfsapfs_object_map_descriptor_t
 type ObjectMapDescriptor struct {
 	Key   *ObjectMapKey
 	Value *ObjectMapValue
 }
 
 // NewObjectMapDescriptor creates a new object map descriptor
-// Corresponds to libfsapfs_object_map_descriptor_initialize
 func NewObjectMapDescriptor() (*ObjectMapDescriptor, error) {
 	return &ObjectMapDescriptor{}, nil
 }
 
 // Free releases resources associated with the object map descriptor
-// Corresponds to libfsapfs_object_map_descriptor_free
 func (d *ObjectMapDescriptor) Free() error {
 	if d == nil {
 		return fmt.Errorf("invalid object map descriptor")
@@ -90,7 +83,6 @@ func (d *ObjectMapDescriptor) Free() error {
 }
 
 // ReadKeyData reads the object map descriptor B-tree key data
-// Corresponds to libfsapfs_object_map_descriptor_read_key_data
 func (d *ObjectMapDescriptor) ReadKeyData(data []byte) error {
 	if d == nil {
 		return fmt.Errorf("invalid object map descriptor")
@@ -114,8 +106,8 @@ func (d *ObjectMapDescriptor) ReadKeyData(data []byte) error {
 	d.Key = key
 
 	if IsVerbose() {
-		Printf("%s: object identifier\t\t: %d\n", "ReadKeyData", d.Key.ObjectIdentifier)
-		Printf("%s: object transaction identifier\t: %d\n", "ReadKeyData", d.Key.ObjectTransactionIdentifier)
+		Printf("%s: object identifier\t\t: %d\n", "ReadKeyData", d.Key.OID)
+		Printf("%s: object transaction identifier\t: %d\n", "ReadKeyData", d.Key.XID)
 		Printf("\n")
 	}
 
@@ -123,7 +115,6 @@ func (d *ObjectMapDescriptor) ReadKeyData(data []byte) error {
 }
 
 // ReadValueData reads the object map descriptor B-tree value data
-// Corresponds to libfsapfs_object_map_descriptor_read_value_data
 func (d *ObjectMapDescriptor) ReadValueData(data []byte) error {
 	if d == nil {
 		return fmt.Errorf("invalid object map descriptor")
@@ -164,7 +155,7 @@ func (d *ObjectMapDescriptor) GetIdentifier() (uint64, error) {
 	if d.Key == nil {
 		return 0, fmt.Errorf("invalid key")
 	}
-	return d.Key.ObjectIdentifier, nil
+	return d.Key.OID, nil
 }
 
 // GetTransactionIdentifier returns the transaction identifier
@@ -175,7 +166,7 @@ func (d *ObjectMapDescriptor) GetTransactionIdentifier() (uint64, error) {
 	if d.Key == nil {
 		return 0, fmt.Errorf("invalid key")
 	}
-	return d.Key.ObjectTransactionIdentifier, nil
+	return d.Key.XID, nil
 }
 
 // GetPhysicalAddress returns the physical address
@@ -212,25 +203,23 @@ func (d *ObjectMapDescriptor) GetSize() (uint32, error) {
 }
 
 // NewObjectMapBTree creates a new object map B-tree
-// Corresponds to libfsapfs_object_map_btree_initialize
 func NewObjectMapBTree(
 	ioHandle *IOHandle,
 	encryptionContext *EncryptionContext,
-	rootNodeBlockNumber uint64,
+	rootNodeOID uint64,
 ) (*ObjectMapBTree, error) {
 	if ioHandle == nil {
 		return nil, fmt.Errorf("invalid IO handle")
 	}
 
 	return &ObjectMapBTree{
-		IOHandle:            ioHandle,
-		EncryptionContext:   encryptionContext,
-		RootNodeBlockNumber: rootNodeBlockNumber,
+		IOHandle:          ioHandle,
+		EncryptionContext: encryptionContext,
+		RootNodeOID:       rootNodeOID,
 	}, nil
 }
 
 // Free releases resources associated with the object map B-tree
-// Corresponds to libfsapfs_object_map_btree_free
 func (bt *ObjectMapBTree) Free() error {
 	if bt == nil {
 		return fmt.Errorf("invalid object map B-tree")
@@ -240,17 +229,16 @@ func (bt *ObjectMapBTree) Free() error {
 }
 
 // GetRootNode retrieves the root node of the B-tree
-// Corresponds to libfsapfs_object_map_btree_get_root_node
 func (bt *ObjectMapBTree) GetRootNode(
-	fileHandle io.ReaderAt,
-	rootNodeBlockNumber uint64,
+	reader io.ReaderAt,
+	rootNodeOID uint64,
 ) (*BTreeNode, error) {
 	if bt == nil {
 		return nil, fmt.Errorf("invalid object map B-tree")
 	}
 
 	// Read the root node
-	node, err := ReadBTreeNode(fileHandle, bt.IOHandle, bt.EncryptionContext, rootNodeBlockNumber)
+	node, err := ReadBTreeNode(reader, bt.IOHandle, bt.EncryptionContext, rootNodeOID)
 	if err != nil {
 		return nil, fmt.Errorf("unable to read B-tree node: %w", err)
 	}
@@ -271,35 +259,34 @@ func (bt *ObjectMapBTree) GetRootNode(
 	}
 
 	// Validate node size
-	if node.Footer.NodeSize != 4096 {
-		return nil, fmt.Errorf("invalid node size value out of bounds: %d", node.Footer.NodeSize)
+	if node.Info.NodeSize != 4096 {
+		return nil, fmt.Errorf("invalid node size value out of bounds: %d", node.Info.NodeSize)
 	}
 
 	// Validate key size
-	if node.Footer.KeySize != ObjectMapBTreeKeySize {
-		return nil, fmt.Errorf("invalid key size value out of bounds: %d", node.Footer.KeySize)
+	if node.Info.KeySize != ObjectMapBTreeKeySize {
+		return nil, fmt.Errorf("invalid key size value out of bounds: %d", node.Info.KeySize)
 	}
 
 	// Validate value size
-	if node.Footer.ValueSize != ObjectMapBTreeValueSize {
-		return nil, fmt.Errorf("invalid value size value out of bounds: %d", node.Footer.ValueSize)
+	if node.Info.ValueSize != ObjectMapBTreeValueSize {
+		return nil, fmt.Errorf("invalid value size value out of bounds: %d", node.Info.ValueSize)
 	}
 
 	return node, nil
 }
 
 // GetSubNode retrieves a sub-node (child node) by block number
-// Corresponds to libfsapfs_object_map_btree_get_sub_node
 func (bt *ObjectMapBTree) GetSubNode(
-	fileHandle io.ReaderAt,
-	subNodeBlockNumber uint64,
+	reader io.ReaderAt,
+	subNodeOID uint64,
 ) (*BTreeNode, error) {
 	if bt == nil {
 		return nil, fmt.Errorf("invalid object map B-tree")
 	}
 
 	// Read the sub-node
-	node, err := ReadBTreeNode(fileHandle, bt.IOHandle, bt.EncryptionContext, subNodeBlockNumber)
+	node, err := ReadBTreeNode(reader, bt.IOHandle, bt.EncryptionContext, subNodeOID)
 	if err != nil {
 		return nil, fmt.Errorf("unable to read B-tree node: %w", err)
 	}
@@ -323,11 +310,10 @@ func (bt *ObjectMapBTree) GetSubNode(
 }
 
 // GetEntryFromNodeByIdentifier finds an entry in a specific node by identifier
-// Corresponds to libfsapfs_object_map_btree_get_entry_from_node_by_identifier
 func (bt *ObjectMapBTree) GetEntryFromNodeByIdentifier(
 	node *BTreeNode,
-	objectIdentifier uint64,
-	transactionIdentifier uint64,
+	oid uint64,
+	xid uint64,
 ) (*BTreeEntry, error) {
 	if bt == nil {
 		return nil, fmt.Errorf("invalid object map B-tree")
@@ -339,7 +325,7 @@ func (bt *ObjectMapBTree) GetEntryFromNodeByIdentifier(
 
 	if IsVerbose() {
 		Printf("%s: retrieving B-tree entry identifier: %d (transaction: %d).\n",
-			"GetEntryFromNodeByIdentifier", objectIdentifier, transactionIdentifier)
+			"GetEntryFromNodeByIdentifier", oid, xid)
 	}
 
 	isLeafNode := node.IsLeafNode()
@@ -365,9 +351,9 @@ func (bt *ObjectMapBTree) GetEntryFromNodeByIdentifier(
 		}
 
 		// If we've passed the target identifier, stop searching
-		if objectMapIdentifier > objectIdentifier {
+		if objectMapIdentifier > oid {
 			break
-		} else if objectMapIdentifier == objectIdentifier && objectMapTransaction > transactionIdentifier {
+		} else if objectMapIdentifier == oid && objectMapTransaction > xid {
 			break
 		}
 
@@ -377,33 +363,32 @@ func (bt *ObjectMapBTree) GetEntryFromNodeByIdentifier(
 
 	// For leaf nodes, return entry only if we found exact match on object identifier
 	if isLeafNode {
-		if previousObjectMapIdentifier == objectIdentifier {
+		if previousObjectMapIdentifier == oid {
 			return previousEntry, nil
 		}
-		return nil, fmt.Errorf("entry not found for object identifier %d", objectIdentifier)
+		return nil, fmt.Errorf("entry not found for object identifier %d", oid)
 	}
 
 	// For branch nodes, return the entry to follow down the tree
 	if previousEntry == nil {
-		return nil, fmt.Errorf("entry not found for object identifier %d", objectIdentifier)
+		return nil, fmt.Errorf("entry not found for object identifier %d", oid)
 	}
 
 	return previousEntry, nil
 }
 
 // GetEntryByIdentifier retrieves a B-tree entry by object and transaction identifier
-// Corresponds to libfsapfs_object_map_btree_get_entry_by_identifier
 func (bt *ObjectMapBTree) GetEntryByIdentifier(
-	fileHandle io.ReaderAt,
-	objectIdentifier uint64,
-	transactionIdentifier uint64,
+	reader io.ReaderAt,
+	oid uint64,
+	xid uint64,
 ) (*BTreeNode, *BTreeEntry, error) {
 	if bt == nil {
 		return nil, nil, fmt.Errorf("invalid object map B-tree")
 	}
 
 	// Read root node
-	node, err := bt.GetRootNode(fileHandle, bt.RootNodeBlockNumber)
+	node, err := bt.GetRootNode(reader, bt.RootNodeOID)
 	if err != nil {
 		return nil, nil, fmt.Errorf("unable to retrieve B-tree root node: %w", err)
 	}
@@ -412,7 +397,7 @@ func (bt *ObjectMapBTree) GetEntryByIdentifier(
 	recursionDepth := 0
 
 	for {
-		if recursionDepth < 0 || recursionDepth > MaxBTreeRecursionDepth {
+		if recursionDepth < 0 || recursionDepth > MaxObjectMapBTreeDepth {
 			return nil, nil, fmt.Errorf("invalid recursion depth value out of bounds: %d", recursionDepth)
 		}
 
@@ -420,7 +405,7 @@ func (bt *ObjectMapBTree) GetEntryByIdentifier(
 		isLeafNode := node.IsLeafNode()
 
 		// Search for entry in this node
-		entry, err := bt.GetEntryFromNodeByIdentifier(node, objectIdentifier, transactionIdentifier)
+		entry, err := bt.GetEntryFromNodeByIdentifier(node, oid, xid)
 		if err != nil {
 			// Entry not found
 			return nil, nil, nil
@@ -436,17 +421,17 @@ func (bt *ObjectMapBTree) GetEntryByIdentifier(
 			return nil, nil, fmt.Errorf("invalid B-tree entry - unsupported value data size: %d", len(entry.ValueData))
 		}
 
-		subNodeBlockNumber := binary.LittleEndian.Uint64(entry.ValueData[0:8])
+		subNodeOID := binary.LittleEndian.Uint64(entry.ValueData[0:8])
 
 		if IsVerbose() {
 			Printf("%s: B-tree sub node block number: %d\n",
-				"GetEntryByIdentifier", subNodeBlockNumber)
+				"GetEntryByIdentifier", subNodeOID)
 		}
 
 		// Read the sub-node
-		node, err = bt.GetSubNode(fileHandle, subNodeBlockNumber)
+		node, err = bt.GetSubNode(reader, subNodeOID)
 		if err != nil {
-			return nil, nil, fmt.Errorf("unable to retrieve B-tree sub node from block: %d: %w", subNodeBlockNumber, err)
+			return nil, nil, fmt.Errorf("unable to retrieve B-tree sub node from block: %d: %w", subNodeOID, err)
 		}
 
 		recursionDepth++
@@ -454,18 +439,17 @@ func (bt *ObjectMapBTree) GetEntryByIdentifier(
 }
 
 // GetDescriptorByObjectIdentifier retrieves the object map descriptor of a specific object identifier
-// Corresponds to libfsapfs_object_map_btree_get_descriptor_by_object_identifier
 func (bt *ObjectMapBTree) GetDescriptorByObjectIdentifier(
-	fileHandle io.ReaderAt,
-	objectIdentifier uint64,
-	transactionIdentifier uint64,
+	reader io.ReaderAt,
+	oid uint64,
+	xid uint64,
 ) (*ObjectMapDescriptor, error) {
 	if bt == nil {
 		return nil, fmt.Errorf("invalid object map B-tree")
 	}
 
 	// Find the entry
-	_, entry, err := bt.GetEntryByIdentifier(fileHandle, objectIdentifier, transactionIdentifier)
+	_, entry, err := bt.GetEntryByIdentifier(reader, oid, xid)
 	if err != nil {
 		return nil, fmt.Errorf("unable to retrieve entry from B-tree: %w", err)
 	}
@@ -494,20 +478,20 @@ func (bt *ObjectMapBTree) GetDescriptorByObjectIdentifier(
 	return descriptor, nil
 }
 
-// GetPhysicalBlockNumber retrieves the physical block number for an object
+// PhysicalAddressForOID retrieves the physical block number for an object
 // This is a convenience function that looks up an object in the object map
-func (bt *ObjectMapBTree) GetPhysicalBlockNumber(
-	fileHandle io.ReaderAt,
-	objectIdentifier uint64,
-	transactionIdentifier uint64,
+func (bt *ObjectMapBTree) PhysicalAddressForOID(
+	reader io.ReaderAt,
+	oid uint64,
+	xid uint64,
 ) (uint64, error) {
-	descriptor, err := bt.GetDescriptorByObjectIdentifier(fileHandle, objectIdentifier, transactionIdentifier)
+	descriptor, err := bt.GetDescriptorByObjectIdentifier(reader, oid, xid)
 	if err != nil {
-		return 0, fmt.Errorf("unable to retrieve descriptor for object %d: %w", objectIdentifier, err)
+		return 0, fmt.Errorf("unable to retrieve descriptor for object %d: %w", oid, err)
 	}
 
 	if descriptor == nil {
-		return 0, fmt.Errorf("object %d not found in object map", objectIdentifier)
+		return 0, fmt.Errorf("object %d not found in object map", oid)
 	}
 
 	return descriptor.Value.ObjectPhysicalAddress, nil
@@ -520,8 +504,8 @@ func ParseObjectMapKey(data []byte) (*ObjectMapKey, error) {
 	}
 
 	return &ObjectMapKey{
-		ObjectIdentifier:            binary.LittleEndian.Uint64(data[0:8]),
-		ObjectTransactionIdentifier: binary.LittleEndian.Uint64(data[8:16]),
+		OID: binary.LittleEndian.Uint64(data[0:8]),
+		XID: binary.LittleEndian.Uint64(data[8:16]),
 	}, nil
 }
 

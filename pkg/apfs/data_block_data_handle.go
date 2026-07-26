@@ -10,7 +10,6 @@ import (
 
 // DataBlockDataHandle represents a data handle for reading data through data blocks
 // This is used for reading file data that spans multiple data blocks
-// Corresponds to libfsapfs_data_block_data_handle_t
 type DataBlockDataHandle struct {
 	// The current offset in the data stream
 	CurrentOffset int64
@@ -26,7 +25,6 @@ type DataBlockDataHandle struct {
 }
 
 // NewDataBlockDataHandle creates a new data block data handle
-// Corresponds to libfsapfs_data_block_data_handle_initialize
 func NewDataBlockDataHandle(
 	ioHandle *IOHandle,
 	encryptionContext *EncryptionContext,
@@ -65,7 +63,6 @@ func NewDataBlockDataHandle(
 }
 
 // Free releases resources associated with the data block data handle
-// Corresponds to libfsapfs_data_block_data_handle_free
 func (dh *DataBlockDataHandle) Free() error {
 	if dh == nil {
 		return fmt.Errorf("invalid data block data handle")
@@ -87,10 +84,9 @@ func (dh *DataBlockDataHandle) Free() error {
 
 // ReadSegmentData reads data from the current offset into a buffer
 // This is a callback function for the data stream
-// Corresponds to libfsapfs_data_block_data_handle_read_segment_data
 //
 // Parameters:
-//   - fileIOHandle: The file handle to read from
+//   - reader: The file handle to read from
 //   - segmentIndex: The index of the segment (unused in this context)
 //   - segmentFileIndex: The file index (unused in this context)
 //   - segmentData: The buffer to read data into
@@ -100,7 +96,7 @@ func (dh *DataBlockDataHandle) Free() error {
 //
 // Returns the number of bytes read or error
 func (dh *DataBlockDataHandle) ReadSegmentData(
-	fileIOHandle io.ReaderAt,
+	reader io.ReaderAt,
 	segmentIndex int,
 	segmentFileIndex int,
 	segmentData []byte,
@@ -140,7 +136,7 @@ func (dh *DataBlockDataHandle) ReadSegmentData(
 	for remainingSize > 0 {
 		// Get the data block at the current offset
 		dataBlock, dataBlockOffset, err := dh.DataBlockVector.GetElementValueAtOffset(
-			fileIOHandle,
+			reader,
 			dh.CurrentOffset,
 		)
 		if err != nil {
@@ -184,17 +180,16 @@ func (dh *DataBlockDataHandle) ReadSegmentData(
 
 // SeekSegmentOffset seeks to a certain offset in the data
 // This is a callback function for the data stream
-// Corresponds to libfsapfs_data_block_data_handle_seek_segment_offset
 //
 // Parameters:
-//   - fileIOHandle: The file handle (unused)
+//   - reader: The file handle (unused)
 //   - segmentIndex: The index of the segment (unused)
 //   - segmentFileIndex: The file index (unused)
 //   - segmentOffset: The offset to seek to
 //
 // Returns the new offset or error
 func (dh *DataBlockDataHandle) SeekSegmentOffset(
-	fileIOHandle io.ReaderAt,
+	reader io.ReaderAt,
 	segmentIndex int,
 	segmentFileIndex int,
 	segmentOffset int64,

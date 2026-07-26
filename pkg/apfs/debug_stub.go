@@ -54,41 +54,8 @@ func PrintVolumeIncompatibleFeaturesFlags(incompatibleFeaturesFlags uint64) {}
 // PrintVolumeReadOnlyCompatibleFeaturesFlags is a no-op in non-debug builds
 func PrintVolumeReadOnlyCompatibleFeaturesFlags(readOnlyCompatibleFeaturesFlags uint64) {}
 
-// GetFileSystemDataTypeName returns the name of the file system data type
-func GetFileSystemDataTypeName(fileSystemDataType uint8) string {
-	switch fileSystemDataType {
-	case 0:
-		return "(APFS_TYPE_ANY)"
-	case 1:
-		return "(APFS_TYPE_SNAP_METADATA)"
-	case 2:
-		return "(APFS_TYPE_EXTENT)"
-	case 3:
-		return "(APFS_TYPE_INODE)"
-	case 4:
-		return "(APFS_TYPE_XATTR)"
-	case 5:
-		return "(APFS_TYPE_SIBLING_LINK)"
-	case 6:
-		return "(APFS_TYPE_DSTREAM_ID)"
-	case 7:
-		return "(APFS_TYPE_CRYPTO_STATE)"
-	case 8:
-		return "(APFS_TYPE_FILE_EXTENT)"
-	case 9:
-		return "(APFS_TYPE_DIR_REC)"
-	case 10:
-		return "(APFS_TYPE_DIR_STATS)"
-	case 11:
-		return "(APFS_TYPE_SNAP_NAME)"
-	case 12:
-		return "(APFS_TYPE_SIBLING_MAP)"
-	}
-	return "Unknown"
-}
-
-// GetDirectoryRecordExtendedFieldTypeName returns the name of the directory record extended field type
-func GetDirectoryRecordExtendedFieldTypeName(extendedFieldType uint8) string {
+// DirectoryEntryExtendedFieldTypeName returns the name of the directory entry record extended field type
+func DirectoryEntryExtendedFieldTypeName(extendedFieldType uint8) string {
 	switch extendedFieldType {
 	case 1:
 		return "(DREC_EXT_TYPE_SIBLING_ID)"
@@ -146,7 +113,7 @@ func PrintGUIDValue(functionName, valueName string, byteStream []byte, byteOrder
 }
 
 // PrintReadOffsets is a no-op in non-debug builds
-func PrintReadOffsets(fileIOHandle io.ReaderAt, offsets []struct{ Offset, Size int64 }) error {
+func PrintReadOffsets(reader io.ReaderAt, offsets []struct{ Offset, Size int64 }) error {
 	return nil
 }
 

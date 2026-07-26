@@ -8,7 +8,6 @@ import (
 )
 
 // Container represents an APFS container
-// Corresponds to libfsapfs_internal_container_t
 type Container struct {
 	// The container superblock
 	Superblock *ContainerSuperblock
@@ -25,8 +24,8 @@ type Container struct {
 	// The object map B-tree
 	ObjectMapBTree *ObjectMapBTree
 
-	// The container key bag (optional, used for encryption)
-	KeyBag *ContainerKeyBag
+	// The container keybag (optional, used for encryption)
+	Keybag *ContainerKeybag
 
 	// The space manager (optional, tracks block allocation)
 	SpaceManager *SpaceManager
@@ -35,13 +34,7 @@ type Container struct {
 	IOHandle *IOHandle
 
 	// The file IO handle
-	FileIOHandle io.ReaderAt
-
-	// Value to indicate if the file IO handle was created inside the library
-	FileIOHandleCreatedInLibrary bool
-
-	// Value to indicate if the file IO handle was opened inside the library
-	FileIOHandleOpenedInLibrary bool
+	Reader io.ReaderAt
 
 	// Passwords supplied via OpenOptions, applied to volumes on access
 	userPassword     string
@@ -49,7 +42,6 @@ type Container struct {
 }
 
 // NewContainer creates a new container
-// Corresponds to libfsapfs_container_initialize
 func NewContainer(ioHandle *IOHandle) (*Container, error) {
 	if ioHandle == nil {
 		return nil, fmt.Errorf("invalid IO handle")
@@ -61,18 +53,17 @@ func NewContainer(ioHandle *IOHandle) (*Container, error) {
 }
 
 // Free releases resources associated with the container
-// Corresponds to libfsapfs_container_free
 func (c *Container) Free() error {
 	if c == nil {
 		return fmt.Errorf("invalid container")
 	}
 
-	// Free key bag
-	if c.KeyBag != nil {
-		if err := c.KeyBag.Free(); err != nil {
-			return fmt.Errorf("unable to free key bag: %w", err)
+	// Free keybag
+	if c.Keybag != nil {
+		if err := c.Keybag.Free(); err != nil {
+			return fmt.Errorf("unable to free keybag: %w", err)
 		}
-		c.KeyBag = nil
+		c.Keybag = nil
 	}
 
 	// Free space manager
@@ -112,8 +103,7 @@ func (c *Container) Free() error {
 }
 
 // OpenRead opens a container for reading
-// Corresponds to libfsapfs_internal_container_open_read
-func (c *Container) OpenRead(fileHandle io.ReaderAt, fileOffset int64) error {
+func (c *Container) OpenRead(reader io.ReaderAt, fileOffset int64) error {
 	if c == nil {
 		return fmt.Errorf("invalid container")
 	}
@@ -138,8 +128,8 @@ func (c *Container) OpenRead(fileHandle io.ReaderAt, fileOffset int64) error {
 		return fmt.Errorf("invalid container - object map B-tree already set")
 	}
 
-	if c.KeyBag != nil {
-		return fmt.Errorf("invalid container - key bag already set")
+	if c.Keybag != nil {
+		return fmt.Errorf("invalid container - keybag already set")
 	}
 
 	if c.SpaceManager != nil {
@@ -152,12 +142,12 @@ func (c *Container) OpenRead(fileHandle io.ReaderAt, fileOffset int64) error {
 	// GPT-partitioned raw image), rebase the handle once here so every
 	// downstream ReadAt computes partition-relative offsets against offset 0.
 	if fileOffset != 0 {
-		fileHandle = io.NewSectionReader(fileHandle, fileOffset, math.MaxInt64-fileOffset)
+		reader = io.NewSectionReader(reader, fileOffset, math.MaxInt64-fileOffset)
 		fileOffset = 0
 	}
 
 	// Store the file handle for later use
-	c.FileIOHandle = fileHandle
+	c.Reader = reader
 
 	// Read the container superblock at the given offset
 	superblock, err := NewContainerSuperblock()
@@ -165,7 +155,7 @@ func (c *Container) OpenRead(fileHandle io.ReaderAt, fileOffset int64) error {
 		return fmt.Errorf("unable to create container superblock: %w", err)
 	}
 
-	if err := superblock.ReadFileIOHandle(fileHandle, fileOffset); err != nil {
+	if err := superblock.ReadFrom(reader, fileOffset); err != nil {
 		return fmt.Errorf("unable to read container superblock at offset %d: %w", fileOffset, err)
 	}
 
@@ -181,15 +171,15 @@ func (c *Container) OpenRead(fileHandle io.ReaderAt, fileOffset int64) error {
 	}
 
 	// Read Fusion middle tree if present (for debug output)
-	if DebugOutput && superblock.FusionMiddleTreeBlockNumber != 0 {
+	if DebugOutput && superblock.FusionMtOID != 0 {
 		fusionMiddleTree, err := NewFusionMiddleTree()
 		if err != nil {
 			return fmt.Errorf("unable to create Fusion middle tree: %w", err)
 		}
 
-		fusionMiddleTreeOffset := int64(superblock.FusionMiddleTreeBlockNumber) * int64(c.IOHandle.BlockSize)
+		fusionMiddleTreeOffset := int64(superblock.FusionMtOID) * int64(c.IOHandle.BlockSize)
 
-		if err := fusionMiddleTree.ReadFileIOHandle(fileHandle, fusionMiddleTreeOffset); err != nil {
+		if err := fusionMiddleTree.ReadFrom(reader, fusionMiddleTreeOffset); err != nil {
 			fusionMiddleTree.Free()
 			return fmt.Errorf("unable to read Fusion middle tree at offset %d: %w", fusionMiddleTreeOffset, err)
 		}
@@ -201,26 +191,26 @@ func (c *Container) OpenRead(fileHandle io.ReaderAt, fileOffset int64) error {
 	checkpointMapBlockNumber := uint64(0)
 	checkpointMapTransactionIdentifier := uint64(0)
 
-	object, err := NewObject()
+	object, err := NewObjectHeader()
 	if err != nil {
 		return fmt.Errorf("unable to create object: %w", err)
 	}
 	defer object.Free()
 
-	scanOffset := int64(superblock.CheckpointDescriptorAreaBlockNumber) * int64(c.IOHandle.BlockSize)
+	scanOffset := int64(superblock.XPDescBase) * int64(c.IOHandle.BlockSize)
 
 	// NOTE: Using < not <= based on drat implementation (libfsapfs uses <= which appears to be a bug)
-	for metadataBlockIndex := uint32(0); metadataBlockIndex < superblock.CheckpointDescriptorAreaNumberOfBlocks; metadataBlockIndex++ {
-		if err := object.ReadFileIOHandle(fileHandle, scanOffset); err != nil {
+	for metadataBlockIndex := uint32(0); metadataBlockIndex < superblock.XPDescBlocks; metadataBlockIndex++ {
+		if err := object.ReadFrom(reader, scanOffset); err != nil {
 			return fmt.Errorf("unable to read object at offset %d: %w", scanOffset, err)
 		}
 
 		switch object.Type {
 		case 0x4000000c: // Checkpoint map object type
 			// Track the checkpoint map with the highest transaction identifier
-			if object.TransactionIdentifier > checkpointMapTransactionIdentifier {
-				checkpointMapBlockNumber = superblock.CheckpointDescriptorAreaBlockNumber + uint64(metadataBlockIndex)
-				checkpointMapTransactionIdentifier = object.TransactionIdentifier
+			if object.XID > checkpointMapTransactionIdentifier {
+				checkpointMapBlockNumber = superblock.XPDescBase + uint64(metadataBlockIndex)
+				checkpointMapTransactionIdentifier = object.XID
 			}
 
 		case 0x80000001: // Container superblock object type
@@ -230,13 +220,13 @@ func (c *Container) OpenRead(fileHandle io.ReaderAt, fileOffset int64) error {
 				return fmt.Errorf("unable to create backup container superblock: %w", err)
 			}
 
-			if err := backupSuperblock.ReadFileIOHandle(fileHandle, scanOffset); err != nil {
+			if err := backupSuperblock.ReadFrom(reader, scanOffset); err != nil {
 				backupSuperblock.Free()
 				return fmt.Errorf("unable to read backup container superblock at offset %d: %w", scanOffset, err)
 			}
 
 			// Use the superblock with the highest transaction identifier
-			if backupSuperblock.ObjectTransactionIdentifier > c.Superblock.ObjectTransactionIdentifier {
+			if backupSuperblock.XID > c.Superblock.XID {
 				c.Superblock.Free()
 				c.Superblock = backupSuperblock
 			} else {
@@ -255,7 +245,7 @@ func (c *Container) OpenRead(fileHandle io.ReaderAt, fileOffset int64) error {
 	checkpointMap := NewCheckpointMap()
 	checkpointMapOffset := int64(checkpointMapBlockNumber) * int64(c.IOHandle.BlockSize)
 
-	if err := checkpointMap.ReadFileIOHandle(fileHandle, checkpointMapOffset); err != nil {
+	if err := checkpointMap.ReadFrom(reader, checkpointMapOffset); err != nil {
 		return fmt.Errorf("unable to read checkpoint map at offset %d: %w", checkpointMapOffset, err)
 	}
 
@@ -270,23 +260,23 @@ func (c *Container) OpenRead(fileHandle io.ReaderAt, fileOffset int64) error {
 	c.ContainerDataHandle = containerDataHandle
 
 	// Read object map
-	if c.Superblock.ObjectMapBlockNumber == 0 {
+	if c.Superblock.OmapOID == 0 {
 		return fmt.Errorf("missing object map block number")
 	}
 
-	objectMapOffset := int64(c.Superblock.ObjectMapBlockNumber) * int64(c.IOHandle.BlockSize)
+	objectMapOffset := int64(c.Superblock.OmapOID) * int64(c.IOHandle.BlockSize)
 
 	objectMap, err := NewObjectMap()
 	if err != nil {
 		return fmt.Errorf("unable to create object map: %w", err)
 	}
 
-	if err := objectMap.ReadFileIOHandle(fileHandle, objectMapOffset); err != nil {
+	if err := objectMap.ReadFrom(reader, objectMapOffset); err != nil {
 		objectMap.Free()
 		return fmt.Errorf("unable to read object map at offset %d: %w", objectMapOffset, err)
 	}
 
-	if objectMap.BTreeBlockNumber == 0 {
+	if objectMap.TreeOID == 0 {
 		objectMap.Free()
 		return fmt.Errorf("missing object map B-tree block number")
 	}
@@ -296,7 +286,7 @@ func (c *Container) OpenRead(fileHandle io.ReaderAt, fileOffset int64) error {
 	objectMapBTree, err := NewObjectMapBTree(
 		c.IOHandle,
 		nil, // No encryption context for container-level objects
-		objectMap.BTreeBlockNumber,
+		objectMap.TreeOID,
 	)
 	if err != nil {
 		objectMap.Free()
@@ -307,47 +297,47 @@ func (c *Container) OpenRead(fileHandle io.ReaderAt, fileOffset int64) error {
 	// Free the object map as we only needed it to get the B-tree block number
 	objectMap.Free()
 
-	// Read container key bag if present
-	if c.Superblock.KeyBagBlockNumber > 0 && c.Superblock.KeyBagNumberOfBlocks > 0 {
-		keyBag, err := NewContainerKeyBag()
+	// Read container keybag if present
+	if c.Superblock.KeylockerStartPaddr > 0 && c.Superblock.KeylockerBlockCount > 0 {
+		keybag, err := NewContainerKeybag()
 		if err != nil {
-			return fmt.Errorf("unable to create container key bag: %w", err)
+			return fmt.Errorf("unable to create container keybag: %w", err)
 		}
 
-		keyBagOffset := int64(c.Superblock.KeyBagBlockNumber) * int64(c.IOHandle.BlockSize)
-		keyBagSize := c.Superblock.KeyBagNumberOfBlocks * uint64(c.IOHandle.BlockSize)
+		keybagOffset := int64(c.Superblock.KeylockerStartPaddr) * int64(c.IOHandle.BlockSize)
+		keybagSize := c.Superblock.KeylockerBlockCount * uint64(c.IOHandle.BlockSize)
 
 		containerIdentifier, err := c.Superblock.GetContainerIdentifier()
 		if err != nil {
-			keyBag.Free()
+			keybag.Free()
 			return fmt.Errorf("unable to get container identifier: %w", err)
 		}
 
-		err = keyBag.ReadFileIOHandle(
+		err = keybag.ReadFrom(
 			c.IOHandle,
-			fileHandle,
-			keyBagOffset,
-			keyBagSize,
+			reader,
+			keybagOffset,
+			keybagSize,
 			containerIdentifier,
 		)
 
 		if err != nil {
-			// If reading key bag fails, mark it as locked but don't fail the entire open
-			keyBag.IsLocked = true
+			// If reading keybag fails, mark it as locked but don't fail the entire open
+			keybag.IsLocked = true
 		}
 
-		c.KeyBag = keyBag
+		c.Keybag = keybag
 	}
 
 	// Read space manager if present (only for debug output in C library)
-	if DebugOutput && c.Superblock.SpaceManagerObjectIdentifier > 0 {
+	if DebugOutput && c.Superblock.SpacemanOID > 0 {
 		// Get space manager block number from checkpoint map
-		spaceManagerBlockNumber, err := c.CheckpointMap.GetPhysicalAddressByObjectIdentifier(c.Superblock.SpaceManagerObjectIdentifier)
+		spaceManagerBlockNumber, err := c.CheckpointMap.GetPhysicalAddressByObjectIdentifier(c.Superblock.SpacemanOID)
 		if err == nil {
 			spaceManagerOffset := int64(spaceManagerBlockNumber) * int64(c.IOHandle.BlockSize)
 
 			spaceManager := NewSpaceManager()
-			err := spaceManager.ReadFileIOHandle(fileHandle, spaceManagerOffset)
+			err := spaceManager.ReadFrom(reader, spaceManagerOffset)
 			if err != nil {
 				// Don't fail container opening if space manager read fails (debug only)
 				if DebugOutput {
@@ -363,7 +353,6 @@ func (c *Container) OpenRead(fileHandle io.ReaderAt, fileOffset int64) error {
 }
 
 // GetSize retrieves the size of the container
-// Corresponds to libfsapfs_container_get_size
 func (c *Container) GetSize() (uint64, error) {
 	if c == nil {
 		return 0, fmt.Errorf("invalid container")
@@ -377,7 +366,6 @@ func (c *Container) GetSize() (uint64, error) {
 }
 
 // GetIdentifier retrieves the container identifier (UUID)
-// Corresponds to libfsapfs_container_get_identifier
 func (c *Container) GetIdentifier() ([]byte, error) {
 	if c == nil {
 		return nil, fmt.Errorf("invalid container")
@@ -391,22 +379,20 @@ func (c *Container) GetIdentifier() ([]byte, error) {
 }
 
 // IsLocked checks if the container is locked (encrypted)
-// Corresponds to libfsapfs_container_is_locked
 func (c *Container) IsLocked() (bool, error) {
 	if c == nil {
 		return false, fmt.Errorf("invalid container")
 	}
 
-	if c.KeyBag == nil {
-		// No key bag means no encryption
+	if c.Keybag == nil {
+		// No keybag means no encryption
 		return false, nil
 	}
 
-	return c.KeyBag.IsLocked, nil
+	return c.Keybag.IsLocked, nil
 }
 
 // GetNumberOfVolumes retrieves the number of volumes in the container
-// Corresponds to libfsapfs_container_get_number_of_volumes
 func (c *Container) GetNumberOfVolumes() (int, error) {
 	if c == nil {
 		return 0, fmt.Errorf("invalid container")
@@ -438,7 +424,6 @@ func (c *Container) GetVolumeObjectIdentifiers() ([]uint64, error) {
 }
 
 // GetVolume retrieves a volume by index
-// Corresponds to libfsapfs_container_get_volume_by_index
 func (c *Container) GetVolume(index int) (*Volume, error) {
 	if c == nil {
 		return nil, fmt.Errorf("invalid container")
@@ -474,18 +459,18 @@ func (c *Container) GetVolume(index int) (*Volume, error) {
 	} else {
 		// Fall back to object map B-tree for older transactions
 		descriptor, err := c.ObjectMapBTree.GetDescriptorByObjectIdentifier(
-			c.FileIOHandle,
+			c.Reader,
 			volumeObjectID,
-			c.Superblock.ObjectTransactionIdentifier,
+			c.Superblock.XID,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("unable to retrieve object map descriptor for volume object %d (transaction: %d): %w",
-				volumeObjectID, c.Superblock.ObjectTransactionIdentifier, err)
+				volumeObjectID, c.Superblock.XID, err)
 		}
 
 		if descriptor == nil {
 			return nil, fmt.Errorf("object map descriptor not found for volume object %d (transaction: %d)",
-				volumeObjectID, c.Superblock.ObjectTransactionIdentifier)
+				volumeObjectID, c.Superblock.XID)
 		}
 
 		physicalAddress = descriptor.Value.ObjectPhysicalAddress
@@ -498,22 +483,16 @@ func (c *Container) GetVolume(index int) (*Volume, error) {
 	}
 
 	// Create and open volume
-	volume, err := NewVolume(c.IOHandle, c.FileIOHandle, c.KeyBag)
+	volume, err := NewVolume(c.IOHandle, c.Reader, c.Keybag)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create volume: %w", err)
 	}
 
-	err = volume.OpenRead(c.FileIOHandle, offset)
+	err = volume.OpenRead(c.Reader, offset)
 	if err != nil {
 		volume.Free()
 		return nil, fmt.Errorf("unable to open volume at offset %d: %w", offset, err)
 	}
 
 	return volume, nil
-}
-
-// GetVolumeByIndex is an alias for GetVolume
-// Corresponds to libfsapfs_container_get_volume_by_index
-func (c *Container) GetVolumeByIndex(index int) (*Volume, error) {
-	return c.GetVolume(index)
 }

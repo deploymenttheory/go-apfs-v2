@@ -2,7 +2,6 @@
 // +build !profiler
 
 // Profiler stub functions (no-op implementations when profiling is disabled)
-// Corresponds to libfsapfs_profiler.c and libfsapfs_profiler.h
 package apfs
 
 import "fmt"

@@ -1,5 +1,4 @@
 // APFS definitions and constants
-// Corresponds to libfsapfs_definitions.h
 package apfs
 
 // Version information
@@ -78,7 +77,7 @@ const (
 	EncryptionMethodAES128XTS EncryptionMethod = 2
 )
 
-// FileSystemDataType constants are defined in btree_key_value.go
+// FileSystemRecordType constants are defined in btree_key_value.go
 // Corresponds to LIBFSAPFS_FILE_SYSTEM_DATA_TYPES
 
 // Cache size limits
@@ -89,8 +88,8 @@ const (
 	MaximumCacheEntriesDataBlocks = 16
 )
 
-// MaximumBTreeNodeRecursionDepth is the maximum B-tree node recursion depth
-const MaximumBTreeNodeRecursionDepth = 256
+// MaxBTreeNodeDepth is the maximum B-tree node recursion depth
+const MaxBTreeNodeDepth = 256
 
 // Byte order constants
 const (

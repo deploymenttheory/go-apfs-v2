@@ -2,7 +2,6 @@
 // +build profiler
 
 // Profiler functions for performance measurement
-// Corresponds to libfsapfs_profiler.c and libfsapfs_profiler.h
 package apfs
 
 import (
@@ -12,13 +11,11 @@ import (
 )
 
 // Profiler represents a performance profiler that writes timing data to a CSV file
-// Corresponds to libfsapfs_profiler_t
 type Profiler struct {
 	outputStream *os.File
 }
 
 // NewProfiler creates a new profiler
-// Corresponds to libfsapfs_profiler_initialize
 func NewProfiler() (*Profiler, error) {
 	return &Profiler{
 		outputStream: nil,
@@ -26,7 +23,6 @@ func NewProfiler() (*Profiler, error) {
 }
 
 // Free releases resources associated with the profiler
-// Corresponds to libfsapfs_profiler_free
 func (p *Profiler) Free() error {
 	if p == nil {
 		return fmt.Errorf("invalid profiler")
@@ -43,7 +39,6 @@ func (p *Profiler) Free() error {
 }
 
 // Open opens the profiler output file
-// Corresponds to libfsapfs_profiler_open
 func (p *Profiler) Open(filename string) error {
 	if p == nil {
 		return fmt.Errorf("invalid profiler")
@@ -73,7 +68,6 @@ func (p *Profiler) Open(filename string) error {
 }
 
 // Close closes the profiler output file
-// Corresponds to libfsapfs_profiler_close
 func (p *Profiler) Close() error {
 	if p == nil {
 		return fmt.Errorf("invalid profiler")
@@ -93,7 +87,6 @@ func (p *Profiler) Close() error {
 }
 
 // StartTiming captures the start timestamp for a profiling measurement
-// Corresponds to libfsapfs_profiler_start_timing
 // Returns the start timestamp in nanoseconds
 func (p *Profiler) StartTiming() (int64, error) {
 	if p == nil {
@@ -108,7 +101,6 @@ func (p *Profiler) StartTiming() (int64, error) {
 }
 
 // StopTiming captures the stop timestamp and writes the profiling data
-// Corresponds to libfsapfs_profiler_stop_timing
 //
 // Parameters:
 //   - startTimestamp: The start timestamp from StartTiming (in nanoseconds)

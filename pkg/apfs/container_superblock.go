@@ -11,15 +11,15 @@ import (
 type ContainerSuperblock struct {
 	// The object checksum
 	// Consists of 8 bytes
-	ObjectChecksum uint64
+	Checksum uint64
 
 	// The object identifier
 	// Consists of 8 bytes
-	ObjectIdentifier uint64
+	OID uint64
 
 	// The object transaction identifier
 	// Consists of 8 bytes
-	ObjectTransactionIdentifier uint64
+	XID uint64
 
 	// The object type
 	// Consists of 4 bytes
@@ -57,140 +57,140 @@ type ContainerSuperblock struct {
 	// The container identifier
 	// Consists of 16 bytes
 	// Contains an UUID
-	ContainerIdentifier [16]byte
+	UUID [16]byte
 
 	// The next object identifier
 	// Consists of 8 bytes
-	NextObjectIdentifier uint64
+	NextOID uint64
 
 	// The next transaction identifier
 	// Consists of 8 bytes
-	NextTransactionIdentifier uint64
+	NextXID uint64
 
 	// The checkpoint descriptor area number of blocks
 	// Consists of 4 bytes
-	CheckpointDescriptorAreaNumberOfBlocks uint32
+	XPDescBlocks uint32
 
 	// The checkpoint data area number of blocks
 	// Consists of 4 bytes
-	CheckpointDataAreaNumberOfBlocks uint32
+	XPDataBlocks uint32
 
 	// The checkpoint descriptor area block number
 	// Consists of 8 bytes
-	CheckpointDescriptorAreaBlockNumber uint64
+	XPDescBase uint64
 
 	// The checkpoint data area block number
 	// Consists of 8 bytes
-	CheckpointDataAreaBlockNumber uint64
+	XPDataBase uint64
 
-	// Unknown
+	// The next index in the checkpoint descriptor area to write to (nx_xp_desc_next)
 	// Consists of 4 bytes
-	Unknown8 uint32
+	XPDescNext uint32
 
-	// Unknown
+	// The next index in the checkpoint data area to write to (nx_xp_data_next)
 	// Consists of 4 bytes
-	Unknown9 uint32
+	XPDataNext uint32
 
-	// Unknown
+	// The index of the first valid item in the checkpoint descriptor area (nx_xp_desc_index)
 	// Consists of 4 bytes
-	Unknown10 uint32
+	XPDescIndex uint32
 
-	// Unknown
+	// The number of blocks in the checkpoint descriptor area used by the checkpoint (nx_xp_desc_len)
 	// Consists of 4 bytes
-	Unknown11 uint32
+	XPDescLen uint32
 
-	// Unknown
+	// The index of the first valid item in the checkpoint data area (nx_xp_data_index)
 	// Consists of 4 bytes
-	Unknown12 uint32
+	XPDataIndex uint32
 
-	// Unknown
+	// The number of blocks in the checkpoint data area used by the checkpoint (nx_xp_data_len)
 	// Consists of 4 bytes
-	Unknown13 uint32
+	XPDataLen uint32
 
 	// The space manager object identifier
 	// Consists of 8 bytes
-	SpaceManagerObjectIdentifier uint64
+	SpacemanOID uint64
 
 	// The object map block number
 	// Consists of 8 bytes
-	ObjectMapBlockNumber uint64
+	OmapOID uint64
 
 	// The reaper object identifier
 	// Consists of 8 bytes
-	ReaperObjectIdentifier uint64
+	ReaperOID uint64
 
-	// Unknown
+	// Reserved for testing; treated as zero on production volumes (nx_test_type)
 	// Consists of 4 bytes
-	Unknown17 uint32
+	TestType uint32
 
 	// The maximum number of volumes
 	// Consists of 4 bytes
-	MaximumNumberOfVolumes uint32
+	MaxVolumes uint32
 
 	// The volume object identifiers
 	// Consists of 100 x 8 bytes
-	VolumeObjectIdentifiers [800]byte
+	VolumeOIDs [800]byte
 
 	// The counters
 	// Consists of 32 x 8 bytes
 	Counters [256]byte
 
-	// Unknown
+	// The first block of the blocked-out range (nx_blocked_out_prange.pr_start_paddr)
 	// Consists of 8 bytes
-	Unknown20 uint64
+	BlockedOutStartPaddr uint64
 
-	// Unknown
+	// The number of blocks in the blocked-out range (nx_blocked_out_prange.pr_block_count)
 	// Consists of 8 bytes
-	Unknown21 uint64
+	BlockedOutBlockCount uint64
 
-	// Unknown
+	// The object identifier of the tree used to keep track of evicted objects (nx_evict_mapping_tree_oid)
 	// Consists of 8 bytes
-	Unknown22 uint64
+	EvictMappingTreeOID uint64
 
-	// Unknown
+	// The container flags (nx_flags)
 	// Consists of 8 bytes
-	Unknown23 uint64
+	Flags uint64
 
-	// Unknown
+	// The physical address of the embedded EFI driver (nx_efi_jumpstart)
 	// Consists of 8 bytes
-	Unknown24 uint64
+	EFIJumpstart uint64
 
 	// The Fusion set identifier
 	// Consists of 16 bytes
 	// Contains an UUID
-	FusionSetIdentifier [16]byte
+	FusionUUID [16]byte
 
-	// The key bag block number
+	// The keybag block number
 	// Consists of 8 bytes
-	KeyBagBlockNumber uint64
+	KeylockerStartPaddr uint64
 
-	// The key bag number of blocks
+	// The keybag number of blocks
 	// Consists of 8 bytes
-	KeyBagNumberOfBlocks uint64
+	KeylockerBlockCount uint64
 
-	// Unknown
+	// Ephemeral object information (nx_ephemeral_info[NX_EPH_INFO_COUNT])
 	// Consists of 4 x 8 bytes
-	Unknown29 [32]byte
+	EphemeralInfo [32]byte
 
-	// Unknown
+	// Reserved for testing (nx_test_oid)
 	// Consists of 8 bytes
-	Unknown30 uint64
+	TestOID uint64
 
 	// The Fusion middle tree block number
 	// Consists of 8 bytes
-	FusionMiddleTreeBlockNumber uint64
+	FusionMtOID uint64
 
 	// The Fusion write-back cache object identifier
 	// Consists of 8 bytes
-	FusionWriteBackCacheObjectIdentifier uint64
+	FusionWbcOID uint64
 
-	// Unknown
+	// The first block of the Fusion write-back cache range (nx_fusion_wbc.pr_start_paddr)
 	// Consists of 8 bytes
-	Unknown33 uint64
+	FusionWbcStartPaddr uint64
 
-	// Unknown
+	// The number of blocks in the Fusion write-back cache range (nx_fusion_wbc.pr_block_count)
 	// Consists of 8 bytes
-	Unknown34 uint64
+	FusionWbcBlockCount uint64
 }
 
 // Container superblock constants
@@ -201,7 +201,6 @@ const (
 )
 
 // NewContainerSuperblock creates a new container superblock
-// Corresponds to libfsapfs_container_superblock_initialize
 func NewContainerSuperblock() (*ContainerSuperblock, error) {
 	return &ContainerSuperblock{}, nil
 }
@@ -216,10 +215,9 @@ func (csb *ContainerSuperblock) Free() error {
 	return nil
 }
 
-// ReadFileIOHandle reads the container superblock from a file
-// Corresponds to libfsapfs_container_superblock_read_file_io_handle
-func (csb *ContainerSuperblock) ReadFileIOHandle(
-	fileHandle io.ReaderAt,
+// ReadFrom reads the container superblock from a file
+func (csb *ContainerSuperblock) ReadFrom(
+	reader io.ReaderAt,
 	fileOffset int64,
 ) error {
 	if csb == nil {
@@ -228,7 +226,7 @@ func (csb *ContainerSuperblock) ReadFileIOHandle(
 
 	// Container superblock is always 4096 bytes
 	data := make([]byte, ContainerSuperblockSize)
-	n, err := fileHandle.ReadAt(data, fileOffset)
+	n, err := reader.ReadAt(data, fileOffset)
 	if err != nil && err != io.EOF {
 		return fmt.Errorf("unable to read container superblock data at offset %d: %w", fileOffset, err)
 	}
@@ -240,7 +238,6 @@ func (csb *ContainerSuperblock) ReadFileIOHandle(
 }
 
 // ReadData reads the container superblock from data
-// Corresponds to libfsapfs_container_superblock_read_data
 func (csb *ContainerSuperblock) ReadData(data []byte) error {
 	if csb == nil {
 		return fmt.Errorf("invalid container superblock")
@@ -265,9 +262,9 @@ func (csb *ContainerSuperblock) ReadData(data []byte) error {
 	}
 
 	// Parse object header
-	csb.ObjectChecksum = storedChecksum
-	csb.ObjectIdentifier = binary.LittleEndian.Uint64(data[8:16])
-	csb.ObjectTransactionIdentifier = binary.LittleEndian.Uint64(data[16:24])
+	csb.Checksum = storedChecksum
+	csb.OID = binary.LittleEndian.Uint64(data[8:16])
+	csb.XID = binary.LittleEndian.Uint64(data[16:24])
 	csb.ObjectType = binary.LittleEndian.Uint32(data[24:28])
 	csb.ObjectSubtype = binary.LittleEndian.Uint32(data[28:32])
 
@@ -304,62 +301,62 @@ func (csb *ContainerSuperblock) ReadData(data []byte) error {
 		PrintContainerIncompatibleFeaturesFlags(csb.IncompatibleFeaturesFlags)
 	}
 
-	copy(csb.ContainerIdentifier[:], data[72:88])
+	copy(csb.UUID[:], data[72:88])
 
 	// Debug output for container identifier GUID
 	if DebugOutput {
-		if err := PrintGUIDValue("libfsapfs_container_superblock_read_data", "container identifier", csb.ContainerIdentifier[:], binary.LittleEndian); err != nil {
+		if err := PrintGUIDValue("ContainerSuperblock.ReadData", "container identifier", csb.UUID[:], binary.LittleEndian); err != nil {
 			fmt.Printf("Warning: unable to print container identifier GUID: %v\n", err)
 		}
 	}
 
-	csb.NextObjectIdentifier = binary.LittleEndian.Uint64(data[88:96])
-	csb.NextTransactionIdentifier = binary.LittleEndian.Uint64(data[96:104])
-	csb.CheckpointDescriptorAreaNumberOfBlocks = binary.LittleEndian.Uint32(data[104:108])
-	csb.CheckpointDataAreaNumberOfBlocks = binary.LittleEndian.Uint32(data[108:112])
-	csb.CheckpointDescriptorAreaBlockNumber = binary.LittleEndian.Uint64(data[112:120])
-	csb.CheckpointDataAreaBlockNumber = binary.LittleEndian.Uint64(data[120:128])
-	csb.Unknown8 = binary.LittleEndian.Uint32(data[128:132])
-	csb.Unknown9 = binary.LittleEndian.Uint32(data[132:136])
-	csb.Unknown10 = binary.LittleEndian.Uint32(data[136:140])
-	csb.Unknown11 = binary.LittleEndian.Uint32(data[140:144])
-	csb.Unknown12 = binary.LittleEndian.Uint32(data[144:148])
-	csb.Unknown13 = binary.LittleEndian.Uint32(data[148:152])
-	csb.SpaceManagerObjectIdentifier = binary.LittleEndian.Uint64(data[152:160])
-	csb.ObjectMapBlockNumber = binary.LittleEndian.Uint64(data[160:168])
-	csb.ReaperObjectIdentifier = binary.LittleEndian.Uint64(data[168:176])
-	csb.Unknown17 = binary.LittleEndian.Uint32(data[176:180])
-	csb.MaximumNumberOfVolumes = binary.LittleEndian.Uint32(data[180:184])
+	csb.NextOID = binary.LittleEndian.Uint64(data[88:96])
+	csb.NextXID = binary.LittleEndian.Uint64(data[96:104])
+	csb.XPDescBlocks = binary.LittleEndian.Uint32(data[104:108])
+	csb.XPDataBlocks = binary.LittleEndian.Uint32(data[108:112])
+	csb.XPDescBase = binary.LittleEndian.Uint64(data[112:120])
+	csb.XPDataBase = binary.LittleEndian.Uint64(data[120:128])
+	csb.XPDescNext = binary.LittleEndian.Uint32(data[128:132])
+	csb.XPDataNext = binary.LittleEndian.Uint32(data[132:136])
+	csb.XPDescIndex = binary.LittleEndian.Uint32(data[136:140])
+	csb.XPDescLen = binary.LittleEndian.Uint32(data[140:144])
+	csb.XPDataIndex = binary.LittleEndian.Uint32(data[144:148])
+	csb.XPDataLen = binary.LittleEndian.Uint32(data[148:152])
+	csb.SpacemanOID = binary.LittleEndian.Uint64(data[152:160])
+	csb.OmapOID = binary.LittleEndian.Uint64(data[160:168])
+	csb.ReaperOID = binary.LittleEndian.Uint64(data[168:176])
+	csb.TestType = binary.LittleEndian.Uint32(data[176:180])
+	csb.MaxVolumes = binary.LittleEndian.Uint32(data[180:184])
 
 	// Read volume object identifiers (100 x 8 bytes = 800 bytes at offset 184)
-	copy(csb.VolumeObjectIdentifiers[:], data[184:984])
+	copy(csb.VolumeOIDs[:], data[184:984])
 
 	// Read counters (32 x 8 bytes = 256 bytes at offset 984)
 	copy(csb.Counters[:], data[984:1240])
 
 	// Read remaining fields
-	csb.Unknown20 = binary.LittleEndian.Uint64(data[1240:1248])
-	csb.Unknown21 = binary.LittleEndian.Uint64(data[1248:1256])
-	csb.Unknown22 = binary.LittleEndian.Uint64(data[1256:1264])
-	csb.Unknown23 = binary.LittleEndian.Uint64(data[1264:1272])
-	csb.Unknown24 = binary.LittleEndian.Uint64(data[1272:1280])
-	copy(csb.FusionSetIdentifier[:], data[1280:1296])
+	csb.BlockedOutStartPaddr = binary.LittleEndian.Uint64(data[1240:1248])
+	csb.BlockedOutBlockCount = binary.LittleEndian.Uint64(data[1248:1256])
+	csb.EvictMappingTreeOID = binary.LittleEndian.Uint64(data[1256:1264])
+	csb.Flags = binary.LittleEndian.Uint64(data[1264:1272])
+	csb.EFIJumpstart = binary.LittleEndian.Uint64(data[1272:1280])
+	copy(csb.FusionUUID[:], data[1280:1296])
 
 	// Debug output for Fusion set identifier GUID
 	if DebugOutput {
-		if err := PrintGUIDValue("libfsapfs_container_superblock_read_data", "Fusion set identifier", csb.FusionSetIdentifier[:], binary.BigEndian); err != nil {
+		if err := PrintGUIDValue("ContainerSuperblock.ReadData", "Fusion set identifier", csb.FusionUUID[:], binary.BigEndian); err != nil {
 			fmt.Printf("Warning: unable to print Fusion set identifier GUID: %v\n", err)
 		}
 	}
 
-	csb.KeyBagBlockNumber = binary.LittleEndian.Uint64(data[1296:1304])
-	csb.KeyBagNumberOfBlocks = binary.LittleEndian.Uint64(data[1304:1312])
-	copy(csb.Unknown29[:], data[1312:1344])
-	csb.Unknown30 = binary.LittleEndian.Uint64(data[1344:1352])
-	csb.FusionMiddleTreeBlockNumber = binary.LittleEndian.Uint64(data[1352:1360])
-	csb.FusionWriteBackCacheObjectIdentifier = binary.LittleEndian.Uint64(data[1360:1368])
-	csb.Unknown33 = binary.LittleEndian.Uint64(data[1368:1376])
-	csb.Unknown34 = binary.LittleEndian.Uint64(data[1376:1384])
+	csb.KeylockerStartPaddr = binary.LittleEndian.Uint64(data[1296:1304])
+	csb.KeylockerBlockCount = binary.LittleEndian.Uint64(data[1304:1312])
+	copy(csb.EphemeralInfo[:], data[1312:1344])
+	csb.TestOID = binary.LittleEndian.Uint64(data[1344:1352])
+	csb.FusionMtOID = binary.LittleEndian.Uint64(data[1352:1360])
+	csb.FusionWbcOID = binary.LittleEndian.Uint64(data[1360:1368])
+	csb.FusionWbcStartPaddr = binary.LittleEndian.Uint64(data[1368:1376])
+	csb.FusionWbcBlockCount = binary.LittleEndian.Uint64(data[1376:1384])
 
 	// Validate incompatible features
 	if (csb.IncompatibleFeaturesFlags & 0x0000000000000001) != 0 {
@@ -372,24 +369,23 @@ func (csb *ContainerSuperblock) ReadData(data []byte) error {
 	}
 
 	// Validate checkpoint descriptor area
-	if (csb.CheckpointDescriptorAreaNumberOfBlocks & 0x80000000) != 0 {
+	if (csb.XPDescBlocks & 0x80000000) != 0 {
 		return fmt.Errorf("unsupported checkpoint descriptor area number of blocks - MSB is set")
 	}
 
-	if csb.CheckpointDescriptorAreaBlockNumber == 0 {
+	if csb.XPDescBase == 0 {
 		return fmt.Errorf("invalid checkpoint descriptor area block number: 0")
 	}
 
 	// Validate maximum number of volumes
-	if csb.MaximumNumberOfVolumes > 100 {
-		return fmt.Errorf("invalid maximum number of volumes: %d (max 100)", csb.MaximumNumberOfVolumes)
+	if csb.MaxVolumes > 100 {
+		return fmt.Errorf("invalid maximum number of volumes: %d (max 100)", csb.MaxVolumes)
 	}
 
 	return nil
 }
 
 // GetContainerIdentifier retrieves the container identifier (UUID)
-// Corresponds to libfsapfs_container_superblock_get_container_identifier
 func (csb *ContainerSuperblock) GetContainerIdentifier() ([]byte, error) {
 	if csb == nil {
 		return nil, fmt.Errorf("invalid container superblock")
@@ -397,7 +393,7 @@ func (csb *ContainerSuperblock) GetContainerIdentifier() ([]byte, error) {
 
 	// Return a copy of the container identifier
 	identifier := make([]byte, 16)
-	copy(identifier, csb.ContainerIdentifier[:])
+	copy(identifier, csb.UUID[:])
 	return identifier, nil
 }
 
@@ -413,7 +409,7 @@ func (csb *ContainerSuperblock) GetVolumeObjectIdentifiers() ([]uint64, error) {
 	// Parse the 800-byte array as 100 uint64 values
 	for i := 0; i < 100; i++ {
 		offset := i * 8
-		volumeID := binary.LittleEndian.Uint64(csb.VolumeObjectIdentifiers[offset : offset+8])
+		volumeID := binary.LittleEndian.Uint64(csb.VolumeOIDs[offset : offset+8])
 		if volumeID != 0 {
 			volumeIDs = append(volumeIDs, volumeID)
 		}

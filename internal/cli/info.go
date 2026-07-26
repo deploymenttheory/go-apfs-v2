@@ -235,7 +235,7 @@ func collectContainerInfo(container *apfs.Container) (*containerInfo, error) { /
 			vi.Files = sb.NumberOfFiles
 			vi.Directories = sb.NumberOfDirectories
 			vi.Symlinks = sb.NumberOfSymlinks
-			vi.Snapshots = sb.NumberOfSnapshots
+			vi.Snapshots = sb.SnapshotCount
 			vi.Size = sb.TotalBlocksAllocated * uint64(container.IOHandle.BlockSize)
 			if sb.UnmountTime != 0 {
 				vi.LastUnmounted = time.Unix(0, int64(sb.UnmountTime)).UTC()

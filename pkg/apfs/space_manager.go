@@ -7,19 +7,18 @@ import (
 )
 
 // SpaceManager represents the APFS space manager structure
-// Corresponds to libfsapfs_space_manager_t
 type SpaceManager struct {
 	// The object checksum
 	// Consists of 8 bytes
-	ObjectChecksum uint64
+	Checksum uint64
 
 	// The object identifier
 	// Consists of 8 bytes
-	ObjectIdentifier uint64
+	OID uint64
 
 	// The object transaction identifier
 	// Consists of 8 bytes
-	ObjectTransactionIdentifier uint64
+	XID uint64
 
 	// The object type
 	// Consists of 4 bytes
@@ -243,16 +242,13 @@ type SpaceManager struct {
 }
 
 // Space manager methods
-// Corresponds to libfsapfs_space_manager.c and libfsapfs_space_manager.h
 
 // NewSpaceManager creates a new space manager
-// Corresponds to libfsapfs_space_manager_initialize
 func NewSpaceManager() *SpaceManager {
 	return &SpaceManager{}
 }
 
 // Free releases resources associated with the space manager
-// Corresponds to libfsapfs_space_manager_free
 func (sm *SpaceManager) Free() error {
 	if sm == nil {
 		return fmt.Errorf("invalid space manager")
@@ -261,9 +257,8 @@ func (sm *SpaceManager) Free() error {
 	return nil
 }
 
-// ReadFileIOHandle reads the space manager from a file at the specified offset
-// Corresponds to libfsapfs_space_manager_read_file_io_handle
-func (sm *SpaceManager) ReadFileIOHandle(fileHandle io.ReaderAt, fileOffset int64) error {
+// ReadFrom reads the space manager from a file at the specified offset
+func (sm *SpaceManager) ReadFrom(reader io.ReaderAt, fileOffset int64) error {
 	if sm == nil {
 		return fmt.Errorf("invalid space manager")
 	}
@@ -274,7 +269,7 @@ func (sm *SpaceManager) ReadFileIOHandle(fileHandle io.ReaderAt, fileOffset int6
 
 	// Read 4096 bytes (size of space manager)
 	data := make([]byte, 4096)
-	n, err := fileHandle.ReadAt(data, fileOffset)
+	n, err := reader.ReadAt(data, fileOffset)
 	if err != nil && err != io.EOF {
 		return fmt.Errorf("unable to read space manager data at offset %d (0x%08x): %w",
 			fileOffset, fileOffset, err)
@@ -293,7 +288,6 @@ func (sm *SpaceManager) ReadFileIOHandle(fileHandle io.ReaderAt, fileOffset int6
 }
 
 // ReadData reads the space manager from binary data
-// Corresponds to libfsapfs_space_manager_read_data
 func (sm *SpaceManager) ReadData(data []byte) error {
 	if sm == nil {
 		return fmt.Errorf("invalid space manager")
@@ -306,9 +300,9 @@ func (sm *SpaceManager) ReadData(data []byte) error {
 	}
 
 	// Parse object header (first 32 bytes)
-	sm.ObjectChecksum = binary.LittleEndian.Uint64(data[0:8])
-	sm.ObjectIdentifier = binary.LittleEndian.Uint64(data[8:16])
-	sm.ObjectTransactionIdentifier = binary.LittleEndian.Uint64(data[16:24])
+	sm.Checksum = binary.LittleEndian.Uint64(data[0:8])
+	sm.OID = binary.LittleEndian.Uint64(data[8:16])
+	sm.XID = binary.LittleEndian.Uint64(data[16:24])
 	sm.ObjectType = binary.LittleEndian.Uint32(data[24:28])
 	sm.ObjectSubtype = binary.LittleEndian.Uint32(data[28:32])
 
@@ -400,7 +394,7 @@ func (sm *SpaceManager) ReadData(data []byte) error {
 	// unknown and not documented in any public APFS specification.
 	//
 	// The original C library (libfsapfs) also does not implement reading these structures:
-	//   From libfsapfs_space_manager.c lines 809-810:
+	//   From SpaceManager.c lines 809-810:
 	//     /* TODO read value at main device offset */
 	//     /* TODO read value at tier2 device offset */
 	//

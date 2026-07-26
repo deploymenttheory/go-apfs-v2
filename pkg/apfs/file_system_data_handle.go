@@ -8,7 +8,6 @@ import (
 )
 
 // FileSystemDataHandle represents a file system data handle for managing data blocks
-// Corresponds to libfsapfs_file_system_data_handle_t
 type FileSystemDataHandle struct {
 	// The IO handle
 	IOHandle *IOHandle
@@ -21,7 +20,6 @@ type FileSystemDataHandle struct {
 }
 
 // NewFileSystemDataHandle creates a new file system data handle
-// Corresponds to libfsapfs_file_system_data_handle_initialize
 func NewFileSystemDataHandle(
 	ioHandle *IOHandle,
 	encryptionContext *EncryptionContext,
@@ -38,14 +36,14 @@ func NewFileSystemDataHandle(
 	}, nil
 }
 
-// Note: Free function (libfsapfs_file_system_data_handle_free) is not needed in Go
+// Note: Free function (FileSystemDataHandle.Free) is not needed in Go
 // as garbage collection handles memory management automatically.
 
 // ReadDataBlock reads a data block from the file system
-// This method corresponds to libfsapfs_file_system_data_handle_read_data_block
+// This method corresponds to FileSystemDataHandle.ReadDataBlock
 // Parameters align with the libfdata vector callback structure
 func (fsdh *FileSystemDataHandle) ReadDataBlock(
-	fileIOHandle io.ReaderAt,
+	reader io.ReaderAt,
 	elementDataFileIndex int,
 	elementDataOffset int64,
 	elementDataSize int64,
@@ -70,7 +68,7 @@ func (fsdh *FileSystemDataHandle) ReadDataBlock(
 	}
 
 	// Check if this is a sparse range
-	const isSparseFlag = 0x1 // LIBFDATA_RANGE_FLAG_IS_SPARSE
+	const isSparseFlag = 0x1 // the extent is a sparse (unallocated) range
 	if (elementDataFlags & isSparseFlag) != 0 {
 		// Sparse range - clear the data block
 		err = dataBlock.Clear()
@@ -95,7 +93,7 @@ func (fsdh *FileSystemDataHandle) ReadDataBlock(
 		}
 
 		// Read the data block
-		err = dataBlock.Read(fileIOHandle, fsdh.IOHandle, fsdh.EncryptionContext, elementDataOffset, encryptionIdentifier)
+		err = dataBlock.Read(reader, fsdh.IOHandle, fsdh.EncryptionContext, elementDataOffset, encryptionIdentifier)
 		if err != nil {
 			return nil, fmt.Errorf("unable to read data block: %w", err)
 		}

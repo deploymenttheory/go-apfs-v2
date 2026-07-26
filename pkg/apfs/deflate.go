@@ -1,5 +1,4 @@
 // Deflate (zlib) (un)compression functions
-// Corresponds to libfsapfs_deflate.c and libfsapfs_deflate.h
 package apfs
 
 import (
@@ -50,7 +49,6 @@ var deflateDistanceCodesNumberOfExtraBits = []uint16{
 }
 
 // BuildDynamicHuffmanTrees initializes the dynamic Huffman trees
-// Corresponds to libfsapfs_deflate_build_dynamic_huffman_trees
 func BuildDynamicHuffmanTrees(bitStream *BitStream, literalsTree *HuffmanTree, distancesTree *HuffmanTree) error {
 	codeSizeArray := make([]uint8, 316)
 
@@ -199,7 +197,6 @@ func BuildDynamicHuffmanTrees(bitStream *BitStream, literalsTree *HuffmanTree, d
 }
 
 // BuildFixedHuffmanTrees initializes the fixed Huffman trees
-// Corresponds to libfsapfs_deflate_build_fixed_huffman_trees
 func BuildFixedHuffmanTrees(literalsTree *HuffmanTree, distancesTree *HuffmanTree) error {
 	codeSizeArray := make([]uint8, 318)
 
@@ -240,7 +237,6 @@ func BuildFixedHuffmanTrees(literalsTree *HuffmanTree, distancesTree *HuffmanTre
 }
 
 // DecodeHuffman decodes a Huffman compressed block
-// Corresponds to libfsapfs_deflate_decode_huffman
 func DecodeHuffman(bitStream *BitStream, literalsTree *HuffmanTree, distancesTree *HuffmanTree, uncompressedData []byte, uncompressedDataSize int, uncompressedDataOffset *int) error {
 	if uncompressedData == nil {
 		return fmt.Errorf("invalid uncompressed data")
@@ -325,7 +321,6 @@ func DecodeHuffman(bitStream *BitStream, literalsTree *HuffmanTree, distancesTre
 
 // CalculateAdler32 calculates the little-endian Adler-32 of a buffer
 // It uses the initial value to calculate a new Adler-32
-// Corresponds to libfsapfs_deflate_calculate_adler32
 func CalculateAdler32(data []byte, dataSize int, initialValue uint32) (uint32, error) {
 	if data == nil {
 		return 0, fmt.Errorf("invalid data")
@@ -434,7 +429,6 @@ func CalculateAdler32(data []byte, dataSize int, initialValue uint32) (uint32, e
 }
 
 // ReadDataHeader reads the compressed data header
-// Corresponds to libfsapfs_deflate_read_data_header
 func ReadDataHeader(compressedData []byte, compressedDataSize int, compressedDataOffset *int) error {
 	if compressedData == nil {
 		return fmt.Errorf("invalid compressed data")
@@ -495,7 +489,6 @@ func ReadDataHeader(compressedData []byte, compressedDataSize int, compressedDat
 }
 
 // ReadBlockHeader reads the header of a block of compressed data
-// Corresponds to libfsapfs_deflate_read_block_header
 func ReadBlockHeader(bitStream *BitStream, blockType *uint8, lastBlockFlag *uint8) error {
 	if blockType == nil {
 		return fmt.Errorf("invalid block type")
@@ -518,7 +511,6 @@ func ReadBlockHeader(bitStream *BitStream, blockType *uint8, lastBlockFlag *uint
 }
 
 // ReadBlock reads a block of compressed data
-// Corresponds to libfsapfs_deflate_read_block
 func ReadBlock(bitStream *BitStream, blockType uint8, fixedHuffmanLiteralsTree *HuffmanTree, fixedHuffmanDistancesTree *HuffmanTree, uncompressedData []byte, uncompressedDataSize int, uncompressedDataOffset *int) error {
 	if bitStream == nil {
 		return fmt.Errorf("invalid bit stream")
@@ -622,7 +614,6 @@ func ReadBlock(bitStream *BitStream, blockType uint8, fixedHuffmanLiteralsTree *
 }
 
 // DeflateDecompress decompresses data using deflate compression
-// Corresponds to libfsapfs_deflate_decompress
 func DeflateDecompress(compressedData []byte, compressedDataSize int, uncompressedData []byte, uncompressedDataSize *int) error {
 	if compressedData == nil {
 		return fmt.Errorf("invalid compressed data")
@@ -719,7 +710,6 @@ func DeflateDecompress(compressedData []byte, compressedDataSize int, uncompress
 }
 
 // DeflateDecompressZlib decompresses data using zlib compression
-// Corresponds to libfsapfs_deflate_decompress_zlib
 func DeflateDecompressZlib(compressedData []byte, compressedDataSize int, uncompressedData []byte, uncompressedDataSize *int) error {
 	if compressedData == nil {
 		return fmt.Errorf("invalid compressed data")

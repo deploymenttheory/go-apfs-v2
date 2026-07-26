@@ -10,7 +10,6 @@ import (
 
 // DataStream represents a data stream abstraction for APFS data
 // This wraps various data sources (embedded data, file extents, compressed data)
-// Corresponds to libfdata_stream_t with various data handles
 type DataStream struct {
 	// The underlying reader
 	reader io.Reader
@@ -26,7 +25,6 @@ type DataStream struct {
 }
 
 // NewDataStreamFromData creates a data stream from embedded byte data
-// Corresponds to libfsapfs_data_stream_initialize_from_data
 func NewDataStreamFromData(data []byte) (*DataStream, error) {
 	if len(data) > common.Int32Max {
 		return nil, fmt.Errorf("invalid data size value exceeds maximum")
@@ -45,7 +43,6 @@ func NewDataStreamFromData(data []byte) (*DataStream, error) {
 
 // NewDataStreamFromFileExtents creates a data stream from file extents
 // Uses DataBlockDataHandle to read blocks from disk with encryption support
-// Corresponds to libfsapfs_data_stream_initialize_from_file_extents
 func NewDataStreamFromFileExtents(
 	ioHandle *IOHandle,
 	encryptionContext *EncryptionContext,
@@ -70,7 +67,7 @@ func NewDataStreamFromFileExtents(
 	dataHandle.DataSize = size
 
 	// Create a reader wrapper around the data handle
-	// Note: fileHandle needs to be set by the caller via SetFileHandle
+	// Note: reader needs to be set by the caller via SetFileHandle
 	reader := &dataBlockReader{
 		dataHandle: dataHandle,
 	}
@@ -85,7 +82,6 @@ func NewDataStreamFromFileExtents(
 
 // NewDataStreamFromCompressedDataStream creates a data stream from compressed data
 // Uses CompressedDataHandle to decompress data on-the-fly
-// Corresponds to libfsapfs_data_stream_initialize_from_compressed_data_stream
 func NewDataStreamFromCompressedDataStream(
 	compressedDataStream *DataStream,
 	uncompressedSize uint64,
@@ -166,7 +162,7 @@ func (ds *DataStream) Close() error {
 // dataBlockReader wraps a DataBlockDataHandle to implement io.Reader and io.ReaderAt
 type dataBlockReader struct {
 	dataHandle *DataBlockDataHandle
-	fileHandle io.ReaderAt // Set when first used
+	reader     io.ReaderAt // Set when first used
 }
 
 // Read implements io.Reader interface
@@ -177,12 +173,12 @@ func (r *dataBlockReader) Read(p []byte) (n int, err error) {
 
 	// Note: This requires a file handle to be available
 	// In practice, this would need to be set externally or passed through context
-	if r.fileHandle == nil {
+	if r.reader == nil {
 		return 0, fmt.Errorf("file handle not set for data block reader")
 	}
 
 	n, err = r.dataHandle.ReadSegmentData(
-		r.fileHandle,
+		r.reader,
 		0, // segment index (unused)
 		0, // segment file index (unused)
 		p,
@@ -200,7 +196,7 @@ func (r *dataBlockReader) ReadAt(p []byte, off int64) (n int, err error) {
 		return 0, fmt.Errorf("invalid data block reader - missing data handle")
 	}
 
-	if r.fileHandle == nil {
+	if r.reader == nil {
 		return 0, fmt.Errorf("file handle not set for data block reader")
 	}
 
@@ -208,14 +204,14 @@ func (r *dataBlockReader) ReadAt(p []byte, off int64) (n int, err error) {
 	savedOffset := r.dataHandle.CurrentOffset
 
 	// Seek to the requested offset
-	_, err = r.dataHandle.SeekSegmentOffset(r.fileHandle, 0, 0, off)
+	_, err = r.dataHandle.SeekSegmentOffset(r.reader, 0, 0, off)
 	if err != nil {
 		return 0, fmt.Errorf("unable to seek to offset %d: %w", off, err)
 	}
 
 	// Read the data
 	n, err = r.dataHandle.ReadSegmentData(
-		r.fileHandle,
+		r.reader,
 		0, // segment index (unused)
 		0, // segment file index (unused)
 		p,
@@ -236,7 +232,7 @@ func (r *dataBlockReader) Seek(offset int64, whence int) (int64, error) {
 		return 0, fmt.Errorf("invalid data block reader - missing data handle")
 	}
 
-	if r.fileHandle == nil {
+	if r.reader == nil {
 		return 0, fmt.Errorf("file handle not set for data block reader")
 	}
 
@@ -257,7 +253,7 @@ func (r *dataBlockReader) Seek(offset int64, whence int) (int64, error) {
 		return 0, fmt.Errorf("negative seek position: %d", newOffset)
 	}
 
-	return r.dataHandle.SeekSegmentOffset(r.fileHandle, 0, 0, newOffset)
+	return r.dataHandle.SeekSegmentOffset(r.reader, 0, 0, newOffset)
 }
 
 // Close implements io.Closer interface
@@ -269,14 +265,14 @@ func (r *dataBlockReader) Close() error {
 }
 
 // SetFileHandle sets the file handle for the reader
-func (r *dataBlockReader) SetFileHandle(fileHandle io.ReaderAt) {
-	r.fileHandle = fileHandle
+func (r *dataBlockReader) SetFileHandle(reader io.ReaderAt) {
+	r.reader = reader
 }
 
 // compressedDataReader wraps a CompressedDataHandle to implement io.Reader and io.ReaderAt
 type compressedDataReader struct {
 	dataHandle *CompressedDataHandle
-	fileHandle io.ReaderAt // Set when first used
+	reader     io.ReaderAt // Set when first used
 }
 
 // Read implements io.Reader interface
@@ -285,12 +281,12 @@ func (r *compressedDataReader) Read(p []byte) (n int, err error) {
 		return 0, fmt.Errorf("invalid compressed data reader - missing data handle")
 	}
 
-	if r.fileHandle == nil {
+	if r.reader == nil {
 		return 0, fmt.Errorf("file handle not set for compressed data reader")
 	}
 
 	n, err = r.dataHandle.ReadSegmentData(
-		r.fileHandle,
+		r.reader,
 		0, // segment index
 		p,
 	)
@@ -304,7 +300,7 @@ func (r *compressedDataReader) ReadAt(p []byte, off int64) (n int, err error) {
 		return 0, fmt.Errorf("invalid compressed data reader - missing data handle")
 	}
 
-	if r.fileHandle == nil {
+	if r.reader == nil {
 		return 0, fmt.Errorf("file handle not set for compressed data reader")
 	}
 
@@ -319,7 +315,7 @@ func (r *compressedDataReader) ReadAt(p []byte, off int64) (n int, err error) {
 
 	// Read the data
 	n, err = r.dataHandle.ReadSegmentData(
-		r.fileHandle,
+		r.reader,
 		0, // segment index
 		p,
 	)
@@ -336,7 +332,7 @@ func (r *compressedDataReader) Seek(offset int64, whence int) (int64, error) {
 		return 0, fmt.Errorf("invalid compressed data reader - missing data handle")
 	}
 
-	if r.fileHandle == nil {
+	if r.reader == nil {
 		return 0, fmt.Errorf("file handle not set for compressed data reader")
 	}
 
@@ -369,6 +365,6 @@ func (r *compressedDataReader) Close() error {
 }
 
 // SetFileHandle sets the file handle for the reader
-func (r *compressedDataReader) SetFileHandle(fileHandle io.ReaderAt) {
-	r.fileHandle = fileHandle
+func (r *compressedDataReader) SetFileHandle(reader io.ReaderAt) {
+	r.reader = reader
 }

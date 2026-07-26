@@ -308,7 +308,7 @@ func printFSRecord(entry *apfs.BTreeEntry) {
 	fmt.Printf("Value size:         %d bytes\n", len(entry.ValueData))
 	fmt.Println()
 
-	typeName := apfs.GetFSObjectTypeName(objType)
+	typeName := apfs.FileSystemRecordTypeName(objType)
 	fmt.Printf("Record type: %s\n", typeName)
 
 	// Display type-specific details
@@ -340,7 +340,7 @@ func inferTypeFromValue(valueData []byte) uint8 {
 		}
 	}
 
-	// Check if this looks like a directory record (has file_id field)
+	// Check if this looks like a directory entry record (has file_id field)
 	if len(valueData) >= 16 {
 		fileID := binary.LittleEndian.Uint64(valueData[8:16])
 		// If file_id is non-zero and reasonable, might be dir record
@@ -416,11 +416,11 @@ func resolveVolumeTreeRoots(file io.ReaderAt) (fsAddr, omapAddr uint64, err erro
 		return 0, 0, fmt.Errorf("volume trees not initialized")
 	}
 
-	omapAddr = volume.ObjectMapBTree.RootNodeBlockNumber
+	omapAddr = volume.ObjectMapBTree.RootNodeOID
 
 	descriptor, err := volume.ObjectMapBTree.GetDescriptorByObjectIdentifier(
 		file,
-		volume.FileSystemBTree.RootNodeBlockNumber,
+		volume.FileSystemBTree.RootNodeOID,
 		volume.FileSystemBTree.VolumeTransactionID,
 	)
 	if err != nil {

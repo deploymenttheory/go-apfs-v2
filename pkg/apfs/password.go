@@ -10,7 +10,6 @@ import (
 )
 
 // PBKDF2 computes a PBKDF2-derived key from the given input using HMAC-SHA256
-// Corresponds to libfsapfs_password_pbkdf2
 //
 // Parameters:
 //   - password: The password to derive the key from

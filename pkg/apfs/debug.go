@@ -18,7 +18,6 @@ import (
 var DebugOutput = true
 
 // PrintBTreeFlags prints the B-tree flags for debugging
-// Corresponds to libfsapfs_debug_print_btree_flags
 func PrintBTreeFlags(btreeFlags uint32) {
 	if !IsVerbose() {
 		return
@@ -54,7 +53,6 @@ func PrintBTreeFlags(btreeFlags uint32) {
 }
 
 // PrintBTreeNodeFlags prints the B-tree node flags for debugging
-// Corresponds to libfsapfs_debug_print_btree_node_flags
 func PrintBTreeNodeFlags(btreeNodeFlags uint16) {
 	if !IsVerbose() {
 		return
@@ -81,7 +79,6 @@ func PrintBTreeNodeFlags(btreeNodeFlags uint16) {
 }
 
 // PrintCheckpointFlags prints the checkpoint flags for debugging
-// Corresponds to libfsapfs_debug_print_checkpoint_flags
 func PrintCheckpointFlags(checkpointFlags uint32) {
 	if !IsVerbose() {
 		return
@@ -93,7 +90,6 @@ func PrintCheckpointFlags(checkpointFlags uint32) {
 }
 
 // PrintContainerCompatibleFeaturesFlags prints the container compatible feature flags
-// Corresponds to libfsapfs_debug_print_container_compatible_features_flags
 func PrintContainerCompatibleFeaturesFlags(compatibleFeaturesFlags uint64) {
 	if !IsVerbose() {
 		return
@@ -108,7 +104,6 @@ func PrintContainerCompatibleFeaturesFlags(compatibleFeaturesFlags uint64) {
 }
 
 // PrintContainerIncompatibleFeaturesFlags prints the container incompatible feature flags
-// Corresponds to libfsapfs_debug_print_container_incompatible_features_flags
 func PrintContainerIncompatibleFeaturesFlags(incompatibleFeaturesFlags uint64) {
 	if !IsVerbose() {
 		return
@@ -126,7 +121,6 @@ func PrintContainerIncompatibleFeaturesFlags(incompatibleFeaturesFlags uint64) {
 }
 
 // PrintContainerReadOnlyCompatibleFeaturesFlags prints the container read-only compatible feature flags
-// Corresponds to libfsapfs_debug_print_container_read_only_compatible_features_flags
 func PrintContainerReadOnlyCompatibleFeaturesFlags(readOnlyCompatibleFeaturesFlags uint64) {
 	if !IsVerbose() {
 		return
@@ -136,7 +130,6 @@ func PrintContainerReadOnlyCompatibleFeaturesFlags(readOnlyCompatibleFeaturesFla
 }
 
 // PrintDirectoryEntryFlags prints the directory entry flags for debugging
-// Corresponds to libfsapfs_debug_print_directory_entry_flags
 func PrintDirectoryEntryFlags(directoryEntryFlags uint16) {
 	if !IsVerbose() {
 		return
@@ -171,7 +164,6 @@ func PrintDirectoryEntryFlags(directoryEntryFlags uint16) {
 }
 
 // PrintExtendedAttributeFlags prints the extended attribute flags for debugging
-// Corresponds to libfsapfs_debug_print_extended_attribute_flags
 func PrintExtendedAttributeFlags(extendedAttributeFlags uint16) {
 	if !IsVerbose() {
 		return
@@ -192,7 +184,6 @@ func PrintExtendedAttributeFlags(extendedAttributeFlags uint16) {
 }
 
 // PrintExtendedFieldFlags prints the extended field flags for debugging
-// Corresponds to libfsapfs_debug_print_extended_field_flags
 func PrintExtendedFieldFlags(extendedFieldFlags uint8) {
 	if !IsVerbose() {
 		return
@@ -225,7 +216,6 @@ func PrintExtendedFieldFlags(extendedFieldFlags uint8) {
 }
 
 // PrintInodeFlags prints the inode flags for debugging
-// Corresponds to libfsapfs_debug_print_inode_flags
 func PrintInodeFlags(inodeFlags uint64) {
 	if !IsVerbose() {
 		return
@@ -285,7 +275,6 @@ func PrintInodeFlags(inodeFlags uint64) {
 }
 
 // PrintVolumeCompatibleFeaturesFlags prints the volume compatible feature flags
-// Corresponds to libfsapfs_debug_print_volume_compatible_features_flags
 func PrintVolumeCompatibleFeaturesFlags(compatibleFeaturesFlags uint64) {
 	if !IsVerbose() {
 		return
@@ -309,7 +298,6 @@ func PrintVolumeCompatibleFeaturesFlags(compatibleFeaturesFlags uint64) {
 }
 
 // PrintVolumeFlags prints the volume flags for debugging
-// Corresponds to libfsapfs_debug_print_volume_flags
 func PrintVolumeFlags(volumeFlags uint64) {
 	if !IsVerbose() {
 		return
@@ -336,7 +324,6 @@ func PrintVolumeFlags(volumeFlags uint64) {
 }
 
 // PrintVolumeIncompatibleFeaturesFlags prints the volume incompatible feature flags
-// Corresponds to libfsapfs_debug_print_volume_incompatible_features_flags
 func PrintVolumeIncompatibleFeaturesFlags(incompatibleFeaturesFlags uint64) {
 	if !IsVerbose() {
 		return
@@ -363,7 +350,6 @@ func PrintVolumeIncompatibleFeaturesFlags(incompatibleFeaturesFlags uint64) {
 }
 
 // PrintVolumeReadOnlyCompatibleFeaturesFlags prints the volume read-only compatible feature flags
-// Corresponds to libfsapfs_debug_print_volume_read_only_compatible_features_flags
 func PrintVolumeReadOnlyCompatibleFeaturesFlags(readOnlyCompatibleFeaturesFlags uint64) {
 	if !IsVerbose() {
 		return
@@ -372,43 +358,8 @@ func PrintVolumeReadOnlyCompatibleFeaturesFlags(readOnlyCompatibleFeaturesFlags 
 	_ = readOnlyCompatibleFeaturesFlags
 }
 
-// GetFileSystemDataTypeName returns the name of the file system data type
-// Corresponds to libfsapfs_debug_print_file_system_data_type
-func GetFileSystemDataTypeName(fileSystemDataType uint8) string {
-	switch fileSystemDataType {
-	case 0:
-		return "(APFS_TYPE_ANY)"
-	case 1:
-		return "(APFS_TYPE_SNAP_METADATA)"
-	case 2:
-		return "(APFS_TYPE_EXTENT)"
-	case 3:
-		return "(APFS_TYPE_INODE)"
-	case 4:
-		return "(APFS_TYPE_XATTR)"
-	case 5:
-		return "(APFS_TYPE_SIBLING_LINK)"
-	case 6:
-		return "(APFS_TYPE_DSTREAM_ID)"
-	case 7:
-		return "(APFS_TYPE_CRYPTO_STATE)"
-	case 8:
-		return "(APFS_TYPE_FILE_EXTENT)"
-	case 9:
-		return "(APFS_TYPE_DIR_REC)"
-	case 10:
-		return "(APFS_TYPE_DIR_STATS)"
-	case 11:
-		return "(APFS_TYPE_SNAP_NAME)"
-	case 12:
-		return "(APFS_TYPE_SIBLING_MAP)"
-	}
-	return "Unknown"
-}
-
-// GetDirectoryRecordExtendedFieldTypeName returns the name of the directory record extended field type
-// Corresponds to libfsapfs_debug_print_directory_record_extended_field_type
-func GetDirectoryRecordExtendedFieldTypeName(extendedFieldType uint8) string {
+// DirectoryEntryExtendedFieldTypeName returns the name of the directory entry record extended field type
+func DirectoryEntryExtendedFieldTypeName(extendedFieldType uint8) string {
 	switch extendedFieldType {
 	case 1:
 		return "(DREC_EXT_TYPE_SIBLING_ID)"
@@ -417,7 +368,6 @@ func GetDirectoryRecordExtendedFieldTypeName(extendedFieldType uint8) string {
 }
 
 // GetInodeExtendedFieldTypeName returns the name of the inode extended field type
-// Corresponds to libfsapfs_debug_print_inode_extended_field_type
 func GetInodeExtendedFieldTypeName(extendedFieldType uint8) string {
 	switch extendedFieldType {
 	case 1:
@@ -457,7 +407,6 @@ func GetInodeExtendedFieldTypeName(extendedFieldType uint8) string {
 }
 
 // PrintPOSIXTimeValue prints a POSIX time value for debugging
-// Corresponds to libfsapfs_debug_print_posix_time_value
 func PrintPOSIXTimeValue(functionName, valueName string, byteStream []byte, byteOrder binary.ByteOrder, valueType string) error {
 	if !IsVerbose() {
 		return nil
@@ -488,7 +437,6 @@ func PrintPOSIXTimeValue(functionName, valueName string, byteStream []byte, byte
 }
 
 // PrintGUIDValue prints a GUID/UUID value for debugging
-// Corresponds to libfsapfs_debug_print_guid_value
 func PrintGUIDValue(functionName, valueName string, byteStream []byte, byteOrder binary.ByteOrder) error {
 	if !IsVerbose() {
 		return nil
@@ -523,14 +471,13 @@ func PrintGUIDValue(functionName, valueName string, byteStream []byte, byteOrder
 }
 
 // PrintReadOffsets prints the read offsets for debugging I/O operations
-// Corresponds to libfsapfs_debug_print_read_offsets
-func PrintReadOffsets(fileIOHandle io.ReaderAt, offsets []struct{ Offset, Size int64 }) error {
+func PrintReadOffsets(reader io.ReaderAt, offsets []struct{ Offset, Size int64 }) error {
 	if !IsVerbose() {
 		return nil
 	}
 
-	if fileIOHandle == nil {
-		return fmt.Errorf("invalid file IO handle")
+	if reader == nil {
+		return fmt.Errorf("invalid reader")
 	}
 
 	Printf("Offsets read:\n")

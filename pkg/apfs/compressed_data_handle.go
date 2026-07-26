@@ -22,7 +22,6 @@ const (
 const CompressedDataHandleBlockSize = 65536
 
 // CompressedDataHandle represents a handle for compressed data in APFS
-// Corresponds to libfsapfs_compressed_data_handle.h
 type CompressedDataHandle struct {
 	// The current segment offset
 	CurrentSegmentOffset int64
@@ -56,7 +55,6 @@ type CompressedDataHandle struct {
 }
 
 // NewCompressedDataHandle creates a new compressed data handle
-// Corresponds to libfsapfs_compressed_data_handle_initialize
 func NewCompressedDataHandle(
 	compressedDataStream *DataStream,
 	uncompressedDataSize uint64,
@@ -110,8 +108,7 @@ func (cdh *CompressedDataHandle) Free() error {
 }
 
 // GetCompressedBlockOffsets determines the compressed block offsets
-// Corresponds to libfsapfs_compressed_data_handle_get_compressed_block_offsets
-func (cdh *CompressedDataHandle) GetCompressedBlockOffsets(fileIOHandle io.ReaderAt) error {
+func (cdh *CompressedDataHandle) GetCompressedBlockOffsets(reader io.ReaderAt) error {
 	if cdh == nil {
 		return fmt.Errorf("invalid compressed data handle")
 	}
@@ -269,9 +266,8 @@ func (cdh *CompressedDataHandle) GetCompressedBlockOffsets(fileIOHandle io.Reade
 
 // ReadSegmentData reads data from the current offset into a buffer
 // This is a callback for the data stream
-// Corresponds to libfsapfs_compressed_data_handle_read_segment_data
 func (cdh *CompressedDataHandle) ReadSegmentData(
-	fileIOHandle io.ReaderAt,
+	reader io.ReaderAt,
 	segmentIndex int,
 	segmentData []byte,
 ) (int, error) {
@@ -293,7 +289,7 @@ func (cdh *CompressedDataHandle) ReadSegmentData(
 
 	// Get compressed block offsets if not already loaded
 	if cdh.CompressedBlockOffsets == nil {
-		if err := cdh.GetCompressedBlockOffsets(fileIOHandle); err != nil {
+		if err := cdh.GetCompressedBlockOffsets(reader); err != nil {
 			return 0, fmt.Errorf("unable to determine compressed block offsets: %w", err)
 		}
 	}
@@ -397,7 +393,6 @@ func (cdh *CompressedDataHandle) ReadSegmentData(
 
 // SeekSegmentOffset seeks to a specific offset in the data
 // This is a callback for the data stream
-// Corresponds to libfsapfs_compressed_data_handle_seek_segment_offset
 func (cdh *CompressedDataHandle) SeekSegmentOffset(
 	segmentIndex int,
 	segmentOffset int64,

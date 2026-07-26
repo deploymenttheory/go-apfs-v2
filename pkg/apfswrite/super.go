@@ -212,7 +212,7 @@ func (b *builder) writeVolume(bno, oid uint64) error {
 	if err := b.makeCatTree(b.firstVolCatRootBno, firstVolCatRootOID); err != nil {
 		return err
 	}
-	// The extent-reference tree holds one physical-extent record per file data
+	// The extentref tree holds one physical-extent record per file data
 	// extent. With snapshots the extents were created at (and are owned by) the
 	// snapshot's transaction, so the live tree — which has no changes since the
 	// last snapshot — is empty and each snapshot carries its own copy instead.

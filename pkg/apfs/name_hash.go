@@ -10,19 +10,17 @@ import (
 )
 
 // CRC32 table for name hash calculation
-// Corresponds to libfsapfs_checksum_crc32_table
 var crc32Table [256]uint32
 var crc32TableInitialized bool
 
 // initializeCRC32Table initializes the CRC-32 table
-// Corresponds to libfsapfs_checksum_initialize_crc32_table
 func initializeCRC32Table() {
 	if crc32TableInitialized {
 		return
 	}
 
 	// APFS uses the polynomial 0x82f63b78 for name hash CRC32
-	// This matches the C library libfsapfs_name_hash.c:165
+	// This matches the C library CalculateNameHash.c:165
 	const polynomial uint32 = 0x82f63b78
 
 	for tableIndex := uint32(0); tableIndex < 256; tableIndex++ {
@@ -43,7 +41,6 @@ func initializeCRC32Table() {
 }
 
 // CalculateNameHash calculates the APFS name hash from a UTF-8 string
-// Corresponds to libfsapfs_name_hash_calculate_from_utf8_string
 //
 // Note: This implementation uses Go's unicode.ToLower() and norm.NFD for case folding
 // and normalization. The C library has special case mappings for certain Unicode
@@ -111,7 +108,6 @@ func CalculateNameHash(utf8String []byte, useCaseFolding bool) uint32 {
 }
 
 // CalculateNameHashFromUTF16 calculates the APFS name hash from a UTF-16 string
-// Corresponds to libfsapfs_name_hash_calculate_from_utf16_string
 //
 // Note: This implementation uses Go's unicode.ToLower() and norm.NFD for case folding
 // and normalization. See CalculateNameHash for details about special case handling.
@@ -187,7 +183,6 @@ func StringToUTF16(str string) []uint16 {
 
 // CompareNamesWithUTF8 compares two names using UTF-8 encoding with optional case folding
 // Returns 0 if equal, <0 if name1 < name2, >0 if name1 > name2
-// Corresponds to libfsapfs_name_compare_with_utf8_string
 func CompareNamesWithUTF8(name1 []byte, name2 []byte, useCaseFolding bool) int {
 	// Apply normalization and case folding as needed
 	str1 := string(name1)
@@ -224,7 +219,6 @@ func CompareNamesWithUTF8(name1 []byte, name2 []byte, useCaseFolding bool) int {
 
 // CompareNamesWithUTF16 compares two names using UTF-16 encoding with optional case folding
 // Returns 0 if equal, <0 if name1 < name2, >0 if name1 > name2
-// Corresponds to libfsapfs_name_compare_with_utf16_string
 func CompareNamesWithUTF16(name1 []uint16, name2 []uint16, useCaseFolding bool) int {
 	// Convert UTF-16 to string
 	str1 := UTF16ToString(name1)
