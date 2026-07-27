@@ -20,6 +20,7 @@ var (
 	packVolumeName  string
 	packFS          string
 	packSnapshot    string
+	packUUIDs       writeIdentityFlags
 )
 
 var packCmd = &cobra.Command{
@@ -54,6 +55,7 @@ func init() {
 	packCmd.Flags().StringVar(&packVolumeName, "volname", "", "volume name when packing a directory (default: directory name)")
 	packCmd.Flags().StringVar(&packFS, "fs", "hfs+", "file system when packing a directory: HFS+ or APFS (case-insensitive)")
 	packCmd.Flags().StringVar(&packSnapshot, "snapshot", "", "APFS only: also create a snapshot with this name capturing the packed volume")
+	packUUIDs.register(packCmd)
 }
 
 func runPack(cmd *cobra.Command, args []string) error {
@@ -116,8 +118,15 @@ func packDirectory(srcDir, dstPath string, encOpts *disk.EncodeOptions) error {
 
 // packDirectoryHFS writes srcDir into a new HFS+ volume and wraps it in a DMG.
 func packDirectoryHFS(srcDir, dstPath, volname string, encOpts *disk.EncodeOptions) error {
+	volumeUUID, err := packUUIDs.resolveVolumeOnly("HFS+")
+	if err != nil {
+		return err
+	}
+	fixed, clamp := writerTimes()
+
 	var buf writeAtBuffer
-	if err := hfsplus.CreateImageFromDir(&buf, 0, volname, srcDir, nil); err != nil {
+	createOpts := &hfsplus.CreateOptions{FixedTime: fixed, ClampModTimes: clamp, VolumeUUID: volumeUUID}
+	if err := hfsplus.CreateImageFromDir(&buf, 0, volname, srcDir, createOpts); err != nil {
 		return fmt.Errorf("unable to build HFS+ volume from %s: %w", srcDir, err)
 	}
 
@@ -130,6 +139,12 @@ func packDirectoryHFS(srcDir, dstPath, volname string, encOpts *disk.EncodeOptio
 
 // packRepack recompresses an existing DMG preserving its block layout.
 func packRepack(srcPath, dstPath string, encOpts *disk.EncodeOptions) error {
+	// A repack copies the source's file system image through unchanged, so
+	// there is no writer to hand a UUID to. Say so rather than accepting the
+	// flag and silently doing nothing with it.
+	if packUUIDs.changed() {
+		return usageErrorf("the UUID flags apply only when packing a directory; %s is an existing image whose file system is copied through unchanged", srcPath)
+	}
 	if err := disk.RepackDMG(srcPath, dstPath, encOpts); err != nil {
 		return fmt.Errorf("unable to repack %s: %w", srcPath, err)
 	}

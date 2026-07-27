@@ -17,6 +17,7 @@ var (
 	createSizeMiB  uint
 	createCaseSens bool
 	createSnapshot string
+	createUUIDs    writeIdentityFlags
 )
 
 var createCmd = &cobra.Command{
@@ -41,6 +42,7 @@ func init() {
 	createCmd.Flags().UintVar(&createSizeMiB, "size", 0, "image size in MiB (0 = minimum for the file system)")
 	createCmd.Flags().BoolVar(&createCaseSens, "case-sensitive", false, "create a case-sensitive volume")
 	createCmd.Flags().StringVar(&createSnapshot, "snapshot", "", "APFS only: also create a snapshot with this name capturing the new volume")
+	createUUIDs.register(createCmd)
 }
 
 func runCreate(cmd *cobra.Command, args []string) error {
@@ -63,9 +65,16 @@ func runCreate(cmd *cobra.Command, args []string) error {
 
 // createHFS writes an empty HFS+ volume wrapped in a DMG (MIT).
 func createHFS(dstPath string, sizeBytes int64) error {
+	volumeUUID, err := createUUIDs.resolveVolumeOnly("HFS+")
+	if err != nil {
+		return err
+	}
+	fixed, clamp := writerTimes()
+
 	root := &hfsplus.Entry{Name: createVolName, Mode: os.ModeDir | 0755}
 	var buf writeAtBuffer
-	if err := hfsplus.CreateImage(&buf, sizeBytes, createVolName, root, nil); err != nil {
+	createOpts := &hfsplus.CreateOptions{FixedTime: fixed, ClampModTimes: clamp, VolumeUUID: volumeUUID}
+	if err := hfsplus.CreateImage(&buf, sizeBytes, createVolName, root, createOpts); err != nil {
 		return fmt.Errorf("unable to create HFS+ volume: %w", err)
 	}
 	if err := disk.WrapRawImageDMG(dstPath, buf.Bytes(), "Apple_HFS", nil); err != nil {

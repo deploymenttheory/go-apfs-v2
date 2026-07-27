@@ -3,6 +3,11 @@
 //
 // Configuration precedence: flag > APFS_* environment variable > config file
 // (~/.config/apfs/config.yaml, optional).
+//
+// SOURCE_DATE_EPOCH is the one deliberate exception, resolved as
+// --source-date-epoch > SOURCE_DATE_EPOCH > APFS_SOURCE_DATE_EPOCH > config
+// file. The bare, unprefixed variable is the ecosystem standard that build
+// systems set, so a stale APFS_ value in a shell profile must not defeat it.
 package cli
 
 import (
@@ -10,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -29,6 +35,9 @@ type globalOptions struct {
 	PasswordStdin    bool
 	RecoveryPassword string
 	Offset           int64
+	// SourceDateEpoch is the fixed build timestamp for reproducible output. The
+	// zero value means unset, leaving each writer to apply its own default.
+	SourceDateEpoch time.Time
 }
 
 var opts globalOptions
@@ -59,6 +68,14 @@ first argument. Data goes to stdout, diagnostics and progress to stderr.
 Configuration precedence: flag > APFS_<FLAG> environment variable >
 ~/.config/apfs/config.yaml.
 
+Reproducible output: create, pack and snapshot create produce byte-identical
+images for identical input, so a built image can be content-addressed and
+compared by hash. Set --source-date-epoch (or SOURCE_DATE_EPOCH) to pin the
+build timestamp and clamp source modification times to it, and --uuid to pin
+the volume identity. SOURCE_DATE_EPOCH resolves as --source-date-epoch >
+SOURCE_DATE_EPOCH > APFS_SOURCE_DATE_EPOCH > config file: the bare variable is
+the ecosystem standard, so it outranks the APFS_ form.
+
 Exit codes:
   0 success        3 unrecognized image     5 unsupported on this platform
   1 error          4 authentication needed  6 partial result
@@ -82,6 +99,7 @@ func init() {
 	flags.Bool("password-stdin", false, "read the password from standard input")
 	flags.String("recovery-password", "", "recovery password for encrypted volumes")
 	flags.Int64("offset", 0, "byte offset of the container in the image (expert; overrides detection)")
+	flags.String("source-date-epoch", "", "fixed build timestamp (decimal seconds since 1970 UTC) for reproducible output")
 
 	rootCmd.SetFlagErrorFunc(func(cmd *cobra.Command, err error) error {
 		return withCode(ExitUsage, err)
@@ -132,6 +150,26 @@ func resolveGlobalOptions(cmd *cobra.Command) error {
 		PasswordStdin:    v.GetBool("password-stdin"),
 		RecoveryPassword: v.GetString("recovery-password"),
 		Offset:           v.GetInt64("offset"),
+	}
+
+	// SOURCE_DATE_EPOCH deliberately departs from the flag > APFS_<FLAG> >
+	// config order used by everything else: the bare, unprefixed variable is the
+	// ecosystem standard that build systems set, and a stale APFS_ value left in
+	// a shell profile must not defeat it.
+	raw := ""
+	if f := cmd.Root().PersistentFlags().Lookup("source-date-epoch"); f != nil && f.Changed {
+		raw = f.Value.String()
+	} else if env := os.Getenv("SOURCE_DATE_EPOCH"); env != "" {
+		raw = env
+	} else {
+		raw = v.GetString("source-date-epoch")
+	}
+	if raw != "" {
+		epoch, err := parseSourceDateEpoch(raw)
+		if err != nil {
+			return err
+		}
+		opts.SourceDateEpoch = epoch
 	}
 
 	switch opts.Output {
