@@ -47,10 +47,7 @@ func (b *builder) setTree(opts *CreateOptions) error {
 			}
 			seen[e.Name] = true
 
-			var mtime uint64
-			if !e.ModTime.IsZero() {
-				mtime = uint64(e.ModTime.UnixNano())
-			}
+			mtime := b.entryTime(e.ModTime)
 			be := &builderEntry{
 				name:   e.Name,
 				oid:    nextOID,
@@ -347,9 +344,11 @@ func (b *builder) inodeValue(e *builderEntry) []byte {
 			mode = sIFREG | 0o644
 		}
 	}
+	// The synthetic root and private-dir inodes are built inline and never go
+	// through setTree, so they carry no time of their own.
 	mtime := e.mtime
 	if mtime == 0 {
-		mtime = b.defaultTime
+		mtime = b.timestamp
 	}
 
 	binary.LittleEndian.PutUint64(val[16:], mtime) // create_time

@@ -45,10 +45,27 @@ type CreateOptions struct {
 	// BlockSize is the allocation block size in bytes (default 4096). Must be
 	// a power of two >= 512.
 	BlockSize uint32
-	// FixedTime, when non-zero, is used for every timestamp that an Entry
-	// does not set, giving deterministic output for tests.
+	// FixedTime is the timestamp written to the volume header's create, modify
+	// and checked dates, and the default for entries that carry no ModTime. The
+	// zero value selects DefaultTime, so an image is byte-identical for
+	// identical input without the caller doing anything.
 	FixedTime time.Time
+	// ClampModTimes applies the SOURCE_DATE_EPOCH rule to entry modification
+	// times: an Entry.ModTime later than the resolved FixedTime is written as
+	// FixedTime, while earlier times are preserved. It has no effect on entries
+	// that supply no ModTime.
+	ClampModTimes bool
+	// VolumeUUID pins the volume's identifier. Only its first eight bytes reach
+	// disk, because the HFS+ volume identifier is the 64-bit pair
+	// FinderInfo[6]/FinderInfo[7]. The zero value derives a stable identifier
+	// from the volume name and the resolved timestamp.
+	VolumeUUID [16]byte
 }
+
+// DefaultTime is the timestamp used when CreateOptions.FixedTime is unset. It is
+// a fixed value rather than the wall clock so that identical input produces
+// identical bytes: an image built twice is byte-for-byte the same.
+var DefaultTime = time.Date(2024, time.January, 1, 0, 0, 0, 0, time.UTC)
 
 // internal per-node bookkeeping built from the Entry tree.
 type fileNode struct {
@@ -86,12 +103,12 @@ type layout struct {
 // must be large enough. volumeName becomes the root folder's catalog name.
 func CreateImage(w io.WriterAt, sizeBytes int64, volumeName string, root *Entry, opts *CreateOptions) error {
 	blockSize := 4096
-	var fixed time.Time
+	var o CreateOptions
 	if opts != nil {
-		if opts.BlockSize != 0 {
-			blockSize = int(opts.BlockSize)
+		o = *opts
+		if o.BlockSize != 0 {
+			blockSize = int(o.BlockSize)
 		}
-		fixed = opts.FixedTime
 	}
 	if blockSize < 512 || blockSize&(blockSize-1) != 0 {
 		return fmt.Errorf("hfsplus: invalid block size %d", blockSize)
@@ -99,15 +116,17 @@ func CreateImage(w io.WriterAt, sizeBytes int64, volumeName string, root *Entry,
 	if root == nil {
 		root = &Entry{}
 	}
-	defaultTime := fixed
+	defaultTime := o.FixedTime
 	if defaultTime.IsZero() {
-		defaultTime = time.Now()
+		defaultTime = DefaultTime
 	}
 
 	// 1. Flatten the tree, assign CNIDs, count files/folders.
 	b := &builder{
 		blockSize:   blockSize,
 		defaultTime: defaultTime,
+		clampTime:   o.ClampModTimes,
+		volumeUUID:  o.VolumeUUID,
 		nextCNID:    HFSFirstUserCatalogNodeID,
 	}
 	rootNode := b.flatten(root, volumeName)
@@ -233,6 +252,8 @@ func readDirEntries(dir string) ([]*Entry, error) {
 type builder struct {
 	blockSize   int
 	defaultTime time.Time
+	clampTime   bool
+	volumeUUID  [16]byte
 	nextCNID    CatalogNodeID
 
 	root      *fileNode
@@ -397,9 +418,14 @@ func (b *builder) catalogRecords(_ *fileNode) []btRecord {
 	return recs
 }
 
+// nodeTime resolves a node's catalog timestamp. A node with no ModTime takes
+// the builder's fixed default; otherwise its own time is used, clamped down to
+// that default when ClampModTimes is set (the SOURCE_DATE_EPOCH rule).
 func (b *builder) nodeTime(n *fileNode) hfsTime {
 	t := n.entry.ModTime
 	if t.IsZero() {
+		t = b.defaultTime
+	} else if b.clampTime && t.After(b.defaultTime) {
 		t = b.defaultTime
 	}
 	return toHFSTime(t)
@@ -534,12 +560,19 @@ func (b *builder) volumeHeader(volumeName string, lay *layout, _, _ builtTree) V
 	}
 	copy(vh.LastMountedVersion[:], "10.0")
 
-	// A stable, non-zero volume identifier derived from the name and time.
-	h := fnv.New64a()
-	fmt.Fprintf(h, "%s-%d", volumeName, uint32(now))
-	id := h.Sum64()
-	vh.FinderInfo[6] = uint32(id >> 32)
-	vh.FinderInfo[7] = uint32(id)
+	// A stable, non-zero volume identifier: the caller's UUID when it supplied
+	// one (its first eight bytes, big-endian, are the 64-bit HFS+ identifier),
+	// otherwise one derived from the volume name and the fixed timestamp.
+	if b.volumeUUID != ([16]byte{}) {
+		vh.FinderInfo[6] = binary.BigEndian.Uint32(b.volumeUUID[0:4])
+		vh.FinderInfo[7] = binary.BigEndian.Uint32(b.volumeUUID[4:8])
+	} else {
+		h := fnv.New64a()
+		fmt.Fprintf(h, "%s-%d", volumeName, uint32(now))
+		id := h.Sum64()
+		vh.FinderInfo[6] = uint32(id >> 32)
+		vh.FinderInfo[7] = uint32(id)
+	}
 	if vh.FinderInfo[6] == 0 && vh.FinderInfo[7] == 0 {
 		vh.FinderInfo[7] = 1
 	}
