@@ -117,6 +117,13 @@ type Entry struct {
 	// Data is the file content for a regular file (any size, may be empty), or
 	// the target path for a symbolic link.
 	Data []byte
+	// Xattrs are the entry's extended attributes, written as embedded
+	// attribute records. A value larger than the format stores inline is an
+	// error rather than a silent truncation; see CreateContainer.
+	//
+	// The com.apple.fs.symlink name is reserved: it is how APFS stores a
+	// symbolic link's target, and the writer emits it itself.
+	Xattrs map[string][]byte
 	// Children are the entries contained in a directory.
 	Children []*Entry
 }
@@ -187,6 +194,12 @@ type builderEntry struct {
 	// Symbolic links: the target path bytes (stored in a com.apple.fs.symlink
 	// extended attribute, not in a data stream).
 	linkTarget []byte
+
+	// Extended attributes, written as embedded attribute records.
+	xattrs map[string][]byte
+	// xattrFlags are the inode internal_flags the attributes require. Several
+	// flags must agree exactly with whether a particular attribute is present.
+	xattrFlags uint64
 
 	// Regular files with content (non-empty streams).
 	data        []byte

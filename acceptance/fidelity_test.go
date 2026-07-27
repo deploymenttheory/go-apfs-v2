@@ -119,9 +119,11 @@ func TestPackReportsFidelityLoss(t *testing.T) {
 			t.Errorf("hardLinksCollapsed = %d, want 1", got)
 		}
 	}
+	// The APFS writer carries ordinary extended attributes now, so this one is
+	// not a loss. Only what it cannot write is reported.
 	if tree.xattr {
-		if got := intField(t, report, "xattrsDropped"); got == 0 {
-			t.Error("xattrsDropped = 0, want at least the attribute that was set")
+		if got := intField(t, report, "xattrsDropped"); got != 0 {
+			t.Errorf("xattrsDropped = %d, want 0: an ordinary attribute is written, not dropped", got)
 		}
 	}
 
@@ -130,8 +132,8 @@ func TestPackReportsFidelityLoss(t *testing.T) {
 	// identity to recognize a hard link by, and has no extended attributes this
 	// tool reads — so there the tree is genuinely lossless and saying otherwise
 	// would be a false failure.
-	if !tree.fifo && !tree.socket && !tree.hardlink && !tree.xattr {
-		t.Log("this platform can create nothing the volume would drop; only the report schema is checked")
+	if !tree.fifo && !tree.socket && !tree.hardlink {
+		t.Log("this platform can create nothing an APFS volume would drop; only the report schema is checked")
 		return
 	}
 	if lossless, _ := report["lossless"].(bool); lossless {
@@ -302,4 +304,51 @@ func TestExtractCompletesWithXattrs(t *testing.T) {
 	if code != exitcode.OK {
 		t.Errorf("extract --xattrs exited %s\nstderr: %s", exitcode.Name(code), stderr)
 	}
+}
+
+// TestPackCarriesXattrs checks an ordinary extended attribute survives
+// pack into an APFS volume, and is still dropped by HFS+, which has no
+// attributes file at all.
+func TestPackCarriesXattrs(t *testing.T) {
+	if !xattrsReadable() {
+		t.Skip("extended attributes are not readable on this platform")
+	}
+	dir := t.TempDir()
+	file := filepath.Join(dir, "file.txt")
+	if err := os.WriteFile(file, []byte("content\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if !setXattr(t, file, "user.marker", []byte("kept")) {
+		t.Skip("unable to set an extended attribute")
+	}
+
+	t.Run("apfs carries it", func(t *testing.T) {
+		out := filepath.Join(t.TempDir(), "packed.dmg")
+		mustRun(t, "pack", dir, out, "--fs", "apfs", "--volname", "XATTR", "-q")
+
+		dest := t.TempDir()
+		mustRun(t, "extract", out, "-C", dest, "--xattrs", "-q")
+
+		names, err := readXattrNames(filepath.Join(dest, "file.txt"))
+		if err != nil {
+			t.Fatalf("reading the extracted attributes: %v", err)
+		}
+		found := false
+		for _, name := range names {
+			if name == "user.marker" {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("user.marker did not survive pack and extract; attributes present: %v", names)
+		}
+	})
+
+	t.Run("hfs+ reports it dropped", func(t *testing.T) {
+		out := filepath.Join(t.TempDir(), "packed.dmg")
+		report, _ := packJSON(t, dir, out, "--fs", "hfs+", "--volname", "XATTR", "-o", "json")
+		if got := intField(t, report, "xattrsDropped"); got == 0 {
+			t.Error("xattrsDropped = 0 for HFS+, which has no attributes file")
+		}
+	})
 }

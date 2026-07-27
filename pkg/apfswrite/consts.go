@@ -122,7 +122,14 @@ const drecLenMask = 0x000003ff
 
 // Inode internal flag: no resource fork. fsck_apfs expects this to be set on
 // the special/root directory inodes we create.
-const inodeNoRsrcFork = 0x00008000
+const (
+	inodeHasSecurityEA = 0x00000040
+	inodeHasFinderInfo = 0x00000100
+	// inodeHasRsrcFork is unused while resource forks are refused: it becomes
+	// required the moment they can be written as a data stream.
+	inodeHasRsrcFork = 0x00004000 //nolint:unused // needed for stream-based resource forks
+	inodeNoRsrcFork  = 0x00008000
+)
 
 // Extended field types for inodes.
 const (

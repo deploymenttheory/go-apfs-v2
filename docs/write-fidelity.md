@@ -15,15 +15,18 @@ copied through bit-for-bit.
 | Regular files | content, mode, owner, group, modification time |
 | Directories | mode, owner, group, modification time |
 | Symbolic links | target, mode, owner, group, modification time |
+| Extended attributes | **APFS only**, up to 3804 bytes each, with the exceptions below |
 
 ## What is not
 
 | | What happens | Reported as |
 |---|---|---|
 | Device nodes, FIFOs, sockets | **skipped entirely** | `specialFilesSkipped` |
-| Extended attributes | dropped | `xattrsDropped` |
+| Extended attributes over 3804 bytes | dropped | `xattrsDropped` |
+| Extended attributes, all of them, on HFS+ | dropped | `xattrsDropped` |
 | Resource forks | dropped | `resourceForksDropped` |
-| ACLs | dropped | `aclsDropped` |
+| `com.apple.decmpfs` | dropped | `xattrsDropped` |
+| ACLs | carried on APFS, dropped on HFS+ | `aclsDropped` |
 | Hard links | each name becomes an independent copy | `hardLinksCollapsed` |
 | BSD flags (`uchg`, `hidden`, …) | dropped | `bsdFlagsDropped` |
 | Volume role and group (`snapshot create` only) | not carried | `volumeIdentityDropped` |
@@ -37,6 +40,24 @@ Resource forks and ACLs are counted separately from ordinary extended
 attributes deliberately. A dropped `com.apple.quarantine` is metadata; a dropped
 resource fork is *file content*, and "ACLs were dropped" is a materially
 different statement to a forensic reader than "3 attributes were dropped".
+
+### Why resource forks and decmpfs are refused rather than written
+
+Both would produce an image macOS calls corrupt, so the writer declines them
+instead of emitting something broken.
+
+`com.apple.ResourceFork` must be stored as a data stream whatever its size —
+`fsck_apfs` says so directly: *"com.apple.ResourceFork is expected to be stream
+based"*. This writer only stores attributes inline. Notably `apfsck` accepts the
+embedded form, so this is a case where only Apple's own checker objects.
+
+`com.apple.decmpfs` declares a file's content compressed and requires
+`APFS_INOBSD_COMPRESSED` in the inode's BSD flags, with the content living in
+the resource fork rather than the data fork. This writer puts content in the
+data fork, so the attribute would describe content the file does not have —
+the same contradiction that stops `extract --xattrs` restoring it.
+
+Both are on the roadmap along with stream-based attributes generally.
 
 ## How losses are reported
 

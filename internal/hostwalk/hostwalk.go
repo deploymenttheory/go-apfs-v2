@@ -21,10 +21,16 @@ import (
 
 // Options tunes a walk.
 type Options struct {
-	// Xattrs reads each entry's extended attributes so they can be counted.
-	// It costs a syscall or two per entry, so it is opt-in; without it the
-	// report says nothing about attributes rather than saying there were none.
+	// Xattrs reads each entry's extended attributes so they can be counted,
+	// and carried when Keep accepts them. It costs a syscall or two per entry,
+	// so it is opt-in; without it the report says nothing about attributes
+	// rather than saying there were none.
 	Xattrs bool
+
+	// Keep decides whether an attribute can be written. One it rejects is
+	// reported as dropped, exactly as every attribute was before any could be
+	// carried. A nil Keep drops all of them.
+	Keep func(name string, value []byte) bool
 
 	// Warn, when non-nil, is called once for each thing the walk cannot carry
 	// across, as it is found.
@@ -40,6 +46,9 @@ type Node struct {
 	ModTime  time.Time
 	UID, GID uint32
 	Data     []byte
+	// Xattrs are the attributes Options.Keep accepted. The rest are counted in
+	// the report instead.
+	Xattrs map[string][]byte
 }
 
 // Walk reads the tree rooted at dir and returns the entry mk builds for it,
@@ -120,7 +129,8 @@ func (w *walker[E]) readDir(dir, rel string) ([]E, error) {
 			node.UID, node.GID = st.Uid(), st.Gid()
 		}
 
-		w.noteMetadataLoss(full, childRel, info)
+		node.Xattrs = w.collectXattrs(full, childRel)
+		w.noteBSDAndLinks(childRel, info)
 
 		var children []E
 		switch {
@@ -161,25 +171,43 @@ func describeSpecial(mode os.FileMode) string {
 	}
 }
 
-// noteMetadataLoss records the metadata that will not survive this entry:
-// extended attributes, resource forks, ACLs, BSD flags, and second-or-later
-// names for an inode already seen.
-func (w *walker[E]) noteMetadataLoss(full, rel string, info os.FileInfo) {
-	if w.opts.Xattrs {
-		if attrs, err := hostmeta.ListXattrs(full); err == nil {
-			for name := range attrs {
-				switch {
-				case name == hostmeta.ResourceForkName:
-					w.warn(rel, fidelity.ResourceFork, name)
-				case hostmeta.IsACLName(name):
-					w.warn(rel, fidelity.ACL, name)
-				default:
-					w.warn(rel, fidelity.Xattr, name)
-				}
-			}
-		}
+// collectXattrs reads the entry's extended attributes, returning those the
+// writer can keep and reporting the rest as dropped. Resource forks and ACLs
+// are reported under their own kinds: losing file content is a different
+// statement to losing metadata.
+func (w *walker[E]) collectXattrs(full, rel string) map[string][]byte {
+	if !w.opts.Xattrs {
+		return nil
+	}
+	attrs, err := hostmeta.ListXattrs(full)
+	if err != nil || len(attrs) == 0 {
+		return nil
 	}
 
+	var kept map[string][]byte
+	for name, value := range attrs {
+		if w.opts.Keep != nil && w.opts.Keep(name, value) {
+			if kept == nil {
+				kept = make(map[string][]byte, len(attrs))
+			}
+			kept[name] = value
+			continue
+		}
+		switch {
+		case name == hostmeta.ResourceForkName:
+			w.warn(rel, fidelity.ResourceFork, name)
+		case hostmeta.IsACLName(name):
+			w.warn(rel, fidelity.ACL, name)
+		default:
+			w.warn(rel, fidelity.Xattr, name)
+		}
+	}
+	return kept
+}
+
+// noteBSDAndLinks records the remaining metadata that will not survive this
+// entry: BSD flags, and second-or-later names for an inode already seen.
+func (w *walker[E]) noteBSDAndLinks(rel string, info os.FileInfo) {
 	if flags, ok := hostmeta.Flags(info); ok && flags != 0 {
 		w.warn(rel, fidelity.BSDFlags, fmt.Sprintf("st_flags=%#x", flags))
 	}
