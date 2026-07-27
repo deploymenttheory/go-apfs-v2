@@ -42,6 +42,15 @@ func (b *builder) setTree(opts *CreateOptions) error {
 			if err := validateName(e.Name); err != nil {
 				return 0, err
 			}
+			// resolvedMode would otherwise stamp anything that is not a
+			// directory or a symbolic link as a regular file, so a device node
+			// or FIFO handed in directly would be written with the wrong mode
+			// and no indication anything was lost. The directory walk skips
+			// these; a caller building a tree by hand gets told.
+			if isSpecialFile(e.Mode) {
+				return 0, fmt.Errorf("apfswrite: %q is a %s; this writer models only regular files, directories and symbolic links",
+					e.Name, e.Mode.Type())
+			}
 			if seen[e.Name] {
 				return 0, fmt.Errorf("apfswrite: duplicate name %q in one directory", e.Name)
 			}

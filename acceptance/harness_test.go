@@ -5,6 +5,7 @@ package acceptance
 
 import (
 	"compress/gzip"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -17,6 +18,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/exitcode"
 )
@@ -159,6 +161,34 @@ func cleanEnv(extra ...string) []string {
 func run(t *testing.T, args ...string) (string, string, int) {
 	t.Helper()
 	return runEnv(t, nil, args...)
+}
+
+// runTimeout is run() with a deadline, for tests whose failure mode is the
+// command never returning. Without it a regression that reintroduces a hang
+// stalls the whole suite until the package timeout fires, and reports as a
+// panic in whichever test happened to be running rather than as a failure here.
+func runTimeout(t *testing.T, limit time.Duration, args ...string) (string, string, int) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), limit)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, binPath, args...)
+	cmd.Env = cleanEnv()
+	var stdout, stderr strings.Builder
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+
+	if ctx.Err() == context.DeadlineExceeded {
+		t.Fatalf("%v did not finish within %s; it is hanging\nstderr: %s", args, limit, stderr.String())
+	}
+	exitCode := 0
+	if exitErr, ok := err.(*exec.ExitError); ok {
+		exitCode = exitErr.ExitCode()
+	} else if err != nil {
+		t.Fatalf("unable to run %v: %v", args, err)
+	}
+	return stdout.String(), stderr.String(), exitCode
 }
 
 // runEnv is run() with extra environment entries appended, for the tests that

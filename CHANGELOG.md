@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`pack <dir>` no longer hangs on a device node, FIFO or socket**
+  (`pkg/apfswrite`, `pkg/hfsplus`). Both directory walks fell through to reading
+  such a file as though it were regular, and none of the three failure modes was
+  clean: opening a FIFO blocks until a writer appears, so the command never
+  returned; a character device such as `/dev/zero` reads until memory runs out;
+  a socket errors and aborts the whole pack. They are now skipped. This applied
+  to both `--fs apfs` and `--fs hfs+`, the latter being the default.
+
+  `CreateContainer` also now rejects an `Entry` whose mode carries an
+  unsupported type bit, rather than stamping it `S_IFREG` and writing a device
+  node as a regular file. The walk skips these; a caller assembling a tree by
+  hand is told.
+
 - **decmpfs LZFSE (types 11 and 12) now decompresses** (`pkg/apfs`). It was
   listed as supported in the README and TOOLS_STATUS, but was blocked in three
   places: `internalCompressionMethod` returned "not supported yet",
