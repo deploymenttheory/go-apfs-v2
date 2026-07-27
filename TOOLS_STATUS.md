@@ -21,6 +21,9 @@ Legend: ✅ implemented · 🟡 partial · ⬜ not yet
 | Populate a volume with files | ✅ | ✅ |
 | Reproducible output (`SOURCE_DATE_EPOCH`, fixed UUIDs) | ✅ | ✅ |
 | Volume roles and volume groups (read + write) | ✅² | — |
+| Write-fidelity reporting (`--strict`) | ✅ | ✅ |
+| Extended attributes (write) | ⬜ | ⬜ |
+| Hard links (write) | ⬜ | ⬜ |
 
 ¹ One snapshot per image (single static checkpoint); multiple snapshots need
 distinct xids and incremental checkpoints.

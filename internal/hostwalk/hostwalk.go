@@ -108,7 +108,7 @@ func (w *walker[E]) readDir(dir, rel string) ([]E, error) {
 		// appears, a character device such as /dev/zero reads until memory runs
 		// out, and a socket fails outright.
 		if hostmeta.IsSpecial(info.Mode()) {
-			w.warn(childRel, fidelity.SpecialFile, info.Mode().Type().String())
+			w.warn(childRel, fidelity.SpecialFile, describeSpecial(info.Mode()))
 			continue
 		}
 
@@ -142,6 +142,23 @@ func (w *walker[E]) readDir(dir, rel string) ([]E, error) {
 		out = append(out, w.mk(node, children))
 	}
 	return out, nil
+}
+
+// describeSpecial names a special file in words, because a reader tracking down
+// what was skipped is better served by "named pipe" than by "p---------".
+func describeSpecial(mode os.FileMode) string {
+	switch {
+	case mode&os.ModeNamedPipe != 0:
+		return "named pipe (FIFO)"
+	case mode&os.ModeSocket != 0:
+		return "socket"
+	case mode&os.ModeCharDevice != 0:
+		return "character device"
+	case mode&os.ModeDevice != 0:
+		return "block device"
+	default:
+		return "irregular file (" + mode.Type().String() + ")"
+	}
 }
 
 // noteMetadataLoss records the metadata that will not survive this entry:

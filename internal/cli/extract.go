@@ -16,6 +16,7 @@ var (
 	extractPattern      string
 	extractRecursive    bool
 	extractPreserveMeta bool
+	extractXattrs       bool
 	extractVerify       bool
 	extractSymlinks     string
 )
@@ -28,6 +29,12 @@ the whole volume is extracted.
 
 Exit code 6 indicates a partial extraction: some entries were skipped and a
 warning was printed to stderr for each.
+
+--xattrs restores extended attributes onto the extracted files. Without it they
+are silently discarded, so extracting and repacking a tree is not a faithful
+round trip however capable the writer is. Attributes the kernel reserves, or
+that the destination file system will not take, are counted and reported rather
+than failing the extraction.
 
 Symlink handling (--symlinks): "auto" (default) creates a real symlink where
 the OS allows it and otherwise writes the link target into a regular file
@@ -49,7 +56,7 @@ func init() {
 	extractCmd.Flags().StringVar(&extractPattern, "pattern", "", "only extract files whose path matches this regex")
 	extractCmd.Flags().BoolVarP(&extractRecursive, "recursive", "r", false, "recurse into a directory PATH")
 	extractCmd.Flags().BoolVar(&extractPreserveMeta, "preserve-meta", false, "preserve permissions and timestamps")
-	extractCmd.Flags().Bool("xattrs", false, "reserved: extended attribute extraction (not yet implemented)")
+	extractCmd.Flags().BoolVar(&extractXattrs, "xattrs", false, "restore extended attributes onto the extracted files")
 	extractCmd.Flags().BoolVar(&extractVerify, "verify", false, "verify extracted files against source checksums")
 	extractCmd.Flags().StringVar(&extractSymlinks, "symlinks", "auto", "symlink handling: auto, real or file")
 	extractCmd.MarkFlagRequired("destination")
@@ -91,6 +98,7 @@ func runExtract(cmd *cobra.Command, args []string) error {
 	extractor := tools.NewExtractor(volume, extractDestination)
 	extractor.Pattern = pattern
 	extractor.PreserveMeta = extractPreserveMeta
+	extractor.Xattrs = extractXattrs
 	extractor.Verbose = opts.Verbose
 	extractor.VerifyChecksum = extractVerify
 	extractor.SymlinkMode = symlinkMode
@@ -129,6 +137,11 @@ func runExtract(cmd *cobra.Command, args []string) error {
 			"symlinksDegraded": extractor.SymlinksDegraded(),
 			"namesRemapped":    extractor.NamesRemapped(),
 		}
+		if extractXattrs {
+			restored, unwritable := extractor.XattrStats()
+			summary["xattrsRestored"] = restored
+			summary["xattrsUnwritable"] = unwritable
+		}
 		if err := jsonOut(summary); err != nil {
 			return err
 		}
@@ -140,6 +153,13 @@ func runExtract(cmd *cobra.Command, args []string) error {
 		}
 		if remapped := extractor.NamesRemapped(); remapped > 0 {
 			fmt.Printf("Note: %d name(s) sanitized to be storable on this file system\n", remapped)
+		}
+		if extractXattrs {
+			restored, unwritable := extractor.XattrStats()
+			fmt.Printf("Restored %d extended attribute(s)\n", restored)
+			if unwritable > 0 {
+				fmt.Printf("Note: %d extended attribute(s) could not be written to this file system\n", unwritable)
+			}
 		}
 	}
 

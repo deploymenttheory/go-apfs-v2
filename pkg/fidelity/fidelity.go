@@ -50,14 +50,15 @@ type kindInfo struct {
 	note string // the summary line, given a count
 }
 
+// The note reads after "N <noun>(s) ", so it must make sense for any N.
 var kinds = map[Kind]kindInfo{
 	SpecialFile:    {"specialFilesSkipped", "special file", "skipped: device nodes, FIFOs and sockets cannot be represented"},
-	Xattr:          {"xattrsDropped", "extended attribute", "dropped: extended attributes are not written"},
-	ResourceFork:   {"resourceForksDropped", "resource fork", "dropped: resource forks are not written"},
-	ACL:            {"aclsDropped", "access control list", "dropped: ACLs are not written"},
-	HardLink:       {"hardLinksCollapsed", "hard link", "written as separate copies rather than links"},
-	BSDFlags:       {"bsdFlagsDropped", "entry with BSD flags", "dropped: BSD flags (uchg, hidden, …) are not written"},
-	VolumeIdentity: {"volumeIdentityDropped", "volume identity field", "dropped: role and volume-group membership are not carried"},
+	Xattr:          {"xattrsDropped", "extended attribute", "not written"},
+	ResourceFork:   {"resourceForksDropped", "resource fork", "not written; that is file content, not metadata"},
+	ACL:            {"aclsDropped", "access control list", "not written"},
+	HardLink:       {"hardLinksCollapsed", "extra hard link", "written as an independent copy rather than a link"},
+	BSDFlags:       {"bsdFlagsDropped", "entry with BSD flags", "written without them (uchg, hidden and the rest)"},
+	VolumeIdentity: {"volumeIdentityDropped", "volume identity field", "not carried: role and volume-group membership"},
 }
 
 // allKinds is every kind in declaration order, so output ordering is stable.

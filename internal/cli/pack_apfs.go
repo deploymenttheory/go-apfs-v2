@@ -27,12 +27,26 @@ func packDirectoryAPFS(srcDir, dstPath, volname string, encOpts *disk.EncodeOpti
 	if packSnapshot != "" {
 		createOpts.Snapshots = []apfswrite.SnapshotSpec{{Name: packSnapshot}}
 	}
+
+	// Walk before writing, so --strict can refuse without leaving a file behind.
+	root, report, err := apfswrite.EntryTreeFromDir(srcDir, &apfswrite.WalkOptions{
+		Xattrs: true,
+		Warn:   fidelityWarner(),
+	})
+	if err != nil {
+		return fmt.Errorf("unable to read %s: %w", srcDir, err)
+	}
+	if err := enforceStrict(report, packStrict, srcDir); err != nil {
+		return err
+	}
+	createOpts.Root = root
+
 	var buf writeAtBuffer
-	if err := apfswrite.CreateContainerFromDir(&buf, 0, srcDir, createOpts); err != nil {
+	if err := apfswrite.CreateContainer(&buf, 0, createOpts); err != nil {
 		return fmt.Errorf("unable to build APFS container from %s: %w", srcDir, err)
 	}
 	if err := disk.WrapRawImageDMG(dstPath, buf.Bytes(), "Apple_APFS", encOpts); err != nil {
 		return fmt.Errorf("unable to write DMG %s: %w", dstPath, err)
 	}
-	return packReport(srcDir, dstPath, int64(len(buf.Bytes())))
+	return packReport(srcDir, dstPath, int64(len(buf.Bytes())), report)
 }

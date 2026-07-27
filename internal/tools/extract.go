@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/deploymenttheory/go-apfs-v2/internal/hostmeta"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
 	"github.com/schollz/progressbar/v3"
 )
@@ -29,6 +30,13 @@ type VolumeFS interface {
 	fs.StatFS
 	fs.ReadFileFS
 	Readlink(name string) (string, error)
+}
+
+// XattrVolume is implemented by volumes that can report a file's extended
+// attributes. It is separate from VolumeFS because not every file system this
+// tool reads has them, and extraction must work without.
+type XattrVolume interface {
+	Xattrs(name string) (map[string][]byte, error)
 }
 
 // SymlinkMode controls how symbolic links are materialized on disk.
@@ -48,14 +56,20 @@ const (
 
 // Extractor handles file extraction from APFS volumes
 type Extractor struct {
-	Volume           VolumeFS
-	Destination      string
-	Pattern          *regexp.Regexp
-	PreserveMeta     bool
-	Verbose          bool
-	VerifyChecksum   bool
+	Volume         VolumeFS
+	Destination    string
+	Pattern        *regexp.Regexp
+	PreserveMeta   bool
+	Verbose        bool
+	VerifyChecksum bool
+	// Xattrs restores extended attributes onto the extracted files. Without
+	// it, extracting and repacking a tree silently discards every attribute,
+	// so the round trip is not faithful however capable the writer is.
+	Xattrs           bool
 	SymlinkMode      SymlinkMode
 	filesExtracted   int
+	xattrsRestored   int
+	xattrsUnwritable int
 	entriesSkipped   int
 	symlinksDegraded int
 	namesRemapped    int
@@ -322,8 +336,63 @@ func (e *Extractor) extractFile(name, destPath string, info fs.FileInfo) error {
 	if e.PreserveMeta {
 		e.applyMetadata(destPath, info)
 	}
+	if e.Xattrs {
+		e.applyXattrs(name, destPath)
+	}
 
 	return nil
+}
+
+// applyXattrs copies the source entry's extended attributes onto the extracted
+// file. An attribute that will not write is counted and reported rather than
+// failing the extraction: some are reserved to the kernel, and some
+// destination file systems take none at all.
+func (e *Extractor) applyXattrs(name, destPath string) {
+	source, ok := e.Volume.(XattrVolume)
+	if !ok {
+		return
+	}
+	attrs, err := source.Xattrs(name)
+	if err != nil || len(attrs) == 0 {
+		return
+	}
+	attrs = withoutCompressionMetadata(attrs)
+	if len(attrs) == 0 {
+		return
+	}
+
+	written, failed := hostmeta.SetXattrs(destPath, attrs)
+	e.xattrsRestored += written
+	e.xattrsUnwritable += len(failed)
+	if len(failed) > 0 && e.Verbose {
+		fmt.Fprintf(os.Stderr, "Note: %s: %d extended attribute(s) could not be written: %s\n",
+			destPath, len(failed), strings.Join(failed, ", "))
+	}
+}
+
+// withoutCompressionMetadata drops the attributes that describe transparent
+// compression, returning the rest.
+//
+// Extraction decompresses as it reads, so the extracted file holds its content
+// in the data fork. Restoring com.apple.decmpfs alongside that would leave the
+// file carrying metadata saying its content lives compressed in a resource fork
+// that no longer describes it — a contradiction, and one that would render the
+// file unreadable if anything later set UF_COMPRESSED. The resource fork goes
+// with it, because for a compressed file that fork *is* the compressed copy.
+//
+// A resource fork without decmpfs is a genuine one and is restored.
+func withoutCompressionMetadata(attrs map[string][]byte) map[string][]byte {
+	if _, compressed := attrs[hostmeta.DecmpfsName]; !compressed {
+		return attrs
+	}
+	kept := make(map[string][]byte, len(attrs))
+	for name, value := range attrs {
+		if name == hostmeta.DecmpfsName || name == hostmeta.ResourceForkName {
+			continue
+		}
+		kept[name] = value
+	}
+	return kept
 }
 
 // applyMetadata restores permissions and timestamps from the volume entry.
@@ -389,6 +458,12 @@ func (e *Extractor) SymlinksDegraded() int {
 // be storable on the host file system.
 func (e *Extractor) NamesRemapped() int {
 	return e.namesRemapped
+}
+
+// XattrStats returns how many extended attributes were restored onto the
+// extracted files, and how many could not be written.
+func (e *Extractor) XattrStats() (restored, unwritable int) {
+	return e.xattrsRestored, e.xattrsUnwritable
 }
 
 // Stats returns extraction statistics

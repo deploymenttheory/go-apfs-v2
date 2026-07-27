@@ -3,6 +3,7 @@
 package hostmeta
 
 import (
+	"sort"
 	"strings"
 
 	"golang.org/x/sys/unix"
@@ -79,4 +80,27 @@ func getXattr(path, name string) ([]byte, error) {
 // attributes" rather than a genuine failure.
 func isUnsupported(err error) bool {
 	return err == unix.ENOTSUP || err == unix.EOPNOTSUPP || err == unix.ENOSYS
+}
+
+// SetXattrs writes attrs onto the file at path, without following a symbolic
+// link. It returns the number written and the names it could not write.
+//
+// Failures are collected rather than aborting: an attribute the kernel reserves
+// to itself (com.apple.provenance, say) or one the destination file system will
+// not take should not stop the rest from being restored.
+func SetXattrs(path string, attrs map[string][]byte) (written int, failed []string) {
+	names := make([]string, 0, len(attrs))
+	for name := range attrs {
+		names = append(names, name)
+	}
+	sort.Strings(names) // deterministic order, so failures are reported the same way twice
+
+	for _, name := range names {
+		if err := unix.Lsetxattr(path, name, attrs[name], 0); err != nil {
+			failed = append(failed, name)
+			continue
+		}
+		written++
+	}
+	return written, failed
 }
