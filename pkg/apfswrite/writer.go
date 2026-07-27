@@ -57,6 +57,19 @@ type CreateOptions struct {
 	// physical volume superblock, an object-map snapshot entry and pinned extent
 	// refcounts — recognized by macOS. Names must be unique and non-empty.
 	Snapshots []SnapshotSpec
+
+	// FixedTime is the timestamp written to every clock-derived on-disk field —
+	// the volume superblock's formatted-by and last-modified times and every
+	// directory entry's date-added — and the default for entries and snapshots
+	// that carry no ModTime. The zero value selects DefaultTime, so a container
+	// is byte-identical for identical input without the caller doing anything.
+	FixedTime time.Time
+
+	// ClampModTimes applies the SOURCE_DATE_EPOCH rule to entry modification
+	// times: an Entry.ModTime later than the resolved FixedTime is written as
+	// FixedTime, while earlier times are preserved. It has no effect on entries
+	// that supply no ModTime.
+	ClampModTimes bool
 }
 
 // SnapshotSpec describes one APFS snapshot to create at build time.
@@ -217,6 +230,15 @@ func CreateContainer(w io.WriterAt, sizeBytes int64, opts *CreateOptions) error 
 	// public API exposes only the CaseSensitive toggle.
 	b.caseSensitive = opts.CaseSensitive
 	b.normSensitive = false
+
+	// Resolve the timestamp before the tree and the snapshots, both of which
+	// stamp it into records.
+	fixed := opts.FixedTime
+	if fixed.IsZero() {
+		fixed = DefaultTime
+	}
+	b.timestamp = uint64(fixed.UnixNano())
+	b.clampTime = opts.ClampModTimes
 
 	// Resolve the user directory tree (nested dirs + regular files of any size)
 	// so its space requirements can size the image when the caller passes 0.
@@ -439,13 +461,32 @@ type builder struct {
 	snapBlocks       uint64 // total blocks in the snapshot object region
 	volSnapTreePaddr uint64 // the volume omap's snapshot tree (0 when no snapshots)
 
-	timestamp   uint64
-	defaultTime uint64 // deterministic inode timestamp when an Entry has no ModTime
+	// timestamp is the resolved CreateOptions.FixedTime in nanoseconds since
+	// 1970 UTC. It is written to every clock-derived on-disk field and is the
+	// default for entries and snapshots that carry no time of their own.
+	timestamp uint64
+	// clampTime carries CreateOptions.ClampModTimes into entryTime.
+	clampTime bool
 }
 
-// defaultInodeTime is the fixed timestamp written to inode create/mod/change/
-// access times when an Entry supplies no ModTime, keeping output deterministic.
-var defaultInodeTime = time.Date(2024, time.January, 1, 0, 0, 0, 0, time.UTC)
+// DefaultTime is the timestamp used when CreateOptions.FixedTime is unset. It is
+// a fixed value rather than the wall clock so that identical input produces
+// identical bytes: a container built twice is byte-for-byte the same.
+var DefaultTime = time.Date(2024, time.January, 1, 0, 0, 0, 0, time.UTC)
+
+// entryTime resolves an entry's on-disk timestamp. A zero time means the
+// builder's fixed default; otherwise the entry's own time is used, clamped down
+// to that default when ClampModTimes is set (the SOURCE_DATE_EPOCH rule).
+func (b *builder) entryTime(t time.Time) uint64 {
+	if t.IsZero() {
+		return b.timestamp
+	}
+	ns := uint64(t.UnixNano())
+	if b.clampTime && ns > b.timestamp {
+		return b.timestamp
+	}
+	return ns
+}
 
 // fsTreeLeafOIDBase is the first virtual object id handed to extra file-system tree leaf
 // nodes (2-level file-system tree). It sits just past the named reserved object ids and
@@ -503,9 +544,6 @@ func (b *builder) layoutFixedBlocks() {
 	b.firstVolExtentrefRootPaddr = b.xpEnd + 6
 	b.firstVolSnapRootPaddr = b.xpEnd + 7
 	b.ipBmapBase = b.xpEnd + 10 // +8 and +9 are the unused Fusion slots
-
-	b.timestamp = uint64(time.Now().UnixNano())
-	b.defaultTime = uint64(defaultInodeTime.UnixNano())
 }
 
 // writeBlocks writes count blocks of data starting at block number paddr.

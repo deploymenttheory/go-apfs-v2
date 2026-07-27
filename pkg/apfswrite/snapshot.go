@@ -51,7 +51,6 @@ func (b *builder) setSnapshots(opts *CreateOptions) error {
 	if b.extentrefTwoLevel {
 		return fmt.Errorf("apfswrite: snapshots are not yet supported for volumes with a 2-level extentref tree")
 	}
-	defaultTime := uint64(defaultInodeTime.UnixNano())
 	// Each snapshot is associated with a distinct inode number reserved past the
 	// highest user inode; fsck_apfs rejects a zero inum.
 	inumBase := b.nextObjID()
@@ -67,10 +66,7 @@ func (b *builder) setSnapshots(opts *CreateOptions) error {
 			return fmt.Errorf("apfswrite: duplicate snapshot name %q", s.Name)
 		}
 		seen[s.Name] = true
-		mtime := defaultTime
-		if !s.ModTime.IsZero() {
-			mtime = uint64(s.ModTime.UnixNano())
-		}
+		mtime := b.entryTime(s.ModTime)
 		b.snapshots = append(b.snapshots, &snapBuild{
 			name: s.Name, xid: uint64(i) + 1, mtime: mtime, inum: inumBase + uint64(i),
 		})

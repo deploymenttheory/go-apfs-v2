@@ -38,12 +38,21 @@ $ apfs extract Firefox.dmg -C ./out --verify
 | Build a DMG from a directory (`pack <dir>`) | ✅ | ✅ |
 | Create a formatted volume (`create`) | ✅ | ✅ |
 | APFS snapshots: create, list, revert (`snapshot`) | ✅ | — |
+| Reproducible (byte-identical) output | ✅ | ✅ |
 
 Both file systems can be written as well as read: `pack <dir>` builds a populated
 volume (files, symlinks, nested directories) and `create` formats an empty one.
 The APFS writer is a pure-Go, MIT-licensed package (`pkg/apfswrite`); created
 containers are validated against Apple's `fsck_apfs`/`hdiutil` and Linux
 `apfsck`.
+
+Every write command is **reproducible**: run it twice on the same input and you
+get two byte-identical images. That makes an image content-addressable, makes
+"did the vendor change anything?" a hash comparison, and lets an attestation
+over the output mean something. `--source-date-epoch` (or the standard
+`SOURCE_DATE_EPOCH`) pins the build timestamp and clamps source modification
+times to it; `--uuid` pins the volume identity. See
+[docs/reproducible-output.md](docs/reproducible-output.md).
 
 **Image formats read:** UDIF DMGs compressed with zlib (UDZO), bzip2 (UDBZ),
 ADC, LZFSE (ULFO) or LZMA (ULMO); GPT-partitioned and Apple-Partition-Map
@@ -192,7 +201,7 @@ Two modes, chosen by what `SOURCE` is:
   is preserved and the chunks recompressed. The result is not byte-identical to
   the original (different compressors produce different container bytes), but
   the **raw file system image round-trips bit-for-bit** and mounts under both
-  this tool and macOS.
+  this tool and macOS. Repacking the *same* input twice is byte-identical.
 
 ```console
 apfs pack ./mytree out.dmg --volname "My Data"          # directory -> HFS+ DMG
@@ -217,6 +226,31 @@ apfs create blank.dmg --fs apfs --volname Data
 
 A snapshot capturing the new volume can be created at the same time with
 `--snapshot NAME` (APFS only). This applies to `pack` too.
+
+### Reproducible output
+
+`create`, `pack` and `snapshot create` produce byte-identical images for
+identical input, with no flags required.
+
+```
+[--source-date-epoch SECONDS] [--uuid UUID] [--volume-uuid UUID] [--container-uuid UUID]
+```
+
+```console
+apfs pack ./tree a.dmg --source-date-epoch 1700000000
+SOURCE_DATE_EPOCH=1700000000 apfs pack ./tree b.dmg
+shasum -a 256 a.dmg b.dmg   # identical
+```
+
+`--source-date-epoch` pins the build timestamp and clamps source modification
+times newer than it, per the reproducible-builds convention. It resolves as
+`--source-date-epoch` > `SOURCE_DATE_EPOCH` > `APFS_SOURCE_DATE_EPOCH` > config
+file — the bare variable outranks the `APFS_` form, the one deliberate exception
+to this tool's usual precedence, because build systems set the standard name.
+
+`--uuid` pins the volume UUID; for APFS the container UUID is derived from it.
+Full detail, including the residual sources of variance, is in
+[docs/reproducible-output.md](docs/reproducible-output.md).
 
 ### `snapshot` — create, list and revert APFS snapshots
 

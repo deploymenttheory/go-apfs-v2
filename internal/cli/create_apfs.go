@@ -10,16 +10,25 @@ import (
 )
 
 func createAPFS(dstPath string, sizeBytes int64) error {
-	opts := &apfswrite.CreateOptions{
+	containerUUID, volumeUUID, err := createUUIDs.resolve()
+	if err != nil {
+		return err
+	}
+	fixed, clamp := writerTimes()
+
+	createOpts := &apfswrite.CreateOptions{
 		VolumeName:    createVolName,
 		CaseSensitive: createCaseSens,
+		ContainerUUID: containerUUID,
+		VolumeUUID:    volumeUUID,
+		FixedTime:     fixed,
+		ClampModTimes: clamp,
 	}
 	if createSnapshot != "" {
-		opts.Snapshots = []apfswrite.SnapshotSpec{{Name: createSnapshot}}
+		createOpts.Snapshots = []apfswrite.SnapshotSpec{{Name: createSnapshot}}
 	}
 	var buf writeAtBuffer
-	err := apfswrite.CreateContainer(&buf, sizeBytes, opts)
-	if err != nil {
+	if err := apfswrite.CreateContainer(&buf, sizeBytes, createOpts); err != nil {
 		return fmt.Errorf("unable to create APFS container: %w", err)
 	}
 	if err := disk.WrapRawImageDMG(dstPath, buf.Bytes(), "Apple_APFS", nil); err != nil {

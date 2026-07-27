@@ -42,6 +42,7 @@ func init() {
 	snapshotCreateCmd.Flags().StringVar(&snapCreateName, "name", "", "snapshot name (required)")
 	snapshotCreateCmd.Flags().StringVarP(&snapCreateOutput, "output", "O", "", "write the result here (a new DMG)")
 	snapshotCreateCmd.Flags().BoolVar(&snapCreateForce, "force", false, "overwrite the source image in place")
+	snapCreateUUIDs.register(snapshotCreateCmd)
 
 	snapshotRevertCmd.Flags().StringVar(&snapRevertName, "name", "", "snapshot to revert to (required)")
 	snapshotRevertCmd.Flags().StringVarP(&snapRevertOutput, "output", "O", "", "write the result here (a new DMG)")
@@ -52,6 +53,7 @@ var (
 	snapCreateName   string
 	snapCreateOutput string
 	snapCreateForce  bool
+	snapCreateUUIDs  writeIdentityFlags
 )
 
 var snapshotCreateCmd = &cobra.Command{
@@ -115,10 +117,20 @@ func runSnapshotCreate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("unable to read volume contents: %w", err)
 	}
 
+	containerUUID, volumeUUID, err := snapCreateUUIDs.resolve()
+	if err != nil {
+		return err
+	}
+	fixed, clamp := writerTimes()
+
 	copts := &apfswrite.CreateOptions{
-		VolumeName: volName,
-		Root:       tree,
-		Snapshots:  []apfswrite.SnapshotSpec{{Name: snapCreateName}},
+		VolumeName:    volName,
+		Root:          tree,
+		Snapshots:     []apfswrite.SnapshotSpec{{Name: snapCreateName}},
+		ContainerUUID: containerUUID,
+		VolumeUUID:    volumeUUID,
+		FixedTime:     fixed,
+		ClampModTimes: clamp,
 	}
 	if ci, err := volume.IsCaseInsensitive(); err == nil {
 		copts.CaseSensitive = !ci

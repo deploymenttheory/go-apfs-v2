@@ -19,6 +19,7 @@ Legend: ✅ implemented · 🟡 partial · ⬜ not yet
 | `io/fs.FS` adapter | ✅ | ✅ |
 | Create empty volume | ✅ | ✅ |
 | Populate a volume with files | ✅ | ✅ |
+| Reproducible output (`SOURCE_DATE_EPOCH`, fixed UUIDs) | ✅ | ✅ |
 
 ¹ One snapshot per image (single static checkpoint); multiple snapshots need
 distinct xids and incremental checkpoints.
