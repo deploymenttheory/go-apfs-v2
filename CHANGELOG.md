@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **decmpfs LZFSE (types 11 and 12) now decompresses** (`pkg/apfs`). It was
+  listed as supported in the README and TOOLS_STATUS, but was blocked in three
+  places: `internalCompressionMethod` returned "not supported yet",
+  `NewCompressedDataHandle` rejected the method, and the resource-fork
+  block-offset table was never parsed for it. The leaf decompressor already
+  existed and was simply unreachable. Real vendor applications ship
+  LZFSE-compressed files, so extraction could hard-fail on exactly the images
+  the tool exists for.
+
+  The per-chunk raw escape is signalled by the *absence* of the LZFSE block
+  magic (`'b'`, the first byte of `bvx1`/`bvx2`/`bvxn`), which macOS writes
+  behind a `0xff` marker — not by LZVN's `0x06` sentinel. Reusing that sentinel
+  would misread any raw chunk whose first byte differed.
+
+- **Inline decmpfs never worked, for any method** (`pkg/apfs`). Data stored in
+  the `com.apple.decmpfs` attribute rather than a resource fork — types 3
+  (zlib), 7 (LZVN) and 11 (LZFSE) — was handed to the block-offset loader with
+  its 16-byte header already stripped, but that loader identifies inline
+  storage by finding the `fpmc` magic at offset zero and skips the header
+  itself. The value is now passed whole, and the magic is verified so a
+  regression fails loudly instead of misparsing compressed bytes as an offset
+  table.
+
+- **A resource fork with more than ~8159 zlib blocks (about 510 MB) faulted**
+  (`pkg/apfs`) with a slice-bounds panic instead of returning an error: the
+  descriptor table was read into a fixed 65537-byte scratch buffer that only
+  holds so many 8-byte descriptors. It is now sized from the table.
+
+- decmpfs types 9/10 (uncompressed) and 13/14 (LZBITMAP) are now named in the
+  "not supported" error rather than reported as an unrecognized type.
+
 ### Added
 
 - **Volume roles and volume groups** (`pkg/apfs`, `pkg/apfswrite`, CLI):

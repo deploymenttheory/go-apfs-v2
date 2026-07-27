@@ -64,9 +64,9 @@ func NewCompressedDataHandle(
 		return nil, fmt.Errorf("invalid compressed data stream")
 	}
 
-	if compressionMethod != CompressionMethodDeflate &&
-		compressionMethod != CompressionMethodLZVN &&
-		compressionMethod != CompressionMethodUnknown5 {
+	switch compressionMethod {
+	case CompressionMethodDeflate, CompressionMethodLZVN, CompressionMethodLZFSE, CompressionMethodUnknown5:
+	default:
 		return nil, fmt.Errorf("unsupported compression method: %d", compressionMethod)
 	}
 
@@ -168,7 +168,14 @@ func (cdh *CompressedDataHandle) loadCompressedBlockOffsets(reader io.ReaderAt) 
 		segmentDataOffset = 264
 		compressedDescriptorsOffset += 4
 		compressedBlockDescriptorSize = 8
-	} else if cdh.CompressionMethod == CompressionMethodLZVN {
+	} else if cdh.CompressionMethod == CompressionMethodLZVN ||
+		cdh.CompressionMethod == CompressionMethodLZFSE {
+		// LZVN and LZFSE resource forks share one block-table layout, and it
+		// differs from zlib's: a flat array of little-endian uint32 at offset 0
+		// with no HFS resource-fork header, entry i being block i's absolute
+		// offset from the fork base, and one trailing entry marking the end. So
+		// the first entry is itself the size of the table, and dividing it by
+		// four gives the entry count.
 		segmentDataOffset = 0
 		compressedBlockDescriptorSize = 4
 
@@ -180,6 +187,9 @@ func (cdh *CompressedDataHandle) loadCompressedBlockOffsets(reader io.ReaderAt) 
 			return fmt.Errorf("invalid compressed block offset: 0x%08x", compressedBlockOffset)
 		}
 
+		// This counts the trailing end-of-table entry as a block, so the array
+		// allocated below has one unused slot. It is harmless: ReadSegmentData
+		// stops at UncompressedDataSize, so the phantom block is unreachable.
 		cdh.NumberOfCompressedBlocks = compressedBlockOffset / 4
 	}
 
@@ -216,24 +226,30 @@ func (cdh *CompressedDataHandle) loadCompressedBlockOffsets(reader io.ReaderAt) 
 			segmentDataOffset += 4 // Skip size field
 		}
 
-		// Read remaining compressed block descriptors
+		// Read the remaining block descriptors into a buffer sized for the
+		// table, not into the fixed-size segment scratch. The table can be
+		// larger than one uncompressed block: a zlib resource fork needs
+		// 8 bytes per block, so a file over roughly 510 MB has more descriptors
+		// than the 65537-byte scratch holds, and reading them into it faulted
+		// on a slice bound instead of returning an error.
 		readSize := int(cdh.NumberOfCompressedBlocks-1) * compressedBlockDescriptorSize
+		descriptors := make([]byte, readSize)
 
-		readCount, err = cdh.CompressedDataStream.ReadAt(
-			cdh.CompressedSegmentData[segmentDataOffset:segmentDataOffset+readSize],
-			int64(segmentDataOffset),
-		)
-		if err != nil && err != io.EOF {
-			return fmt.Errorf("unable to read compressed block descriptors at offset %d: %w", segmentDataOffset, err)
-		}
-		if readCount != readSize {
-			return fmt.Errorf("unable to read %d bytes at offset %d", readSize, segmentDataOffset)
+		if readSize > 0 {
+			readCount, err = cdh.CompressedDataStream.ReadAt(descriptors, int64(segmentDataOffset))
+			if err != nil && err != io.EOF {
+				return fmt.Errorf("unable to read compressed block descriptors at offset %d: %w", segmentDataOffset, err)
+			}
+			if readCount != readSize {
+				return fmt.Errorf("unable to read %d bytes at offset %d", readSize, segmentDataOffset)
+			}
 		}
 
-		// Parse remaining block offsets
+		// Parse remaining block offsets, walking the descriptor buffer.
+		descriptorOffset := 0
 		for compressedBlockIndex = 1; compressedBlockIndex < cdh.NumberOfCompressedBlocks; compressedBlockIndex++ {
-			compressedBlockOffset := binary.LittleEndian.Uint32(cdh.CompressedSegmentData[segmentDataOffset:])
-			segmentDataOffset += 4
+			compressedBlockOffset := binary.LittleEndian.Uint32(descriptors[descriptorOffset:])
+			descriptorOffset += compressedBlockDescriptorSize
 
 			compressedBlockOffset += compressedDescriptorsOffset
 
@@ -244,10 +260,6 @@ func (cdh *CompressedDataHandle) loadCompressedBlockOffsets(reader io.ReaderAt) 
 
 			cdh.CompressedBlockOffsets[compressedBlockIndex] = compressedBlockOffset
 			previousCompressedBlockOffset = compressedBlockOffset
-
-			if cdh.CompressionMethod == CompressionMethodDeflate {
-				segmentDataOffset += 4 // Skip size field
-			}
 		}
 
 		compressedBlockIndex = cdh.NumberOfCompressedBlocks

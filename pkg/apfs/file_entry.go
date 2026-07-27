@@ -1,6 +1,7 @@
 package apfs
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"strings"
@@ -855,11 +856,21 @@ func (fe *FileEntry) getFileExtents() error {
 	return nil
 }
 
-// internalCompressionMethod maps a raw com.apple.decmpfs type to the
-// internal compression method codes used by CompressedDataHandle:
-// decmpfs 3/4 = zlib (attr/rsrc), 5 = sparse, 7/8 = LZVN, 11/12 = LZFSE.
-// The attr-vs-rsrc distinction is handled by where the data is read from,
-// not by the method code.
+// internalCompressionMethod maps a raw com.apple.decmpfs type to the internal
+// compression method codes used by CompressedDataHandle. The types come in
+// attribute/resource-fork pairs, the odd member of each pair storing the data
+// inline in the com.apple.decmpfs attribute and the even member storing it in
+// the com.apple.ResourceFork attribute:
+//
+//	 3 /  4  zlib
+//	 5       uncompressed, stored inline
+//	 7 /  8  LZVN
+//	 9 / 10  uncompressed ("plain")
+//	11 / 12  LZFSE
+//	13 / 14  LZBITMAP
+//
+// The attribute-versus-resource-fork distinction is handled by where the data
+// is read from, not by the method code, so each pair maps to one method.
 func internalCompressionMethod(decmpfsType uint32) (int, error) {
 	switch decmpfsType {
 	case 3, 4:
@@ -869,10 +880,56 @@ func internalCompressionMethod(decmpfsType uint32) (int, error) {
 	case 7, 8:
 		return CompressionMethodLZVN, nil
 	case 11, 12:
-		return 0, fmt.Errorf("decmpfs LZFSE compression (type %d) is not supported yet", decmpfsType)
+		return CompressionMethodLZFSE, nil
+	case 9, 10:
+		return 0, fmt.Errorf("decmpfs uncompressed storage (type %d) is not supported yet", decmpfsType)
+	case 13, 14:
+		return 0, fmt.Errorf("decmpfs LZBITMAP compression (type %d) is not supported yet", decmpfsType)
 	default:
 		return 0, fmt.Errorf("unsupported decmpfs compression type: %d", decmpfsType)
 	}
+}
+
+// newInlineDecmpfsStream builds the decompressing stream for a com.apple.decmpfs
+// attribute that stores its compressed data inline, immediately after the
+// 16-byte header, rather than in a resource fork.
+//
+// attrValue must be the *whole* attribute value, header included.
+// CompressedDataHandle detects inline storage by finding the "fpmc" magic at
+// offset zero and skips the header itself; handing it the payload alone hides
+// that magic and sends the stream down a resource-fork branch, which misparses
+// the first bytes of the compressed data as a block-offset table. The magic is
+// therefore checked here, so passing a stripped value fails loudly instead of
+// producing plausible nonsense.
+func newInlineDecmpfsStream(
+	attrValue []byte,
+	uncompressedSize uint64,
+	method int,
+	fileHandle io.ReaderAt,
+) (*DataStream, error) {
+	if len(attrValue) <= CompressedDataHeaderSize {
+		return nil, fmt.Errorf("inline decmpfs attribute is %d bytes: too short to hold a %d-byte header and any data",
+			len(attrValue), CompressedDataHeaderSize)
+	}
+	if !bytes.Equal(attrValue[:4], CompressedDataHeaderSignature[:]) {
+		return nil, fmt.Errorf("inline decmpfs data must carry its %q header: the block-offset loader identifies inline storage by that magic at offset zero",
+			string(CompressedDataHeaderSignature[:]))
+	}
+
+	compressedDataStream, err := NewDataStreamFromData(attrValue)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create compressed data stream from embedded data: %w", err)
+	}
+
+	dataStream, err := NewDataStreamFromCompressedDataStream(compressedDataStream, uncompressedSize, method)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create decompressed data stream: %w", err)
+	}
+
+	if cdReader, ok := dataStream.readerAt.(*compressedDataReader); ok {
+		cdReader.SetFileHandle(fileHandle)
+	}
+	return dataStream, nil
 }
 
 // getDataStream retrieves the data stream (lazy initialization)
@@ -905,27 +962,14 @@ func (fe *FileEntry) getDataStream() error {
 
 					// Check if data is embedded in the attribute (inline compression)
 					if len(fe.CompressedDataAttributeValues.ValueData) > 16 {
-						// Data is embedded in the attribute after the header
-						compressedData := fe.CompressedDataAttributeValues.ValueData[16:]
-
-						// Create data stream from embedded compressed data
-						compressedDataStream, err := NewDataStreamFromData(compressedData)
-						if err != nil {
-							return fmt.Errorf("unable to create compressed data stream from embedded data: %w", err)
-						}
-
-						// Create decompressed data stream
-						dataStream, err := NewDataStreamFromCompressedDataStream(
-							compressedDataStream,
+						dataStream, err := newInlineDecmpfsStream(
+							fe.CompressedDataAttributeValues.ValueData,
 							header.UncompressedDataSize,
 							method,
+							fe.FileHandle,
 						)
 						if err != nil {
-							return fmt.Errorf("unable to create decompressed data stream: %w", err)
-						}
-
-						if cdReader, ok := dataStream.readerAt.(*compressedDataReader); ok {
-							cdReader.SetFileHandle(fe.FileHandle)
+							return err
 						}
 
 						fe.DataStream = dataStream
