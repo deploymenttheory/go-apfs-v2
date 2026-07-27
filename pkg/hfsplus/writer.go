@@ -37,6 +37,11 @@ type Entry struct {
 	UID, GID uint32
 	Data     []byte   // file content, or symlink target bytes
 	Children []*Entry // directory children (writer sorts them)
+
+	// ResourceFork is the file's resource fork, empty when it has none. On
+	// HFS+ this is a fork of the catalog record rather than an extended
+	// attribute, even though macOS presents it as com.apple.ResourceFork.
+	ResourceFork []byte
 }
 
 // CreateOptions tunes image creation. The zero value is valid.
@@ -79,6 +84,10 @@ type fileNode struct {
 	dataLen    int
 	dataBlocks uint32
 	dataStart  uint32 // first allocation block of the data fork
+
+	rsrcLen    int
+	rsrcBlocks uint32
+	rsrcStart  uint32 // first allocation block of the resource fork
 }
 
 // layout describes where each metadata region and file data lives, in
@@ -275,6 +284,14 @@ func (b *builder) addChildren(parent *fileNode, children []*Entry) {
 		if n.dataLen > 0 {
 			n.dataBlocks = uint32((n.dataLen + b.blockSize - 1) / b.blockSize)
 		}
+		// A directory has no forks, and a symlink's target is its data fork;
+		// neither carries a resource fork.
+		if !n.isDir && !n.isSymlink {
+			n.rsrcLen = len(ce.ResourceFork)
+			if n.rsrcLen > 0 {
+				n.rsrcBlocks = uint32((n.rsrcLen + b.blockSize - 1) / b.blockSize)
+			}
+		}
 		parent.children = append(parent.children, n)
 		b.allNodes = append(b.allNodes, n)
 		if n.isDir {
@@ -289,7 +306,7 @@ func (b *builder) computeLayout(sizeBytes int64, catalogBlks uint32) (layout, er
 	bs := b.blockSize
 	var totalData uint32
 	for _, f := range b.fileNodes {
-		totalData += f.dataBlocks
+		totalData += f.dataBlocks + f.rsrcBlocks
 	}
 
 	// Metadata before data: block 0, bitmap, extents (1 node), catalog.
@@ -338,27 +355,36 @@ func (b *builder) computeLayout(sizeBytes int64, catalogBlks uint32) (layout, er
 	return lay, nil
 }
 
-// assignData assigns each file a contiguous data extent starting at dataStart.
+// assignData assigns each file contiguous extents starting at dataStart: its
+// data fork, then its resource fork if it has one.
 func (b *builder) assignData(lay *layout) {
 	next := lay.dataStart
 	for _, f := range b.fileNodes {
-		if f.dataBlocks == 0 {
-			continue
+		if f.dataBlocks > 0 {
+			f.dataStart = next
+			next += f.dataBlocks
 		}
-		f.dataStart = next
-		next += f.dataBlocks
+		if f.rsrcBlocks > 0 {
+			f.rsrcStart = next
+			next += f.rsrcBlocks
+		}
 	}
 }
 
 // writeFileData copies every file's bytes into the image at its data extent.
 func (b *builder) writeFileData(w io.WriterAt) error {
 	for _, f := range b.fileNodes {
-		if f.dataLen == 0 {
-			continue
+		if f.dataLen > 0 {
+			off := int64(f.dataStart) * int64(b.blockSize)
+			if _, err := w.WriteAt(f.entry.Data, off); err != nil {
+				return fmt.Errorf("hfsplus: writing %s: %w", f.name, err)
+			}
 		}
-		off := int64(f.dataStart) * int64(b.blockSize)
-		if _, err := w.WriteAt(f.entry.Data, off); err != nil {
-			return fmt.Errorf("hfsplus: writing %s: %w", f.name, err)
+		if f.rsrcLen > 0 {
+			off := int64(f.rsrcStart) * int64(b.blockSize)
+			if _, err := w.WriteAt(f.entry.ResourceFork, off); err != nil {
+				return fmt.Errorf("hfsplus: writing resource fork of %s: %w", f.name, err)
+			}
 		}
 	}
 	return nil
@@ -366,14 +392,26 @@ func (b *builder) writeFileData(w io.WriterAt) error {
 
 // forkFor returns the data-fork descriptor for a file node.
 func (b *builder) forkFor(f *fileNode) ForkData {
+	return forkDescriptor(f.dataLen, f.dataBlocks, f.dataStart)
+}
+
+// rsrcForkFor returns the resource-fork descriptor for a file node. It is the
+// zero value when the file has no resource fork, which is what fsck_hfs expects
+// of a file that does not carry one.
+func (b *builder) rsrcForkFor(f *fileNode) ForkData {
+	return forkDescriptor(f.rsrcLen, f.rsrcBlocks, f.rsrcStart)
+}
+
+func forkDescriptor(length int, blocks, start uint32) ForkData {
+	if blocks == 0 {
+		return ForkData{}
+	}
 	fork := ForkData{
-		LogicalSize: uint64(f.dataLen),
+		LogicalSize: uint64(length),
 		ClumpSize:   65536,
-		TotalBlocks: f.dataBlocks,
+		TotalBlocks: blocks,
 	}
-	if f.dataBlocks > 0 {
-		fork.Extents[0] = ExtentDescriptor{StartBlock: f.dataStart, BlockCount: f.dataBlocks}
-	}
+	fork.Extents[0] = ExtentDescriptor{StartBlock: start, BlockCount: blocks}
 	return fork
 }
 
@@ -446,6 +484,7 @@ func (b *builder) normalRecord(n *fileNode) btRecord {
 		AccessDate:       ht,
 		BSDInfo:          bsd,
 		DataFork:         b.forkFor(n),
+		ResourceFork:     b.rsrcForkFor(n),
 	}
 	if n.isSymlink {
 		file.UserInfo.FileType = SymLinkFileType
@@ -497,6 +536,7 @@ func (b *builder) buildBitmap(lay *layout) []byte {
 	setRange(lay.catalogStart, lay.catalogBlks)
 	for _, f := range b.fileNodes {
 		setRange(f.dataStart, f.dataBlocks)
+		setRange(f.rsrcStart, f.rsrcBlocks)
 	}
 	set(lay.totalBlocks - 1) // alternate volume header
 	return bitmap
@@ -582,7 +622,7 @@ func (b *builder) countUsedBlocks(lay *layout) uint32 {
 	used += lay.extentBlocks
 	used += lay.catalogBlks
 	for _, f := range b.fileNodes {
-		used += f.dataBlocks
+		used += f.dataBlocks + f.rsrcBlocks
 	}
 	used++ // alternate volume header (last block, in the trailing free region)
 	return used
