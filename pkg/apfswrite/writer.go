@@ -348,9 +348,19 @@ func entryFromDir(dir string) (*Entry, error) {
 	return &Entry{Children: children}, nil
 }
 
+// isSpecialFile reports whether mode describes something this writer cannot
+// model: a device node, FIFO or socket. os.ModeIrregular covers whatever else
+// the platform may report that is neither a regular file, a directory nor a
+// symbolic link.
+func isSpecialFile(mode os.FileMode) bool {
+	return mode&(os.ModeDevice|os.ModeNamedPipe|os.ModeSocket|os.ModeIrregular) != 0
+}
+
 // readDirEntries reads one directory level into Entry nodes, recursing into
 // subdirectories. Symlinks are captured as their target path; regular files as
 // their bytes. Mode, mtime and (where the OS exposes them) uid/gid are copied.
+// Device nodes, FIFOs and sockets are skipped: this writer cannot represent
+// them, and reading one would hang or exhaust memory rather than fail cleanly.
 func readDirEntries(dir string) ([]*Entry, error) {
 	fis, err := os.ReadDir(dir)
 	if err != nil {
@@ -383,6 +393,13 @@ func readDirEntries(dir string) ([]*Entry, error) {
 				return nil, err
 			}
 			e.Children = kids
+		case isSpecialFile(info.Mode()):
+			// This writer models regular files, directories and symbolic links.
+			// Reading a special file as though it were regular does not merely
+			// produce a wrong entry, it breaks the run: opening a FIFO blocks
+			// until a writer appears, a character device such as /dev/zero
+			// reads until memory runs out, and a socket fails outright. Skip it.
+			continue
 		default:
 			data, err := os.ReadFile(full)
 			if err != nil {

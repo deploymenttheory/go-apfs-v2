@@ -4,6 +4,7 @@
 package apfswrite_test
 
 import (
+	"os"
 	"strings"
 	"testing"
 
@@ -173,6 +174,36 @@ func TestCreateContainerRejectsInvalidRole(t *testing.T) {
 			}
 			if !strings.Contains(err.Error(), tc.contains) {
 				t.Errorf("error = %q, want it to mention %q", err, tc.contains)
+			}
+		})
+	}
+}
+
+// TestCreateContainerRejectsSpecialEntry checks a caller-built tree containing
+// something this writer cannot model is refused rather than silently written
+// with the wrong mode. The directory walk skips such files; a caller assembling
+// an Entry tree by hand gets told instead.
+func TestCreateContainerRejectsSpecialEntry(t *testing.T) {
+	for _, mode := range []os.FileMode{
+		os.ModeNamedPipe | 0o644,
+		os.ModeSocket | 0o644,
+		os.ModeDevice | 0o644,
+		os.ModeDevice | os.ModeCharDevice | 0o644,
+	} {
+		t.Run(mode.String(), func(t *testing.T) {
+			opts := &apfswrite.CreateOptions{
+				VolumeName: "SPECIAL",
+				Root: &apfswrite.Entry{Children: []*apfswrite.Entry{
+					{Name: "ordinary.txt", Data: []byte("fine\n")},
+					{Name: "special", Mode: mode},
+				}},
+			}
+			err := apfswrite.CreateContainer(&memImage{}, 32*1024*1024, opts)
+			if err == nil {
+				t.Fatalf("CreateContainer accepted a %s entry", mode.Type())
+			}
+			if !strings.Contains(err.Error(), "regular files, directories and symbolic links") {
+				t.Errorf("error = %q, want it to say what the writer can model", err)
 			}
 		})
 	}
