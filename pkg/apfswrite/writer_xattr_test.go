@@ -22,8 +22,12 @@ func TestCreateContainerXattrRoundTrip(t *testing.T) {
 		"com.apple.metadata:_x": bytes.Repeat([]byte{0xfe}, 300),
 		"user.empty":            {},
 		"user.one":              {0x01},
-		// The largest value the format embeds, to pin the boundary.
-		"user.largest": bytes.Repeat([]byte("x"), 3804),
+		// The largest value the format embeds, and the first that needs a
+		// stream: the boundary is worth pinning from both sides.
+		"user.largest":  bytes.Repeat([]byte("x"), 3804),
+		"user.streamed": bytes.Repeat([]byte("y"), 3805),
+		// Far past it, so the stream spans several blocks.
+		"user.big": bytes.Repeat([]byte("z"), 300_000),
 	}
 
 	vol := openVolume(t, &apfswrite.CreateOptions{
@@ -165,18 +169,6 @@ func TestCreateContainerRejectsUnwritableXattrs(t *testing.T) {
 		contains string
 	}{
 		{
-			"a value too large to embed",
-			map[string][]byte{"user.big": bytes.Repeat([]byte("x"), 3805)},
-			"need a data stream",
-		},
-		{
-			// fsck_apfs: "com.apple.ResourceFork is expected to be stream
-			// based". Embedding one produces an image macOS calls corrupt.
-			"a resource fork, which must be stream based",
-			map[string][]byte{"com.apple.ResourceFork": []byte("fork bytes")},
-			"must be stored as a data stream",
-		},
-		{
 			// apfsck: "is not compressed but has decmpfs xattr". A decmpfs
 			// attribute declares content this writer does not produce.
 			"a decmpfs attribute, which declares compressed content",
@@ -239,5 +231,107 @@ func TestCreateContainerXattrsAreDeterministic(t *testing.T) {
 		if !bytes.Equal(first, buildImage(t, opts())) {
 			t.Fatal("two builds with the same attributes differ; map order is reaching the image")
 		}
+	}
+}
+
+// TestCreateContainerStreamedXattrs covers attributes stored in a data stream
+// rather than inside their record: everything over the embedded limit, and any
+// resource fork whatever its size, because fsck_apfs accepts nothing else for
+// one.
+func TestCreateContainerStreamedXattrs(t *testing.T) {
+	fork := bytes.Repeat([]byte("resource fork "), 5000) // ~70 KB, multi-block
+	small := []byte("a small fork")
+
+	vol := openVolume(t, &apfswrite.CreateOptions{
+		VolumeName: "STREAMS",
+		Root: &apfswrite.Entry{Children: []*apfswrite.Entry{
+			{Name: "big-fork.txt", Data: []byte("data fork\n"), Xattrs: map[string][]byte{
+				"com.apple.ResourceFork": fork,
+			}},
+			// A resource fork small enough to embed must still be streamed.
+			{Name: "small-fork.txt", Data: []byte("data fork\n"), Xattrs: map[string][]byte{
+				"com.apple.ResourceFork": small,
+			}},
+			{Name: "mixed.txt", Data: []byte("data fork\n"), Xattrs: map[string][]byte{
+				"user.inline":   []byte("short"),
+				"user.streamed": bytes.Repeat([]byte("s"), 100_000),
+			}},
+		}},
+	})
+
+	cases := map[string]map[string][]byte{
+		"big-fork.txt":   {"com.apple.ResourceFork": fork},
+		"small-fork.txt": {"com.apple.ResourceFork": small},
+		"mixed.txt": {
+			"user.inline":   []byte("short"),
+			"user.streamed": bytes.Repeat([]byte("s"), 100_000),
+		},
+	}
+	for path, want := range cases {
+		got, err := vol.Xattrs(path)
+		if err != nil {
+			t.Errorf("Xattrs(%s): %v", path, err)
+			continue
+		}
+		for name, value := range want {
+			if !bytes.Equal(got[name], value) {
+				t.Errorf("%s: %s read %d bytes, want %d", path, name, len(got[name]), len(value))
+			}
+		}
+	}
+
+	// The file's own content must be untouched by any of this: the attribute
+	// streams and the data fork are separate objects competing for blocks.
+	for _, path := range []string{"big-fork.txt", "small-fork.txt", "mixed.txt"} {
+		content, err := vol.ReadFile(path)
+		if err != nil {
+			t.Errorf("ReadFile(%s): %v", path, err)
+			continue
+		}
+		if string(content) != "data fork\n" {
+			t.Errorf("%s: content = %q, want %q", path, content, "data fork\n")
+		}
+	}
+}
+
+// TestCreateContainerResourceForkSetsFlag checks an inode with a resource fork
+// says so, and one without says the opposite. A checker compares the flag
+// against the attribute and reports a mismatch either way.
+func TestCreateContainerResourceForkSetsFlag(t *testing.T) {
+	const (
+		hasRsrcFork = 0x00004000
+		noRsrcFork  = 0x00008000
+	)
+
+	vol := openVolume(t, &apfswrite.CreateOptions{
+		VolumeName: "FORKFLAG",
+		Root: &apfswrite.Entry{Children: []*apfswrite.Entry{
+			{Name: "forked.txt", Data: []byte("data\n"), Xattrs: map[string][]byte{
+				"com.apple.ResourceFork": []byte("fork"),
+			}},
+			{Name: "plain.txt", Data: []byte("data\n")},
+		}},
+	})
+
+	forked, err := vol.FileEntryByPath("forked.txt")
+	if err != nil {
+		t.Fatalf("FileEntryByPath: %v", err)
+	}
+	if forked.Inode.Flags&hasRsrcFork == 0 {
+		t.Error("an inode with a resource fork does not claim INODE_HAS_RSRC_FORK")
+	}
+	if forked.Inode.Flags&noRsrcFork != 0 {
+		t.Error("an inode with a resource fork also claims INODE_NO_RSRC_FORK; they are mutually exclusive")
+	}
+
+	plain, err := vol.FileEntryByPath("plain.txt")
+	if err != nil {
+		t.Fatalf("FileEntryByPath: %v", err)
+	}
+	if plain.Inode.Flags&noRsrcFork == 0 {
+		t.Error("an inode with no resource fork does not claim INODE_NO_RSRC_FORK")
+	}
+	if plain.Inode.Flags&hasRsrcFork != 0 {
+		t.Error("an inode with no resource fork claims INODE_HAS_RSRC_FORK")
 	}
 }

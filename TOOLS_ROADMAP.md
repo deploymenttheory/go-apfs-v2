@@ -24,9 +24,10 @@ what is planned or under consideration, roughly in priority order.
 
 ## Medium term
 
-- **Stream-based extended attributes** — the APFS writer stores attributes
-  inline, so values over 3804 bytes, resource forks and decmpfs still cannot be
-  written. HFS+ has no attributes file at all.
+- **Extended attributes in the HFS+ writer** — it has no attributes file at
+  all, so every attribute is dropped. The APFS writer carries them.
+- **decmpfs on write** — needs the compression machinery and the inode's
+  BSD flags, not just the attribute.
 - **Hard links** in the HFS+ writer.
 - **Multiple APFS snapshots per image** — needs distinct transaction ids and
   incremental checkpoints (the writer currently emits a single static

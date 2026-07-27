@@ -117,9 +117,9 @@ type Entry struct {
 	// Data is the file content for a regular file (any size, may be empty), or
 	// the target path for a symbolic link.
 	Data []byte
-	// Xattrs are the entry's extended attributes, written as embedded
-	// attribute records. A value larger than the format stores inline is an
-	// error rather than a silent truncation; see CreateContainer.
+	// Xattrs are the entry's extended attributes. Small values are stored
+	// inside their attribute record; larger ones, and any resource fork, get a
+	// data stream of their own.
 	//
 	// The com.apple.fs.symlink name is reserved: it is how APFS stores a
 	// symbolic link's target, and the writer emits it itself.
@@ -195,8 +195,11 @@ type builderEntry struct {
 	// extended attribute, not in a data stream).
 	linkTarget []byte
 
-	// Extended attributes, written as embedded attribute records.
+	// Extended attributes small enough to store inside their record.
 	xattrs map[string][]byte
+	// Extended attributes too large to embed, or required by the format to be
+	// stream based. Each owns a synthetic stream entry holding its content.
+	streamedXattrs map[string]*builderEntry
 	// xattrFlags are the inode internal_flags the attributes require. Several
 	// flags must agree exactly with whether a particular attribute is present.
 	xattrFlags uint64
@@ -409,10 +412,15 @@ type builder struct {
 	// plus the subset that are regular files with a data extent.
 	entries     []*builderEntry
 	streamFiles []*builderEntry
-	symlinks    []*builderEntry
-	numFiles    uint64 // regular files (user)
-	numDirs     uint64 // directories (user, excludes root and private-dir)
-	numSymlinks uint64 // symbolic links (user)
+	// xattrStreams are the synthetic stream entries backing extended
+	// attributes too large to embed. They are also in streamFiles, which is
+	// what gets them blocks, an extent and a place in the extentref tree; this
+	// list exists so their object ids can be accounted for separately.
+	xattrStreams []*builderEntry
+	symlinks     []*builderEntry
+	numFiles     uint64 // regular files (user)
+	numDirs      uint64 // directories (user, excludes root and private-dir)
+	numSymlinks  uint64 // symbolic links (user)
 
 	// file-system tree shape, decided in setTree from the record sizes.
 	numFSTreeLeaves uint64 // extra leaf nodes when the file-system tree is a 2-level tree

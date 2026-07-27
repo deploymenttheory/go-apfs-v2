@@ -32,12 +32,11 @@ type WalkOptions struct {
 // it, but it is returned rather than hidden because a lossy conversion that
 // does not say so is the failure mode this exists to prevent.
 //
-// Extended attributes are carried where the format allows them inline. A resource
-// fork is not: macOS requires one to be stored as a data stream whatever its
-// size. Nor is com.apple.decmpfs, which declares content this writer does not
-// produce. Both are reported as dropped, as is anything too large to embed.
-// Hard links are not supported either, so a second name for one file becomes an
-// independent copy.
+// Extended attributes are carried, whatever their size: small values live
+// inside their record and larger ones, along with any resource fork, get a data
+// stream of their own. com.apple.decmpfs is the exception — it declares content
+// this writer does not produce — and is reported as dropped. Hard links are not
+// supported, so a second name for one file becomes an independent copy.
 func EntryTreeFromDir(srcDir string, opts *WalkOptions) (*Entry, *fidelity.Report, error) {
 	var o hostwalk.Options
 	if opts != nil {
@@ -69,12 +68,12 @@ func newEntry(n hostwalk.Node, children []*Entry) *Entry {
 //
 // It exists so a caller walking a source tree can tell in advance what will
 // survive, rather than discovering it when CreateContainer refuses the whole
-// image. The rejections are not arbitrary: see validateXattrs for why a
-// resource fork and a compression header cannot be written inline.
+// image. Size is no longer a limit: a value too large to embed gets a stream.
+// See validateXattrs for why a compression header still cannot be written.
 func CanWriteXattr(name string, value []byte) bool {
 	switch name {
-	case symlinkName, resourceForkName, decmpfsName:
+	case symlinkName, decmpfsName:
 		return false
 	}
-	return name != "" && !strings.ContainsRune(name, 0) && len(value) <= maxEmbeddedXattrSize
+	return name != "" && !strings.ContainsRune(name, 0)
 }

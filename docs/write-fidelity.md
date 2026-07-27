@@ -15,18 +15,17 @@ copied through bit-for-bit.
 | Regular files | content, mode, owner, group, modification time |
 | Directories | mode, owner, group, modification time |
 | Symbolic links | target, mode, owner, group, modification time |
-| Extended attributes | **APFS only**, up to 3804 bytes each, with the exceptions below |
+| Extended attributes | **APFS only**, any size, including resource forks |
 
 ## What is not
 
 | | What happens | Reported as |
 |---|---|---|
 | Device nodes, FIFOs, sockets | **skipped entirely** | `specialFilesSkipped` |
-| Extended attributes over 3804 bytes | dropped | `xattrsDropped` |
 | Extended attributes, all of them, on HFS+ | dropped | `xattrsDropped` |
-| Resource forks | dropped | `resourceForksDropped` |
+| Resource forks on HFS+ | dropped | `resourceForksDropped` |
 | `com.apple.decmpfs` | dropped | `xattrsDropped` |
-| ACLs | carried on APFS, dropped on HFS+ | `aclsDropped` |
+| ACLs on HFS+ | dropped | `aclsDropped` |
 | Hard links | each name becomes an independent copy | `hardLinksCollapsed` |
 | BSD flags (`uchg`, `hidden`, …) | dropped | `bsdFlagsDropped` |
 | Volume role and group (`snapshot create` only) | not carried | `volumeIdentityDropped` |
@@ -41,23 +40,27 @@ attributes deliberately. A dropped `com.apple.quarantine` is metadata; a dropped
 resource fork is *file content*, and "ACLs were dropped" is a materially
 different statement to a forensic reader than "3 attributes were dropped".
 
-### Why resource forks and decmpfs are refused rather than written
+### How attributes are stored, and why decmpfs is still refused
 
-Both would produce an image macOS calls corrupt, so the writer declines them
-instead of emitting something broken.
+A small value lives inside its attribute record. A larger one — and **any**
+resource fork, however small — gets a data stream of its own: an object with its
+own id, extent and place in the extent-reference tree.
 
-`com.apple.ResourceFork` must be stored as a data stream whatever its size —
-`fsck_apfs` says so directly: *"com.apple.ResourceFork is expected to be stream
-based"*. This writer only stores attributes inline. Notably `apfsck` accepts the
-embedded form, so this is a case where only Apple's own checker objects.
+Resource forks have no size threshold because `fsck_apfs` requires one to be
+stream based whatever its size: *"com.apple.ResourceFork is expected to be
+stream based"*. `apfsck` accepts the embedded form, so this is a case where only
+Apple's own checker objects.
 
-`com.apple.decmpfs` declares a file's content compressed and requires
-`APFS_INOBSD_COMPRESSED` in the inode's BSD flags, with the content living in
-the resource fork rather than the data fork. This writer puts content in the
-data fork, so the attribute would describe content the file does not have —
-the same contradiction that stops `extract --xattrs` restoring it.
+An attribute's stream carries no `DSTREAM_ID` record, unlike a file's data
+stream. That record holds a reference count, and an attribute's stream cannot be
+cloned, so there is no count to keep. `apfsck` reports one as *"xattrs can't be
+cloned"*.
 
-Both are on the roadmap along with stream-based attributes generally.
+`com.apple.decmpfs` is still refused. It declares a file's content compressed
+and requires `APFS_INOBSD_COMPRESSED` in the inode's BSD flags, with the content
+living in the resource fork rather than the data fork. This writer puts content
+in the data fork, so the attribute would describe content the file does not have
+— the same contradiction that stops `extract --xattrs` restoring it.
 
 ## How losses are reported
 
