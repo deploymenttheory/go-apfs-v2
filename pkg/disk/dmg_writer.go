@@ -71,12 +71,19 @@ type SourceBlock struct {
 	Attributes  string
 	StartSector uint64
 	// SectorCount is the number of 512-byte sectors the block covers. When
-	// Data is non-nil it must equal len(Data)/512; when Data is nil the block
-	// is treated as all-zero for SectorCount sectors.
+	// Data is non-nil it must equal len(Data)/512; otherwise it is authoritative.
 	SectorCount uint64
 	// Data is the exact uncompressed bytes for the block, length a multiple of
-	// 512. A nil Data means an all-zero block of SectorCount sectors.
+	// 512. A nil Data and a nil Reader mean an all-zero block of SectorCount
+	// sectors.
 	Data []byte
+	// Reader supplies the block's uncompressed bytes lazily, covering
+	// [0, SectorCount*512) in block-relative coordinates. It is the alternative
+	// to Data for a block too large to hold in memory; setting both is an error.
+	//
+	// The encoder reads it in ascending, chunk-sized windows and never retains
+	// more than one chunk, so a block of any size costs a fixed amount of memory.
+	Reader io.ReaderAt
 }
 
 // udifPlist mirrors the plist shape produced/consumed by hdiutil and this
@@ -189,8 +196,21 @@ func EncodeUDIF(dst io.Writer, blocks []SourceBlock, opts *EncodeOptions) error 
 		totalSectors uint64
 	)
 
+	// One chunk-sized window, shared by every block that reads lazily. This is
+	// the whole of the encoder's per-image memory cost: a block is never held.
+	var window []byte
+	for i := range blocks {
+		if blocks[i].Reader != nil {
+			window = make([]byte, o.ChunkSectors*sectorSize)
+			break
+		}
+	}
+
 	for bi := range blocks {
 		blk := &blocks[bi]
+		if blk.Data != nil && blk.Reader != nil {
+			return fmt.Errorf("EncodeUDIF: block %q sets both Data and Reader", blk.Name)
+		}
 		secCount := blk.SectorCount
 		if blk.Data != nil {
 			if len(blk.Data)%sectorSize != 0 {
@@ -199,7 +219,7 @@ func EncodeUDIF(dst io.Writer, blocks []SourceBlock, opts *EncodeOptions) error 
 			secCount = uint64(len(blk.Data)) / sectorSize
 		}
 
-		mish, blockCRC, err := encodeBlock(dfw, bi, blk, secCount, &o)
+		mish, blockCRC, err := encodeBlock(dfw, bi, blk, secCount, &o, window)
 		if err != nil {
 			return fmt.Errorf("EncodeUDIF: block %q: %w", blk.Name, err)
 		}
@@ -268,7 +288,9 @@ func EncodeUDIF(dst io.Writer, blocks []SourceBlock, opts *EncodeOptions) error 
 // encodeBlock chunks a single source block, streams its compressed chunk data
 // to dfw, and returns the serialised mish block bytes plus the CRC32 of the
 // block's uncompressed data.
-func encodeBlock(dfw *dataForkWriter, index int, blk *SourceBlock, secCount uint64, o *EncodeOptions) ([]byte, uint32, error) {
+// window, when non-nil, is a scratch buffer of ChunkSectors*512 bytes shared
+// across blocks, used only when the block reads lazily.
+func encodeBlock(dfw *dataForkWriter, index int, blk *SourceBlock, secCount uint64, o *EncodeOptions, window []byte) ([]byte, uint32, error) {
 	var chunks bytes.Buffer
 	chunkCount := uint32(0)
 	blockCRC := crc32.NewIEEE()
@@ -281,11 +303,17 @@ func encodeBlock(dfw *dataForkWriter, index int, blk *SourceBlock, secCount uint
 		}
 
 		var raw []byte
-		if blk.Data != nil {
+		switch {
+		case blk.Data != nil:
 			start := sector * sectorSize
 			raw = blk.Data[start : start+n*sectorSize]
+		case blk.Reader != nil:
+			raw = window[:n*sectorSize]
+			if _, err := readFullAt(blk.Reader, raw, int64(sector*sectorSize)); err != nil {
+				return nil, 0, fmt.Errorf("read sector %d: %w", sector, err)
+			}
 		}
-		// A nil raw slice (Data==nil) is treated as all-zero.
+		// A nil raw slice (neither Data nor Reader) is treated as all-zero.
 
 		if raw == nil || isAllZero(raw) {
 			// Feed zeros into the block CRC to keep it over the full
@@ -346,6 +374,28 @@ func encodeBlock(dfw *dataForkWriter, index int, blk *SourceBlock, secCount uint
 	return out.Bytes(), blockCRC.Sum32(), nil
 }
 
+// readFullAt fills p from r at off. It exists because an io.ReaderAt is
+// permitted both to return fewer bytes than asked for and to report io.EOF
+// alongside a full read, so a single ReadAt call cannot be trusted to have
+// filled the buffer.
+func readFullAt(r io.ReaderAt, p []byte, off int64) (int, error) {
+	n := 0
+	for n < len(p) {
+		read, err := r.ReadAt(p[n:], off+int64(n))
+		n += read
+		if err != nil {
+			if err == io.EOF && n == len(p) {
+				return n, nil
+			}
+			return n, err
+		}
+		if read == 0 {
+			return n, io.ErrUnexpectedEOF
+		}
+	}
+	return n, nil
+}
+
 var zeroScratch = make([]byte, 64<<10)
 
 // writeZeros feeds n zero bytes into h without allocating.
@@ -395,61 +445,97 @@ func RepackDMG(srcPath, dstPath string, opts *EncodeOptions) error {
 	if err != nil {
 		return fmt.Errorf("RepackDMG: reconstruct %s: %w", srcPath, err)
 	}
+	if err := encodeToFile(dstPath, blocks, opts); err != nil {
+		return fmt.Errorf("RepackDMG: %w", err)
+	}
+	return nil
+}
 
+// encodeToFile encodes blocks to a new file at dstPath through a buffered
+// writer. A failure removes the partial file rather than leaving a truncated
+// DMG behind, which would otherwise look like a valid output to anything that
+// only checks the path exists.
+func encodeToFile(dstPath string, blocks []SourceBlock, opts *EncodeOptions) error {
 	out, err := os.Create(dstPath)
 	if err != nil {
-		return fmt.Errorf("RepackDMG: create %s: %w", dstPath, err)
+		return fmt.Errorf("create %s: %w", dstPath, err)
+	}
+
+	fail := func(err error) error {
+		out.Close()
+		os.Remove(dstPath)
+		return err
 	}
 
 	bw := bufio.NewWriterSize(out, 1<<20)
 	if err := EncodeUDIF(bw, blocks, opts); err != nil {
-		out.Close()
-		return fmt.Errorf("RepackDMG: encode: %w", err)
+		return fail(fmt.Errorf("encode: %w", err))
 	}
 	if err := bw.Flush(); err != nil {
-		out.Close()
-		return fmt.Errorf("RepackDMG: flush: %w", err)
+		return fail(fmt.Errorf("flush: %w", err))
 	}
 	if err := out.Close(); err != nil {
-		return fmt.Errorf("RepackDMG: close: %w", err)
+		os.Remove(dstPath)
+		return fmt.Errorf("close: %w", err)
 	}
 	return nil
+}
+
+// wholeDiskBlock describes a raw file system image as the single Apple
+// partition block a DMG wraps it in. partitionHint is the Apple partition type
+// name embedded in the block name so the reader (and hdiutil) locate the file
+// system, e.g. "Apple_HFSX", "Apple_HFS" or "Apple_APFS".
+func wholeDiskBlock(partitionHint string, sectors uint64) SourceBlock {
+	name := fmt.Sprintf("whole disk (%s : 0)", partitionHint)
+	return SourceBlock{
+		Name:        name,
+		CFName:      name,
+		ID:          "0",
+		Attributes:  "0x0050",
+		StartSector: 0,
+		SectorCount: sectors,
+	}
 }
 
 // WrapRawImageDMG writes a UDIF DMG at dstPath wrapping a raw file system
 // image as a single Apple partition block. partitionHint is the Apple
 // partition type name embedded in the block name so the reader (and hdiutil)
 // locate the file system, e.g. "Apple_HFSX", "Apple_HFS" or "Apple_APFS".
+//
+// The whole image is held in memory. WrapRawImageDMGFrom takes the same image
+// as an io.ReaderAt and does not.
 func WrapRawImageDMG(dstPath string, raw []byte, partitionHint string, opts *EncodeOptions) error {
 	if len(raw)%sectorSize != 0 {
 		return fmt.Errorf("WrapRawImageDMG: raw image length %d is not a multiple of %d", len(raw), sectorSize)
 	}
-	name := fmt.Sprintf("whole disk (%s : 0)", partitionHint)
-	blocks := []SourceBlock{{
-		Name:        name,
-		CFName:      name,
-		ID:          "0",
-		Attributes:  "0x0050",
-		StartSector: 0,
-		SectorCount: uint64(len(raw) / sectorSize),
-		Data:        raw,
-	}}
+	block := wholeDiskBlock(partitionHint, uint64(len(raw)/sectorSize))
+	block.Data = raw
 
-	out, err := os.Create(dstPath)
-	if err != nil {
-		return fmt.Errorf("WrapRawImageDMG: create %s: %w", dstPath, err)
+	if err := encodeToFile(dstPath, []SourceBlock{block}, opts); err != nil {
+		return fmt.Errorf("WrapRawImageDMG: %w", err)
 	}
-	bw := bufio.NewWriterSize(out, 1<<20)
-	if err := EncodeUDIF(bw, blocks, opts); err != nil {
-		out.Close()
-		return fmt.Errorf("WrapRawImageDMG: encode: %w", err)
+	return nil
+}
+
+// WrapRawImageDMGFrom writes a UDIF DMG at dstPath wrapping the raw file system
+// image read from src, which must cover [0, size). It is WrapRawImageDMG
+// without holding the image in memory: nothing larger than one chunk is
+// retained, so src may be an *os.File of any size.
+//
+// The output is byte-identical to what WrapRawImageDMG produces for the same
+// bytes; only where they come from differs.
+func WrapRawImageDMGFrom(dstPath string, src io.ReaderAt, size int64, partitionHint string, opts *EncodeOptions) error {
+	if size%sectorSize != 0 {
+		return fmt.Errorf("WrapRawImageDMGFrom: raw image length %d is not a multiple of %d", size, sectorSize)
 	}
-	if err := bw.Flush(); err != nil {
-		out.Close()
-		return fmt.Errorf("WrapRawImageDMG: flush: %w", err)
+	if src == nil {
+		return fmt.Errorf("WrapRawImageDMGFrom: nil source")
 	}
-	if err := out.Close(); err != nil {
-		return fmt.Errorf("WrapRawImageDMG: close: %w", err)
+	block := wholeDiskBlock(partitionHint, uint64(size/sectorSize))
+	block.Reader = src
+
+	if err := encodeToFile(dstPath, []SourceBlock{block}, opts); err != nil {
+		return fmt.Errorf("WrapRawImageDMGFrom: %w", err)
 	}
 	return nil
 }
