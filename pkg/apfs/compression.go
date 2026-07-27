@@ -125,8 +125,45 @@ func decompressLZVN(compressedData []byte, uncompressedData []byte, uncompressed
 	return nil
 }
 
-// decompressLZFSE decompresses LZFSE compressed data
+// lzfseBlockMagicFirstByte is 'b', the first byte of every LZFSE block magic
+// ("bvx1", "bvx2", "bvxn", "bvx-"). decmpfs marks a chunk that did not compress
+// by storing it raw behind a one-byte prefix, and the reader detects that by
+// the *absence* of this magic rather than by any particular prefix value —
+// which is what macOS's own implementation does. In practice macOS writes 0xff.
+const lzfseBlockMagicFirstByte = 0x62
+
+// decompressLZFSE decompresses one decmpfs LZFSE chunk.
+//
+// A chunk that does not begin with the LZFSE block magic is stored raw behind a
+// one-byte marker. Note this is magic-absence, not a sentinel value, and in
+// particular it is not LZVN's 0x06: reusing that here would misread any raw
+// chunk whose first byte happened to differ.
 func decompressLZFSE(compressedData []byte, uncompressedData []byte, uncompressedDataSize *int) error {
+	if len(compressedData) == 0 {
+		return fmt.Errorf("invalid compressed data buffer")
+	}
+
+	if compressedData[0] != lzfseBlockMagicFirstByte {
+		// Stored raw: copy everything after the marker byte.
+		if int64(len(compressedData)) > common.Int32Max {
+			return fmt.Errorf("invalid compressed data size value exceeds maximum")
+		}
+		if int64(*uncompressedDataSize) > common.Int32Max {
+			return fmt.Errorf("invalid uncompressed data size value exceeds maximum")
+		}
+		if (len(compressedData) - 1) > *uncompressedDataSize {
+			return fmt.Errorf("compressed data size exceeds uncompressed data size")
+		}
+
+		*uncompressedDataSize = len(compressedData) - 1
+		copy(uncompressedData, compressedData[1:])
+		return nil
+	}
+
+	if len(compressedData) < 2 {
+		return fmt.Errorf("truncated LZFSE chunk: %d bytes", len(compressedData))
+	}
+
 	decompressed, err := lzfse.Decompress(compressedData)
 	if err != nil {
 		return fmt.Errorf("unable to decompress LZFSE data: %w", err)

@@ -10,7 +10,7 @@ Legend: ✅ implemented · 🟡 partial · ⬜ not yet
 | Area | APFS | HFS+ / HFSX |
 | --- | :---: | :---: |
 | Read (containers, volumes, file-system tree, extents) | ✅ | ✅ |
-| Transparent compression (zlib / LZVN / LZFSE) | ✅ | ✅ |
+| Transparent compression (zlib / LZVN / LZFSE) | ✅³ | ✅ |
 | Symlinks, hardlinks | ✅ | ✅ |
 | Extended attributes (read) | ✅ | 🟡 |
 | Snapshots (read / list) | ✅ | — |
@@ -28,6 +28,13 @@ distinct xids and incremental checkpoints.
 ² Roles read and written in full. A volume group can only be written on a
 system volume: a group is a system/data pair and the writer emits one volume
 per container, so the resulting group has no data half.
+
+³ decmpfs types 3/4 (zlib), 5, 7/8 (LZVN) and 11/12 (LZFSE), stored inline in
+the attribute or in a resource fork. Types 9/10 (uncompressed) and 13/14
+(LZBITMAP) are recognized and reported as unsupported rather than decoded.
+Coverage is by synthesized fixtures: no image available to the project contains
+a decmpfs-compressed file, and producing a real LZFSE one needs macOS plus
+`afsctool`.
 
 The APFS writer lives in `pkg/apfswrite` (pure Go, MIT).
 
