@@ -192,15 +192,42 @@ func (b *builder) nextObjID() uint64 {
 
 // writeFileData writes each stream file's content into its data block,
 // zero-padded to a full allocation block.
+// fileCopyWindowBlocks is how much of a file writeFileData moves at a time:
+// 1024 blocks, which is 4 MiB at the default 4 KiB block size. Without a
+// window, a single large file cost its own size in memory — an 8 GB file inside
+// an otherwise small tree needed 8 GB.
+const fileCopyWindowBlocks = 1024
+
 func (b *builder) writeFileData() error {
+	var window []byte
+
 	for _, f := range b.streamFiles {
 		if f.blocks == 0 {
 			continue // 0-byte file: no data block
 		}
-		block := b.zeroedBlocks(int(f.blocks))
-		copy(block, f.data)
-		if err := b.writeBlocks(block, f.dataBlock); err != nil {
-			return err
+
+		for done := uint64(0); done < f.blocks; {
+			blocks := min(f.blocks-done, uint64(fileCopyWindowBlocks))
+			size := blocks * uint64(b.blocksize)
+			if uint64(len(window)) < size {
+				window = make([]byte, size)
+			}
+			chunk := window[:size]
+
+			// A file's last block is zero-padded to a whole allocation block,
+			// and the window is reused across files, so clear what the copy
+			// will not overwrite rather than trusting it to be zero.
+			offset := done * uint64(b.blocksize)
+			copied := 0
+			if offset < uint64(len(f.data)) {
+				copied = copy(chunk, f.data[offset:])
+			}
+			clear(chunk[copied:])
+
+			if err := b.writeBlocks(chunk, f.dataBlock+done); err != nil {
+				return err
+			}
+			done += blocks
 		}
 	}
 	return nil
