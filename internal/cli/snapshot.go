@@ -455,20 +455,39 @@ func runSnapshotRevert(cmd *cobra.Command, args []string) error {
 	blockSize := uint64(container.IOHandle.BlockSize)
 	cleanup() // done reading; reconstruct and patch the raw image below
 
-	raw, err := disk.ReconstructRawImage(imagePath)
+	// Reconstruct into a scratch file rather than memory: the image can be far
+	// larger than RAM, and only one block of it is actually being changed.
+	img, err := newScratchImage(outPath)
+	if err != nil {
+		return err
+	}
+	defer img.Close()
+
+	total, err := disk.ReconstructRawImageTo(img, imagePath)
 	if err != nil {
 		return fmt.Errorf("revert currently requires a DMG image: %w", err)
 	}
+
 	// This patch addresses the container at offset zero in the raw image.
-	if len(raw) < 36 || binary.LittleEndian.Uint32(raw[32:36]) != nxMagicLE {
+	magic := make([]byte, 4)
+	if total < 36 {
+		return withCode(ExitUnsupported, fmt.Errorf("revert supports a DMG wrapping an APFS container at offset zero"))
+	}
+	if _, err := img.ReadAt(magic, 32); err != nil {
+		return fmt.Errorf("reading the container magic: %w", err)
+	}
+	if binary.LittleEndian.Uint32(magic) != nxMagicLE {
 		return withCode(ExitUnsupported, fmt.Errorf("revert supports a DMG wrapping an APFS container at offset zero"))
 	}
 
 	off := liveBlock * blockSize
-	if off+blockSize > uint64(len(raw)) {
+	if off+blockSize > uint64(total) {
 		return fmt.Errorf("live volume superblock block %d is out of range", liveBlock)
 	}
-	block := raw[off : off+blockSize]
+	block := make([]byte, blockSize)
+	if _, err := img.ReadAt(block, int64(off)); err != nil {
+		return fmt.Errorf("reading the live volume superblock: %w", err)
+	}
 	binary.LittleEndian.PutUint64(block[apsbRevertToXIDOffset:], snapXID)
 	binary.LittleEndian.PutUint64(block[apsbRevertToSblockOffset:], snapSblock)
 	// Reseal the block: Fletcher 64 over everything after the 8-byte checksum.
@@ -477,8 +496,11 @@ func runSnapshotRevert(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("recomputing superblock checksum: %w", err)
 	}
 	binary.LittleEndian.PutUint64(block[0:], cksum)
+	if _, err := img.WriteAt(block, int64(off)); err != nil {
+		return fmt.Errorf("writing the patched superblock: %w", err)
+	}
 
-	if err := disk.WrapRawImageDMG(outPath, raw, "Apple_APFS", nil); err != nil {
+	if err := disk.WrapRawImageDMGFrom(outPath, img, total, "Apple_APFS", nil); err != nil {
 		return fmt.Errorf("unable to write %s: %w", outPath, err)
 	}
 

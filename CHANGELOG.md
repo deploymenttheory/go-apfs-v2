@@ -20,10 +20,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   putting it there would reproduce the problem being fixed. `--temp-dir`
   overrides. Output is byte-identical to before.
 
-  `create` and `pack` check the free space first and refuse a build that cannot
-  fit, naming what is needed, what is available and where to put the scratch
-  file instead. Trading a memory limit for a disk one is only an improvement if
-  running out of disk is diagnosed rather than discovered part-way through.
+  `pack SRC.dmg OUT.dmg` no longer materialises the source image either.
+  `reconstructBlocks` describes each blkx block as a lazy reader that
+  decompresses chunks on demand, so `RepackDMG` re-chunks on the fly. Repacking
+  a 500 MB vendor DMG went from 924 MB of peak resident memory to 33 MB.
+  `ReconstructRawImageTo` is the streaming counterpart of
+  `ReconstructRawImage`, and `snapshot revert` uses it, so nothing in the
+  command line assembles a whole image any more.
 
 - **Write-fidelity reporting and `--strict`** (`pkg/fidelity`, `pkg/apfswrite`,
   `pkg/hfsplus`, CLI): packing a directory is lossy, and until now it was
@@ -139,6 +142,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   unsupported type bit, rather than stamping it `S_IFREG` and writing a device
   node as a regular file. The walk skips these; a caller assembling a tree by
   hand is told.
+
+- **A DMG whose chunks were all zero-fill could not be read back**
+  (`pkg/disk`). Such an image writes no data fork, so its plist starts at offset
+  zero — which the reader took for "no plist at all" and rejected. It went
+  unnoticed because building a fully sparse image previously needed as much
+  memory as the image was nominally large; it is exactly what a large repack
+  produces.
 
 - **Reading an extended attribute could loop forever** (`pkg/apfs`).
   `ExtendedAttribute.Read` relied on the underlying stream to report `io.EOF`,

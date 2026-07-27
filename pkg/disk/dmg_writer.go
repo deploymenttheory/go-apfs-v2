@@ -441,10 +441,13 @@ func firstNonEmpty(vals ...string) string {
 // name so both this package's reader and hdiutil handle the output exactly as
 // they handle the input. The chunk data is recompressed per opts.
 func RepackDMG(srcPath, dstPath string, opts *EncodeOptions) error {
-	blocks, _, err := reconstructBlocks(srcPath)
+	blocks, _, closer, err := reconstructBlocks(srcPath)
 	if err != nil {
 		return fmt.Errorf("RepackDMG: reconstruct %s: %w", srcPath, err)
 	}
+	// The blocks read from the open DMG lazily, so it must stay open until the
+	// encode finishes.
+	defer closer.Close()
 	if err := encodeToFile(dstPath, blocks, opts); err != nil {
 		return fmt.Errorf("RepackDMG: %w", err)
 	}
