@@ -354,6 +354,14 @@ func (csb *ContainerSuperblock) ReadData(data []byte) error {
 	}
 
 	// Validate block size
+	// This reader handles one block size. Note the check is not what actually
+	// rejects a larger container: ReadFrom reads a fixed ContainerSuperblockSize
+	// bytes and the checksum above covers exactly that span, whereas the object's
+	// checksum is sealed over the whole block -- so an 8 KiB container fails as a
+	// checksum mismatch before reaching here. Supporting other sizes therefore
+	// means a two-phase superblock read (peek nx_block_size, re-read the full
+	// block, then verify), not deleting this check. pkg/apfswrite refuses to
+	// write anything but 4096 for the same reason.
 	if csb.BlockSize != 4096 {
 		return fmt.Errorf("unsupported block size: %d (expected 4096)", csb.BlockSize)
 	}

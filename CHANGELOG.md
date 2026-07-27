@@ -156,6 +156,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The APFS writer now accepts only a 4096-byte block** (`pkg/apfswrite`).
+  `CreateOptions.BlockSize` previously took any power of two from 4096 to 65536,
+  as the format allows, and the writer's arithmetic is parameterised by it
+  throughout — so the larger sizes looked supported. They were not. Measured
+  against the checkers:
+
+  | block size | `fsck_apfs -n` | `apfsck -cw` |
+  | --- | --- | --- |
+  | 4096 | clean | clean |
+  | 8192 | clean | clean |
+  | 16384 | `invalid btn_table_space`, no valid checkpoint | `Omap record: bad alignment for key or value` |
+  | 65536 | spins without reaching a verdict | clean |
+
+  Every non-4096 container was also unreadable by this project's own reader:
+  `pkg/apfs` reads a fixed 4096-byte container superblock and so verifies the
+  Fletcher-64 over a different span than the writer sealed it over, which fails
+  as a checksum mismatch before any block-size check is reached. Writing an
+  image that neither Apple's checker nor our own reader accepts is worse than
+  refusing to write it.
+
+  `CreateOptions.BlockSize` is deprecated rather than removed, since it is
+  public API, and nothing in the command line ever set it — so no existing
+  invocation changes behaviour. Supporting larger blocks again means a two-phase
+  superblock read on the reader side and a corrected layout on the writer side,
+  neither of which is a deletion of a check.
+
 - **Image bytes for a given input have moved once, and are stable from here.**
   `pkg/apfswrite` and `pkg/hfsplus` no longer call `time.Now()`;
   `CreateOptions.FixedTime` defaults to an exported `DefaultTime`
@@ -168,6 +194,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   route through a single content-sniffing image opener.
 
 ### Fixed
+
+- **The documented HFS+ capabilities now match the code.** Three claims were
+  wrong, and each of them would have sent someone down a path that could not
+  work:
+
+  `README.md` and `TOOLS_STATUS.md` marked transparent compression as
+  implemented for HFS+. It is not: a file with the `UF_COMPRESSED` flag returns
+  an error instead of its contents, and the resource fork that decmpfs stores
+  compressed data in is never read.
+
+  `TOOLS_STATUS.md` marked HFS+ extended-attribute reading as partial. There is
+  no partial support — the attributes file is not parsed at all, so no attribute
+  is visible through the `io/fs` adapter and `extract --xattrs` silently carries
+  nothing off an HFS+ image. The `extract` synopsis in `README.md` also omitted
+  `--xattrs` entirely, and did not say that both it and transparent
+  decompression apply only to APFS.
+
+  Finally, the decmpfs note in `TOOLS_STATUS.md` and the preamble to
+  `pkg/apfs/decmpfs_test.go` both said no image available to this project
+  contains a decmpfs-compressed file. One does, and always has:
+  `compressed.txt` in `testdata/cli/basic.dmg` is type 8 — LZVN in a resource
+  fork, written by `ditto --hfsCompression` — so that path is covered against
+  bytes macOS produced rather than only against synthesized fixtures.
+
+  Both HFS+ gaps are now listed under "Near term" in `TOOLS_ROADMAP.md`.
 
 - **`pack <dir>` no longer hangs on a device node, FIFO or socket**
   (`pkg/apfswrite`, `pkg/hfsplus`). Both directory walks fell through to reading

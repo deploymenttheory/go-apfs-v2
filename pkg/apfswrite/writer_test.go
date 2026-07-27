@@ -5,6 +5,7 @@ package apfswrite_test
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
@@ -128,6 +129,49 @@ func TestCreateContainerReadRoundTrip(t *testing.T) {
 				t.Errorf("root has %d entries %v, want 0", len(entries), names)
 			}
 		})
+	}
+}
+
+// TestCreateContainerBlockSize pins the one block size this writer emits.
+//
+// The format permits any power of two from 4096 to 65536, and the writer's
+// arithmetic is parameterised by block size throughout, so the larger sizes
+// used to be accepted. What came out was not sound: at 16384 both fsck_apfs
+// ("invalid btn_table_space", no valid checkpoint) and apfsck ("Omap record:
+// bad alignment for key or value") reject the container, and at 65536
+// fsck_apfs spins without reaching a verdict. All of them are also unreadable
+// by pkg/apfs, whose superblock checksum spans a fixed 4096 bytes.
+//
+// If this writer ever lays out larger blocks correctly, this test is the thing
+// to change -- deliberately, with a checker's verdict behind it.
+func TestCreateContainerBlockSize(t *testing.T) {
+	for _, tc := range []struct {
+		blockSize uint32
+		wantOK    bool
+	}{
+		{0, true}, // zero means "default"
+		{4096, true},
+		{8192, false},
+		{16384, false},
+		{65536, false},
+		{1024, false},   // below the format minimum
+		{131072, false}, // above the format maximum
+		{6000, false},   // not a power of two
+	} {
+		img := &memImage{}
+		err := apfswrite.CreateContainer(img, 32<<20, &apfswrite.CreateOptions{
+			BlockSize:  tc.blockSize,
+			VolumeName: "blocksize",
+		})
+		switch {
+		case tc.wantOK && err != nil:
+			t.Errorf("block size %d: CreateContainer failed: %v", tc.blockSize, err)
+		case !tc.wantOK && err == nil:
+			t.Errorf("block size %d: CreateContainer succeeded, want refusal", tc.blockSize)
+		case !tc.wantOK && !strings.Contains(err.Error(), "unsupported block size"):
+			t.Errorf("block size %d: error %q does not say the block size is unsupported",
+				tc.blockSize, err)
+		}
 	}
 }
 

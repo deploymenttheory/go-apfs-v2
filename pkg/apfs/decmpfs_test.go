@@ -16,13 +16,14 @@ import (
 // go-compressions/lzfse can compress as well as decompress. That keeps these
 // tests runnable on every platform, with no macOS and no afsctool needed.
 //
-// Synthesis is not just convenience — it is currently the only coverage there
-// is. None of the images available to this project exercise decmpfs at all: the
+// Synthesis carries most of the coverage, because producing a real
+// LZFSE-compressed file needs macOS plus afsctool. It is not the only coverage:
+// compressed.txt in testdata/cli/basic.dmg is a genuine decmpfs file — type 8,
+// LZVN in a resource fork, written by ditto --hfsCompression — so the
+// acceptance suite exercises that one path against bytes macOS produced. The
 // vendor DMG used for acceptance testing has 675 regular files and not one
-// compressed, and the committed fixtures have none either. Producing a real
-// LZFSE-compressed file needs macOS plus afsctool, since ditto's
-// --hfsCompression emits zlib. If such a fixture is ever added, these tests
-// stay useful as the fast, cross-platform layer beneath it.
+// compressed, so it contributes nothing here. These synthesized tests remain
+// the fast, cross-platform layer that covers the types no fixture reaches.
 
 // decmpfsHeader builds the 16-byte com.apple.decmpfs header: the "fpmc" magic,
 // the compression type, and the uncompressed size.

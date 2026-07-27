@@ -24,6 +24,19 @@ when it mounts a volume (for example the space manager free-queue node limits),
 those values are reproduced as functional interoperability requirements of the
 format, verified against Apple's `fsck_apfs`/`hdiutil` and the Linux `apfsck`.
 
+## Block size
+
+Containers are written with a 4096-byte block, and that is the only size
+accepted. The format allows any power of two up to 65536, and this writer's
+arithmetic is parameterised by block size throughout, so the larger sizes look
+supported — but the containers that came out were unsound, not merely unusual.
+At 16384 both `fsck_apfs` and `apfsck` reject the result; at 65536 `fsck_apfs`
+spins without reaching a verdict. All non-4096 sizes are also unreadable by
+`pkg/apfs`, which reads a fixed-size container superblock and so verifies a
+different checksum span than the writer sealed.
+
+`CreateOptions.BlockSize` is retained and deprecated rather than removed.
+
 ## Validation
 
 Created containers are checked three ways: by our own reader in
