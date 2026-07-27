@@ -33,7 +33,7 @@ type WalkOptions struct {
 func EntryTreeFromDir(srcDir string, opts *WalkOptions) (*Entry, *fidelity.Report, error) {
 	var o hostwalk.Options
 	if opts != nil {
-		o = hostwalk.Options{Xattrs: opts.Xattrs, Warn: opts.Warn}
+		o = hostwalk.Options{Xattrs: opts.Xattrs, Warn: opts.Warn} // Keep is nil: this writer has no attributes file
 	}
 
 	root, report, err := hostwalk.Walk(srcDir, &o, newEntry)

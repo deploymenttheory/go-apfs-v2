@@ -4,6 +4,8 @@
 package apfswrite
 
 import (
+	"strings"
+
 	"github.com/deploymenttheory/go-apfs-v2/internal/hostwalk"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/fidelity"
 )
@@ -30,13 +32,16 @@ type WalkOptions struct {
 // it, but it is returned rather than hidden because a lossy conversion that
 // does not say so is the failure mode this exists to prevent.
 //
-// This writer does not yet write extended attributes, so every attribute is
-// dropped — including any resource fork — and it has no hard links, so a second
-// name for one file becomes an independent copy.
+// Extended attributes are carried where the format allows them inline. A resource
+// fork is not: macOS requires one to be stored as a data stream whatever its
+// size. Nor is com.apple.decmpfs, which declares content this writer does not
+// produce. Both are reported as dropped, as is anything too large to embed.
+// Hard links are not supported either, so a second name for one file becomes an
+// independent copy.
 func EntryTreeFromDir(srcDir string, opts *WalkOptions) (*Entry, *fidelity.Report, error) {
 	var o hostwalk.Options
 	if opts != nil {
-		o = hostwalk.Options{Xattrs: opts.Xattrs, Warn: opts.Warn}
+		o = hostwalk.Options{Xattrs: opts.Xattrs, Warn: opts.Warn, Keep: CanWriteXattr}
 	}
 
 	root, report, err := hostwalk.Walk(srcDir, &o, newEntry)
@@ -55,6 +60,21 @@ func newEntry(n hostwalk.Node, children []*Entry) *Entry {
 		UID:      n.UID,
 		GID:      n.GID,
 		Data:     n.Data,
+		Xattrs:   n.Xattrs,
 		Children: children,
 	}
+}
+
+// CanWriteXattr reports whether this writer can carry an extended attribute.
+//
+// It exists so a caller walking a source tree can tell in advance what will
+// survive, rather than discovering it when CreateContainer refuses the whole
+// image. The rejections are not arbitrary: see validateXattrs for why a
+// resource fork and a compression header cannot be written inline.
+func CanWriteXattr(name string, value []byte) bool {
+	switch name {
+	case symlinkName, resourceForkName, decmpfsName:
+		return false
+	}
+	return name != "" && !strings.ContainsRune(name, 0) && len(value) <= maxEmbeddedXattrSize
 }

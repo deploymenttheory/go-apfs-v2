@@ -59,14 +59,21 @@ func (b *builder) setTree(opts *CreateOptions) error {
 			}
 
 			mtime := b.entryTime(e.ModTime)
+			xattrs, xattrFlags, err := validateXattrs(e)
+			if err != nil {
+				return 0, err
+			}
+
 			be := &builderEntry{
-				name:   e.Name,
-				oid:    nextOID,
-				parent: parent,
-				mode:   e.resolvedMode(),
-				uid:    e.UID,
-				gid:    e.GID,
-				mtime:  mtime,
+				name:       e.Name,
+				oid:        nextOID,
+				parent:     parent,
+				mode:       e.resolvedMode(),
+				uid:        e.UID,
+				gid:        e.GID,
+				mtime:      mtime,
+				xattrs:     xattrs,
+				xattrFlags: xattrFlags,
 			}
 			nextOID++
 			b.entries = append(b.entries, be)
@@ -161,6 +168,69 @@ func (b *builder) physFiles() []*builderEntry {
 		}
 	}
 	return out
+}
+
+// Attribute names that an inode flag must agree with. A checker compares each
+// flag against the presence of its attribute and reports a mismatch either way,
+// so these cannot be set optimistically or left alone.
+const (
+	resourceForkName = "com.apple.ResourceFork"
+	securityName     = "com.apple.system.Security"
+	finderInfoName   = "com.apple.FinderInfo"
+	decmpfsName      = "com.apple.decmpfs"
+)
+
+// validateXattrs checks an entry's extended attributes can be written, and
+// returns the inode flags their presence requires.
+//
+// A value too large to embed is refused rather than truncated: this writer does
+// not yet store an attribute in a data stream of its own, and silently dropping
+// content is exactly the failure this project has been removing.
+func validateXattrs(e *Entry) (map[string][]byte, uint64, error) {
+	// An inode with no resource fork must say so. The flag is not optional:
+	// a checker treats its absence as a claim that a fork exists.
+	flags := uint64(inodeNoRsrcFork)
+	if len(e.Xattrs) == 0 {
+		return nil, flags, nil
+	}
+
+	for name, value := range e.Xattrs {
+		if name == "" {
+			return nil, 0, fmt.Errorf("apfswrite: %q has an extended attribute with an empty name", e.Name)
+		}
+		if strings.ContainsRune(name, 0) {
+			return nil, 0, fmt.Errorf("apfswrite: extended attribute name %q on %q contains a NUL", name, e.Name)
+		}
+		if name == symlinkName {
+			return nil, 0, fmt.Errorf("apfswrite: %q sets %s, which the writer emits itself for symbolic links", e.Name, symlinkName)
+		}
+		if len(value) > maxEmbeddedXattrSize {
+			return nil, 0, fmt.Errorf("apfswrite: extended attribute %q on %q is %d bytes; only values up to %d are supported, larger ones need a data stream",
+				name, e.Name, len(value), maxEmbeddedXattrSize)
+		}
+
+		switch name {
+		case resourceForkName:
+			// Apple's fsck_apfs requires a resource fork to be stream based
+			// whatever its size — "com.apple.ResourceFork is expected to be
+			// stream based" — and this writer only embeds. Writing one anyway
+			// produces an image macOS calls corrupt, so refuse it instead.
+			// Note apfsck accepts the embedded form; only fsck_apfs objects.
+			return nil, 0, fmt.Errorf("apfswrite: %q carries a resource fork, which must be stored as a data stream; this writer only stores attributes inline", e.Name)
+		case decmpfsName:
+			// A decmpfs attribute declares the file's content compressed, and
+			// requires APFS_INOBSD_COMPRESSED in bsd_flags — which this writer
+			// does not set, because it puts content in the data fork. Writing
+			// the attribute alone would describe content the file does not
+			// have. apfsck: "is not compressed but has decmpfs xattr".
+			return nil, 0, fmt.Errorf("apfswrite: %q carries %s, which declares its content compressed; this writer stores content uncompressed in the data fork", e.Name, decmpfsName)
+		case securityName:
+			flags |= inodeHasSecurityEA
+		case finderInfoName:
+			flags |= inodeHasFinderInfo
+		}
+	}
+	return e.Xattrs, flags, nil
 }
 
 func validateName(name string) error {
@@ -283,6 +353,7 @@ func (b *builder) buildFSTreeRecords() []fsTreeRecord {
 			// The symlink target lives in a com.apple.fs.symlink xattr record.
 			recs = append(recs, b.symlinkXattrRecord(e))
 		}
+		recs = append(recs, b.userXattrRecords(e)...)
 		if e.hasStream {
 			recs = append(recs, b.dstreamIDRecord(e))
 			// A 0-byte file has a data stream but no physical extent, so no
@@ -394,7 +465,7 @@ func (b *builder) inodeValue(e *builderEntry) []byte {
 	binary.LittleEndian.PutUint64(val[32:], mtime) // change_time
 	binary.LittleEndian.PutUint64(val[40:], mtime) // access_time
 
-	binary.LittleEndian.PutUint64(val[48:], inodeNoRsrcFork) // internal_flags
+	binary.LittleEndian.PutUint64(val[48:], e.internalFlags()) // internal_flags
 
 	if e.isDir {
 		binary.LittleEndian.PutUint32(val[56:], e.nchildren)            // nchildren
@@ -486,28 +557,61 @@ func (b *builder) buildHashedDrecKey(parent uint64, name string) ([]byte, uint32
 // target, matching what the reader resolves in getSymbolicLinkData.
 const symlinkName = "com.apple.fs.symlink"
 
-// symlinkXattrRecord builds the com.apple.fs.symlink extended-attribute record
-// carrying a symbolic link's target. The value is stored embedded (not in a
-// data stream): j_xattr_val_t flags = XATTR_DATA_EMBEDDED | XATTR_FILE_SYSTEM_OWNED,
-// data = target bytes followed by a NUL terminator. This is the representation
-// the reader's GetSymbolicLinkTarget expects and that fsck_apfs accepts.
-func (b *builder) symlinkXattrRecord(e *builderEntry) fsTreeRecord {
+// maxEmbeddedXattrSize is XATTR_MAX_EMBEDDED_SIZE: the largest value APFS
+// stores inside the attribute record rather than in a data stream. A larger
+// value needs a stream of its own, which this writer does not yet produce.
+const maxEmbeddedXattrSize = 3804
+
+// xattrRecord builds one extended-attribute record with its value stored
+// embedded in the record: j_xattr_key_t is the inode's oid plus the
+// NUL-terminated attribute name, and j_xattr_val_t is flags, length and the
+// data itself.
+//
+// This is the representation the reader expects and that fsck_apfs accepts.
+func (b *builder) xattrRecord(oid uint64, name string, data []byte, flags uint16) fsTreeRecord {
 	// Key: header (oid, XATTR) + name_len(2) + NUL-terminated attribute name.
-	nameLen := len(symlinkName) + 1
+	nameLen := len(name) + 1
 	key := make([]byte, sizeofXattrKeyFixed+nameLen)
-	setKeyHeader(key, 0, e.oid, typeXattr)
+	setKeyHeader(key, 0, oid, typeXattr)
 	binary.LittleEndian.PutUint16(key[8:], uint16(nameLen))
-	copy(key[sizeofXattrKeyFixed:], symlinkName)
+	copy(key[sizeofXattrKeyFixed:], name)
 
-	// Value: flags(2) + xdata_len(2) + xdata (target + NUL).
-	xdata := make([]byte, len(e.linkTarget)+1)
-	copy(xdata, e.linkTarget)
-	val := make([]byte, sizeofXattrValFixed+len(xdata))
-	binary.LittleEndian.PutUint16(val[0:], xattrDataEmbedded|xattrFileSystemOwned)
-	binary.LittleEndian.PutUint16(val[2:], uint16(len(xdata)))
-	copy(val[sizeofXattrValFixed:], xdata)
+	// Value: flags(2) + xdata_len(2) + xdata.
+	val := make([]byte, sizeofXattrValFixed+len(data))
+	binary.LittleEndian.PutUint16(val[0:], flags)
+	binary.LittleEndian.PutUint16(val[2:], uint16(len(data)))
+	copy(val[sizeofXattrValFixed:], data)
 
-	return fsTreeRecord{id: e.oid, typ: typeXattr, name: symlinkName, key: key, val: val}
+	return fsTreeRecord{id: oid, typ: typeXattr, name: name, key: key, val: val}
+}
+
+// symlinkXattrRecord builds the com.apple.fs.symlink record carrying a symbolic
+// link's target, NUL-terminated. It is owned by the file system rather than the
+// user, which is what distinguishes it from an attribute a caller supplied.
+func (b *builder) symlinkXattrRecord(e *builderEntry) fsTreeRecord {
+	target := make([]byte, len(e.linkTarget)+1)
+	copy(target, e.linkTarget)
+	return b.xattrRecord(e.oid, symlinkName, target, xattrDataEmbedded|xattrFileSystemOwned)
+}
+
+// userXattrRecords builds the records for an entry's caller-supplied extended
+// attributes, in name order so the file-system tree comparator's ordering is
+// reproducible.
+func (b *builder) userXattrRecords(e *builderEntry) []fsTreeRecord {
+	if len(e.xattrs) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(e.xattrs))
+	for name := range e.xattrs {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	recs := make([]fsTreeRecord, 0, len(names))
+	for _, name := range names {
+		recs = append(recs, b.xattrRecord(e.oid, name, e.xattrs[name], xattrDataEmbedded))
+	}
+	return recs
 }
 
 // packFSTreeLeaves greedily packs sorted records into leaf nodes of blocksize,
@@ -725,4 +829,14 @@ func (b *builder) setExtentrefInfo(info []byte, keyCount, nodeCount int) {
 	binary.LittleEndian.PutUint32(info[20:], sizeofPhysExtVal)               // bt_longest_val
 	binary.LittleEndian.PutUint64(info[24:], uint64(keyCount))               // bt_key_count
 	binary.LittleEndian.PutUint64(info[32:], uint64(nodeCount))              // bt_node_count
+}
+
+// internalFlags returns the inode's internal_flags. The synthetic root and
+// private-dir inodes are built inline and carry none, so they fall back to
+// asserting no resource fork, which is what they have.
+func (e *builderEntry) internalFlags() uint64 {
+	if e.xattrFlags == 0 {
+		return inodeNoRsrcFork
+	}
+	return e.xattrFlags
 }

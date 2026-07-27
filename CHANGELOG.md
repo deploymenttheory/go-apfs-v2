@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The APFS writer carries extended attributes** (`pkg/apfswrite`, CLI). They
+  were dropped entirely before, so `extract` → `pack` could never round-trip a
+  real macOS tree; now an ordinary attribute survives it. Attributes are stored
+  inline, up to the format's 3804-byte embedded limit.
+
+  The inode flags that must agree with which attributes are present —
+  `INODE_HAS_SECURITY_EA`, `INODE_HAS_FINDER_INFO` and `INODE_NO_RSRC_FORK` —
+  are set accordingly; a checker compares each against its attribute and
+  complains either way.
+
+  Resource forks, `com.apple.decmpfs`, and values over the embedded limit are
+  refused rather than written wrong, and reported as dropped. `fsck_apfs`
+  requires a resource fork to be stream based whatever its size, and a decmpfs
+  attribute declares content this writer does not produce. See
+  [`docs/write-fidelity.md`](docs/write-fidelity.md).
+
 - **Building an image no longer holds it in memory** (`internal/imagefile`,
   `pkg/disk`, CLI). The DMG encoder can now read its source lazily through
   `SourceBlock.Reader`, and `create`, `pack <dir>` and `snapshot create` build

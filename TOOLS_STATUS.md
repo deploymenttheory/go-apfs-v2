@@ -22,7 +22,7 @@ Legend: ✅ implemented · 🟡 partial · ⬜ not yet
 | Reproducible output (`SOURCE_DATE_EPOCH`, fixed UUIDs) | ✅ | ✅ |
 | Volume roles and volume groups (read + write) | ✅² | — |
 | Write-fidelity reporting (`--strict`) | ✅ | ✅ |
-| Extended attributes (write) | ⬜ | ⬜ |
+| Extended attributes (write) | ✅⁴ | ⬜ |
 | Hard links (write) | ⬜ | ⬜ |
 
 ¹ One snapshot per image (single static checkpoint); multiple snapshots need
@@ -31,6 +31,10 @@ distinct xids and incremental checkpoints.
 ² Roles read and written in full. A volume group can only be written on a
 system volume: a group is a system/data pair and the writer emits one volume
 per container, so the resulting group has no data half.
+
+⁴ Attributes are stored inline, up to the format's 3804-byte embedded limit.
+Larger ones, resource forks and `com.apple.decmpfs` need a data stream, which
+the writer does not yet produce, and are reported as dropped.
 
 ³ decmpfs types 3/4 (zlib), 5, 7/8 (LZVN) and 11/12 (LZFSE), stored inline in
 the attribute or in a resource fork. Types 9/10 (uncompressed) and 13/14
