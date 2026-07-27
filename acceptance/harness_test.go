@@ -98,10 +98,15 @@ func TestMain(m *testing.M) {
 	}
 
 	// The committed HFS+ fixture and its manifest (may be absent in older
-	// checkouts; the HFS+ tests skip when it is).
+	// checkouts; the HFS+ tests skip when it is). A manifest that is present
+	// but unparseable is fatal rather than ignored: silently degrading to "no
+	// HFS+ coverage" is how a whole tier of tests disappears unnoticed.
 	fixtureHFS = filepath.Join(repoRoot, "testdata", "cli", "hfs-basic.dmg")
 	if data, err := os.ReadFile(filepath.Join(repoRoot, "testdata", "cli", "hfs-manifest.json")); err == nil {
-		json.Unmarshal(data, &hfsManifest)
+		if err := json.Unmarshal(data, &hfsManifest); err != nil {
+			fmt.Fprintf(os.Stderr, "unable to parse HFS+ manifest: %v\n", err)
+			os.Exit(1)
+		}
 	}
 
 	os.Exit(m.Run())

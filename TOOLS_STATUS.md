@@ -10,7 +10,7 @@ Legend: ✅ implemented · 🟡 partial · ⬜ not yet
 | Area | APFS | HFS+ / HFSX |
 | --- | :---: | :---: |
 | Read (containers, volumes, file-system tree, extents) | ✅ | ✅ |
-| Transparent compression (zlib / LZVN / LZFSE) | ✅³ | ⬜⁵ |
+| Transparent compression (zlib / LZVN / LZFSE) | ✅³ | ✅⁵ |
 | Symlinks, hardlinks | ✅ | ✅ |
 | Extended attributes (read) | ✅ | ✅⁶ |
 | Snapshots (read / list) | ✅ | — |
@@ -45,8 +45,10 @@ needs macOS plus `afsctool`. One real one is committed: `compressed.txt` in
 `testdata/cli/basic.dmg` is type 8 — LZVN in a resource fork — written by
 `ditto --hfsCompression`.
 
-⁵ Not implemented on HFS+: a file with the `UF_COMPRESSED` flag returns an error
-instead of its contents. Planned; see [`TOOLS_ROADMAP.md`](TOOLS_ROADMAP.md).
+⁵ Decoding is shared with APFS (`internal/decmpfs`), so the same types are
+covered. Both storage shapes are read: data held inline in the attribute, and
+data held in the file's resource fork in 64 KiB chunks. A compressed file's
+size is taken from its decmpfs header, since its data fork is empty.
 
 ⁶ All three attribute record shapes are read on HFS+ — a value stored inside its
 record, one given a fork of its own, and a fork whose extents spill past the

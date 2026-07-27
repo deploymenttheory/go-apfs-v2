@@ -500,8 +500,9 @@ func (v *Volume) loadOverflowExtents() error {
 	return nil
 }
 
-// dataForkReader opens the data fork of a resolved file entry.
-func (v *Volume) dataForkReader(e *entry) (*forkReader, error) {
+// dataForkReader opens a resolved file entry's content: its data fork, or a
+// decompressing reader when the file is transparently compressed.
+func (v *Volume) dataForkReader(e *entry) (fileReader, error) {
 	if e.isDir {
 		return nil, fmt.Errorf("is a directory")
 	}
@@ -515,7 +516,7 @@ func (v *Volume) dataForkReader(e *entry) (*forkReader, error) {
 		return nil, fmt.Errorf("entry has no catalog file record")
 	}
 	if e.file.BSDInfo.OwnerFlags&ufCompressed != 0 {
-		return nil, fmt.Errorf("HFS+ compressed files not supported yet")
+		return v.decmpfsReader(e)
 	}
 	return v.forkReaderFor(e.file.FileID, forkTypeData, e.file.DataFork)
 }

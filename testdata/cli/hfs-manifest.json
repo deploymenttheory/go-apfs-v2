@@ -1,50 +1,151 @@
 {
  "files": {
+  "bigattr.txt": {
+   "mode": "0o644",
+   "sha256": "04aebeb2dd97388480684f50c389dff001fed5927891d7a0e17122249c7f3558",
+   "size": 28,
+   "type": "file",
+   "xattrs": {
+    "com.apple.provenance": {
+     "sha256": "42792b5d3fdc4c191e7444e3299b830a018cee5daa9628f1b0b95dd51828d44b",
+     "size": 11
+    },
+    "com.example.big": {
+     "sha256": "f5ddb39412a9924f220f6c16749f0ca53083cf2aa56c4e4ca3d8994141bee964",
+     "size": 6000
+    }
+   }
+  },
+  "compressed.txt": {
+   "compressed": true,
+   "mode": "0o644",
+   "sha256": "23f90f8b2c3a4b5f3b5e156339994afd5c2718b378aca6f0e17111f80a70d4ec",
+   "size": 23893,
+   "type": "file",
+   "xattrs": {
+    "com.apple.provenance": {
+     "sha256": "42792b5d3fdc4c191e7444e3299b830a018cee5daa9628f1b0b95dd51828d44b",
+     "size": 11
+    }
+   }
+  },
   "dir1/nested/deep.txt": {
    "mode": "0o644",
    "sha256": "30cf6f2de471343739bcc1dde393c0c0771814ac3ad798f68c8a74495174521a",
    "size": 10,
-   "type": "file"
+   "type": "file",
+   "xattrs": {
+    "com.apple.provenance": {
+     "sha256": "42792b5d3fdc4c191e7444e3299b830a018cee5daa9628f1b0b95dd51828d44b",
+     "size": 11
+    }
+   }
   },
   "empty.txt": {
    "mode": "0o644",
    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
    "size": 0,
-   "type": "file"
+   "type": "file",
+   "xattrs": {
+    "com.apple.provenance": {
+     "sha256": "42792b5d3fdc4c191e7444e3299b830a018cee5daa9628f1b0b95dd51828d44b",
+     "size": 11
+    }
+   }
   },
   "hardlink-to-hello": {
    "mode": "0o644",
-   "sha256": "b4eec6294b425678f0c225df5247ab1d2a92330eef06b570385702897c496d71",
+   "sha256": "25364e43b2cfa0c8cafbbfd4017149c3214727f6d9a57cfc8fafc8a56af0815f",
    "size": 16,
-   "type": "file"
+   "type": "file",
+   "xattrs": {
+    "com.apple.provenance": {
+     "sha256": "42792b5d3fdc4c191e7444e3299b830a018cee5daa9628f1b0b95dd51828d44b",
+     "size": 11
+    },
+    "com.example.test": {
+     "sha256": "ed7320f11f58f740c51bc0addc4d527df68996e71813e382ff8b2c100c3a0e23",
+     "size": 7
+    }
+   }
   },
   "hello.txt": {
    "mode": "0o644",
-   "sha256": "b4eec6294b425678f0c225df5247ab1d2a92330eef06b570385702897c496d71",
+   "sha256": "25364e43b2cfa0c8cafbbfd4017149c3214727f6d9a57cfc8fafc8a56af0815f",
    "size": 16,
-   "type": "file"
+   "type": "file",
+   "xattrs": {
+    "com.apple.provenance": {
+     "sha256": "42792b5d3fdc4c191e7444e3299b830a018cee5daa9628f1b0b95dd51828d44b",
+     "size": 11
+    },
+    "com.example.test": {
+     "sha256": "ed7320f11f58f740c51bc0addc4d527df68996e71813e382ff8b2c100c3a0e23",
+     "size": 7
+    }
+   }
   },
   "link-to-hello": {
    "target": "hello.txt",
-   "type": "symlink"
+   "type": "symlink",
+   "xattrs": {
+    "com.apple.provenance": {
+     "sha256": "42792b5d3fdc4c191e7444e3299b830a018cee5daa9628f1b0b95dd51828d44b",
+     "size": 11
+    }
+   }
   },
   "random.bin": {
    "mode": "0o644",
-   "sha256": "4acffd0c007df4988c6d590c26fd13c6a8e04e47cf325ca9e4f8a87a08e4cb5e",
+   "sha256": "99f7fea86c625dbcea4f1d8d47a6c41a3f2a2b04664ebd2b53642c25e689781b",
    "size": 1572864,
-   "type": "file"
+   "type": "file",
+   "xattrs": {
+    "com.apple.provenance": {
+     "sha256": "42792b5d3fdc4c191e7444e3299b830a018cee5daa9628f1b0b95dd51828d44b",
+     "size": 11
+    }
+   }
+  },
+  "rsrc.txt": {
+   "mode": "0o644",
+   "sha256": "c4e2d89a6204e5164209f33f20214affbd437398c25e6e88ea7d3c158aa07e34",
+   "size": 23,
+   "type": "file",
+   "xattrs": {
+    "com.apple.ResourceFork": {
+     "sha256": "3bb60a11ea3ec8414e0360fe5b2475c270101bbe1f8ab3cad4242979ed352f84",
+     "size": 34
+    },
+    "com.apple.provenance": {
+     "sha256": "42792b5d3fdc4c191e7444e3299b830a018cee5daa9628f1b0b95dd51828d44b",
+     "size": 11
+    }
+   }
   },
   "script.sh": {
    "mode": "0o755",
-   "sha256": "299001868fb8c02fd431c336c6d058f5558c5dff5b5af5e6fe04b870a6a9cbba",
+   "sha256": "b4d644d4279594903f1a9911956432d9473041f2984fc6014c14d7402c7d126c",
    "size": 18,
-   "type": "file"
+   "type": "file",
+   "xattrs": {
+    "com.apple.provenance": {
+     "sha256": "42792b5d3fdc4c191e7444e3299b830a018cee5daa9628f1b0b95dd51828d44b",
+     "size": 11
+    }
+   }
   },
-  "u\u0308ni\u0308c\u00f8de\u0301/\u0444\u0430\u0438\u0306\u043b.txt": {
+  "ünïcødé/файл.txt": {
    "mode": "0o644",
-   "sha256": "2f83c52112da9b859b66d180ea7c85d7449dc5526784bfd22a773e56222b0eb0",
-   "size": 18,
-   "type": "file"
+   "sha256": "cc4c4f3164ed1354d2a85f7531e127626a39a27857b85efa368b6f237c6bb9c5",
+   "size": 21,
+   "type": "file",
+   "xattrs": {
+    "com.apple.provenance": {
+     "sha256": "42792b5d3fdc4c191e7444e3299b830a018cee5daa9628f1b0b95dd51828d44b",
+     "size": 11
+    }
+   }
   }
  },
  "volumeName": "HFSTEST"

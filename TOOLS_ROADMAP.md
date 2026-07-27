@@ -17,11 +17,6 @@ what is planned or under consideration, roughly in priority order.
 
 ## Near term
 
-- **decmpfs on HFS+** — a file with the `UF_COMPRESSED` flag currently returns
-  an error instead of its contents. The decoders already exist in
-  `internal/decmpfs`, and the attributes file that carries `com.apple.decmpfs`
-  is now read, so what remains is wiring the two together over the resource
-  fork.
 - **Case-insensitive HFS+ (`H+` v4)** — the writer currently emits
   case-sensitive HFSX (`HX`). Case-insensitive volumes need the Unicode
   case-folding comparison for catalog key ordering.

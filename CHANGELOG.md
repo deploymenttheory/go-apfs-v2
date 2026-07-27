@@ -9,6 +9,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **HFS+ transparent compression is read** (`pkg/hfsplus`, CLI). A file carrying
+  `UF_COMPRESSED` returned an error instead of its contents; it now decodes.
+  Both storage shapes work: data held inline in the `com.apple.decmpfs`
+  attribute, and data held in the file's resource fork in 64 KiB chunks — which
+  is what `ditto --hfsCompression` produces and what nothing in this package
+  read before, `forkTypeResource` having been declared and never used.
+
+  `Stat` reports the size from the decmpfs header rather than the data fork's,
+  which is empty for a compressed file — so such a file listed as zero bytes
+  even once it could be read. Where a file's compression metadata is broken it
+  still lists at its data fork's size and then fails on read, because
+  `fs.DirEntry.Info` has no error path worth failing into.
+
+  No decoding was added: `internal/decmpfs` already had it, and this supplies
+  only the two things HFS+ does differently — where the attribute comes from and
+  where the resource fork is.
+
+- **The fixture generator produces the HFS+ set too** (`scripts/gen-fixtures.sh`).
+  `testdata/cli/hfs-basic.dmg` and its manifest were committed with no script
+  that could rebuild them, while a test hard-failed without them: load-bearing
+  and unreproducible at once. Both file systems now get the same tree from one
+  shared function, so the two can be compared against each other, and the script
+  takes an optional `apfs`/`hfs+` argument.
+
+  The tree gained what the attribute and compression work needs to be tested
+  against bytes macOS wrote rather than bytes we synthesized: a large attribute
+  that cannot fit in an inline record, a real resource fork, and a
+  `ditto --hfsCompression` file on both volumes. `random.bin` is now generated
+  deterministically rather than from `/dev/urandom`, so regenerating twice
+  produces the same fixture — which is the point of committing one.
+
+  The manifest records each file's extended attributes and whether it is
+  compressed. It is not exhaustive: macOS hides `com.apple.decmpfs` and the
+  resource fork of a compressed file from a normal listing, so tests assert that
+  the recorded attributes are present rather than that they are all there is.
+
 - **HFS+ extended attributes are read** (`pkg/hfsplus`, CLI). The attributes
   file — the third of the volume's B-trees — was not parsed at all, so no
   attribute reached the `io/fs` adapter. `extract --xattrs` was therefore a

@@ -91,6 +91,22 @@ type manifestEntry struct {
 	SHA256 string `json:"sha256"`
 	Size   int64  `json:"size"`
 	Target string `json:"target"`
+
+	// Compressed marks a file stored with transparent compression. The size
+	// and hash above are of its decompressed content, which is what a reader
+	// must reproduce.
+	Compressed bool `json:"compressed"`
+
+	// Xattrs records the extended attributes macOS reported, by name. It is
+	// not exhaustive: macOS hides com.apple.decmpfs and the resource fork of a
+	// compressed file from a normal listing, so a volume may hold attributes
+	// this map does not name. Assert containment, not equality.
+	Xattrs map[string]manifestXattr `json:"xattrs"`
+}
+
+type manifestXattr struct {
+	Size   int    `json:"size"`
+	SHA256 string `json:"sha256"`
 }
 
 // TestFixtureManifest verifies the committed hfs-basic.dmg fixture against

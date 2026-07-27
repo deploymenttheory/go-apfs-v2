@@ -42,7 +42,7 @@ func (v *Volume) Open(name string) (fs.File, error) {
 		return nil, err
 	}
 
-	info := newFileInfo(path.Base(name), e)
+	info := v.newFileInfo(path.Base(name), e)
 
 	if e.isDir {
 		return &hfsDir{volume: v, name: name, info: info}, nil
@@ -69,7 +69,7 @@ func (v *Volume) ReadDir(name string) ([]fs.DirEntry, error) {
 
 	entries := make([]fs.DirEntry, 0, len(e.children))
 	for _, child := range e.children {
-		entries = append(entries, dirEntry{info: newFileInfo(child.name, child)})
+		entries = append(entries, dirEntry{info: v.newFileInfo(child.name, child)})
 	}
 
 	return entries, nil
@@ -82,7 +82,7 @@ func (v *Volume) Stat(name string) (fs.FileInfo, error) {
 		return nil, err
 	}
 
-	return newFileInfo(path.Base(name), e), nil
+	return v.newFileInfo(path.Base(name), e), nil
 }
 
 // ReadFile implements fs.ReadFileFS.
@@ -159,7 +159,7 @@ type fileInfo struct {
 	sys     any
 }
 
-func newFileInfo(name string, e *entry) *fileInfo {
+func (v *Volume) newFileInfo(name string, e *entry) *fileInfo {
 	var bsd BSDInfo
 	var modTime hfsTime
 	var size int64
@@ -172,7 +172,7 @@ func newFileInfo(name string, e *entry) *fileInfo {
 	} else if e.file != nil {
 		bsd = e.file.BSDInfo
 		modTime = e.file.ContentModDate
-		size = int64(e.file.DataFork.LogicalSize)
+		size = v.logicalSize(e)
 		sys = e.file
 	}
 
@@ -226,7 +226,7 @@ func (de dirEntry) Info() (fs.FileInfo, error) { return de.info, nil }
 // hfsFile implements fs.File, io.ReaderAt and io.Seeker for regular files
 // and symlinks.
 type hfsFile struct {
-	fork   *forkReader
+	fork   fileReader
 	info   *fileInfo
 	offset int64
 }
