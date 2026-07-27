@@ -94,7 +94,7 @@ func init() {
 	flags.StringP("output", "o", "text", "output format: text or json")
 	flags.BoolP("quiet", "q", false, "suppress progress and non-essential messages")
 	flags.Bool("verbose", false, "verbose diagnostics on stderr")
-	flags.StringP("volume", "v", "", "volume to operate on: index, name or UUID (default: first)")
+	flags.StringP("volume", "v", "", "volume to operate on: index, name, UUID or role (e.g. system, role:data) (default: first)")
 	flags.StringP("password", "p", "", "password for encrypted volumes")
 	flags.Bool("password-stdin", false, "read the password from standard input")
 	flags.String("recovery-password", "", "recovery password for encrypted volumes")

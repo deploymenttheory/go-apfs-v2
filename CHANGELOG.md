@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Volume roles and volume groups** (`pkg/apfs`, `pkg/apfswrite`, CLI):
+  `apfs_role` was parsed and then used nowhere, and `apfs_volume_group_id` was
+  not parsed at all, so a macOS installer or system image was illegible — N
+  similarly-named volumes with no indication which held the OS. `apfs info` now
+  reports each volume's role and volume group in both text and JSON (`role`,
+  `roleName`, `roleValue`, `volumeGroupId`; omitted when unset, so the existing
+  schema is unchanged for role-less volumes), and `-v/--volume` accepts a role
+  token (`-v system`, or `-v role:system` to match only on role), erroring with
+  the candidates listed when a role matches several volumes. `create --fs apfs`
+  gains `--role` and `--volume-group`.
+
+  Roles are a **single value, not a bit field**: Apple writes the low six as
+  `0x0001`, `0x0002`, `0x0004` … but a checker matches `apfs_role` exactly, so
+  `SYSTEM|DATA` is not a role. Decoding by exact match also makes the shifted
+  encoding unambiguous: `APFS_VOL_ROLE_UPDATE` is `3 << 6` = `0x00c0`, which a
+  bitwise decode would report as "Data, Baseband".
+
 - **Reproducible output** (`pkg/apfswrite`, `pkg/hfsplus`, CLI): `create`,
   `pack` and `snapshot create` now produce byte-identical images for identical
   input, making a built image content-addressable, "did the vendor change

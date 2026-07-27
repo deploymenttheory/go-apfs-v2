@@ -29,7 +29,9 @@ what is planned or under consideration, roughly in priority order.
 - **Multiple APFS snapshots per image** — needs distinct transaction ids and
   incremental checkpoints (the writer currently emits a single static
   checkpoint, so one snapshot shares the live volume's xid).
-- **Multi-volume** containers on the write side.
+- **Multi-volume** containers on the write side. This is also what a complete
+  volume group needs: a group is a system/data pair, and with one volume per
+  container only the system half can be written today.
 - **hdiutil-mountable created DMGs** — created images are read by this tool and
   their raw file system is `fsck`-clean and hdiutil-mountable; the DMG *wrapper*
   of a partition-map-less image is not yet directly mountable by hdiutil.
