@@ -64,7 +64,7 @@ jobs:
         run: go test -v ./acceptance/
       - name: Cache acceptance images
         id: dmg-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .acceptance-cache
           key: acceptance-firefox-150.0-zed-0.196.5
