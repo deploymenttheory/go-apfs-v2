@@ -51,6 +51,12 @@ type Entry struct {
 	// too. com.apple.ResourceFork does not belong here -- it is a fork, and
 	// goes in ResourceFork above.
 	Xattrs map[string][]byte
+
+	// LinkGroup marks entries that are several names for one file. Every name
+	// sharing a value is written as a hard link to a single copy of the
+	// content; zero means the entry has only one name. The value itself is
+	// arbitrary and does not reach the disk.
+	LinkGroup uint64
 }
 
 // CreateOptions tunes image creation. The zero value is valid.
@@ -101,6 +107,14 @@ type fileNode struct {
 	// attrs are the node's extended attributes, sorted by name. A value too
 	// large to sit inside its record gets an extent of its own.
 	attrs []*attrWrite
+
+	// isLink marks a visible name pointing at an indirect node; linkRef is
+	// that node's catalog id. isINode marks the indirect node itself, which
+	// holds the content, and linkCount is how many names refer to it.
+	isLink    bool
+	linkRef   uint32
+	isINode   bool
+	linkCount uint32
 }
 
 // attrWrite is one extended attribute to be written.
@@ -162,6 +176,10 @@ func CreateImage(w io.WriterAt, sizeBytes int64, volumeName string, root *Entry,
 		nextCNID:    HFSFirstUserCatalogNodeID,
 	}
 	rootNode := b.flatten(root, volumeName)
+
+	// 1b. Turn groups of names sharing an inode into hard links, which adds
+	// the private directory and one indirect node per group.
+	b.buildHardLinks()
 
 	// 2. Determine node counts. Both are independent of the fork values the
 	// records will eventually carry -- only the record count and sizes matter,
@@ -587,6 +605,26 @@ func (b *builder) normalRecord(n *fileNode) btRecord {
 				subFolders++
 			}
 		}
+		if n.isPrivateDir() {
+			// Written the way macOS writes it: invisible and name-locked, an
+			// off-screen Finder location, and a mode with no permission bits.
+			folder := HFSPlusCatalogFolder{
+				RecordType:       HFSPlusFolderRecord,
+				Flags:            HFSHasFolderCountMask,
+				Valence:          uint32(len(n.children)),
+				FolderID:         n.cnid,
+				CreateDate:       ht,
+				ContentModDate:   ht,
+				AttributeModDate: ht,
+				AccessDate:       ht,
+				BSDInfo:          BSDInfo{FileMode: sIFDIR},
+				FolderCount:      subFolders,
+			}
+			folder.UserInfo.FinderFlags = privateDirFinderFlags
+			folder.UserInfo.Location.V = privateDirLocation
+			folder.UserInfo.Location.H = privateDirLocation
+			return btRecord{key: key, payload: marshalBE(&folder)}
+		}
 		// Directories must NOT set kHFSThreadExistsMask/kHFSFileLockedMask;
 		// fsck_hfs treats those bits as reserved-must-be-zero on folders
 		// (E_CatalogFlagsNotZero). The folder-count flag is always set; the
@@ -619,9 +657,19 @@ func (b *builder) normalRecord(n *fileNode) btRecord {
 		DataFork:         b.forkFor(n),
 		ResourceFork:     b.rsrcForkFor(n),
 	}
-	if n.isSymlink {
+	switch {
+	case n.isSymlink:
 		file.UserInfo.FileType = SymLinkFileType
 		file.UserInfo.FileCreator = SymLinkCreator
+	case n.isLink:
+		// A visible name for a linked file: no forks, and the indirect node's
+		// catalog id in the special field.
+		file.UserInfo.FileType = HardLinkFileType
+		file.UserInfo.FileCreator = HFSPlusCreator
+		file.BSDInfo.Special = n.linkRef
+	case n.isINode:
+		// The indirect node holds the content, and counts the names.
+		file.BSDInfo.Special = n.linkCount
 	}
 	return btRecord{key: key, payload: marshalBE(&file)}
 }

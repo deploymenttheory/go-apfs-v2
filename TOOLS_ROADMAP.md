@@ -26,8 +26,6 @@ what is planned or under consideration, roughly in priority order.
 
 - **decmpfs on write** — needs the compression machinery and the inode's
   BSD flags, not just the attribute.
-- **Hard links in the HFS+ writer** — the APFS writer represents them; HFS+
-  still writes each name as its own copy.
 - **Multiple APFS snapshots per image** — needs distinct transaction ids and
   incremental checkpoints (the writer currently emits a single static
   checkpoint, so one snapshot shares the live volume's xid).

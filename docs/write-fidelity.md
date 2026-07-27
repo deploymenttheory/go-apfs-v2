@@ -17,7 +17,7 @@ copied through bit-for-bit.
 | Symbolic links | target, mode, owner, group, modification time |
 | Extended attributes | both, any size |
 | Resource forks | both: on APFS as an attribute stream, on HFS+ as the catalog record's resource fork |
-| Hard links | **APFS only**: several names share one inode and one copy of the content |
+| Hard links | both: several names share one inode and one copy of the content |
 
 ## What is not
 
@@ -26,7 +26,6 @@ copied through bit-for-bit.
 | Device nodes, FIFOs, sockets | **skipped entirely** | `specialFilesSkipped` |
 | `com.apple.decmpfs` | dropped | `xattrsDropped` |
 | ACLs on HFS+ | dropped | `aclsDropped` |
-| Hard links on HFS+ | each name becomes an independent copy | `hardLinksCollapsed` |
 | BSD flags (`uchg`, `hidden`, …) | dropped | `bsdFlagsDropped` |
 | Volume role and group (`snapshot create` only) | not carried | `volumeIdentityDropped` |
 

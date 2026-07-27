@@ -39,12 +39,12 @@ type WalkOptions struct {
 // extent of its own. A resource fork is carried too, in the catalog record's
 // resource fork where HFS+ actually keeps it. com.apple.decmpfs is the
 // exception -- it declares content this writer does not produce -- and is
-// reported as dropped. Several names for one file still become independent
-// copies.
+// reported as dropped. Several names for one file are written as hard links to
+// one copy of the content, rather than as copies.
 func EntryTreeFromDir(srcDir string, opts *WalkOptions) (*Entry, *fidelity.Report, error) {
 	var o hostwalk.Options
 	if opts != nil {
-		o = hostwalk.Options{Xattrs: opts.Xattrs, Warn: opts.Warn, Keep: CanWriteXattr}
+		o = hostwalk.Options{Xattrs: opts.Xattrs, Warn: opts.Warn, Keep: CanWriteXattr, HardLinks: true}
 	}
 
 	root, report, err := hostwalk.Walk(srcDir, &o, newEntry)
@@ -83,6 +83,7 @@ func newEntry(n hostwalk.Node, children []*Entry) *Entry {
 		Data:         n.Data,
 		ResourceFork: n.Xattrs[hostmeta.ResourceForkName],
 		Xattrs:       attrsWithoutResourceFork(n.Xattrs),
+		LinkGroup:    n.LinkGroup,
 		Children:     children,
 	}
 }
