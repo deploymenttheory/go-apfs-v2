@@ -1,18 +1,18 @@
 module github.com/deploymenttheory/go-apfs-v2
 
-go 1.24.4
+go 1.25.0
 
 require (
 	github.com/go-compressions/lzfse v0.3.0
 	github.com/google/uuid v1.6.0
 	github.com/hanwen/go-fuse/v2 v2.9.0
-	github.com/schollz/progressbar/v3 v3.18.0
+	github.com/schollz/progressbar/v3 v3.19.1
 	github.com/spf13/cobra v1.10.1
 	github.com/spf13/viper v1.21.0
 	github.com/ulikunitz/xz v0.5.16
 	golang.org/x/crypto v0.45.0
-	golang.org/x/sys v0.38.0
-	golang.org/x/term v0.37.0
+	golang.org/x/sys v0.46.0
+	golang.org/x/term v0.44.0
 	golang.org/x/text v0.31.0
 	howett.net/plist v1.0.1
 )
