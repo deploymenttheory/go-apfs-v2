@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The HFS+ writer carries resource forks** (`pkg/hfsplus`, CLI). They were
+  dropped entirely, so a resource fork could be read off an HFS+ image and not
+  written back to one. A file's fork now survives `extract --xattrs` → `pack
+  --fs hfs+` byte-identically, and `resourceForksDropped` is zero where it used
+  to count every one.
+
+  A resource fork is a fork of the catalog record on HFS+, not an
+  attributes-file record, so this needs no attributes file: the fork gets its
+  own extent alongside the data fork, and the allocation bitmap and free-block
+  count account for it. A file without one keeps an all-zero fork descriptor
+  rather than a zero-length extent, which is what `fsck_hfs` expects.
+
+  Verified by `fsck_hfs -n` reporting the volume clean and by `hdiutil`
+  mounting it, with the fork readable both as `..namedfork/rsrc` and as
+  `com.apple.ResourceFork`.
+
 - **HFS+ transparent compression is read** (`pkg/hfsplus`, CLI). A file carrying
   `UF_COMPRESSED` returned an error instead of its contents; it now decodes.
   Both storage shapes work: data held inline in the `com.apple.decmpfs`

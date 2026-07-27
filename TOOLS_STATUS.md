@@ -22,6 +22,7 @@ Legend: ✅ implemented · 🟡 partial · ⬜ not yet
 | Reproducible output (`SOURCE_DATE_EPOCH`, fixed UUIDs) | ✅ | ✅ |
 | Volume roles and volume groups (read + write) | ✅² | — |
 | Write-fidelity reporting (`--strict`) | ✅ | ✅ |
+| Resource forks (write) | ✅⁴ | ✅ |
 | Extended attributes (write) | ✅⁴ | ⬜ |
 | Hard links (write) | ✅ | ⬜ |
 

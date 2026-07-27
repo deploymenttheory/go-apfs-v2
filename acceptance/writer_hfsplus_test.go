@@ -38,6 +38,10 @@ func hfsSampleTree() (*hfsplus.Entry, []byte) {
 	big := bytes.Repeat([]byte("ABCDEFGH0123456789"), 60000) // ~1.03 MiB
 	root := &hfsplus.Entry{Children: []*hfsplus.Entry{
 		{Name: "hello.txt", Mode: 0o644, Data: []byte("hello world\n")},
+		// A resource fork, so fsck_hfs and hdiutil judge one on every run
+		// rather than only the data fork.
+		{Name: "forked.txt", Mode: 0o644, Data: []byte("has a resource fork\n"),
+			ResourceFork: []byte("resource fork payload\n")},
 		{Name: "big.bin", Mode: 0o644, Data: big},
 		{Name: "run.sh", Mode: 0o755, Data: []byte("#!/bin/sh\necho hi\n")},
 		{Name: "link", Mode: os.ModeSymlink | 0o755, Data: []byte("hello.txt")},
@@ -142,5 +146,22 @@ func TestWriteMountsViaHdiutil(t *testing.T) {
 	// Nested.
 	if got, err := os.ReadFile(filepath.Join(mnt, "sub", "deep", "leaf.txt")); err != nil || string(got) != "leaf\n" {
 		t.Errorf("leaf.txt = %q, %v", got, err)
+	}
+	// Resource fork, read the way macOS exposes it. This is the check that the
+	// fork is not merely present on disk but reachable as macOS expects, which
+	// our own reader could not tell us.
+	rsrc, err := os.ReadFile(filepath.Join(mnt, "forked.txt", "..namedfork", "rsrc"))
+	if err != nil {
+		t.Errorf("reading the resource fork of forked.txt: %v", err)
+	} else if string(rsrc) != "resource fork payload\n" {
+		t.Errorf("resource fork = %q", rsrc)
+	}
+	// And as the attribute macOS presents it as.
+	xattr, err := exec.Command("xattr", "-p", "com.apple.ResourceFork",
+		filepath.Join(mnt, "forked.txt")).CombinedOutput()
+	if err != nil {
+		t.Errorf("xattr -p com.apple.ResourceFork: %v\n%s", err, xattr)
+	} else if !bytes.Contains(xattr, []byte("resource fork payload")) {
+		t.Errorf("com.apple.ResourceFork = %q", xattr)
 	}
 }
