@@ -56,9 +56,15 @@ func TestPackSkipsSpecialFiles(t *testing.T) {
 			out := filepath.Join(t.TempDir(), "packed.dmg")
 
 			// The deadline is the assertion: before the fix this never returned.
+			//
+			// Skipping an entry is a partial result, so the exit code is 6 —
+			// the same meaning extract gives when it cannot handle everything.
+			// The image is still written and still usable, which is what the
+			// rest of this test checks.
 			_, stderr, code := runTimeout(t, packTimeout, "pack", dir, out, "--fs", fs, "--volname", "SPECIAL", "-q")
-			if code != exitcode.OK {
-				t.Fatalf("pack exited %s\nstderr: %s", exitcode.Name(code), stderr)
+			if code != exitcode.Partial {
+				t.Fatalf("pack exited %s, want %s\nstderr: %s",
+					exitcode.Name(code), exitcode.Name(exitcode.Partial), stderr)
 			}
 
 			// The ordinary contents must still be there: skipping the special

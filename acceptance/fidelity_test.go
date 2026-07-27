@@ -10,16 +10,10 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/exitcode"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/fidelity"
 )
-
-// packTimeout bounds a pack that should complete promptly. Reading a special
-// file rather than skipping it used to hang forever, so the deadline is part of
-// the assertion.
-const packTimeout = 60 * time.Second
 
 // lossyTree builds a directory holding, as far as the platform allows, one of
 // everything a volume cannot carry. It reports which it managed to create.
