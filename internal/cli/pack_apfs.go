@@ -41,6 +41,10 @@ func packDirectoryAPFS(srcDir, dstPath, volname string, encOpts *disk.EncodeOpti
 	}
 	createOpts.Root = root
 
+	if err := ensureScratchSpaceForTree(srcDir, dstPath); err != nil {
+		return err
+	}
+
 	img, err := newScratchImage(dstPath)
 	if err != nil {
 		return err
