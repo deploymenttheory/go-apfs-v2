@@ -51,6 +51,12 @@ func makeSocket(t *testing.T, path string) bool {
 // xattrsReadable reports whether this platform can read extended attributes.
 func xattrsReadable() bool { return true }
 
+// hardLinksDetectable reports whether this platform exposes inode identity, so
+// a second name for one file can be recognized as a link rather than mistaken
+// for a separate file. Creating a hard link and recognizing one are separate
+// capabilities: NTFS supports links, but Windows does not expose the identity.
+func hardLinksDetectable() bool { return true }
+
 // readXattrNames returns the names of the extended attributes on path.
 func readXattrNames(path string) ([]string, error) {
 	size, err := unix.Llistxattr(path, nil)

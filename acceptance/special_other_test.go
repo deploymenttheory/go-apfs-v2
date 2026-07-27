@@ -20,6 +20,11 @@ func makeSocket(t *testing.T, path string) bool {
 
 func xattrsReadable() bool { return false }
 
+// hardLinksDetectable reports whether this platform exposes inode identity.
+// Windows supports hard links on NTFS but does not expose the identity through
+// os.FileInfo, so a link is indistinguishable from a separate file.
+func hardLinksDetectable() bool { return false }
+
 func readXattrNames(path string) ([]string, error) { return nil, nil }
 
 func setXattr(t *testing.T, path, name string, value []byte) bool {

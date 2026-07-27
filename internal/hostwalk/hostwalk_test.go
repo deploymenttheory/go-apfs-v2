@@ -119,6 +119,18 @@ func TestWalkReportsHardLinks(t *testing.T) {
 	if err := os.Link(original, filepath.Join(dir, "c-link.txt")); err != nil {
 		t.Skipf("unable to create a hard link: %v", err)
 	}
+
+	// Creating a link and recognizing one are separate capabilities. NTFS
+	// supports hard links, but Windows does not expose inode identity through
+	// os.FileInfo, so there they are indistinguishable from separate files —
+	// which is what LinkIdentity reports and what the walk then cannot count.
+	info, err := os.Lstat(original)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := hostmeta.Link(info); !ok {
+		t.Skip("this platform does not expose inode identity, so hard links cannot be recognized")
+	}
 	// A separate file with identical content must not be reported.
 	mustWrite(t, filepath.Join(dir, "d-separate.txt"), "shared\n")
 

@@ -42,7 +42,9 @@ func buildLossyTree(t *testing.T) lossyTree {
 
 	tree.fifo = makeFIFO(t, filepath.Join(tree.dir, "pipe"))
 	tree.socket = makeSocket(t, filepath.Join(tree.dir, "sock"))
-	tree.hardlink = os.Link(regular, filepath.Join(tree.dir, "linked.txt")) == nil
+	// Only count this as a hard link the walk will notice if the platform can
+	// also recognize one; creating and detecting are separate capabilities.
+	tree.hardlink = os.Link(regular, filepath.Join(tree.dir, "linked.txt")) == nil && hardLinksDetectable()
 	tree.xattr = setXattr(t, regular, "user.marker", []byte("value"))
 
 	return tree
@@ -121,6 +123,16 @@ func TestPackReportsFidelityLoss(t *testing.T) {
 		if got := intField(t, report, "xattrsDropped"); got == 0 {
 			t.Error("xattrsDropped = 0, want at least the attribute that was set")
 		}
+	}
+
+	// Only assert the pack was lossy if the platform could actually create
+	// something to lose. Windows has no FIFOs or sockets, exposes no inode
+	// identity to recognize a hard link by, and has no extended attributes this
+	// tool reads — so there the tree is genuinely lossless and saying otherwise
+	// would be a false failure.
+	if !tree.fifo && !tree.socket && !tree.hardlink && !tree.xattr {
+		t.Log("this platform can create nothing the volume would drop; only the report schema is checked")
+		return
 	}
 	if lossless, _ := report["lossless"].(bool); lossless {
 		t.Error("a lossy pack reported itself lossless")
