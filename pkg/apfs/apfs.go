@@ -105,7 +105,14 @@ func (c *Container) Volumes() ([]*Volume, error) {
 }
 
 // VolumeBySelector returns a single volume selected by index ("0"), name
-// ("Macintosh HD") or UUID. An empty selector returns the first volume.
+// ("Macintosh HD"), UUID, or role ("system", or "role:system" to select by role
+// explicitly). An empty selector returns the first volume.
+//
+// Name and UUID are matched before a bare role token, so a volume literally
+// named "system" still wins; the "role:" prefix skips that check for callers
+// that need to be unambiguous. A bare role token that matches several volumes
+// is an error rather than a silent first-match: picking one arbitrarily is the
+// wrong default for a tool used forensically.
 func (c *Container) VolumeBySelector(selector string) (*Volume, error) {
 	if selector == "" {
 		selector = "0"
@@ -126,6 +133,10 @@ func (c *Container) VolumeBySelector(selector string) (*Volume, error) {
 		return nil, err
 	}
 
+	if role, ok := strings.CutPrefix(strings.ToLower(selector), "role:"); ok {
+		return volumeByRole(volumes, role, selector)
+	}
+
 	for _, volume := range volumes {
 		if name, err := volume.UTF8Name(); err == nil && name == selector {
 			return volume, nil
@@ -135,7 +146,52 @@ func (c *Container) VolumeBySelector(selector string) (*Volume, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("no volume matches selector %q (by index, name or UUID)", selector)
+	// No name or UUID matched, so fall back to interpreting the selector as a
+	// role token.
+	if _, err := ParseVolumeRole(selector); err == nil {
+		return volumeByRole(volumes, strings.ToLower(selector), selector)
+	}
+
+	return nil, fmt.Errorf("no volume matches selector %q (by index, name, UUID or role)", selector)
+}
+
+// volumeByRole returns the single volume whose role matches token. selector is
+// the caller's original spelling, used in error messages.
+func volumeByRole(volumes []*Volume, token, selector string) (*Volume, error) {
+	want, err := ParseVolumeRole(token)
+	if err != nil {
+		return nil, fmt.Errorf("invalid volume selector %q: %w", selector, err)
+	}
+	if want == VolumeRoleNone {
+		return nil, fmt.Errorf("invalid volume selector %q: %q is not a role a volume can be selected by", selector, token)
+	}
+
+	var matches []*Volume
+	var indices []int
+	for index, volume := range volumes {
+		if role, err := volume.Role(); err == nil && role == want {
+			matches = append(matches, volume)
+			indices = append(indices, index)
+		}
+	}
+
+	switch len(matches) {
+	case 0:
+		return nil, fmt.Errorf("no volume has the %q role", token)
+	case 1:
+		return matches[0], nil
+	default:
+		// A container can legally hold several volumes with the same role — two
+		// recovery volumes in a multi-OS container, for instance. Name them
+		// rather than choosing for the caller.
+		var described []string
+		for i, volume := range matches {
+			name, _ := volume.UTF8Name()
+			described = append(described, fmt.Sprintf("%d (%s)", indices[i], name))
+		}
+		return nil, fmt.Errorf("%d volumes have the %q role: %s; select one by index, name or UUID",
+			len(matches), token, strings.Join(described, ", "))
+	}
 }
 
 // applyPasswords sets the container's open-time passwords on a volume and

@@ -9,6 +9,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
 )
 
 // CreateOptions configures CreateContainer. The zero value is valid: it formats
@@ -70,6 +72,21 @@ type CreateOptions struct {
 	// FixedTime, while earlier times are preserved. It has no effect on entries
 	// that supply no ModTime.
 	ClampModTimes bool
+
+	// Role is the volume's role (apfs_role): what the volume is for, such as
+	// the system or data volume of a macOS install. Use the apfs.VolumeRole*
+	// constants. Zero means no role, which is what a plain data image wants.
+	Role uint16
+
+	// VolumeGroupID identifies the volume group this volume belongs to
+	// (apfs_volume_group_id) — the system/data pairing macOS has used since
+	// Catalina. The zero value means the volume belongs to no group.
+	//
+	// Setting it requires Role to be apfs.VolumeRoleSystem, and also sets the
+	// APFS_FEATURE_VOLGRP_SYSTEM_INO_SPACE feature flag, which is what actually
+	// declares membership. The resulting group is incomplete — it has no data
+	// volume — because this writer emits one volume per container.
+	VolumeGroupID [16]byte
 }
 
 // SnapshotSpec describes one APFS snapshot to create at build time.
@@ -224,6 +241,12 @@ func CreateContainer(w io.WriterAt, sizeBytes int64, opts *CreateOptions) error 
 	b.volUUID = opts.VolumeUUID
 	if b.volUUID == ([16]byte{}) {
 		b.volUUID = defaultVolumeUUID
+	}
+
+	b.role = opts.Role
+	b.volumeGroupID = opts.VolumeGroupID
+	if err := validateRole(b.role, b.volumeGroupID); err != nil {
+		return err
 	}
 
 	// A normalization-insensitive, case-insensitive volume is the default; the
@@ -385,6 +408,8 @@ type builder struct {
 	label          string
 	mainUUID       [16]byte
 	volUUID        [16]byte
+	role           uint16   // apfs_role
+	volumeGroupID  [16]byte // apfs_volume_group_id
 	caseSensitive  bool
 	normSensitive  bool
 
@@ -473,6 +498,34 @@ type builder struct {
 // a fixed value rather than the wall clock so that identical input produces
 // identical bytes: a container built twice is byte-for-byte the same.
 var DefaultTime = time.Date(2024, time.January, 1, 0, 0, 0, 0, time.UTC)
+
+// validateRole rejects role and volume-group combinations that produce an image
+// a checker will reject, so the caller gets an error rather than a container
+// that only fails later under apfsck or macOS.
+//
+// A volume's role is a single value, never a combination: every checker matches
+// apfs_role against the defined values exactly.
+//
+// A volume group is a system/data pair, and this writer emits one volume per
+// container, so a complete group cannot be represented yet (multi-volume
+// containers are a roadmap item). The system volume is the half that stands
+// alone: apfsck treats a group whose data volume is absent as an oddity rather
+// than corruption, but a group whose *system* volume is absent is a hard error.
+// So a grouped volume must be the system one.
+func validateRole(role uint16, groupID [16]byte) error {
+	if !apfs.IsValidVolumeRole(role) {
+		return fmt.Errorf("apfswrite: invalid volume role %#04x: a volume has exactly one role, and roles are not combined", role)
+	}
+	if groupID == ([16]byte{}) {
+		return nil
+	}
+	if role != apfs.VolumeRoleSystem {
+		return fmt.Errorf("apfswrite: a volume in a volume group must have the system role, not %q: "+
+			"a group is a system/data pair, and this writer emits a single volume per container, "+
+			"so the data half cannot be written alongside it", apfs.VolumeRoleString(role))
+	}
+	return nil
+}
 
 // entryTime resolves an entry's on-disk timestamp. A zero time means the
 // builder's fixed default; otherwise the entry's own time is used, clamped down

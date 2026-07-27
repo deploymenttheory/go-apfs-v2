@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/disk"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/hfsplus"
 	"github.com/spf13/cobra"
@@ -17,6 +18,8 @@ var (
 	createSizeMiB  uint
 	createCaseSens bool
 	createSnapshot string
+	createRole     string
+	createVolGroup string
 	createUUIDs    writeIdentityFlags
 )
 
@@ -42,6 +45,8 @@ func init() {
 	createCmd.Flags().UintVar(&createSizeMiB, "size", 0, "image size in MiB (0 = minimum for the file system)")
 	createCmd.Flags().BoolVar(&createCaseSens, "case-sensitive", false, "create a case-sensitive volume")
 	createCmd.Flags().StringVar(&createSnapshot, "snapshot", "", "APFS only: also create a snapshot with this name capturing the new volume")
+	createCmd.Flags().StringVar(&createRole, "role", "", "APFS only: volume role ("+strings.Join(apfs.VolumeRoleTokens(), ", ")+")")
+	createCmd.Flags().StringVar(&createVolGroup, "volume-group", "", "APFS only: volume group UUID this volume belongs to (requires --role system)")
 	createUUIDs.register(createCmd)
 }
 
@@ -55,6 +60,9 @@ func runCreate(cmd *cobra.Command, args []string) error {
 
 	switch strings.ToLower(createFS) {
 	case "hfs+", "hfsx":
+		if createRole != "" || createVolGroup != "" {
+			return usageErrorf("--role and --volume-group are APFS concepts and do not apply to HFS+")
+		}
 		return createHFS(dstPath, sizeBytes)
 	case "apfs":
 		return createAPFS(dstPath, sizeBytes)

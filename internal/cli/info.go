@@ -68,11 +68,19 @@ type containerInfo struct {
 }
 
 type volumeInfo struct {
-	Index         int       `json:"index"`
-	Name          string    `json:"name"`
-	UUID          string    `json:"uuid"`
-	CaseSensitive bool      `json:"caseSensitive"`
-	Locked        bool      `json:"locked"`
+	Index         int    `json:"index"`
+	Name          string `json:"name"`
+	UUID          string `json:"uuid"`
+	CaseSensitive bool   `json:"caseSensitive"`
+	Locked        bool   `json:"locked"`
+	// Role is the lowercase role token ("system", "data", …), omitted when the
+	// volume has no role; RoleValue is the raw apfs_role, always present so a
+	// consumer can see a value this build does not recognize. VolumeGroupID is
+	// the volume group UUID, omitted when the volume is in no group.
+	Role          string    `json:"role,omitempty"`
+	RoleName      string    `json:"roleName,omitempty"`
+	RoleValue     uint16    `json:"roleValue"`
+	VolumeGroupID string    `json:"volumeGroupId,omitempty"`
 	Files         uint64    `json:"files"`
 	Directories   uint64    `json:"directories"`
 	Symlinks      uint64    `json:"symlinks"`
@@ -230,6 +238,14 @@ func collectContainerInfo(container *apfs.Container) (*containerInfo, error) { /
 		if volLocked, err := volume.IsLocked(); err == nil {
 			vi.Locked = volLocked
 		}
+		if role, err := volume.Role(); err == nil {
+			vi.RoleValue = role
+			vi.Role = apfs.VolumeRoleString(role)
+			vi.RoleName = apfs.VolumeRoleName(role)
+		}
+		if groupID, err := volume.VolumeGroupIdentifier(); err == nil && groupID != ([16]byte{}) {
+			vi.VolumeGroupID = formatUUIDBytes(groupID[:])
+		}
 
 		if sb := volume.Superblock; sb != nil {
 			vi.Files = sb.NumberOfFiles
@@ -268,6 +284,12 @@ func printContainerInfo(info *containerInfo) {
 		fmt.Println()
 		fmt.Printf("Volume %d: %s\n", vi.Index, vi.Name)
 		fmt.Printf("  %-18s %s\n", "UUID", vi.UUID)
+		if vi.RoleName != "" {
+			fmt.Printf("  %-18s %s\n", "Role", vi.RoleName)
+		}
+		if vi.VolumeGroupID != "" {
+			fmt.Printf("  %-18s %s\n", "Volume group", vi.VolumeGroupID)
+		}
 		fmt.Printf("  %-18s %s (%d bytes)\n", "Size", formatSize(vi.Size), vi.Size)
 		fmt.Printf("  %-18s %d files, %d directories, %d symlinks\n", "Contents", vi.Files, vi.Directories, vi.Symlinks)
 		if vi.Snapshots > 0 {

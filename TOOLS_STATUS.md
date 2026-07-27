@@ -20,9 +20,14 @@ Legend: ✅ implemented · 🟡 partial · ⬜ not yet
 | Create empty volume | ✅ | ✅ |
 | Populate a volume with files | ✅ | ✅ |
 | Reproducible output (`SOURCE_DATE_EPOCH`, fixed UUIDs) | ✅ | ✅ |
+| Volume roles and volume groups (read + write) | ✅² | — |
 
 ¹ One snapshot per image (single static checkpoint); multiple snapshots need
 distinct xids and incremental checkpoints.
+
+² Roles read and written in full. A volume group can only be written on a
+system volume: a group is a system/data pair and the writer emits one volume
+per container, so the resulting group has no data half.
 
 The APFS writer lives in `pkg/apfswrite` (pure Go, MIT).
 

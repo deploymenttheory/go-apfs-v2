@@ -171,6 +171,12 @@ func (b *builder) volumeSuperblock() *apfsSuperblock {
 	vsb := &apfsSuperblock{}
 	vsb.Magic = apfsMagic
 	vsb.Features = apfsFeatureHardlinkMapRecords
+	if b.volumeGroupID != ([16]byte{}) {
+		// Membership is declared by the feature flag, not by the identifier.
+		// apfsck reports "volume group: member has no feature flag" for a
+		// volume carrying a group identifier without it.
+		vsb.Features |= apfsFeatureVolgrpSystemInoSpace
+	}
 	vsb.IncompatibleFeatures = b.volIncompatFeatures()
 	// The snapshot volume superblocks are superblocks, not fs-allocated blocks,
 	// so they are excluded from the allocation count.
@@ -196,6 +202,8 @@ func (b *builder) volumeSuperblock() *apfsSuperblock {
 	vsb.FormattedBy.LastXID = formatXID
 	copy(vsb.Volname[:], b.label)
 	vsb.NextDocID = minDocID
+	vsb.Role = b.role
+	vsb.VolumeGroupID = b.volumeGroupID
 	return vsb
 }
 

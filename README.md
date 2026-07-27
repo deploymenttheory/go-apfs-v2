@@ -85,20 +85,44 @@ apply to all commands.
 apfs info IMAGE [--hierarchy] [--bodyfile FILE] [--md5] [--entry ID] [--file-path PATH]
 ```
 
-Prints the file system type (APFS or HFS+), container/volume UUIDs, sizes, and
-file/directory/symlink counts. With `-o json`, emits a single document
-including a `fileSystem` field.
+Prints the file system type (APFS or HFS+), container/volume UUIDs, sizes,
+file/directory/symlink counts, and — for APFS — each volume's **role** and
+volume group. With `-o json`, emits a single document including a `fileSystem`
+field.
 
 ```console
 apfs info image.dmg
 apfs info -o json image.dmg | jq -r '.volumes[0].name'
 apfs info -v "Macintosh HD" image.dmg          # select a volume by name/UUID
+apfs info -v system image.dmg                  # ...or by role
 apfs info --hierarchy image.dmg                # full tree (APFS, text)
 apfs info --bodyfile out.body image.dmg        # Sleuth Kit bodyfile
 ```
 
 The forensic flags (`--hierarchy`, `--bodyfile`, `--md5`, `--entry`,
 `--file-path`) are APFS-only and text-only.
+
+#### Volume roles
+
+A volume's role (`apfs_role`) says what it is for — `system`, `data`,
+`recovery`, `preboot`, `update` and so on. Without it a macOS installer or
+system image is illegible: several similarly-named volumes with no indication
+which one holds the OS.
+
+`-v/--volume` accepts a role token anywhere it accepts an index, name or UUID,
+so `-v system` finds the OS volume without knowing its name. Name and UUID are
+matched first, so a volume literally named `system` still wins; `-v role:system`
+skips that and matches only on role. A role matching several volumes is an
+error naming the candidates rather than an arbitrary pick.
+
+In JSON, `role` is the lowercase token, `roleName` the display name, and
+`roleValue` the raw `apfs_role` — always present, so a value this build does not
+recognize is visible rather than silently dropped. `volumeGroupId` is the
+volume group (`apfs_volume_group_id`), the system/data pairing macOS has used
+since Catalina. All three are omitted when unset.
+
+Note that roles are a **single value**, never a combination: `0x00c0` is
+`update`, not `data|baseband`.
 
 ### `list` — list directory contents
 
@@ -214,6 +238,7 @@ apfs pack original.dmg smaller.dmg --compression none
 
 ```
 apfs create OUT.dmg --fs hfs+|apfs [--volname NAME] [--size MiB] [--case-sensitive]
+                    [--role ROLE] [--volume-group UUID]
 ```
 
 Creates a new DMG containing a freshly formatted, **empty** volume (the format
@@ -222,7 +247,13 @@ operation). Both `--fs hfs+` and `--fs apfs` are supported.
 ```console
 apfs create blank.dmg --fs hfs+ --volname Scratch --size 16
 apfs create blank.dmg --fs apfs --volname Data
+apfs create system.dmg --fs apfs --volname "Macintosh HD" --role system
 ```
+
+`--role` and `--volume-group` are APFS-only. `--volume-group` requires
+`--role system`: a volume group is a system/data pair, and this writer emits one
+volume per container, so the data half cannot accompany it (multi-volume
+containers are on the roadmap).
 
 A snapshot capturing the new volume can be created at the same time with
 `--snapshot NAME` (APFS only). This applies to `pack` too.

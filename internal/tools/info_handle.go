@@ -442,6 +442,17 @@ func (ih *InfoHandle) PrintVolumeInfo(volumeIndex int, volume *apfs.Volume) erro
 	fmt.Fprintf(ih.NotifyStream, "│ %-*s │\n", boxWidth, "UUID: "+formatUUIDArray(identifier))
 	fmt.Fprintf(ih.NotifyStream, "╰─%s─╯\n\n", repeatChar('─', boxWidth))
 
+	// Identity section: what the volume is for, and which group it belongs to.
+	// Both are omitted when unset, which is the common case for a plain image.
+	if roleName, err := volume.RoleName(); err == nil && roleName != "" {
+		fmt.Fprintf(ih.NotifyStream, "  Identity\n")
+		fmt.Fprintf(ih.NotifyStream, "    %-20s  %s\n", "Role", roleName)
+		if groupID, err := volume.VolumeGroupIdentifier(); err == nil && groupID != ([16]byte{}) {
+			fmt.Fprintf(ih.NotifyStream, "    %-20s  %s\n", "Volume group", formatUUIDArray(groupID))
+		}
+		fmt.Fprintf(ih.NotifyStream, "\n")
+	}
+
 	// Storage section
 	fmt.Fprintf(ih.NotifyStream, "  Storage\n")
 	if size, err := volume.Size(); err == nil {
