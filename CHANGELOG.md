@@ -20,6 +20,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   putting it there would reproduce the problem being fixed. `--temp-dir`
   overrides. Output is byte-identical to before.
 
+  `create` and `pack` check the free space first and refuse a build that cannot
+  fit, naming what is needed, what is available and where to put the scratch
+  file instead. Trading a memory limit for a disk one is only an improvement if
+  running out of disk is diagnosed rather than discovered part-way through.
+
 - **Write-fidelity reporting and `--strict`** (`pkg/fidelity`, `pkg/apfswrite`,
   `pkg/hfsplus`, CLI): packing a directory is lossy, and until now it was
   silently so. `pack <dir>` and `snapshot create` now count and report every

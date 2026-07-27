@@ -80,6 +80,10 @@ func createHFS(dstPath string, sizeBytes int64) error {
 	fixed, clamp := writerTimes()
 
 	root := &hfsplus.Entry{Name: createVolName, Mode: os.ModeDir | 0755}
+	if err := ensureScratchSpace(scratchDir(dstPath), dstPath, uint64(sizeBytes)); err != nil {
+		return err
+	}
+
 	img, err := newScratchImage(dstPath)
 	if err != nil {
 		return err

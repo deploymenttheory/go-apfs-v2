@@ -153,6 +153,10 @@ func packDirectoryHFS(srcDir, dstPath, volname string, encOpts *disk.EncodeOptio
 		return err
 	}
 
+	if err := ensureScratchSpaceForTree(srcDir, dstPath); err != nil {
+		return err
+	}
+
 	img, err := newScratchImage(dstPath)
 	if err != nil {
 		return err
@@ -231,11 +235,17 @@ func packReport(srcPath, dstPath string, srcSize int64, report *fidelity.Report)
 // by contrast, is somewhere the user has already committed to holding an image
 // of this size. --temp-dir overrides it.
 func newScratchImage(dstPath string) (*imagefile.File, error) {
-	dir := opts.TempDir
-	if dir == "" {
-		dir = filepath.Dir(dstPath)
-	}
+	dir := scratchDir(dstPath)
 	// Dot-prefixed so a file left behind by a hard kill is hidden and obviously
 	// transient rather than looking like an output.
 	return imagefile.New(dir, ".apfs-image-*.tmp")
+}
+
+// scratchDir returns where the scratch file for an image bound for dstPath
+// goes: --temp-dir when set, otherwise beside the output.
+func scratchDir(dstPath string) string {
+	if opts.TempDir != "" {
+		return opts.TempDir
+	}
+	return filepath.Dir(dstPath)
 }

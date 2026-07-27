@@ -47,6 +47,10 @@ func createAPFS(dstPath string, sizeBytes int64) error {
 	if createSnapshot != "" {
 		createOpts.Snapshots = []apfswrite.SnapshotSpec{{Name: createSnapshot}}
 	}
+	if err := ensureScratchSpace(scratchDir(dstPath), dstPath, uint64(sizeBytes)); err != nil {
+		return err
+	}
+
 	img, err := newScratchImage(dstPath)
 	if err != nil {
 		return err
