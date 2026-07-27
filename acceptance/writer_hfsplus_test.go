@@ -1,6 +1,7 @@
-// Oracle-backed acceptance tests for the HFS+ writer: images produced by
-// pkg/hfsplus are checked with fsck_hfs and mounted with hdiutil. The
-// in-memory round-trip tests stay in pkg/hfsplus.
+// Checker tests for the HFS+ writer: an image written by pkg/hfsplus is
+// checked with fsck_hfs and mounted with hdiutil so the files can be read back
+// through the operating system. The in-memory round-trip tests stay in
+// pkg/hfsplus.
 package acceptance
 
 import (
@@ -29,7 +30,7 @@ func (m *memWriterAt) WriteAt(p []byte, off int64) (int, error) {
 	return len(p), nil
 }
 
-// hfsSampleTree is the fixture both HFS+ oracle tests write: a small file, a
+// hfsSampleTree is the fixture both HFS+ checker tests write: a small file, a
 // file over a megabyte, an executable, a symlink, a unicode name, an empty
 // file and two levels of directory. It returns the tree and the large file's
 // contents so the mount test can compare checksums.

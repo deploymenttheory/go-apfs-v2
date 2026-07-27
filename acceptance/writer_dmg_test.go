@@ -1,6 +1,6 @@
-// Oracle-backed acceptance test for the DMG writer: a repacked image is
-// mounted with hdiutil to prove the container is readable by the platform.
-// The synthetic encode/decode round-trips stay in pkg/disk.
+// Checker test for the DMG writer: a repacked image is mounted with hdiutil,
+// which proves macOS can read it. The synthetic encode/decode round-trips stay
+// in pkg/disk.
 package acceptance
 
 import (

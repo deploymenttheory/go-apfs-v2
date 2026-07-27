@@ -324,12 +324,13 @@ go test ./pkg/... ./internal/...   # unit tests
 go test -v ./acceptance/  # acceptance suite against the committed fixtures
 ```
 
-The acceptance suite lives in its own root package, `acceptance/`. It contains
-no production code: every test builds the real binary and drives it as a
-subprocess, so it exercises the tool exactly as a pipeline would. Its
-vendor-image tier runs against a published application DMG and is skipped
-unless `APFS_ACCEPTANCE_DMG` is set — see `go doc ./acceptance` for the
-environment it reads.
+The acceptance tests live in their own root package, `acceptance/`, which holds
+no production code. A test goes there if something outside our own code decides
+whether it passed — the real `apfs` command run as a subprocess, or a tool that
+ships with the OS such as `fsck_apfs`, `apfsck` or `hdiutil`. Tests that only
+check our code against itself stay in the package they test. Some of them run
+against a published application DMG and are skipped unless
+`APFS_ACCEPTANCE_DMG` is set; see `go doc ./acceptance`.
 
 CI runs the build matrix and the test suite on
 Linux, macOS and Windows. Correctness is cross-checked against the platforms'

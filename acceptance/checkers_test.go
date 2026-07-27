@@ -1,6 +1,5 @@
-// Shared helpers for the oracle-backed acceptance tests: attaching a raw
-// image through hdiutil, detaching it again, and skipping when a platform tool
-// is unavailable. Used by the APFS, HFS+ and DMG writer suites.
+// Helpers shared by the checker tests: attaching a raw image through hdiutil,
+// detaching it again, and skipping when a platform tool is not installed.
 package acceptance
 
 import (

@@ -1,8 +1,7 @@
-// Oracle-backed acceptance tests for the APFS container writer: every test
-// here validates a container produced by pkg/apfswrite against a tool that
-// ships with the platform — fsck_apfs and diskutil on macOS, apfsck on Linux.
-// The in-memory round-trip tests that need no external tool stay in
-// pkg/apfswrite alongside the code they exercise.
+// Checker tests for the APFS container writer. Each one formats a container
+// with pkg/apfswrite and hands it to a tool that ships with the platform:
+// fsck_apfs and diskutil on macOS, apfsck on Linux. Tests that only read a
+// container back with our own reader stay in pkg/apfswrite.
 package acceptance
 
 import (
@@ -413,10 +412,11 @@ func TestCreateContainerMultiLeafFsckClean(t *testing.T) {
 	}
 }
 
-// TestCreateContainerMultiChunkFsckClean is the oracle half of
-// pkg/apfswrite's TestCreateContainerMultiChunk: 130 MiB of file data pushes
-// the used region past block 32768, the end of the space manager's first
-// chunk, so the allocation bitmap spans more than one chunk.
+// TestCreateContainerMultiChunkFsckClean checks a container whose allocation
+// bitmap spans more than one chunk: 130 MiB of file data pushes the used
+// region past block 32768, the end of the space manager's first chunk.
+// pkg/apfswrite's TestCreateContainerMultiChunk reads the same container back
+// with our own reader; this one asks fsck_apfs instead.
 func TestCreateContainerMultiChunkFsckClean(t *testing.T) {
 	if runtime.GOOS != "darwin" {
 		t.Skip("fsck_apfs is only available on macOS")
