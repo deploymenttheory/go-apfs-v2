@@ -180,6 +180,18 @@ func (ea *ExtendedAttribute) Read(buffer []byte) (int, error) {
 		return 0, io.EOF
 	}
 
+	// Stop at the end of the attribute's value. Without this the reader relies
+	// on the underlying stream to report io.EOF, and a stream that instead
+	// returns (0, nil) past its end turns any io.Reader loop over this — such
+	// as io.ReadAll — into an infinite one.
+	size := ea.DataStream.Size()
+	if ea.currentOffset >= int64(size) {
+		return 0, io.EOF
+	}
+	if remaining := int64(size) - ea.currentOffset; remaining < int64(len(buffer)) {
+		buffer = buffer[:remaining]
+	}
+
 	// Read from data stream at current offset
 	n, err := ea.DataStream.ReadAt(buffer, ea.currentOffset)
 	if err != nil && err != io.EOF {
@@ -188,6 +200,12 @@ func (ea *ExtendedAttribute) Read(buffer []byte) (int, error) {
 
 	// Update current offset
 	ea.currentOffset += int64(n)
+
+	// A short read that consumed the rest of the value is the end, whatever the
+	// underlying stream chose to report.
+	if err == nil && ea.currentOffset >= int64(size) && n == 0 {
+		return 0, io.EOF
+	}
 
 	return n, err
 }

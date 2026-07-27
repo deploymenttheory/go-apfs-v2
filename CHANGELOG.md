@@ -7,53 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-
-- **`pack <dir>` no longer hangs on a device node, FIFO or socket**
-  (`pkg/apfswrite`, `pkg/hfsplus`). Both directory walks fell through to reading
-  such a file as though it were regular, and none of the three failure modes was
-  clean: opening a FIFO blocks until a writer appears, so the command never
-  returned; a character device such as `/dev/zero` reads until memory runs out;
-  a socket errors and aborts the whole pack. They are now skipped. This applied
-  to both `--fs apfs` and `--fs hfs+`, the latter being the default.
-
-  `CreateContainer` also now rejects an `Entry` whose mode carries an
-  unsupported type bit, rather than stamping it `S_IFREG` and writing a device
-  node as a regular file. The walk skips these; a caller assembling a tree by
-  hand is told.
-
-- **decmpfs LZFSE (types 11 and 12) now decompresses** (`pkg/apfs`). It was
-  listed as supported in the README and TOOLS_STATUS, but was blocked in three
-  places: `internalCompressionMethod` returned "not supported yet",
-  `NewCompressedDataHandle` rejected the method, and the resource-fork
-  block-offset table was never parsed for it. The leaf decompressor already
-  existed and was simply unreachable. Real vendor applications ship
-  LZFSE-compressed files, so extraction could hard-fail on exactly the images
-  the tool exists for.
-
-  The per-chunk raw escape is signalled by the *absence* of the LZFSE block
-  magic (`'b'`, the first byte of `bvx1`/`bvx2`/`bvxn`), which macOS writes
-  behind a `0xff` marker — not by LZVN's `0x06` sentinel. Reusing that sentinel
-  would misread any raw chunk whose first byte differed.
-
-- **Inline decmpfs never worked, for any method** (`pkg/apfs`). Data stored in
-  the `com.apple.decmpfs` attribute rather than a resource fork — types 3
-  (zlib), 7 (LZVN) and 11 (LZFSE) — was handed to the block-offset loader with
-  its 16-byte header already stripped, but that loader identifies inline
-  storage by finding the `fpmc` magic at offset zero and skips the header
-  itself. The value is now passed whole, and the magic is verified so a
-  regression fails loudly instead of misparsing compressed bytes as an offset
-  table.
-
-- **A resource fork with more than ~8159 zlib blocks (about 510 MB) faulted**
-  (`pkg/apfs`) with a slice-bounds panic instead of returning an error: the
-  descriptor table was read into a fixed 65537-byte scratch buffer that only
-  holds so many 8-byte descriptors. It is now sized from the table.
-
-- decmpfs types 9/10 (uncompressed) and 13/14 (LZBITMAP) are now named in the
-  "not supported" error rather than reported as an unrecognized type.
-
 ### Added
+
+- **Write-fidelity reporting and `--strict`** (`pkg/fidelity`, `pkg/apfswrite`,
+  `pkg/hfsplus`, CLI): packing a directory is lossy, and until now it was
+  silently so. `pack <dir>` and `snapshot create` now count and report every
+  thing the volume cannot carry — special files skipped, extended attributes,
+  resource forks and ACLs dropped, hard links collapsed into copies, BSD flags
+  lost, and (for a volume rebuild) the volume's role and group membership.
+  Counts appear as `Note:` lines and, under `--output json`, as stable keys with
+  every key always present. `--strict` refuses to write anything at all when
+  something would be lost, failing before the destination is created.
+
+  Exit codes: entries omitted from the volume give 6, the same "some things
+  could not be handled" meaning `extract` already has; metadata loss alone gives
+  0. That distinction is deliberate — macOS attaches `com.apple.provenance` to
+  files as they are written, so treating a dropped attribute as failure would
+  make almost every pack of a macOS tree exit non-zero. See
+  [`docs/write-fidelity.md`](docs/write-fidelity.md).
+
+- **`extract --xattrs`** now restores extended attributes onto the extracted
+  files. It was previously a reserved flag that did nothing, which meant
+  extract-then-pack discarded every attribute however capable the writer was.
+  Transparent-compression metadata is deliberately not restored: extraction
+  decompresses as it reads, so restoring `com.apple.decmpfs` would leave the
+  file describing content it no longer holds.
+
+- Both writers expose `EntryTreeFromDir`, returning the entry tree alongside the
+  account of what the conversion dropped, so a program can inspect it before
+  deciding to write. `CreateContainerFromDir` and `CreateImageFromDir` remain as
+  wrappers that discard the report.
+
 
 - **Volume roles and volume groups** (`pkg/apfs`, `pkg/apfswrite`, CLI):
   `apfs_role` was parsed and then used nowhere, and `apfs_volume_group_id` was
@@ -126,6 +110,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   route through a single content-sniffing image opener.
 
 ### Fixed
+
+- **`pack <dir>` no longer hangs on a device node, FIFO or socket**
+  (`pkg/apfswrite`, `pkg/hfsplus`). Both directory walks fell through to reading
+  such a file as though it were regular, and none of the three failure modes was
+  clean: opening a FIFO blocks until a writer appears, so the command never
+  returned; a character device such as `/dev/zero` reads until memory runs out;
+  a socket errors and aborts the whole pack. They are now skipped and counted.
+  This applied to both `--fs apfs` and `--fs hfs+`, the latter being the default.
+
+  `CreateContainer` also now rejects an `Entry` whose mode carries an
+  unsupported type bit, rather than stamping it `S_IFREG` and writing a device
+  node as a regular file. The walk skips these; a caller assembling a tree by
+  hand is told.
+
+- **Reading an extended attribute could loop forever** (`pkg/apfs`).
+  `ExtendedAttribute.Read` relied on the underlying stream to report `io.EOF`,
+  so a stream that signalled its end by returning `(0, nil)` turned any
+  `io.Reader` loop over the attribute — `io.ReadAll` inside `Volume.Xattrs`, for
+  instance — into an endless one. The reader now bounds itself by the
+  attribute's own size. Nothing reached this path until `extract --xattrs`
+  existed.
+
+- **decmpfs LZFSE (types 11 and 12) now decompresses** (`pkg/apfs`). It was
+  listed as supported in the README and TOOLS_STATUS, but was blocked in three
+  places: `internalCompressionMethod` returned "not supported yet",
+  `NewCompressedDataHandle` rejected the method, and the resource-fork
+  block-offset table was never parsed for it. The leaf decompressor already
+  existed and was simply unreachable. Real vendor applications ship
+  LZFSE-compressed files, so extraction could hard-fail on exactly the images
+  the tool exists for.
+
+  The per-chunk raw escape is signalled by the *absence* of the LZFSE block
+  magic (`'b'`, the first byte of `bvx1`/`bvx2`/`bvxn`), which macOS writes
+  behind a `0xff` marker — not by LZVN's `0x06` sentinel. Reusing that sentinel
+  would misread any raw chunk whose first byte differed.
+
+- **Inline decmpfs never worked, for any method** (`pkg/apfs`). Data stored in
+  the `com.apple.decmpfs` attribute rather than a resource fork — types 3
+  (zlib), 7 (LZVN) and 11 (LZFSE) — was handed to the block-offset loader with
+  its 16-byte header already stripped, but that loader identifies inline
+  storage by finding the `fpmc` magic at offset zero and skips the header
+  itself. The value is now passed whole, and the magic is verified so a
+  regression fails loudly instead of misparsing compressed bytes as an offset
+  table.
+
+- **A resource fork with more than ~8159 zlib blocks (about 510 MB) faulted**
+  (`pkg/apfs`) with a slice-bounds panic instead of returning an error: the
+  descriptor table was read into a fixed 65537-byte scratch buffer that only
+  holds so many 8-byte descriptors. It is now sized from the table.
+
+- decmpfs types 9/10 (uncompressed) and 13/14 (LZBITMAP) are now named in the
+  "not supported" error rather than reported as an unrecognized type.
 
 - Partition-offset handling, multi-leaf B-tree traversal, DMG chunk caching,
   and decmpfs size/handle wiring in the APFS reader (see git history for the

@@ -12,9 +12,11 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/deploymenttheory/go-apfs-v2/internal/hostmeta"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfswrite"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/disk"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/fidelity"
 )
 
 // Volume-superblock field offsets (bytes) used by in-place revert.
@@ -42,6 +44,7 @@ func init() {
 	snapshotCreateCmd.Flags().StringVar(&snapCreateName, "name", "", "snapshot name (required)")
 	snapshotCreateCmd.Flags().StringVarP(&snapCreateOutput, "output", "O", "", "write the result here (a new DMG)")
 	snapshotCreateCmd.Flags().BoolVar(&snapCreateForce, "force", false, "overwrite the source image in place")
+	snapshotCreateCmd.Flags().BoolVar(&snapCreateStrict, "strict", false, "refuse to write anything if the source volume holds something the rebuild cannot carry")
 	snapCreateUUIDs.register(snapshotCreateCmd)
 
 	snapshotRevertCmd.Flags().StringVar(&snapRevertName, "name", "", "snapshot to revert to (required)")
@@ -53,6 +56,7 @@ var (
 	snapCreateName   string
 	snapCreateOutput string
 	snapCreateForce  bool
+	snapCreateStrict bool
 	snapCreateUUIDs  writeIdentityFlags
 )
 
@@ -112,9 +116,12 @@ func runSnapshotCreate(cmd *cobra.Command, args []string) error {
 	}
 	volName, _ := volume.UTF8Name()
 
-	tree, err := entryTreeFromVolume(volume)
+	tree, report, err := entryTreeFromVolume(volume, fidelityWarner())
 	if err != nil {
 		return fmt.Errorf("unable to read volume contents: %w", err)
+	}
+	if err := enforceStrict(report, snapCreateStrict, imagePath); err != nil {
+		return err
 	}
 
 	containerUUID, volumeUUID, err := snapCreateUUIDs.resolve()
@@ -145,27 +152,68 @@ func runSnapshotCreate(cmd *cobra.Command, args []string) error {
 	}
 
 	if opts.Output == "json" {
-		return jsonOut(map[string]any{"source": imagePath, "destination": outPath, "snapshot": snapCreateName, "volume": volName})
+		out := map[string]any{"source": imagePath, "destination": outPath, "snapshot": snapCreateName, "volume": volName}
+		for key, value := range report.JSON() {
+			out[key] = value
+		}
+		if err := jsonOut(out); err != nil {
+			return err
+		}
+		return fidelityExit(report)
 	}
 	if !opts.Quiet {
 		fmt.Printf("Wrote %s with snapshot %q of volume %q\n", outPath, snapCreateName, volName)
 	}
-	return nil
+	printFidelityNotes(report)
+	return fidelityExit(report)
 }
 
 // entryTreeFromVolume walks an APFS volume and builds an apfswrite.Entry tree
 // (files, directories, symlinks with their modes and modification times) that
-// the writer can rebuild. Only the root's children are used by the writer.
-func entryTreeFromVolume(vol *apfs.Volume) (*apfswrite.Entry, error) {
-	children, err := volumeEntries(vol, ".")
+// the writer can rebuild, along with an account of what the rebuild drops.
+// Only the root's children are used by the writer.
+//
+// This is the volume-to-volume counterpart of the writers' EntryTreeFromDir,
+// and it loses the same things for the same reasons — plus the volume's own
+// role and group membership, which a rebuilt volume does not inherit.
+func entryTreeFromVolume(vol *apfs.Volume, warn func(string, fidelity.Kind, string)) (*apfswrite.Entry, *fidelity.Report, error) {
+	w := &volumeWalker{vol: vol, report: &fidelity.Report{}, warn: warn}
+	children, err := w.readDir(".")
 	if err != nil {
-		return nil, err
+		return nil, w.report, err
 	}
-	return &apfswrite.Entry{Children: children}, nil
+	w.noteVolumeIdentity()
+	return &apfswrite.Entry{Children: children}, w.report, nil
 }
 
-func volumeEntries(vol *apfs.Volume, dir string) ([]*apfswrite.Entry, error) {
-	des, err := vol.ReadDir(dir)
+type volumeWalker struct {
+	vol    *apfs.Volume
+	report *fidelity.Report
+	warn   func(string, fidelity.Kind, string)
+}
+
+func (w *volumeWalker) add(path string, kind fidelity.Kind, detail string) {
+	w.report.Add(kind, path)
+	if w.warn != nil {
+		w.warn(path, kind, detail)
+	}
+}
+
+// noteVolumeIdentity records the volume-level metadata a rebuild does not
+// carry. The writer can set a role and a group, but a group needs its system
+// and data halves in one container and this writer emits a single volume, so
+// reproducing the source volume's identity is not generally possible.
+func (w *volumeWalker) noteVolumeIdentity() {
+	if role, err := w.vol.Role(); err == nil && role != apfs.VolumeRoleNone {
+		w.add(".", fidelity.VolumeIdentity, "role "+apfs.VolumeRoleString(role))
+	}
+	if group, err := w.vol.VolumeGroupIdentifier(); err == nil && group != ([16]byte{}) {
+		w.add(".", fidelity.VolumeIdentity, "volume group membership")
+	}
+}
+
+func (w *volumeWalker) readDir(dir string) ([]*apfswrite.Entry, error) {
+	des, err := w.vol.ReadDir(dir)
 	if err != nil {
 		return nil, err
 	}
@@ -184,35 +232,69 @@ func volumeEntries(vol *apfs.Volume, dir string) ([]*apfswrite.Entry, error) {
 		e := &apfswrite.Entry{Name: name, Mode: mode, ModTime: info.ModTime()}
 		if inode, ok := info.Sys().(*apfs.Inode); ok {
 			e.UID, e.GID = inode.OwnerIdentifier, inode.GroupIdentifier
+			// A link count above one means the source had several names for
+			// this inode; the rebuild gives each its own copy. Directories
+			// legitimately exceed one because of their children's "..".
+			if mode.IsRegular() && inode.NumberOfLinks > 1 {
+				w.add(full, fidelity.HardLink, fmt.Sprintf("%d names in the source", inode.NumberOfLinks))
+			}
 		}
+		w.noteAttributes(full)
+
 		switch {
 		case mode&fs.ModeSymlink != 0:
-			target, err := vol.Readlink(full)
+			target, err := w.vol.Readlink(full)
 			if err != nil {
 				return nil, fmt.Errorf("%s: reading symlink: %w", full, err)
 			}
 			e.Data = []byte(target)
 		case mode.IsDir():
-			kids, err := volumeEntries(vol, full)
+			kids, err := w.readDir(full)
 			if err != nil {
 				return nil, err
 			}
 			e.Children = kids
 		case mode.IsRegular():
-			data, err := vol.ReadFile(full)
+			data, err := w.vol.ReadFile(full)
 			if err != nil {
 				return nil, fmt.Errorf("%s: reading file: %w", full, err)
 			}
 			e.Data = data
 		default:
-			// Skip special files (devices, fifos, sockets) — the writer only
-			// models files, directories and symlinks.
+			// The writer models only files, directories and symbolic links.
+			w.add(full, fidelity.SpecialFile, mode.Type().String())
 			continue
 		}
 		out = append(out, e)
 	}
 	return out, nil
 }
+
+// noteAttributes records the extended attributes the rebuild will not carry.
+// The symlink attribute is excluded: it is how APFS stores a link target, which
+// the rebuild does reproduce, so counting it would report a loss that is not one.
+func (w *volumeWalker) noteAttributes(path string) {
+	attrs, err := w.vol.Xattrs(path)
+	if err != nil {
+		return
+	}
+	for name := range attrs {
+		switch {
+		case name == symlinkXattrName:
+			continue
+		case name == hostmeta.ResourceForkName:
+			w.add(path, fidelity.ResourceFork, name)
+		case hostmeta.IsACLName(name):
+			w.add(path, fidelity.ACL, name)
+		default:
+			w.add(path, fidelity.Xattr, name)
+		}
+	}
+}
+
+// symlinkXattrName is where APFS keeps a symbolic link's target. It is file
+// system bookkeeping rather than user metadata, and the rebuild recreates it.
+const symlinkXattrName = "com.apple.fs.symlink"
 
 var snapshotVerifyCmd = &cobra.Command{
 	Use:   "verify IMAGE",

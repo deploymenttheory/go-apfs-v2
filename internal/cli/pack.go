@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/disk"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/fidelity"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/hfsplus"
 	"github.com/spf13/cobra"
 )
@@ -20,6 +21,7 @@ var (
 	packVolumeName  string
 	packFS          string
 	packSnapshot    string
+	packStrict      bool
 	packUUIDs       writeIdentityFlags
 )
 
@@ -41,8 +43,22 @@ different compressors produce different container bytes — but the raw
 file system image round-trips bit-for-bit and the result mounts under both this
 tool and macOS.
 
+Fidelity: packing a directory is lossy. The new volume carries regular files,
+directories and symbolic links with their mode, owner, group and modification
+time. It does not carry extended attributes (including resource forks and
+ACLs), hard links (each name becomes a separate copy), device nodes, FIFOs or
+sockets (skipped), BSD flags, or a distinct creation time. Each loss is counted
+and reported, and --output json exposes the counts. --strict refuses to write
+anything at all when the source contains something the volume cannot carry.
+Repacking an existing DMG loses nothing. See docs/write-fidelity.md.
+
+Exit codes: 6 means entries were skipped entirely and the image is incomplete;
+5 means --strict refused to write. Metadata that could not be carried is
+reported but does not on its own change the exit code.
+
 Examples:
   apfs pack ./mytree out.dmg --volname "My Data"   # directory -> HFS+ DMG
+  apfs pack ./mytree out.dmg --fs apfs --strict    # fail rather than lose data
   apfs pack original.dmg repacked.dmg              # repack a DMG
   apfs pack original.dmg smaller.dmg --compression none`,
 	Args: exactArgs(2, "SOURCE OUT.dmg"),
@@ -55,6 +71,7 @@ func init() {
 	packCmd.Flags().StringVar(&packVolumeName, "volname", "", "volume name when packing a directory (default: directory name)")
 	packCmd.Flags().StringVar(&packFS, "fs", "hfs+", "file system when packing a directory: HFS+ or APFS (case-insensitive)")
 	packCmd.Flags().StringVar(&packSnapshot, "snapshot", "", "APFS only: also create a snapshot with this name capturing the packed volume")
+	packCmd.Flags().BoolVar(&packStrict, "strict", false, "refuse to write anything if the source contains something the volume cannot carry")
 	packUUIDs.register(packCmd)
 }
 
@@ -124,9 +141,21 @@ func packDirectoryHFS(srcDir, dstPath, volname string, encOpts *disk.EncodeOptio
 	}
 	fixed, clamp := writerTimes()
 
+	// Walk before writing, so --strict can refuse without leaving a file behind.
+	root, report, err := hfsplus.EntryTreeFromDir(srcDir, &hfsplus.WalkOptions{
+		Xattrs: true,
+		Warn:   fidelityWarner(),
+	})
+	if err != nil {
+		return fmt.Errorf("unable to read %s: %w", srcDir, err)
+	}
+	if err := enforceStrict(report, packStrict, srcDir); err != nil {
+		return err
+	}
+
 	var buf writeAtBuffer
 	createOpts := &hfsplus.CreateOptions{FixedTime: fixed, ClampModTimes: clamp, VolumeUUID: volumeUUID}
-	if err := hfsplus.CreateImageFromDir(&buf, 0, volname, srcDir, createOpts); err != nil {
+	if err := hfsplus.CreateImage(&buf, 0, volname, root, createOpts); err != nil {
 		return fmt.Errorf("unable to build HFS+ volume from %s: %w", srcDir, err)
 	}
 
@@ -134,7 +163,7 @@ func packDirectoryHFS(srcDir, dstPath, volname string, encOpts *disk.EncodeOptio
 		return fmt.Errorf("unable to write DMG %s: %w", dstPath, err)
 	}
 
-	return packReport(srcDir, dstPath, int64(len(buf.Bytes())))
+	return packReport(srcDir, dstPath, int64(len(buf.Bytes())), report)
 }
 
 // packRepack recompresses an existing DMG preserving its block layout.
@@ -153,10 +182,12 @@ func packRepack(srcPath, dstPath string, encOpts *disk.EncodeOptions) error {
 	if srcInfo != nil {
 		srcSize = srcInfo.Size()
 	}
-	return packReport(srcPath, dstPath, srcSize)
+	// A repack copies the file system image through bit-for-bit, so there is
+	// nothing to lose and --strict passes trivially.
+	return packReport(srcPath, dstPath, srcSize, nil)
 }
 
-func packReport(srcPath, dstPath string, srcSize int64) error {
+func packReport(srcPath, dstPath string, srcSize int64, report *fidelity.Report) error {
 	dstInfo, _ := os.Stat(dstPath)
 	dstSize := int64(0)
 	if dstInfo != nil {
@@ -164,17 +195,25 @@ func packReport(srcPath, dstPath string, srcSize int64) error {
 	}
 
 	if opts.Output == "json" {
-		return jsonOut(map[string]any{
+		out := map[string]any{
 			"source":           srcPath,
 			"destination":      dstPath,
 			"sourceBytes":      srcSize,
 			"destinationBytes": dstSize,
-		})
+		}
+		for key, value := range report.JSON() {
+			out[key] = value
+		}
+		if err := jsonOut(out); err != nil {
+			return err
+		}
+		return fidelityExit(report)
 	}
 	if !opts.Quiet {
 		fmt.Printf("Packed %s -> %s (%s)\n", srcPath, dstPath, formatSize(uint64(dstSize)))
 	}
-	return nil
+	printFidelityNotes(report)
+	return fidelityExit(report)
 }
 
 // writeAtBuffer is a growable in-memory io.WriterAt used to capture a raw
