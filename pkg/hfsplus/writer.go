@@ -23,7 +23,6 @@ import (
 	"hash/fnv"
 	"io"
 	"os"
-	"path/filepath"
 	"sort"
 	"time"
 )
@@ -182,89 +181,20 @@ func CreateImage(w io.WriterAt, sizeBytes int64, volumeName string, root *Entry,
 	return nil
 }
 
-// CreateImageFromDir walks srcDir into an Entry tree and writes it via
-// CreateImage. Regular files, directories and symlinks are supported.
+// CreateImageFromDir walks srcDir into an Entry tree and writes an HFS+ image
+// built from it. srcDir's own name is not used; its contents become the volume
+// root's children.
+//
+// The conversion is lossy: device nodes, FIFOs and sockets are skipped, and
+// extended attributes, resource forks, ACLs, BSD flags and hard links are not
+// carried across. This function discards the account of what was lost; call
+// EntryTreeFromDir directly to see it.
 func CreateImageFromDir(w io.WriterAt, sizeBytes int64, volumeName, srcDir string, opts *CreateOptions) error {
-	root, err := entryFromDir(srcDir)
+	root, _, err := EntryTreeFromDir(srcDir, nil)
 	if err != nil {
 		return err
 	}
 	return CreateImage(w, sizeBytes, volumeName, root, opts)
-}
-
-// entryFromDir builds an Entry tree rooted at dir (the directory's own name
-// is not used; its children become the volume root's children).
-func entryFromDir(dir string) (*Entry, error) {
-	root := &Entry{}
-	children, err := readDirEntries(dir)
-	if err != nil {
-		return nil, err
-	}
-	root.Children = children
-	return root, nil
-}
-
-// isSpecialFile reports whether mode describes something this writer cannot
-// model: a device node, FIFO or socket. os.ModeIrregular covers whatever else
-// the platform may report that is neither a regular file, a directory nor a
-// symbolic link.
-func isSpecialFile(mode os.FileMode) bool {
-	return mode&(os.ModeDevice|os.ModeNamedPipe|os.ModeSocket|os.ModeIrregular) != 0
-}
-
-// readDirEntries reads one directory level into Entry nodes, recursing into
-// subdirectories. Device nodes, FIFOs and sockets are skipped: this writer
-// cannot represent them, and reading one would hang or exhaust memory rather
-// than fail cleanly.
-func readDirEntries(dir string) ([]*Entry, error) {
-	fis, err := os.ReadDir(dir)
-	if err != nil {
-		return nil, err
-	}
-	var out []*Entry
-	for _, fi := range fis {
-		full := filepath.Join(dir, fi.Name())
-		info, err := os.Lstat(full)
-		if err != nil {
-			return nil, err
-		}
-		e := &Entry{Name: fi.Name(), Mode: info.Mode(), ModTime: info.ModTime()}
-		if st, ok := info.Sys().(interface {
-			Uid() uint32
-			Gid() uint32
-		}); ok {
-			e.UID, e.GID = st.Uid(), st.Gid()
-		}
-		switch {
-		case info.Mode()&os.ModeSymlink != 0:
-			target, err := os.Readlink(full)
-			if err != nil {
-				return nil, err
-			}
-			e.Data = []byte(target)
-		case info.IsDir():
-			kids, err := readDirEntries(full)
-			if err != nil {
-				return nil, err
-			}
-			e.Children = kids
-		case isSpecialFile(info.Mode()):
-			// This writer models regular files, directories and symbolic links.
-			// Reading a special file as though it were regular does not merely
-			// produce a wrong entry, it breaks the run: opening a FIFO blocks
-			// until a writer appears, a character device such as /dev/zero
-			// reads until memory runs out, and a socket fails outright. Skip it.
-			continue
-		default:
-			data, err := os.ReadFile(full)
-			if err != nil {
-				return nil, err
-			}
-			e.Data = data
-		}
-		out = append(out, e)
-	}
-	return out, nil
 }
 
 // builder holds writer state across the layout/build passes.
