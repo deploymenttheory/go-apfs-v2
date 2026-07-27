@@ -80,12 +80,17 @@ func createHFS(dstPath string, sizeBytes int64) error {
 	fixed, clamp := writerTimes()
 
 	root := &hfsplus.Entry{Name: createVolName, Mode: os.ModeDir | 0755}
-	var buf writeAtBuffer
+	img, err := newScratchImage(dstPath)
+	if err != nil {
+		return err
+	}
+	defer img.Close()
+
 	createOpts := &hfsplus.CreateOptions{FixedTime: fixed, ClampModTimes: clamp, VolumeUUID: volumeUUID}
-	if err := hfsplus.CreateImage(&buf, sizeBytes, createVolName, root, createOpts); err != nil {
+	if err := hfsplus.CreateImage(img, sizeBytes, createVolName, root, createOpts); err != nil {
 		return fmt.Errorf("unable to create HFS+ volume: %w", err)
 	}
-	if err := disk.WrapRawImageDMG(dstPath, buf.Bytes(), "Apple_HFS", nil); err != nil {
+	if err := disk.WrapRawImageDMGFrom(dstPath, img, img.Size(), "Apple_HFS", nil); err != nil {
 		return fmt.Errorf("unable to write DMG: %w", err)
 	}
 	return createReport(dstPath, "hfs+")

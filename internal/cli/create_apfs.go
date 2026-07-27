@@ -47,11 +47,16 @@ func createAPFS(dstPath string, sizeBytes int64) error {
 	if createSnapshot != "" {
 		createOpts.Snapshots = []apfswrite.SnapshotSpec{{Name: createSnapshot}}
 	}
-	var buf writeAtBuffer
-	if err := apfswrite.CreateContainer(&buf, sizeBytes, createOpts); err != nil {
+	img, err := newScratchImage(dstPath)
+	if err != nil {
+		return err
+	}
+	defer img.Close()
+
+	if err := apfswrite.CreateContainer(img, sizeBytes, createOpts); err != nil {
 		return fmt.Errorf("unable to create APFS container: %w", err)
 	}
-	if err := disk.WrapRawImageDMG(dstPath, buf.Bytes(), "Apple_APFS", nil); err != nil {
+	if err := disk.WrapRawImageDMGFrom(dstPath, img, img.Size(), "Apple_APFS", nil); err != nil {
 		return fmt.Errorf("unable to write DMG: %w", err)
 	}
 	return createReport(dstPath, "apfs")

@@ -41,12 +41,17 @@ func packDirectoryAPFS(srcDir, dstPath, volname string, encOpts *disk.EncodeOpti
 	}
 	createOpts.Root = root
 
-	var buf writeAtBuffer
-	if err := apfswrite.CreateContainer(&buf, 0, createOpts); err != nil {
+	img, err := newScratchImage(dstPath)
+	if err != nil {
+		return err
+	}
+	defer img.Close()
+
+	if err := apfswrite.CreateContainer(img, 0, createOpts); err != nil {
 		return fmt.Errorf("unable to build APFS container from %s: %w", srcDir, err)
 	}
-	if err := disk.WrapRawImageDMG(dstPath, buf.Bytes(), "Apple_APFS", encOpts); err != nil {
+	if err := disk.WrapRawImageDMGFrom(dstPath, img, img.Size(), "Apple_APFS", encOpts); err != nil {
 		return fmt.Errorf("unable to write DMG %s: %w", dstPath, err)
 	}
-	return packReport(srcDir, dstPath, int64(len(buf.Bytes())), report)
+	return packReport(srcDir, dstPath, img.Size(), report)
 }

@@ -279,6 +279,11 @@ times newer than it, per the reproducible-builds convention. It resolves as
 file — the bare variable outranks the `APFS_` form, the one deliberate exception
 to this tool's usual precedence, because build systems set the standard name.
 
+Images are built into a temporary file beside the output rather than in memory,
+so image size is not bounded by RAM. `--temp-dir` puts that scratch file
+somewhere else; the system temporary directory is deliberately not the default,
+because it is often small and on many Linux systems is RAM-backed.
+
 `--uuid` pins the volume UUID; for APFS the container UUID is derived from it.
 Full detail, including the residual sources of variance, is in
 [docs/reproducible-output.md](docs/reproducible-output.md).

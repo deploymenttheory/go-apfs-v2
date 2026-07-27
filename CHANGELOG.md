@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Building an image no longer holds it in memory** (`internal/imagefile`,
+  `pkg/disk`, CLI). The DMG encoder can now read its source lazily through
+  `SourceBlock.Reader`, and `create`, `pack <dir>` and `snapshot create` build
+  into a temporary file rather than a `bytes.Buffer`. Creating a 2 GiB image
+  went from 2551 MB of peak resident memory to 16 MB.
+
+  The scratch file goes beside the output rather than in the system temporary
+  directory, which is often small and on many Linux images is RAM-backed —
+  putting it there would reproduce the problem being fixed. `--temp-dir`
+  overrides. Output is byte-identical to before.
+
 - **Write-fidelity reporting and `--strict`** (`pkg/fidelity`, `pkg/apfswrite`,
   `pkg/hfsplus`, CLI): packing a directory is lossy, and until now it was
   silently so. `pack <dir>` and `snapshot create` now count and report every
