@@ -3,14 +3,7 @@ Copyright (c) 2025-2026 deploymenttheory
 
 This product includes software design and code adapted from:
 
-1. libfsapfs (https://github.com/libyal/libfsapfs)
-   Copyright (c) Joachim Metz
-   Licensed under the GNU Lesser General Public License v3.
-   The core APFS parser in pkg/apfs is a Go port of libfsapfs's design and
-   on-disk structure handling (files there carry per-file attribution
-   comments referencing the corresponding libfsapfs sources).
-
-2. go-apfs (https://github.com/blacktop/go-apfs)
+1. go-apfs (https://github.com/blacktop/go-apfs)
    Copyright (c) 2020-2026 blacktop
    Licensed under the Apache License, Version 2.0.
    The DMG/UDIF reader design (koly/blkx/mish parsing, chunk decompression,
@@ -18,10 +11,10 @@ This product includes software design and code adapted from:
    the multi-leaf B-tree record-walk algorithm in pkg/disk and pkg/apfs are
    adapted from blacktop's implementation.
 
-3. The Apple File System Reference (Apple Inc.), used as the on-disk format
+2. The Apple File System Reference (Apple Inc.), used as the on-disk format
    specification, including known errata identified by the community.
 
-4. go-apfs (https://github.com/blacktop/go-apfs)
+3. go-apfs (https://github.com/blacktop/go-apfs)
    Copyright (c) 2020-2026 blacktop
    Licensed under the Apache License, Version 2.0.
    The HFS+ catalog and on-disk type definitions in pkg/hfsplus are adapted
@@ -29,7 +22,7 @@ This product includes software design and code adapted from:
    support, link resolution and the io/fs adapter are original to this
    project.
 
-5. apfsprogs / mkapfs (https://github.com/linux-apfs/apfsprogs)
+4. apfsprogs / mkapfs (https://github.com/linux-apfs/apfsprogs)
    Copyright (C) 2019 Ernesto A. Fernández
    Licensed under the GNU General Public License, version 2.
    The APFS file system writer in pkg/apfswrite began as a study of mkapfs and
