@@ -90,6 +90,49 @@ func catalogKeyFields(key []byte) (CatalogNodeID, []uint16) {
 	return parentID, units
 }
 
+// compareCatalogKeysFolded orders two encoded catalog keys the way a
+// case-insensitive volume does: parent id ascending, then the name compared
+// through the fold table, skipping code units the fold ignores.
+func compareCatalogKeysFolded(a, b []byte) int {
+	pa, na := catalogKeyFields(a)
+	pb, nb := catalogKeyFields(b)
+	if pa != pb {
+		if pa < pb {
+			return -1
+		}
+		return 1
+	}
+	i, j := 0, 0
+	for {
+		var ua, ub uint16
+		var oka, okb bool
+		for i < len(na) && !oka {
+			ua, oka = foldUnit(na[i])
+			i++
+		}
+		for j < len(nb) && !okb {
+			ub, okb = foldUnit(nb[j])
+			j++
+		}
+		if !oka || !okb {
+			switch {
+			case oka:
+				return 1
+			case okb:
+				return -1
+			default:
+				return 0
+			}
+		}
+		if ua != ub {
+			if ua < ub {
+				return -1
+			}
+			return 1
+		}
+	}
+}
+
 // compareCatalogKeys orders two encoded catalog keys with HFSX binary
 // comparison: parentID ascending, then lexicographic on the big-endian
 // UTF-16 name code units. Returns <0, 0 or >0.
@@ -313,7 +356,10 @@ func packHeaderNode(nodeSize int, t builtTree, keyCompareType BTHeaderKeyCompare
 		MaxKeyLength:   maxKeyLength,
 		TotalNodes:     totalNodes,
 		FreeNodes:      totalNodes - usedNodes,
-		ClumpSize:      65536,
+		// A B-tree file's clump size is its own size. fsck_hfs rejects anything
+		// else on a pure HFS+ volume ("Invalid file clump size"), though it
+		// does not check this on HFSX.
+		ClumpSize:      uint32(totalNodes) * uint32(nodeSize),
 		BtreeType:      0,
 		KeyCompareType: keyCompareType,
 		Attributes:     attributes,

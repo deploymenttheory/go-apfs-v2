@@ -256,3 +256,73 @@ func TestWriteMountsViaHdiutil(t *testing.T) {
 		}
 	}
 }
+
+// TestWriteCaseInsensitiveFsckAndMount checks a case-insensitive volume the
+// way only macOS can: fsck_hfs validates the catalog's key order under the fold
+// compare, and the mount proves the kernel resolves names by that same fold.
+// Our own reader cannot judge this, since it would use the same table to agree
+// with itself.
+func TestWriteCaseInsensitiveFsckAndMount(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("fsck_hfs and hdiutil are macOS-only")
+	}
+	requireTools(t, "hdiutil", "fsck_hfs")
+
+	root := &hfsplus.Entry{Children: []*hfsplus.Entry{
+		{Name: "ReadMe.txt", Mode: 0o644, Data: []byte("contents\n")},
+		{Name: "Zebra.txt", Mode: 0o644, Data: []byte("z\n")},
+		{Name: "apple.txt", Mode: 0o644, Data: []byte("a\n")},
+		// Scripts whose folding a table built from current Unicode data would
+		// get wrong, Georgian most of all.
+		{Name: "Ⴀgeorgian.txt", Mode: 0o644, Data: []byte("georgian\n")},
+		{Name: "ЖЗИcyrillic.txt", Mode: 0o644, Data: []byte("cyrillic\n")},
+		{Name: "ΑΒΓgreek.txt", Mode: 0o644, Data: []byte("greek\n")},
+		{Name: "Sub", Mode: os.ModeDir | 0o755, Children: []*hfsplus.Entry{
+			{Name: "Nested.txt", Mode: 0o644, Data: []byte("nested\n")},
+		}},
+	}}
+
+	w := &memWriterAt{}
+	if err := hfsplus.CreateImage(w, 0, "CIVOL", root, &hfsplus.CreateOptions{CaseInsensitive: true}); err != nil {
+		t.Fatalf("CreateImage: %v", err)
+	}
+	path := filepath.Join(t.TempDir(), "ci.img")
+	if err := os.WriteFile(path, w.b, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	dev := attachRaw(t, path)
+	out, _ := exec.Command("fsck_hfs", "-n", dev).CombinedOutput()
+	detach(t, dev)
+	if !bytes.Contains(out, []byte("appears to be OK")) {
+		t.Fatalf("fsck_hfs did not report clean:\n%s", out)
+	}
+
+	mnt := t.TempDir()
+	attached, err := exec.Command("hdiutil", "attach", "-readonly", "-nobrowse",
+		"-mountpoint", mnt, path).CombinedOutput()
+	if err != nil {
+		t.Fatalf("hdiutil attach: %v\n%s", err, attached)
+	}
+	defer detach(t, firstField(string(attached)))
+
+	// Every spelling must resolve to the same file.
+	for _, name := range []string{"ReadMe.txt", "readme.txt", "README.TXT", "rEaDmE.TxT"} {
+		got, err := os.ReadFile(filepath.Join(mnt, name))
+		if err != nil || string(got) != "contents\n" {
+			t.Errorf("%s = %q, %v", name, got, err)
+		}
+	}
+	if _, err := os.ReadFile(filepath.Join(mnt, "sub", "nested.txt")); err != nil {
+		t.Errorf("case-insensitive lookup through a directory: %v", err)
+	}
+
+	// The folded spellings of each script. U+10D0 is the one that matters: a
+	// table built from current Unicode would fold U+10A0 to U+2D00 instead, and
+	// this lookup would fail.
+	for _, name := range []string{"აgeorgian.txt", "жзиcyrillic.txt", "αβγgreek.txt"} {
+		if _, err := os.ReadFile(filepath.Join(mnt, name)); err != nil {
+			t.Errorf("folded lookup %q failed: %v", name, err)
+		}
+	}
+}
