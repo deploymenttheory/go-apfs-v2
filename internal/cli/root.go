@@ -38,6 +38,10 @@ type globalOptions struct {
 	// SourceDateEpoch is the fixed build timestamp for reproducible output. The
 	// zero value means unset, leaving each writer to apply its own default.
 	SourceDateEpoch time.Time
+	// TempDir is where the scratch file for a build goes. Empty means beside
+	// the output, which is the safer default: the system temporary directory is
+	// often small, and on many Linux images it is RAM-backed.
+	TempDir string
 }
 
 var opts globalOptions
@@ -100,6 +104,7 @@ func init() {
 	flags.String("recovery-password", "", "recovery password for encrypted volumes")
 	flags.Int64("offset", 0, "byte offset of the container in the image (expert; overrides detection)")
 	flags.String("source-date-epoch", "", "fixed build timestamp (decimal seconds since 1970 UTC) for reproducible output")
+	flags.String("temp-dir", "", "directory for the scratch file used while building an image (default: beside the output)")
 
 	rootCmd.SetFlagErrorFunc(func(cmd *cobra.Command, err error) error {
 		return withCode(ExitUsage, err)
@@ -150,6 +155,7 @@ func resolveGlobalOptions(cmd *cobra.Command) error {
 		PasswordStdin:    v.GetBool("password-stdin"),
 		RecoveryPassword: v.GetString("recovery-password"),
 		Offset:           v.GetInt64("offset"),
+		TempDir:          v.GetString("temp-dir"),
 	}
 
 	// SOURCE_DATE_EPOCH deliberately departs from the flag > APFS_<FLAG> >

@@ -3,12 +3,12 @@
 package cli
 
 import (
-	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/deploymenttheory/go-apfs-v2/internal/imagefile"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/disk"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/fidelity"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/hfsplus"
@@ -153,17 +153,22 @@ func packDirectoryHFS(srcDir, dstPath, volname string, encOpts *disk.EncodeOptio
 		return err
 	}
 
-	var buf writeAtBuffer
+	img, err := newScratchImage(dstPath)
+	if err != nil {
+		return err
+	}
+	defer img.Close()
+
 	createOpts := &hfsplus.CreateOptions{FixedTime: fixed, ClampModTimes: clamp, VolumeUUID: volumeUUID}
-	if err := hfsplus.CreateImage(&buf, 0, volname, root, createOpts); err != nil {
+	if err := hfsplus.CreateImage(img, 0, volname, root, createOpts); err != nil {
 		return fmt.Errorf("unable to build HFS+ volume from %s: %w", srcDir, err)
 	}
 
-	if err := disk.WrapRawImageDMG(dstPath, buf.Bytes(), "Apple_HFS", encOpts); err != nil {
+	if err := disk.WrapRawImageDMGFrom(dstPath, img, img.Size(), "Apple_HFS", encOpts); err != nil {
 		return fmt.Errorf("unable to write DMG %s: %w", dstPath, err)
 	}
 
-	return packReport(srcDir, dstPath, int64(len(buf.Bytes())), report)
+	return packReport(srcDir, dstPath, img.Size(), report)
 }
 
 // packRepack recompresses an existing DMG preserving its block layout.
@@ -216,19 +221,21 @@ func packReport(srcPath, dstPath string, srcSize int64, report *fidelity.Report)
 	return fidelityExit(report)
 }
 
-// writeAtBuffer is a growable in-memory io.WriterAt used to capture a raw
-// file system image before wrapping it in a DMG.
-type writeAtBuffer struct {
-	buf bytes.Buffer
-}
-
-func (w *writeAtBuffer) WriteAt(p []byte, off int64) (int, error) {
-	end := off + int64(len(p))
-	if int64(w.buf.Len()) < end {
-		w.buf.Write(make([]byte, end-int64(w.buf.Len())))
+// newScratchImage creates the temporary file a raw file system image is built
+// into before being wrapped in a DMG.
+//
+// It goes beside the output by default rather than in the system temporary
+// directory. That directory is often small, and on many Linux images it is
+// tmpfs — backed by RAM — so building a large image there would reproduce the
+// very memory problem the scratch file exists to avoid. The output directory,
+// by contrast, is somewhere the user has already committed to holding an image
+// of this size. --temp-dir overrides it.
+func newScratchImage(dstPath string) (*imagefile.File, error) {
+	dir := opts.TempDir
+	if dir == "" {
+		dir = filepath.Dir(dstPath)
 	}
-	copy(w.buf.Bytes()[off:end], p)
-	return len(p), nil
+	// Dot-prefixed so a file left behind by a hard kill is hidden and obviously
+	// transient rather than looking like an output.
+	return imagefile.New(dir, ".apfs-image-*.tmp")
 }
-
-func (w *writeAtBuffer) Bytes() []byte { return w.buf.Bytes() }

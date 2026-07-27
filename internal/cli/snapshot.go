@@ -143,11 +143,16 @@ func runSnapshotCreate(cmd *cobra.Command, args []string) error {
 		copts.CaseSensitive = !ci
 	}
 
-	var buf writeAtBuffer
-	if err := apfswrite.CreateContainer(&buf, 0, copts); err != nil {
+	img, err := newScratchImage(outPath)
+	if err != nil {
+		return err
+	}
+	defer img.Close()
+
+	if err := apfswrite.CreateContainer(img, 0, copts); err != nil {
 		return fmt.Errorf("unable to build APFS container with snapshot: %w", err)
 	}
-	if err := disk.WrapRawImageDMG(outPath, buf.Bytes(), "Apple_APFS", nil); err != nil {
+	if err := disk.WrapRawImageDMGFrom(outPath, img, img.Size(), "Apple_APFS", nil); err != nil {
 		return fmt.Errorf("unable to write %s: %w", outPath, err)
 	}
 
