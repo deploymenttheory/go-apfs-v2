@@ -151,32 +151,50 @@ func CreateImage(w io.WriterAt, sizeBytes int64, volumeName string, root *Entry,
 	}
 	extTree := buildBTree(blockSize, nil, 0, 0x00000002, 10, 0)
 
-	// 6. Assemble the image.
-	img := make([]byte, int64(lay.totalBlocks)*int64(blockSize))
+	// 6. Write the image out region by region, rather than assembling it in
+	// memory first. Regions no region covers stay zero: on a file, unwritten
+	// ranges read as zeros, exactly as they did in the buffer this replaced.
+	total := int64(lay.totalBlocks) * int64(blockSize)
+
+	blockAt := func(block uint32) int64 { return int64(block) * int64(blockSize) }
 
 	// Catalog nodes.
 	for i, n := range catTree.nodes {
-		copy(img[(int(lay.catalogStart)+i)*blockSize:], n)
+		if _, err := w.WriteAt(n, blockAt(lay.catalogStart+uint32(i))); err != nil {
+			return fmt.Errorf("hfsplus: writing catalog node %d: %w", i, err)
+		}
 	}
 	// Extents-overflow nodes.
 	for i, n := range extTree.nodes {
-		copy(img[(int(lay.extentsStart)+i)*blockSize:], n)
+		if _, err := w.WriteAt(n, blockAt(lay.extentsStart+uint32(i))); err != nil {
+			return fmt.Errorf("hfsplus: writing extents node %d: %w", i, err)
+		}
 	}
 	// File data.
-	b.writeFileData(img)
+	if err := b.writeFileData(w); err != nil {
+		return err
+	}
 
 	// 7. Allocation bitmap.
-	bitmap := b.buildBitmap(&lay)
-	copy(img[int(lay.bitmapStart)*blockSize:], bitmap)
+	if _, err := w.WriteAt(b.buildBitmap(&lay), blockAt(lay.bitmapStart)); err != nil {
+		return fmt.Errorf("hfsplus: writing allocation bitmap: %w", err)
+	}
 
 	// 8. Volume header (primary at 1024, alternate at end-1024).
 	vh := b.volumeHeader(volumeName, &lay, catTree, extTree)
 	vhBytes := marshalBE(&vh)
-	copy(img[1024:], vhBytes)
-	copy(img[len(img)-1024:], vhBytes)
+	if _, err := w.WriteAt(vhBytes, 1024); err != nil {
+		return fmt.Errorf("hfsplus: writing volume header: %w", err)
+	}
+	if _, err := w.WriteAt(vhBytes, total-1024); err != nil {
+		return fmt.Errorf("hfsplus: writing alternate volume header: %w", err)
+	}
 
-	if _, err := w.WriteAt(img, 0); err != nil {
-		return fmt.Errorf("hfsplus: writing image: %w", err)
+	// The alternate volume header is 512 bytes and sits at total-1024, so it
+	// does not reach the end. Write the final byte so the image is its full
+	// declared size however the destination sizes itself.
+	if _, err := w.WriteAt([]byte{0}, total-1); err != nil {
+		return fmt.Errorf("hfsplus: sizing image: %w", err)
 	}
 	return nil
 }
@@ -333,14 +351,17 @@ func (b *builder) assignData(lay *layout) {
 }
 
 // writeFileData copies every file's bytes into the image at its data extent.
-func (b *builder) writeFileData(img []byte) {
+func (b *builder) writeFileData(w io.WriterAt) error {
 	for _, f := range b.fileNodes {
 		if f.dataLen == 0 {
 			continue
 		}
-		off := int(f.dataStart) * b.blockSize
-		copy(img[off:], f.entry.Data)
+		off := int64(f.dataStart) * int64(b.blockSize)
+		if _, err := w.WriteAt(f.entry.Data, off); err != nil {
+			return fmt.Errorf("hfsplus: writing %s: %w", f.name, err)
+		}
 	}
+	return nil
 }
 
 // forkFor returns the data-fork descriptor for a file node.

@@ -28,6 +28,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ReconstructRawImage`, and `snapshot revert` uses it, so nothing in the
   command line assembles a whole image any more.
 
+  `pkg/hfsplus` writes its image region by region rather than assembling it in
+  a single `[]byte` — which mattered most, HFS+ being the default `--fs`.
+  Creating a 2 GiB HFS+ image went from 1449 MB of peak resident memory to
+  17 MB. `pkg/apfswrite` writes each file's content in fixed windows rather
+  than allocating a buffer the size of the file, so one large file inside an
+  otherwise small tree no longer costs its own size in memory.
+
 - **Write-fidelity reporting and `--strict`** (`pkg/fidelity`, `pkg/apfswrite`,
   `pkg/hfsplus`, CLI): packing a directory is lossy, and until now it was
   silently so. `pack <dir>` and `snapshot create` now count and report every
