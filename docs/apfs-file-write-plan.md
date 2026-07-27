@@ -15,7 +15,7 @@ checkpoints) and is exactly what creating a volume from a directory tree needs.
 
 The APFS *reader* (`pkg/apfs`) already parses every record type we must write
 (inode, directory entry record, file-extent, dstream-id, physical-extent-reference), so it
-is a precise oracle: if our reader reads a file back with the right content and
+is a precise check: if our reader reads a file back with the right content and
 `fsck_apfs`/`apfsck` are clean, the records are valid.
 
 Licensing: `pkg/apfswrite` is pure-Go, MIT-licensed original work (see its

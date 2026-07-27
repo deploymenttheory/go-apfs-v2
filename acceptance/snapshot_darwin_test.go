@@ -48,7 +48,7 @@ func fsckRaw(t *testing.T, rawPath string) string {
 
 // TestSnapshotCreateRevertFsckDarwin validates that the rebuilt `snapshot create`
 // output is fsck-clean and the `snapshot revert` output carries the revert marker
-// (macOS/Apple fsck_apfs is the oracle).
+// (macOS only; fsck_apfs does the checking).
 func TestSnapshotCreateRevertFsckDarwin(t *testing.T) {
 	dir := t.TempDir()
 	src := filepath.Join(dir, "src")

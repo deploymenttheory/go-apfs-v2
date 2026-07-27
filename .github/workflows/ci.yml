@@ -42,13 +42,13 @@ jobs:
           go-version-file: go.mod
       - name: Vet
         run: go vet ./...
-      - name: Build apfsck oracle (Linux; pinned version)
+      - name: Build apfsck (Linux; pinned version)
         if: runner.os == 'Linux'
         run: |
-          # apfsck is the Linux-side validation oracle for the containers
-          # pkg/apfswrite produces (fsck_apfs is the macOS oracle). The apt
-          # package is stale (Dec 2023); build a pinned recent version from
-          # source so the oracle's checks are stable across CI runs.
+          # apfsck checks the containers pkg/apfswrite produces on Linux;
+          # fsck_apfs does the same job on macOS. The apt package is stale
+          # (Dec 2023), so build a pinned version from source and keep its
+          # checks stable across runs.
           git clone --depth 1 --branch v0.2.1 https://github.com/linux-apfs/apfsprogs /tmp/apfsprogs
           make -C /tmp/apfsprogs/apfsck
           sudo cp /tmp/apfsprogs/apfsck/apfsck /usr/local/bin/

@@ -21,7 +21,7 @@ import (
 )
 
 // TestCreateContainerFsckClean formats a container into a temp file and runs
-// Apple's fsck_apfs against it (macOS only). fsck_apfs is the primary oracle.
+// Apple's fsck_apfs against it (macOS only).
 func TestCreateContainerFsckClean(t *testing.T) {
 	if runtime.GOOS != "darwin" {
 		t.Skip("fsck_apfs is only available on macOS")
@@ -111,7 +111,7 @@ func TestCreateContainerMountsViaHdiutil(t *testing.T) {
 }
 
 // TestCreateContainerWithFileFsckClean runs Apple's fsck_apfs against a
-// container holding one file (macOS only). fsck_apfs is the strict oracle.
+// container holding one file and checks it with fsck_apfs (macOS only).
 func TestCreateContainerWithFileFsckClean(t *testing.T) {
 	if runtime.GOOS != "darwin" {
 		t.Skip("fsck_apfs is only available on macOS")
@@ -120,7 +120,7 @@ func TestCreateContainerWithFileFsckClean(t *testing.T) {
 
 	const size = 32 * 1024 * 1024
 	imgPath := filepath.Join(t.TempDir(), "file.img")
-	content := []byte("Hello, APFS milestone 1! fsck oracle content.\n")
+	content := []byte("Hello, APFS milestone 1!\n")
 	writeImage(t, imgPath, size, &apfswrite.CreateOptions{
 		VolumeName: "FsckFileVol",
 		RootFiles:  []apfswrite.RootFile{{Name: "hello.txt", Data: content}},
@@ -212,7 +212,7 @@ func TestCreateContainerLargeFileFsckClean(t *testing.T) {
 
 // TestCreateContainerMetadataFsckClean runs Apple's fsck_apfs against a tree
 // carrying non-default modes, owners, timestamps and a symbolic link (macOS
-// only). fsck_apfs is the strict oracle for the inode fields and the symlink
+// only). fsck_apfs checks the inode fields and the symlink
 // xattr representation.
 func TestCreateContainerMetadataFsckClean(t *testing.T) {
 	if runtime.GOOS != "darwin" {
@@ -339,7 +339,7 @@ func snapshotOpts() *apfswrite.CreateOptions {
 }
 
 // TestCreateContainerTreeFsckClean runs Apple's fsck_apfs against a nested tree
-// (macOS only). fsck_apfs is the strict oracle.
+// (macOS only).
 func TestCreateContainerTreeFsckClean(t *testing.T) {
 	if runtime.GOOS != "darwin" {
 		t.Skip("fsck_apfs is only available on macOS")

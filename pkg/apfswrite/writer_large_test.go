@@ -23,7 +23,7 @@ func randomBytes(n int, seed int64) []byte {
 }
 
 // openVolumeSize creates a container of the given size and returns its first
-// volume as an fs.FS, using the MIT reader as the cross-platform oracle.
+// volume as an fs.FS, reading it back with the MIT reader in pkg/apfs.
 func openVolumeSize(t *testing.T, size int64, opts *apfswrite.CreateOptions) *apfs.Volume {
 	t.Helper()
 	img := &memImage{}

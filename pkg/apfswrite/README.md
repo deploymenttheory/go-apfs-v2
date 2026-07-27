@@ -26,5 +26,5 @@ format, verified against Apple's `fsck_apfs`/`hdiutil` and the Linux `apfsck`.
 
 ## Validation
 
-Created containers are checked against three oracles: our own reader in
+Created containers are checked three ways: by our own reader in
 `pkg/apfs`, Apple's `fsck_apfs` and `hdiutil` (macOS), and `apfsck` (Linux).

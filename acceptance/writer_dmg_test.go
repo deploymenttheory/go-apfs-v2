@@ -14,9 +14,9 @@ import (
 	"github.com/deploymenttheory/go-apfs-v2/pkg/disk"
 )
 
-// TestRepackMountsViaHdiutil is the darwin-only correctness oracle: it repacks
-// the source DMG and attaches it read-only via hdiutil to prove the output is a
-// genuinely valid UDIF image. Gated on DMG_REPACK_SRC.
+// TestRepackMountsViaHdiutil repacks the source DMG and attaches it read-only
+// with hdiutil, which proves macOS accepts the output as a valid UDIF image.
+// Set DMG_REPACK_SRC to a source DMG to run it.
 func TestRepackMountsViaHdiutil(t *testing.T) {
 	if runtime.GOOS != "darwin" {
 		t.Skip("hdiutil is only available on darwin")
