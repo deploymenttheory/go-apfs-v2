@@ -41,9 +41,8 @@ $ apfs extract Firefox.dmg -C ./out --verify
 | Reproducible (byte-identical) output | ✅ | ✅ |
 
 ¹ Not implemented on HFS+: reading a file with the `UF_COMPRESSED` flag set
-returns an error rather than its contents. Extended attributes are likewise not
-read on HFS+, so `extract --xattrs` carries nothing off an HFS+ image. Both are
-planned; see [`TOOLS_ROADMAP.md`](TOOLS_ROADMAP.md).
+returns an error rather than its contents. Planned; see
+[`TOOLS_ROADMAP.md`](TOOLS_ROADMAP.md).
 
 Both file systems can be written as well as read: `pack <dir>` builds a populated
 volume (files, symlinks, nested directories) and `create` formats an empty one.
@@ -170,8 +169,8 @@ apfs extract IMAGE [PATH] -C DIR [-r|--recursive] [--pattern REGEX]
 Extracts the whole volume (or a subtree given `PATH`) to `DIR`, preserving
 symlinks, decompressing transparently-compressed files (APFS only), and
 optionally restoring permissions/timestamps (`--preserve-meta`), restoring
-extended attributes (`--xattrs`, APFS only) and verifying content against
-source checksums (`--verify`).
+extended attributes (`--xattrs`) and verifying content against source checksums
+(`--verify`).
 
 **Symlink handling** (`--symlinks`): `auto` (default) creates a real symlink
 where the OS allows it and otherwise writes the link target into a regular file
