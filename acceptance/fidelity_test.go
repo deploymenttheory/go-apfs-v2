@@ -114,9 +114,11 @@ func TestPackReportsFidelityLoss(t *testing.T) {
 		}
 	}
 
+	// The APFS writer represents hard links now, so a second name is not a
+	// loss. HFS+ still collapses them, which its own case below covers.
 	if tree.hardlink {
-		if got := intField(t, report, "hardLinksCollapsed"); got != 1 {
-			t.Errorf("hardLinksCollapsed = %d, want 1", got)
+		if got := intField(t, report, "hardLinksCollapsed"); got != 0 {
+			t.Errorf("hardLinksCollapsed = %d, want 0: APFS writes links, it does not copy", got)
 		}
 	}
 	// The APFS writer carries ordinary extended attributes now, so this one is
@@ -132,7 +134,7 @@ func TestPackReportsFidelityLoss(t *testing.T) {
 	// identity to recognize a hard link by, and has no extended attributes this
 	// tool reads — so there the tree is genuinely lossless and saying otherwise
 	// would be a false failure.
-	if !tree.fifo && !tree.socket && !tree.hardlink {
+	if !tree.fifo && !tree.socket {
 		t.Log("this platform can create nothing an APFS volume would drop; only the report schema is checked")
 		return
 	}
@@ -349,6 +351,68 @@ func TestPackCarriesXattrs(t *testing.T) {
 		report, _ := packJSON(t, dir, out, "--fs", "hfs+", "--volname", "XATTR", "-o", "json")
 		if got := intField(t, report, "xattrsDropped"); got == 0 {
 			t.Error("xattrsDropped = 0 for HFS+, which has no attributes file")
+		}
+	})
+}
+
+// TestPackCarriesHardLinks checks several names for one file survive a pack
+// into APFS as links rather than copies, and that HFS+ still reports them
+// collapsed, having no way to represent them.
+func TestPackCarriesHardLinks(t *testing.T) {
+	if !hardLinksDetectable() {
+		t.Skip("this platform does not expose inode identity")
+	}
+	dir := t.TempDir()
+	original := filepath.Join(dir, "original.txt")
+	if err := os.WriteFile(original, []byte("shared content\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"link-a.txt", "link-b.txt"} {
+		if err := os.Link(original, filepath.Join(dir, name)); err != nil {
+			t.Skipf("unable to create a hard link: %v", err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(dir, "plain.txt"), []byte("not linked\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Run("apfs writes them as links", func(t *testing.T) {
+		out := filepath.Join(t.TempDir(), "packed.dmg")
+		mustRun(t, "pack", dir, out, "--fs", "apfs", "--volname", "LINKS", "-q")
+
+		// Every name must list with the same inode, and a file that is not
+		// linked must differ from them.
+		inodes := map[string]uint64{}
+		for _, line := range nonEmptyLines(mustRun(t, "list", out, "-o", "json")) {
+			var entry struct {
+				Path  string `json:"path"`
+				Inode uint64 `json:"inode"`
+			}
+			if err := json.Unmarshal([]byte(line), &entry); err != nil {
+				t.Fatalf("list JSON invalid: %v\n%s", err, line)
+			}
+			inodes[entry.Path] = entry.Inode
+		}
+
+		first := inodes["original.txt"]
+		if first == 0 {
+			t.Fatalf("original.txt missing from the volume; saw %v", inodes)
+		}
+		for _, name := range []string{"link-a.txt", "link-b.txt"} {
+			if inodes[name] != first {
+				t.Errorf("%s has inode %d, want %d: it should be a link, not a copy", name, inodes[name], first)
+			}
+		}
+		if inodes["plain.txt"] == first {
+			t.Error("an unlinked file shares an inode with the linked ones")
+		}
+	})
+
+	t.Run("hfs+ reports them collapsed", func(t *testing.T) {
+		out := filepath.Join(t.TempDir(), "packed.dmg")
+		report, _ := packJSON(t, dir, out, "--fs", "hfs+", "--volname", "LINKS", "-o", "json")
+		if got := intField(t, report, "hardLinksCollapsed"); got != 2 {
+			t.Errorf("hardLinksCollapsed = %d, want 2 (three names, one inode)", got)
 		}
 	})
 }

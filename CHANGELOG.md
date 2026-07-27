@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The APFS writer represents hard links** (`pkg/apfswrite`, CLI). Several
+  names for one file previously became independent copies; they now share one
+  inode and one copy of the content, so six names for a 512 KiB file cost
+  512 KiB rather than three megabytes.
+
+  A file with several names gets `nlink` set, a sibling-link record per name, a
+  sibling-map record per sibling id, and a sibling-id extended field on each of
+  its directory entries. Sibling ids come from the same pool as inode numbers,
+  so the volume's next object id accounts for them. HFS+ has no way to
+  represent a link and still reports each extra name as collapsed.
+
 - **The APFS writer carries extended attributes** (`pkg/apfswrite`, CLI). They
   were dropped entirely before, so `extract` → `pack` could never round-trip a
   real macOS tree; now an ordinary attribute survives it. Attributes are stored

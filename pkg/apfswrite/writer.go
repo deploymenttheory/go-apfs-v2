@@ -126,6 +126,14 @@ type Entry struct {
 	Xattrs map[string][]byte
 	// Children are the entries contained in a directory.
 	Children []*Entry
+
+	// LinkGroup marks entries that are names for one and the same file. Two
+	// regular files sharing a non-zero LinkGroup are written as hard links: one
+	// inode, one copy of the content, and a directory entry each. The value is
+	// an opaque grouping key, not an inode number — the writer assigns its own.
+	//
+	// It is ignored on directories and symbolic links, which cannot be linked.
+	LinkGroup uint64
 }
 
 // isDirEntry reports whether e should be written as a directory. A zero Mode
@@ -195,6 +203,17 @@ type builderEntry struct {
 	// extended attribute, not in a data stream).
 	linkTarget []byte
 
+	// Hard links. primary is the entry holding the inode when this one is a
+	// second or later name for it, and nil when this entry is that holder.
+	// siblings lists every name for the file, and is populated on the holder
+	// only; nlink is its length.
+	primary  *builderEntry
+	siblings []siblingName
+	nlink    uint32
+	// siblingID is this name's own sibling record, referenced from its
+	// directory entry. Zero when the file has only one name.
+	siblingID uint64
+
 	// Extended attributes small enough to store inside their record.
 	xattrs map[string][]byte
 	// Extended attributes too large to embed, or required by the format to be
@@ -210,6 +229,14 @@ type builderEntry struct {
 	dataBlock   uint64 // physical block number of the first content block (0 if empty)
 	blocks      uint64 // number of allocation blocks in the file's extent (0 for a 0-byte file)
 	allocedSize uint64 // block-aligned allocated size in bytes (0 for a 0-byte file)
+}
+
+// siblingName is one name for a file that has several, as recorded in a
+// sibling-link record.
+type siblingName struct {
+	id     uint64 // the sibling's own object id
+	parent uint64 // the directory holding this name
+	name   string
 }
 
 // Deterministic default UUIDs used when the caller leaves a UUID zero.

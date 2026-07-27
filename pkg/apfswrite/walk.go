@@ -35,12 +35,12 @@ type WalkOptions struct {
 // Extended attributes are carried, whatever their size: small values live
 // inside their record and larger ones, along with any resource fork, get a data
 // stream of their own. com.apple.decmpfs is the exception — it declares content
-// this writer does not produce — and is reported as dropped. Hard links are not
-// supported, so a second name for one file becomes an independent copy.
+// this writer does not produce — and is reported as dropped. Several names for
+// one file are written as hard links rather than as copies.
 func EntryTreeFromDir(srcDir string, opts *WalkOptions) (*Entry, *fidelity.Report, error) {
 	var o hostwalk.Options
 	if opts != nil {
-		o = hostwalk.Options{Xattrs: opts.Xattrs, Warn: opts.Warn, Keep: CanWriteXattr}
+		o = hostwalk.Options{Xattrs: opts.Xattrs, Warn: opts.Warn, Keep: CanWriteXattr, HardLinks: true}
 	}
 
 	root, report, err := hostwalk.Walk(srcDir, &o, newEntry)
@@ -53,14 +53,15 @@ func EntryTreeFromDir(srcDir string, opts *WalkOptions) (*Entry, *fidelity.Repor
 // newEntry builds one APFS Entry from the walker's platform-neutral node.
 func newEntry(n hostwalk.Node, children []*Entry) *Entry {
 	return &Entry{
-		Name:     n.Name,
-		Mode:     n.Mode,
-		ModTime:  n.ModTime,
-		UID:      n.UID,
-		GID:      n.GID,
-		Data:     n.Data,
-		Xattrs:   n.Xattrs,
-		Children: children,
+		Name:      n.Name,
+		Mode:      n.Mode,
+		ModTime:   n.ModTime,
+		UID:       n.UID,
+		GID:       n.GID,
+		Data:      n.Data,
+		Xattrs:    n.Xattrs,
+		LinkGroup: n.LinkGroup,
+		Children:  children,
 	}
 }
 

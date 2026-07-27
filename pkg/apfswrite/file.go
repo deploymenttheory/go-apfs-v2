@@ -32,6 +32,9 @@ func (b *builder) setTree(opts *CreateOptions) error {
 
 	// Deterministic order: sort siblings by name at every level.
 	nextOID := uint64(minUserInoNum)
+	// The first name seen for a link group holds the inode; later ones become
+	// extra names for it. The walk is deterministic, so "first" is stable.
+	linkGroups := map[uint64]*builderEntry{}
 	var walk func(parent uint64, children []*Entry) (uint32, error)
 	walk = func(parent uint64, children []*Entry) (uint32, error) {
 		sorted := make([]*Entry, len(children))
@@ -58,6 +61,17 @@ func (b *builder) setTree(opts *CreateOptions) error {
 					e.Name, e.Mode.Type())
 			}
 
+			// A second or later name for a file already seen is written as a
+			// hard link: a directory entry pointing at the existing inode, with
+			// no inode, content or attributes of its own. Its attributes are
+			// that same inode's, so there is nothing separate to validate.
+			if primary := linkGroups[e.LinkGroup]; primary != nil && e.LinkGroup != 0 && e.Mode.IsRegular() {
+				extra := &builderEntry{name: e.Name, parent: parent, primary: primary}
+				b.entries = append(b.entries, extra)
+				primary.siblings = append(primary.siblings, siblingName{parent: parent, name: e.Name})
+				continue
+			}
+
 			mtime := b.entryTime(e.ModTime)
 			xattrs, xattrFlags, err := validateXattrs(e)
 			if err != nil {
@@ -78,6 +92,11 @@ func (b *builder) setTree(opts *CreateOptions) error {
 			}
 			nextOID++
 			b.entries = append(b.entries, be)
+
+			if e.LinkGroup != 0 && e.Mode.IsRegular() {
+				linkGroups[e.LinkGroup] = be
+				be.siblings = append(be.siblings, siblingName{parent: parent, name: e.Name})
+			}
 
 			// Each streamed attribute owns an object of its own: a data stream
 			// with its own oid, extent and refcount, referenced by the
@@ -140,6 +159,26 @@ func (b *builder) setTree(opts *CreateOptions) error {
 	if _, err := walk(rootDirInoNum, topLevel); err != nil {
 		return err
 	}
+
+	// Sibling ids come from the same pool as inode numbers, and the volume's
+	// next-id must end up past them, so they are allocated after the tree is
+	// walked and before nextObjID is consulted.
+	//
+	// A file with a single name gets none: a checker accepts a lone sibling
+	// record but does not require one, and omitting it keeps an ordinary tree's
+	// records exactly as they were.
+	for _, e := range b.entries {
+		if e.primary != nil || len(e.siblings) < 2 {
+			e.siblings = nil
+			continue
+		}
+		e.nlink = uint32(len(e.siblings))
+		for i := range e.siblings {
+			e.siblings[i].id = nextOID
+			nextOID++
+		}
+	}
+	b.linkSiblingIDs()
 
 	b.fileDataBlocks = 0
 	for _, f := range b.streamFiles {
@@ -205,6 +244,25 @@ const (
 	finderInfoName   = "com.apple.FinderInfo"
 	decmpfsName      = "com.apple.decmpfs"
 )
+
+// linkSiblingIDs gives every name its own sibling id, so a directory entry can
+// point at the sibling record describing that particular name. Each name's id
+// lives on the sibling list of the entry holding the inode, so the extra names
+// have to be matched back to it.
+func (b *builder) linkSiblingIDs() {
+	for _, e := range b.entries {
+		holder, name := e, e.name
+		if e.primary != nil {
+			holder = e.primary
+		}
+		for _, sib := range holder.siblings {
+			if sib.parent == e.parent && sib.name == name {
+				e.siblingID = sib.id
+				break
+			}
+		}
+	}
+}
 
 // splitXattrs divides an entry's attributes into those small enough to store
 // inside their record and those needing a data stream.
@@ -319,6 +377,13 @@ func (b *builder) nextObjID() uint64 {
 		if e.oid+1 > next {
 			next = e.oid + 1
 		}
+		// Sibling ids share the pool, and a checker rejects one at or past the
+		// volume's next id as a free id in use.
+		for _, sib := range e.siblings {
+			if sib.id+1 > next {
+				next = sib.id + 1
+			}
+		}
 	}
 	return next
 }
@@ -390,8 +455,8 @@ func (b *builder) buildFSTreeRecords() []fsTreeRecord {
 	recs := make([]fsTreeRecord, 0, 4+4*len(b.entries))
 
 	// Special directory dentries live under the virtual root parent (id 1).
-	recs = append(recs, b.dentryRecord(rootDirParent, "root", rootDirInoNum, dtDir))
-	recs = append(recs, b.dentryRecord(rootDirParent, "private-dir", privDirInoNum, dtDir))
+	recs = append(recs, b.dentryRecord(rootDirParent, "root", rootDirInoNum, dtDir, 0))
+	recs = append(recs, b.dentryRecord(rootDirParent, "private-dir", privDirInoNum, dtDir, 0))
 	// Root inode (id 2): nchildren = number of top-level entries.
 	recs = append(recs, b.inodeRecord(&builderEntry{
 		name: "root", isDir: true, oid: rootDirInoNum, parent: rootDirParent,
@@ -403,6 +468,13 @@ func (b *builder) buildFSTreeRecords() []fsTreeRecord {
 	}))
 
 	for _, e := range b.entries {
+		// An extra name for an already-written file contributes a directory
+		// entry pointing at that file's inode, and nothing else.
+		if e.primary != nil {
+			recs = append(recs, b.dentryRecord(e.parent, e.name, e.primary.oid, dtReg, e.siblingID))
+			continue
+		}
+
 		dt := dtReg
 		switch {
 		case e.isDir:
@@ -410,8 +482,12 @@ func (b *builder) buildFSTreeRecords() []fsTreeRecord {
 		case e.isSymlink:
 			dt = dtLnk
 		}
-		recs = append(recs, b.dentryRecord(e.parent, e.name, e.oid, uint16(dt)))
+		recs = append(recs, b.dentryRecord(e.parent, e.name, e.oid, uint16(dt), e.siblingID))
 		recs = append(recs, b.inodeRecord(e))
+		for _, sib := range e.siblings {
+			recs = append(recs, b.siblingLinkRecord(e.oid, sib))
+			recs = append(recs, b.siblingMapRecord(e.oid, sib))
+		}
 		if e.isSymlink {
 			// The symlink target lives in a com.apple.fs.symlink xattr record.
 			recs = append(recs, b.symlinkXattrRecord(e))
@@ -471,7 +547,7 @@ func fsTreeRecordLess(a, b fsTreeRecord) bool {
 		return a.name < b.name
 	case typeXattr:
 		return a.name < b.name
-	case typeFileExtent:
+	case typeFileExtent, typeSiblingLink:
 		return a.logical < b.logical
 	}
 	return false
@@ -479,13 +555,60 @@ func fsTreeRecordLess(a, b fsTreeRecord) bool {
 
 // dentryRecord builds a hashed dentry record: key (parent, DIR_REC, hash(name)),
 // value j_drec_hashed_val pointing at childID with directory-entry type dt.
-func (b *builder) dentryRecord(parent uint64, name string, childID uint64, dt uint16) fsTreeRecord {
+//
+// siblingID, when non-zero, appends the extended field naming this particular
+// name's sibling record. A checker requires every sibling link to be reachable
+// from a directory entry this way, and reports one that is not as orphaned.
+func (b *builder) dentryRecord(parent uint64, name string, childID uint64, dt uint16, siblingID uint64) fsTreeRecord {
 	key, hash := b.buildHashedDrecKey(parent, name)
-	val := make([]byte, sizeofDrecVal)
+
+	size := sizeofDrecVal
+	if siblingID != 0 {
+		size += sizeofXfBlob + sizeofXField + 8
+	}
+	val := make([]byte, size)
 	binary.LittleEndian.PutUint64(val[0:], childID)     // file_id
 	binary.LittleEndian.PutUint64(val[8:], b.timestamp) // date_added
 	binary.LittleEndian.PutUint16(val[16:], dt)         // flags (dir-entry type)
+
+	if siblingID != 0 {
+		xblob := sizeofDrecVal
+		binary.LittleEndian.PutUint16(val[xblob:], 1)   // xf_num_exts
+		binary.LittleEndian.PutUint16(val[xblob+2:], 8) // xf_used_data
+		xf := xblob + sizeofXfBlob
+		val[xf+0] = drecExtTypeSiblingID
+		val[xf+1] = xfDoNotCopy
+		binary.LittleEndian.PutUint16(val[xf+2:], 8)
+		binary.LittleEndian.PutUint64(val[xf+sizeofXField:], siblingID)
+	}
+
 	return fsTreeRecord{id: parent, typ: typeDirRec, hash: hash, name: name, key: key, val: val}
+}
+
+// siblingLinkRecord names one of a file's several names: key (inode oid,
+// SIBLING_LINK, sibling id), value the parent directory and the name itself.
+func (b *builder) siblingLinkRecord(oid uint64, sib siblingName) fsTreeRecord {
+	key := make([]byte, sizeofSiblingLinkKey)
+	setKeyHeader(key, 0, oid, typeSiblingLink)
+	binary.LittleEndian.PutUint64(key[8:], sib.id)
+
+	nameLen := len(sib.name) + 1
+	val := make([]byte, sizeofSiblingLinkValFixed+nameLen)
+	binary.LittleEndian.PutUint64(val[0:], sib.parent)
+	binary.LittleEndian.PutUint16(val[8:], uint16(nameLen))
+	copy(val[sizeofSiblingLinkValFixed:], sib.name)
+
+	return fsTreeRecord{id: oid, typ: typeSiblingLink, logical: sib.id, key: key, val: val}
+}
+
+// siblingMapRecord maps a sibling id back to the inode it stands for. Every
+// sibling link needs one; a checker reports a link without as unmapped.
+func (b *builder) siblingMapRecord(oid uint64, sib siblingName) fsTreeRecord {
+	key := make([]byte, sizeofSiblingMapKey)
+	setKeyHeader(key, 0, sib.id, typeSiblingMap)
+	val := make([]byte, sizeofSiblingMapVal)
+	binary.LittleEndian.PutUint64(val[0:], oid)
+	return fsTreeRecord{id: sib.id, typ: typeSiblingMap, key: key, val: val}
 }
 
 // inodeRecord builds an inode record: key (oid, INODE), value j_inode_val with
@@ -545,7 +668,11 @@ func (b *builder) inodeValue(e *builderEntry) []byte {
 		binary.LittleEndian.PutUint32(val[56:], e.nchildren)            // nchildren
 		binary.LittleEndian.PutUint32(val[60:], protectionClassDirNone) // default_protection_class
 	} else {
-		binary.LittleEndian.PutUint32(val[56:], 1) // nlink
+		nlink := uint32(1)
+		if e.nlink > 0 {
+			nlink = e.nlink
+		}
+		binary.LittleEndian.PutUint32(val[56:], nlink) // nlink
 	}
 	binary.LittleEndian.PutUint32(val[72:], e.uid) // owner
 	binary.LittleEndian.PutUint32(val[76:], e.gid) // group

@@ -95,9 +95,11 @@ const (
 	typeExtent       = 2
 	typeInode        = 3
 	typeXattr        = 4
+	typeSiblingLink  = 5
 	typeDstreamID    = 6
 	typeFileExtent   = 8
 	typeDirRec       = 9
+	typeSiblingMap   = 12
 	typeSnapName     = 11
 )
 
@@ -272,6 +274,19 @@ const (
 
 	// sizeofXattrDstream is j_xattr_dstream_t: xattr_obj_id(8) + j_dstream_t.
 	sizeofXattrDstream = 8 + sizeofDstream
+
+	// A sibling-link key is the object header plus the sibling id; its value is
+	// the parent directory's id, the name length, and the name.
+	sizeofSiblingLinkKey      = 16
+	sizeofSiblingLinkValFixed = 10 // parent_id(8)+name_len(2)
+	// A sibling-map record is keyed on the sibling id alone and names the
+	// inode it stands for.
+	sizeofSiblingMapKey = 8
+	sizeofSiblingMapVal = 8
+
+	// drecExtTypeSiblingID is the extended field on a directory entry naming
+	// the sibling record for that particular name.
+	drecExtTypeSiblingID = 1
 
 	sizeofDstream       = 40 // size(8)+alloced_size(8)+default_crypto_id(8)+total_bytes_written(8)+total_bytes_read(8)
 	sizeofDstreamIDVal  = 4  // refcnt(4)

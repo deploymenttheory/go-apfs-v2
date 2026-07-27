@@ -32,6 +32,11 @@ type Options struct {
 	// carried. A nil Keep drops all of them.
 	Keep func(name string, value []byte) bool
 
+	// HardLinks says the writer can represent several names for one file. When
+	// it cannot, a second name is reported as collapsed into a copy, which is
+	// what the volume will actually contain.
+	HardLinks bool
+
 	// Warn, when non-nil, is called once for each thing the walk cannot carry
 	// across, as it is found.
 	Warn func(path string, kind fidelity.Kind, detail string)
@@ -49,6 +54,10 @@ type Node struct {
 	// Xattrs are the attributes Options.Keep accepted. The rest are counted in
 	// the report instead.
 	Xattrs map[string][]byte
+	// LinkGroup is non-zero when this entry shares an inode with others in the
+	// walk, and identical across every name for that inode. It is only set
+	// when Options.HardLinks says the writer can use it.
+	LinkGroup uint64
 }
 
 // Walk reads the tree rooted at dir and returns the entry mk builds for it,
@@ -61,7 +70,13 @@ func Walk[E any](dir string, opts *Options, mk func(Node, []E) E) (E, *fidelity.
 	if opts == nil {
 		opts = &Options{}
 	}
-	w := &walker[E]{opts: opts, report: &fidelity.Report{}, inodes: map[hostmeta.LinkIdentity]string{}, mk: mk}
+	w := &walker[E]{
+		opts:       opts,
+		report:     &fidelity.Report{},
+		inodes:     map[hostmeta.LinkIdentity]string{},
+		linkGroups: map[hostmeta.LinkIdentity]uint64{},
+		mk:         mk,
+	}
 
 	children, err := w.readDir(dir, ".")
 	if err != nil {
@@ -79,6 +94,11 @@ type walker[E any] struct {
 	report *fidelity.Report
 	inodes map[hostmeta.LinkIdentity]string
 	mk     func(Node, []E) E
+
+	// Grouping keys handed to a writer that can represent hard links, one per
+	// inode. Numbered from one so zero can mean "not linked".
+	linkGroups    map[hostmeta.LinkIdentity]uint64
+	nextLinkGroup uint64
 }
 
 func (w *walker[E]) warn(rel string, kind fidelity.Kind, detail string) {
@@ -130,7 +150,8 @@ func (w *walker[E]) readDir(dir, rel string) ([]E, error) {
 		}
 
 		node.Xattrs = w.collectXattrs(full, childRel)
-		w.noteBSDAndLinks(childRel, info)
+		node.LinkGroup = w.noteLinks(childRel, info)
+		w.noteBSDFlags(childRel, info)
 
 		var children []E
 		switch {
@@ -205,22 +226,47 @@ func (w *walker[E]) collectXattrs(full, rel string) map[string][]byte {
 	return kept
 }
 
-// noteBSDAndLinks records the remaining metadata that will not survive this
-// entry: BSD flags, and second-or-later names for an inode already seen.
-func (w *walker[E]) noteBSDAndLinks(rel string, info os.FileInfo) {
+// noteBSDFlags records BSD flags, which no writer here carries.
+func (w *walker[E]) noteBSDFlags(rel string, info os.FileInfo) {
 	if flags, ok := hostmeta.Flags(info); ok && flags != 0 {
 		w.warn(rel, fidelity.BSDFlags, fmt.Sprintf("st_flags=%#x", flags))
 	}
+}
 
-	// Directories legitimately carry a link count above one — every
-	// subdirectory's ".." counts — so only files can be hard links here.
-	if info.Mode().IsRegular() {
-		if id, ok := hostmeta.Link(info); ok && id.Links > 1 {
-			if first, seen := w.inodes[id]; seen {
-				w.warn(rel, fidelity.HardLink, "also linked as "+first)
-			} else {
-				w.inodes[id] = rel
-			}
-		}
+// noteLinks handles a file with several names. When the writer can represent
+// them it returns a grouping key shared by every name for that inode; when it
+// cannot, it reports the second and later names as collapsed into copies,
+// which is what the volume will actually hold.
+//
+// Directories legitimately carry a link count above one — every subdirectory's
+// ".." counts — so only files are considered.
+func (w *walker[E]) noteLinks(rel string, info os.FileInfo) uint64 {
+	if !info.Mode().IsRegular() {
+		return 0
 	}
+	id, ok := hostmeta.Link(info)
+	if !ok || id.Links <= 1 {
+		return 0
+	}
+
+	first, seen := w.inodes[id]
+	if !seen {
+		w.inodes[id] = rel
+	}
+
+	if w.opts.HardLinks {
+		// Any stable non-zero value will do, and the inode number is both
+		// stable and already unique within a device.
+		if group, ok := w.linkGroups[id]; ok {
+			return group
+		}
+		w.nextLinkGroup++
+		w.linkGroups[id] = w.nextLinkGroup
+		return w.nextLinkGroup
+	}
+
+	if seen {
+		w.warn(rel, fidelity.HardLink, "also linked as "+first)
+	}
+	return 0
 }
