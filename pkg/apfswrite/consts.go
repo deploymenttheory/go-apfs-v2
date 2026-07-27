@@ -195,6 +195,11 @@ const (
 const (
 	apfsFeatureHardlinkMapRecords = 0x00000002
 
+	// apfsFeatureVolgrpSystemInoSpace declares that the volume belongs to a
+	// volume group. It, not the group identifier, is what checkers consult to
+	// decide membership, so the two must always be set together.
+	apfsFeatureVolgrpSystemInoSpace = 0x00000010
+
 	apfsFSUnencrypted = 0x00000001
 
 	apfsIncompatCaseInsensitive          = 0x00000001

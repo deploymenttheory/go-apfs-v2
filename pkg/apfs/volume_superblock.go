@@ -217,6 +217,11 @@ type VolumeSuperblock struct {
 	// Consists of 8 bytes
 	SnapMetaExtOID uint64
 
+	// The identifier of the volume group this volume belongs to
+	// (apfs_volume_group_id), or the zero UUID when it belongs to none.
+	// Consists of 16 bytes
+	VolumeGroupID [16]byte
+
 	// Parsed volume name as string (not part of binary structure)
 	volumeName string
 }
@@ -384,7 +389,22 @@ func (vs *VolumeSuperblock) ReadData(data []byte, isSnapshot bool) error {
 	vs.CloneinfoXID = binary.LittleEndian.Uint64(data[992:1000])
 	vs.SnapMetaExtOID = binary.LittleEndian.Uint64(data[1000:1008])
 
+	// The volume group identifier ends exactly at the 1024-byte minimum this
+	// function requires, so no size check is needed. The next field,
+	// apfs_integrity_meta_oid at offset 1024, would need that minimum raised.
+	copy(vs.VolumeGroupID[:], data[1008:1024])
+
 	return nil
+}
+
+// VolumeGroupIdentifier retrieves the identifier of the volume group this
+// volume belongs to (apfs_volume_group_id). The zero UUID means the volume
+// belongs to no group.
+func (vs *VolumeSuperblock) VolumeGroupIdentifier() ([16]byte, error) {
+	if vs == nil {
+		return [16]byte{}, fmt.Errorf("invalid volume superblock")
+	}
+	return vs.VolumeGroupID, nil
 }
 
 // VolumeIdentifier retrieves the volume identifier (UUID)
