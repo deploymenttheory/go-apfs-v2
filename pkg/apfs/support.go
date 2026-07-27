@@ -1,5 +1,4 @@
 // Support functions for APFS
-// Corresponds to libfsapfs_support.c and libfsapfs_support.h
 package apfs
 
 import (
@@ -9,21 +8,13 @@ import (
 	"os"
 )
 
-// GetVersion returns the library version
-// Corresponds to libfsapfs_get_version
-func GetVersion() string {
-	return Version
-}
-
-// GetAccessFlagsRead returns the access flags for reading
-// Corresponds to libfsapfs_get_access_flags_read
-func GetAccessFlagsRead() AccessFlags {
+// AccessFlagsRead returns the access flags for reading
+func AccessFlagsRead() AccessFlags {
 	return AccessFlagRead
 }
 
 // CheckContainerSignature determines if a file contains an APFS container signature
 // Returns true if the file has a valid container signature, false otherwise
-// Corresponds to libfsapfs_check_container_signature
 func CheckContainerSignature(filename string) (bool, error) {
 	if filename == "" {
 		return false, fmt.Errorf("invalid filename")
@@ -41,7 +32,6 @@ func CheckContainerSignature(filename string) (bool, error) {
 
 // CheckVolumeSignature determines if a file contains an APFS volume signature
 // Returns true if the file has a valid volume signature, false otherwise
-// Corresponds to libfsapfs_check_volume_signature
 func CheckVolumeSignature(filename string) (bool, error) {
 	if filename == "" {
 		return false, fmt.Errorf("invalid filename")
@@ -59,7 +49,6 @@ func CheckVolumeSignature(filename string) (bool, error) {
 
 // CheckContainerSignatureReader determines if a reader contains an APFS container signature
 // Returns true if the reader has a valid container signature, false otherwise
-// Corresponds to libfsapfs_check_container_signature_file_io_handle
 func CheckContainerSignatureReader(reader io.ReaderAt) (bool, error) {
 	if reader == nil {
 		return false, fmt.Errorf("invalid reader")
@@ -86,7 +75,6 @@ func CheckContainerSignatureReader(reader io.ReaderAt) (bool, error) {
 
 // CheckVolumeSignatureReader determines if a reader contains an APFS volume signature
 // Returns true if the reader has a valid volume signature, false otherwise
-// Corresponds to libfsapfs_check_volume_signature_file_io_handle
 func CheckVolumeSignatureReader(reader io.ReaderAt) (bool, error) {
 	if reader == nil {
 		return false, fmt.Errorf("invalid reader")

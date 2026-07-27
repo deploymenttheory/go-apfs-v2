@@ -4,26 +4,18 @@ package cli
 import (
 	"fmt"
 	"io"
-	"io/fs"
 	"math"
 	"os"
-	"strings"
 
+	"github.com/deploymenttheory/go-apfs-v2/internal/tools"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/disk"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/hfsplus"
 )
 
-// volumeFS is the filesystem-agnostic contract that list, cat and extract
-// operate on. Both APFS volumes (pkg/apfs) and HFS+ volumes (pkg/hfsplus)
-// implement it.
-type volumeFS interface {
-	fs.FS
-	fs.ReadDirFS
-	fs.StatFS
-	fs.ReadFileFS
-	Readlink(name string) (string, error)
-}
+// volumeFS is the contract that list, cat and extract operate on. Both APFS
+// volumes (pkg/apfs) and HFS+ volumes (pkg/hfsplus) implement it.
+type volumeFS = tools.VolumeFS
 
 // multiCloser closes several resources in order.
 type multiCloser []io.Closer
@@ -41,11 +33,11 @@ func (m multiCloser) Close() error {
 // freeCloser adapts the APFS container's Free method to io.Closer.
 type freeCloser struct{ container *apfs.Container }
 
-func (f freeCloser) Close() error { return f.container.Free() }
+func (f freeCloser) Close() error { return f.container.Close() }
 
-// sniffFilesystem identifies the filesystem at the start of a
+// sniffFileSystem identifies the file system at the start of a
 // partition-relative reader: "apfs", "hfsplus" or "".
-func sniffFilesystem(reader io.ReaderAt) string {
+func sniffFileSystem(reader io.ReaderAt) string {
 	magic := make([]byte, 4)
 	if _, err := reader.ReadAt(magic, 32); err == nil && string(magic) == "NXSB" {
 		return "apfs"
@@ -57,9 +49,9 @@ func sniffFilesystem(reader io.ReaderAt) string {
 	return ""
 }
 
-// openFilesystem opens an image and returns the selected volume as a
-// filesystem, dispatching on the detected filesystem type (APFS or HFS+).
-func openFilesystem(imagePath string) (volumeFS, io.Closer, error) {
+// openFileSystem opens an image and returns the selected volume as a
+// file system, dispatching on the detected file system type (APFS or HFS+).
+func openFileSystem(imagePath string) (volumeFS, io.Closer, error) {
 	if _, err := os.Stat(imagePath); err != nil {
 		return nil, nil, withCode(ExitBadImage, fmt.Errorf("unable to open image: %w", err))
 	}
@@ -78,7 +70,7 @@ func openFilesystem(imagePath string) (volumeFS, io.Closer, error) {
 		base = io.NewSectionReader(reader, offset, math.MaxInt64-offset)
 	}
 
-	switch sniffFilesystem(base) {
+	switch sniffFileSystem(base) {
 	case "apfs":
 		container, err := apfs.Open(base, &apfs.OpenOptions{
 			Password:         opts.Password,
@@ -90,7 +82,7 @@ func openFilesystem(imagePath string) (volumeFS, io.Closer, error) {
 		}
 		volume, err := openVolume(container)
 		if err != nil {
-			container.Free()
+			container.Close()
 			closer.Close()
 			return nil, nil, err
 		}
@@ -110,7 +102,7 @@ func openFilesystem(imagePath string) (volumeFS, io.Closer, error) {
 
 	default:
 		closer.Close()
-		return nil, nil, withCode(ExitBadImage, fmt.Errorf("%s does not contain a recognizable APFS or HFS+ filesystem", imagePath))
+		return nil, nil, withCode(ExitBadImage, fmt.Errorf("%s does not contain a recognizable APFS or HFS+ file system", imagePath))
 	}
 }
 
@@ -130,14 +122,4 @@ func openVolume(container *apfs.Container) (*apfs.Volume, error) {
 	}
 
 	return volume, nil
-}
-
-// fsNameFromVolumePath converts an absolute volume path ("/a/b") to an fs.FS
-// name ("a/b", or "." for the root). Accepts already-relative input too.
-func fsNameFromVolumePath(volumePath string) string {
-	name := strings.Trim(strings.TrimSpace(volumePath), "/")
-	if name == "" {
-		return "."
-	}
-	return name
 }

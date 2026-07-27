@@ -7,7 +7,6 @@ import (
 )
 
 // BufferDataHandle represents a buffer data handle for reading from a byte buffer
-// Corresponds to libfsapfs_buffer_data_handle.h
 type BufferDataHandle struct {
 	// The current offset in the buffer
 	CurrentOffset int64

@@ -7,23 +7,6 @@ import (
 
 // File system B-tree data types
 // Based on APFS specification and verified against go-apfs implementation
-const (
-	FileSystemDataTypeAny               uint8 = 0x00
-	FileSystemDataTypeSnapMetadata      uint8 = 0x01
-	FileSystemDataTypeExtent            uint8 = 0x02 // Physical extent (not file extent!)
-	FileSystemDataTypeInode             uint8 = 0x03
-	FileSystemDataTypeExtendedAttribute uint8 = 0x04
-	FileSystemDataTypeSiblingLink       uint8 = 0x05
-	FileSystemDataTypeDStreamID         uint8 = 0x06
-	FileSystemDataTypeCryptoState       uint8 = 0x07
-	FileSystemDataTypeFileExtent        uint8 = 0x08 // File data extent (was incorrectly 0x02!)
-	FileSystemDataTypeDirectoryRecord   uint8 = 0x09
-	FileSystemDataTypeDirectoryStats    uint8 = 0x0a
-	FileSystemDataTypeSnapshotName      uint8 = 0x0b
-	FileSystemDataTypeSiblingMap        uint8 = 0x0c
-	FileSystemDataTypeFileInfo          uint8 = 0x0d // Was incorrectly at 0x08!
-)
-
 // ExtractDataTypeFromKey extracts the data type from a file system B-tree key
 // The data type is stored in the upper 4 bits of the file system identifier
 func ExtractDataTypeFromKey(keyData []byte) (uint8, error) {
@@ -78,7 +61,7 @@ func CompareFileSystemKeys(key1Data []byte, key2Data []byte, dataType uint8) int
 
 	// If identifiers are equal, compare based on data type
 	switch dataType {
-	case FileSystemDataTypeFileExtent:
+	case FileSystemRecordTypeFileExtent:
 		// For file extents, also compare logical address
 		if len(key1Data) >= 16 && len(key2Data) >= 16 {
 			logicalAddr1 := binary.LittleEndian.Uint64(key1Data[8:16])
@@ -92,11 +75,11 @@ func CompareFileSystemKeys(key1Data []byte, key2Data []byte, dataType uint8) int
 			}
 		}
 
-	case FileSystemDataTypeDirectoryRecord:
-		// For directory records, compare hash and names
-		return compareDirectoryRecordKeys(key1Data, key2Data)
+	case FileSystemRecordTypeDirectoryEntry:
+		// For directory entry records, compare hash and names
+		return compareDirectoryEntryKeys(key1Data, key2Data)
 
-	case FileSystemDataTypeExtendedAttribute:
+	case FileSystemRecordTypeExtendedAttribute:
 		// For extended attributes, compare names
 		return compareExtendedAttributeKeys(key1Data, key2Data)
 	}
@@ -162,7 +145,7 @@ func CreateFileExtentKey(identifier uint64, logicalAddress uint64) []byte {
 	key := make([]byte, 16)
 
 	// Create file system identifier with data type
-	fsid := CreateFileSystemKey(identifier, FileSystemDataTypeFileExtent)
+	fsid := CreateFileSystemKey(identifier, FileSystemRecordTypeFileExtent)
 	binary.LittleEndian.PutUint64(key[0:8], fsid)
 
 	// Add logical address
@@ -176,15 +159,15 @@ func CreateInodeKey(identifier uint64) []byte {
 	key := make([]byte, 8)
 
 	// Create file system identifier with data type
-	fsid := CreateFileSystemKey(identifier, FileSystemDataTypeInode)
+	fsid := CreateFileSystemKey(identifier, FileSystemRecordTypeInode)
 	binary.LittleEndian.PutUint64(key[0:8], fsid)
 
 	return key
 }
 
-// compareDirectoryRecordKeys compares two directory record keys
+// compareDirectoryEntryKeys compares two directory entry record keys
 // Returns <0 if key1 < key2, 0 if equal, >0 if key1 > key2
-func compareDirectoryRecordKeys(key1Data []byte, key2Data []byte) int {
+func compareDirectoryEntryKeys(key1Data []byte, key2Data []byte) int {
 	// Minimum key size: 8 (fs_id) + 2 (name_size) = 10 bytes
 	if len(key1Data) < 10 || len(key2Data) < 10 {
 		return 0

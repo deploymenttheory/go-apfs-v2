@@ -7,6 +7,7 @@ import (
 	"path"
 	"time"
 
+	"github.com/deploymenttheory/go-apfs-v2/internal/tools"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
 	"github.com/spf13/cobra"
 )
@@ -58,13 +59,13 @@ func runList(cmd *cobra.Command, args []string) error {
 		startPath = args[1]
 	}
 
-	volume, closer, err := openFilesystem(imagePath)
+	volume, closer, err := openFileSystem(imagePath)
 	if err != nil {
 		return err
 	}
 	defer closer.Close()
 
-	name := fsNameFromVolumePath(startPath)
+	name := tools.FSNameFromVolumePath(startPath)
 
 	info, err := volume.Stat(name)
 	if err != nil {

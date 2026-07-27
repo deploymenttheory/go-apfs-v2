@@ -1,7 +1,7 @@
 // CLI acceptance tests for the pack (write-direction) command, exercised
 // through the built binary against the committed APFS and HFS+ fixtures.
 // These run on every OS in CI without any downloads.
-package cli_test
+package acceptance
 
 import (
 	"crypto/sha256"
@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/disk"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/exitcode"
 )
 
 // packFixtures returns the fixture images that should round-trip through pack:
@@ -35,8 +36,8 @@ func rawSHA256(t *testing.T, dmg string) (string, int) {
 	return hex.EncodeToString(sum[:]), len(raw)
 }
 
-// TestPackRoundTripFixtures proves the fidelity invariant on both filesystems:
-// pack via the CLI, then the raw filesystem image is preserved bit-for-bit.
+// TestPackRoundTripFixtures proves the fidelity invariant on both file systems:
+// pack via the CLI, then the raw file system image is preserved bit-for-bit.
 func TestPackRoundTripFixtures(t *testing.T) {
 	for fsName, src := range packFixtures(t) {
 		t.Run(fsName, func(t *testing.T) {
@@ -172,10 +173,10 @@ func TestPackExitCodes(t *testing.T) {
 		args []string
 		want int
 	}{
-		{"missing source", []string{"pack", filepath.Join(t.TempDir(), "nope.dmg"), out}, 3},
-		{"bad compression", []string{"pack", fixtureDMG, out, "--compression", "lz4"}, 2},
-		{"bad chunk size", []string{"pack", fixtureDMG, out, "--chunk-size", "0"}, 2},
-		{"too few args", []string{"pack", fixtureDMG}, 2},
+		{"missing source", []string{"pack", filepath.Join(t.TempDir(), "nope.dmg"), out}, exitcode.BadImage},
+		{"bad compression", []string{"pack", fixtureDMG, out, "--compression", "lz4"}, exitcode.Usage},
+		{"bad chunk size", []string{"pack", fixtureDMG, out, "--chunk-size", "0"}, exitcode.Usage},
+		{"too few args", []string{"pack", fixtureDMG}, exitcode.Usage},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

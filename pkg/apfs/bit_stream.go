@@ -62,8 +62,8 @@ func NewBitStream(
 	}, nil
 }
 
-// GetValue retrieves a value from the bit stream
-func (bs *BitStream) GetValue(numberOfBits uint8) (uint32, error) {
+// Value retrieves a value from the bit stream
+func (bs *BitStream) Value(numberOfBits uint8) (uint32, error) {
 	if numberOfBits > common.Uint32BitWidth {
 		return 0, fmt.Errorf("invalid number of bits value exceeds maximum")
 	}

@@ -27,7 +27,6 @@ type DataBlockVectorSegment struct {
 }
 
 // DataBlockVector represents a vector of data blocks from file extents
-// Corresponds to libfdata_vector_t with file system data handle
 type DataBlockVector struct {
 	// The element size (block size)
 	ElementSize uint64
@@ -42,19 +41,18 @@ type DataBlockVector struct {
 	TotalSize uint64
 
 	// Cache of data blocks
-	cache      map[int64]*DataBlock
-	cacheMutex sync.RWMutex
-	cacheSize  int
+	cache        map[int64]*DataBlock
+	cacheMutex   sync.RWMutex
+	cacheSize    int
 	maxCacheSize int
 }
 
 // Segment flags
 const (
-	SegmentFlagIsSparse = 0x1 // LIBFDATA_RANGE_FLAG_IS_SPARSE
+	SegmentFlagIsSparse = 0x1 // the extent is a sparse (unallocated) range
 )
 
 // NewDataBlockVector creates a new data block vector
-// Corresponds to libfsapfs_data_block_vector_initialize
 func NewDataBlockVector(
 	ioHandle *IOHandle,
 	dataHandle *FileSystemDataHandle,
@@ -116,8 +114,8 @@ func NewDataBlockVector(
 	return vector, nil
 }
 
-// GetSize returns the total size of the data in the vector
-func (v *DataBlockVector) GetSize() (uint64, error) {
+// Size returns the total size of the data in the vector
+func (v *DataBlockVector) Size() (uint64, error) {
 	if v == nil {
 		return 0, fmt.Errorf("invalid data block vector")
 	}
@@ -125,11 +123,10 @@ func (v *DataBlockVector) GetSize() (uint64, error) {
 	return v.TotalSize, nil
 }
 
-// GetElementValueAtOffset retrieves the data block at a given logical offset
+// ElementValueAtOffset retrieves the data block at a given logical offset
 // Returns the data block and the offset within that block
-// Corresponds to libfdata_vector_get_element_value_at_offset
-func (v *DataBlockVector) GetElementValueAtOffset(
-	fileIOHandle io.ReaderAt,
+func (v *DataBlockVector) ElementValueAtOffset(
+	reader io.ReaderAt,
 	logicalOffset int64,
 ) (*DataBlock, int64, error) {
 	if v == nil {
@@ -180,7 +177,7 @@ func (v *DataBlockVector) GetElementValueAtOffset(
 
 	// Not in cache, need to read it
 	dataBlock, err = v.DataHandle.ReadDataBlock(
-		fileIOHandle,
+		reader,
 		segment.FileIndex,
 		physicalBlockOffset,
 		int64(v.ElementSize),
@@ -225,8 +222,8 @@ func (v *DataBlockVector) cacheBlock(offset int64, dataBlock *DataBlock) {
 	v.cacheSize++
 }
 
-// Free releases resources associated with the vector
-func (v *DataBlockVector) Free() error {
+// Close releases resources associated with the vector
+func (v *DataBlockVector) Close() error {
 	if v == nil {
 		return fmt.Errorf("invalid data block vector")
 	}

@@ -62,7 +62,7 @@ func runExtract(cmd *cobra.Command, args []string) error {
 		volumePath = args[1]
 	}
 
-	volume, closer, err := openFilesystem(imagePath)
+	volume, closer, err := openFileSystem(imagePath)
 	if err != nil {
 		return err
 	}
@@ -118,7 +118,7 @@ func runExtract(cmd *cobra.Command, args []string) error {
 
 	extractor.FinishProgress()
 
-	files, bytes := extractor.GetStats()
+	files, bytes := extractor.Stats()
 
 	if opts.Output == "json" {
 		summary := map[string]any{
@@ -139,7 +139,7 @@ func runExtract(cmd *cobra.Command, args []string) error {
 			fmt.Printf("Note: %d symlink(s) written as regular files (OS symlink support unavailable)\n", degraded)
 		}
 		if remapped := extractor.NamesRemapped(); remapped > 0 {
-			fmt.Printf("Note: %d name(s) sanitized to be storable on this filesystem\n", remapped)
+			fmt.Printf("Note: %d name(s) sanitized to be storable on this file system\n", remapped)
 		}
 	}
 

@@ -1,5 +1,4 @@
 // MD5 hash calculation for APFS file entries
-// Corresponds to libfsapfs digest_hash functionality
 package tools
 
 import (
@@ -12,14 +11,13 @@ import (
 )
 
 // CalculateMD5Hash calculates the MD5 hash of a file entry's data
-// Corresponds to info_handle_file_entry_calculate_md5
 func CalculateMD5Hash(entry *apfs.FileEntry) (string, error) {
 	if entry == nil {
 		return "", fmt.Errorf("invalid file entry")
 	}
 
 	// Get the file size
-	size, err := entry.GetDataSize()
+	size, err := entry.DataSize()
 	if err != nil {
 		return "", fmt.Errorf("unable to get file size: %w", err)
 	}

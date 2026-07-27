@@ -1,5 +1,4 @@
 // Input/Output (IO) handle functions
-// Corresponds to libfsapfs_io_handle.c and libfsapfs_io_handle.h
 package apfs
 
 import (
@@ -21,14 +20,12 @@ type nodeCacheEntry struct {
 }
 
 // Container and volume signatures
-// Corresponds to fsapfs_container_signature and fsapfs_volume_signature
 var (
 	ContainerSignature = [4]byte{'N', 'X', 'S', 'B'}
 	VolumeSignature    = [4]byte{'A', 'P', 'S', 'B'}
 )
 
 // IOHandle represents the Input/Output handle for APFS operations
-// Corresponds to libfsapfs_io_handle_t
 type IOHandle struct {
 	// The bytes per sector
 	BytesPerSector uint16
@@ -53,50 +50,49 @@ type IOHandle struct {
 }
 
 // getCachedNode returns the cached parsed node for a physical block, if any
-func (io *IOHandle) getCachedNode(blockNumber uint64) *BTreeNode {
-	io.nodeCacheMu.Lock()
-	defer io.nodeCacheMu.Unlock()
+func (h *IOHandle) getCachedNode(blockNumber uint64) *BTreeNode {
+	h.nodeCacheMu.Lock()
+	defer h.nodeCacheMu.Unlock()
 
-	if io.nodeCache == nil {
+	if h.nodeCache == nil {
 		return nil
 	}
 
-	element, ok := io.nodeCache[blockNumber]
+	element, ok := h.nodeCache[blockNumber]
 	if !ok {
 		return nil
 	}
 
-	io.nodeLRU.MoveToFront(element)
+	h.nodeLRU.MoveToFront(element)
 	return element.Value.(*nodeCacheEntry).node
 }
 
 // putCachedNode stores a parsed node in the LRU cache
-func (io *IOHandle) putCachedNode(blockNumber uint64, node *BTreeNode) {
-	io.nodeCacheMu.Lock()
-	defer io.nodeCacheMu.Unlock()
+func (h *IOHandle) putCachedNode(blockNumber uint64, node *BTreeNode) {
+	h.nodeCacheMu.Lock()
+	defer h.nodeCacheMu.Unlock()
 
-	if io.nodeCache == nil {
-		io.nodeCache = make(map[uint64]*list.Element)
-		io.nodeLRU = list.New()
+	if h.nodeCache == nil {
+		h.nodeCache = make(map[uint64]*list.Element)
+		h.nodeLRU = list.New()
 	}
 
-	if element, ok := io.nodeCache[blockNumber]; ok {
-		io.nodeLRU.MoveToFront(element)
+	if element, ok := h.nodeCache[blockNumber]; ok {
+		h.nodeLRU.MoveToFront(element)
 		element.Value.(*nodeCacheEntry).node = node
 		return
 	}
 
-	io.nodeCache[blockNumber] = io.nodeLRU.PushFront(&nodeCacheEntry{blockNumber: blockNumber, node: node})
+	h.nodeCache[blockNumber] = h.nodeLRU.PushFront(&nodeCacheEntry{blockNumber: blockNumber, node: node})
 
-	for io.nodeLRU.Len() > nodeCacheMaxEntries {
-		oldest := io.nodeLRU.Back()
-		delete(io.nodeCache, oldest.Value.(*nodeCacheEntry).blockNumber)
-		io.nodeLRU.Remove(oldest)
+	for h.nodeLRU.Len() > nodeCacheMaxEntries {
+		oldest := h.nodeLRU.Back()
+		delete(h.nodeCache, oldest.Value.(*nodeCacheEntry).blockNumber)
+		h.nodeLRU.Remove(oldest)
 	}
 }
 
 // NewIOHandle creates a new IO handle with default values
-// Corresponds to libfsapfs_io_handle_initialize
 func NewIOHandle() (*IOHandle, error) {
 	ioHandle := &IOHandle{
 		BytesPerSector: 512,  // Default sector size
@@ -121,36 +117,31 @@ func NewIOHandle() (*IOHandle, error) {
 }
 
 // Clear resets the IO handle to default values
-// Corresponds to libfsapfs_io_handle_clear
-func (io *IOHandle) Clear() error {
-	if io == nil {
+func (h *IOHandle) Clear() error {
+	if h == nil {
 		return nil
 	}
 
-	io.BytesPerSector = 512
-	io.BlockSize = 4096
-	io.ContainerSize = 0
-	io.Abort = false
+	h.BytesPerSector = 512
+	h.BlockSize = 4096
+	h.ContainerSize = 0
+	h.Abort = false
 
 	return nil
 }
 
-// Free releases resources associated with the IO handle
-// Corresponds to libfsapfs_io_handle_free
-func (io *IOHandle) Free() error {
-	if io == nil {
+// Close releases resources associated with the IO handle
+func (h *IOHandle) Close() error {
+	if h == nil {
 		return nil
 	}
 
 	// Close and free profiler if it exists
-	if io.Profiler != nil {
-		if err := io.Profiler.Close(); err != nil {
+	if h.Profiler != nil {
+		if err := h.Profiler.Close(); err != nil {
 			return fmt.Errorf("unable to close profiler: %w", err)
 		}
-		if err := io.Profiler.Free(); err != nil {
-			return fmt.Errorf("unable to free profiler: %w", err)
-		}
-		io.Profiler = nil
+		h.Profiler = nil
 	}
 
 	return nil

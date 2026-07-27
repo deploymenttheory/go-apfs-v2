@@ -9,7 +9,6 @@ import (
 )
 
 // FileEntry represents an APFS file entry (file, directory, or special file)
-// Corresponds to libfsapfs_file_entry_t / libfsapfs_internal_file_entry_t
 type FileEntry struct {
 	// IOHandle is the I/O handle
 	IOHandle *IOHandle
@@ -26,11 +25,11 @@ type FileEntry struct {
 	// Inode contains the inode metadata
 	Inode *Inode
 
-	// DirectoryRecord contains the directory record (may be nil for root)
-	DirectoryRecord *DirectoryRecord
+	// DirectoryEntryRecord contains the directory entry record (may be nil for root)
+	DirectoryEntryRecord *DirectoryEntryRecord
 
-	// TransactionIdentifier is the transaction identifier
-	TransactionIdentifier uint64
+	// XID is the transaction identifier
+	XID uint64
 
 	// ExtendedAttributes is the array of extended attributes (lazily initialized)
 	ExtendedAttributes []*AttributeValues
@@ -51,10 +50,10 @@ type FileEntry struct {
 	SymbolicLinkData []byte
 
 	// DirectoryEntries contains sub-directory entries (lazily initialized)
-	DirectoryEntries []*DirectoryRecord
+	DirectoryEntries []*DirectoryEntryRecord
 
 	// DataSize is the cached data size
-	DataSize int64 // -1 indicates not yet determined
+	dataSize int64 // -1 indicates not yet determined
 
 	// FileExtents contains the file extents (lazily initialized)
 	FileExtents []*FileExtent
@@ -67,32 +66,30 @@ type FileEntry struct {
 }
 
 // NewFileEntry creates a new file entry
-// Corresponds to libfsapfs_file_entry_initialize
 func NewFileEntry(
 	ioHandle *IOHandle,
-	fileHandle io.ReaderAt,
+	reader io.ReaderAt,
 	encryptionContext *EncryptionContext,
 	fileSystemBTree *FileSystemBTree,
 	inode *Inode,
-	directoryRecord *DirectoryRecord,
-	transactionIdentifier uint64,
+	directoryEntryRecord *DirectoryEntryRecord,
+	xid uint64,
 ) (*FileEntry, error) {
 	return &FileEntry{
-		IOHandle:              ioHandle,
-		FileHandle:            fileHandle,
-		EncryptionContext:     encryptionContext,
-		FileSystemBTree:       fileSystemBTree,
-		Inode:                 inode,
-		DirectoryRecord:       directoryRecord,
-		TransactionIdentifier: transactionIdentifier,
-		DataSize:              -1, // Not yet determined
-		currentOffset:         0,
+		IOHandle:             ioHandle,
+		FileHandle:           reader,
+		EncryptionContext:    encryptionContext,
+		FileSystemBTree:      fileSystemBTree,
+		Inode:                inode,
+		DirectoryEntryRecord: directoryEntryRecord,
+		XID:                  xid,
+		dataSize:             -1, // Not yet determined
+		currentOffset:        0,
 	}, nil
 }
 
-// GetIdentifier retrieves the identifier
-// Corresponds to libfsapfs_file_entry_get_identifier
-func (fe *FileEntry) GetIdentifier() (uint64, error) {
+// Identifier retrieves the identifier
+func (fe *FileEntry) Identifier() (uint64, error) {
 	if fe == nil {
 		return 0, fmt.Errorf("invalid file entry")
 	}
@@ -104,9 +101,8 @@ func (fe *FileEntry) GetIdentifier() (uint64, error) {
 	return fe.Inode.Identifier, nil
 }
 
-// GetParentIdentifier retrieves the parent identifier
-// Corresponds to libfsapfs_file_entry_get_parent_identifier
-func (fe *FileEntry) GetParentIdentifier() (uint64, error) {
+// ParentIdentifier retrieves the parent identifier
+func (fe *FileEntry) ParentIdentifier() (uint64, error) {
 	if fe == nil {
 		return 0, fmt.Errorf("invalid file entry")
 	}
@@ -118,9 +114,8 @@ func (fe *FileEntry) GetParentIdentifier() (uint64, error) {
 	return fe.Inode.ParentIdentifier, nil
 }
 
-// GetParentFileEntry retrieves the parent file entry
-// Corresponds to libfsapfs_file_entry_get_parent_file_entry
-func (fe *FileEntry) GetParentFileEntry() (*FileEntry, error) {
+// ParentFileEntry retrieves the parent file entry
+func (fe *FileEntry) ParentFileEntry() (*FileEntry, error) {
 	if fe == nil {
 		return nil, fmt.Errorf("invalid file entry")
 	}
@@ -139,31 +134,30 @@ func (fe *FileEntry) GetParentFileEntry() (*FileEntry, error) {
 	}
 
 	// Get parent inode
-	parentInode, err := fe.FileSystemBTree.GetInodeByIdentifier(
+	parentInode, err := fe.FileSystemBTree.InodeByIdentifier(
 		fe.FileHandle,
 		parentIdentifier,
-		fe.TransactionIdentifier,
+		fe.XID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("unable to retrieve parent inode: %w", err)
 	}
 
-	// Get parent directory record (may be nil for root)
-	// For now, we create the parent without a directory record
+	// Get parent directory entry record (may be nil for root)
+	// For now, we create the parent without a directory entry record
 	return NewFileEntry(
 		fe.IOHandle,
 		fe.FileHandle,
 		fe.EncryptionContext,
 		fe.FileSystemBTree,
 		parentInode,
-		nil, // No directory record for parent
-		fe.TransactionIdentifier,
+		nil, // No directory entry record for parent
+		fe.XID,
 	)
 }
 
-// GetCreationTime retrieves the creation time
-// Corresponds to libfsapfs_file_entry_get_creation_time
-func (fe *FileEntry) GetCreationTime() (int64, error) {
+// CreationTime retrieves the creation time
+func (fe *FileEntry) CreationTime() (int64, error) {
 	if fe == nil {
 		return 0, fmt.Errorf("invalid file entry")
 	}
@@ -176,9 +170,8 @@ func (fe *FileEntry) GetCreationTime() (int64, error) {
 	return int64(fe.Inode.CreationTime / 1000000000), nil
 }
 
-// GetModificationTime retrieves the modification time
-// Corresponds to libfsapfs_file_entry_get_modification_time
-func (fe *FileEntry) GetModificationTime() (int64, error) {
+// ModificationTime retrieves the modification time
+func (fe *FileEntry) ModificationTime() (int64, error) {
 	if fe == nil {
 		return 0, fmt.Errorf("invalid file entry")
 	}
@@ -191,9 +184,8 @@ func (fe *FileEntry) GetModificationTime() (int64, error) {
 	return int64(fe.Inode.ModificationTime / 1000000000), nil
 }
 
-// GetAccessTime retrieves the access time
-// Corresponds to libfsapfs_file_entry_get_access_time
-func (fe *FileEntry) GetAccessTime() (int64, error) {
+// AccessTime retrieves the access time
+func (fe *FileEntry) AccessTime() (int64, error) {
 	if fe == nil {
 		return 0, fmt.Errorf("invalid file entry")
 	}
@@ -206,9 +198,8 @@ func (fe *FileEntry) GetAccessTime() (int64, error) {
 	return int64(fe.Inode.AccessTime / 1000000000), nil
 }
 
-// GetInodeChangeTime retrieves the inode change time
-// Corresponds to libfsapfs_file_entry_get_inode_change_time
-func (fe *FileEntry) GetInodeChangeTime() (int64, error) {
+// InodeChangeTime retrieves the inode change time
+func (fe *FileEntry) InodeChangeTime() (int64, error) {
 	if fe == nil {
 		return 0, fmt.Errorf("invalid file entry")
 	}
@@ -221,23 +212,21 @@ func (fe *FileEntry) GetInodeChangeTime() (int64, error) {
 	return int64(fe.Inode.InodeChangeTime / 1000000000), nil
 }
 
-// GetAddedTime retrieves the added time (from directory record)
-// Corresponds to libfsapfs_file_entry_get_added_time
-func (fe *FileEntry) GetAddedTime() (int64, error) {
+// AddedTime retrieves the added time (from directory entry record)
+func (fe *FileEntry) AddedTime() (int64, error) {
 	if fe == nil {
 		return 0, fmt.Errorf("invalid file entry")
 	}
 
-	if fe.DirectoryRecord == nil {
-		return 0, fmt.Errorf("invalid directory record")
+	if fe.DirectoryEntryRecord == nil {
+		return 0, fmt.Errorf("invalid directory entry record")
 	}
 
-	return fe.DirectoryRecord.GetAddedTime()
+	return int64(fe.DirectoryEntryRecord.AddedTime), nil
 }
 
-// GetOwnerIdentifier retrieves the owner identifier (UID)
-// Corresponds to libfsapfs_file_entry_get_owner_identifier
-func (fe *FileEntry) GetOwnerIdentifier() (uint32, error) {
+// OwnerIdentifier retrieves the owner identifier (UID)
+func (fe *FileEntry) OwnerIdentifier() (uint32, error) {
 	if fe == nil {
 		return 0, fmt.Errorf("invalid file entry")
 	}
@@ -249,9 +238,8 @@ func (fe *FileEntry) GetOwnerIdentifier() (uint32, error) {
 	return fe.Inode.OwnerIdentifier, nil
 }
 
-// GetGroupIdentifier retrieves the group identifier (GID)
-// Corresponds to libfsapfs_file_entry_get_group_identifier
-func (fe *FileEntry) GetGroupIdentifier() (uint32, error) {
+// GroupIdentifier retrieves the group identifier (GID)
+func (fe *FileEntry) GroupIdentifier() (uint32, error) {
 	if fe == nil {
 		return 0, fmt.Errorf("invalid file entry")
 	}
@@ -263,9 +251,8 @@ func (fe *FileEntry) GetGroupIdentifier() (uint32, error) {
 	return fe.Inode.GroupIdentifier, nil
 }
 
-// GetDeviceIdentifier retrieves the device identifier
-// Corresponds to libfsapfs_file_entry_get_device_identifier
-func (fe *FileEntry) GetDeviceIdentifier() (uint32, error) {
+// DeviceIdentifier retrieves the device identifier
+func (fe *FileEntry) DeviceIdentifier() (uint32, error) {
 	if fe == nil {
 		return 0, fmt.Errorf("invalid file entry")
 	}
@@ -277,9 +264,8 @@ func (fe *FileEntry) GetDeviceIdentifier() (uint32, error) {
 	return fe.Inode.DeviceIdentifier, nil
 }
 
-// GetDeviceNumber retrieves the major and minor device numbers
-// Corresponds to libfsapfs_file_entry_get_device_number
-func (fe *FileEntry) GetDeviceNumber() (major uint32, minor uint32, err error) {
+// DeviceNumber retrieves the major and minor device numbers
+func (fe *FileEntry) DeviceNumber() (major uint32, minor uint32, err error) {
 	if fe == nil {
 		return 0, 0, fmt.Errorf("invalid file entry")
 	}
@@ -296,9 +282,8 @@ func (fe *FileEntry) GetDeviceNumber() (major uint32, minor uint32, err error) {
 	return major, minor, nil
 }
 
-// GetFileMode retrieves the file mode (permissions and type)
-// Corresponds to libfsapfs_file_entry_get_file_mode
-func (fe *FileEntry) GetFileMode() (uint16, error) {
+// FileMode retrieves the file mode (permissions and type)
+func (fe *FileEntry) FileMode() (uint16, error) {
 	if fe == nil {
 		return 0, fmt.Errorf("invalid file entry")
 	}
@@ -310,9 +295,8 @@ func (fe *FileEntry) GetFileMode() (uint16, error) {
 	return fe.Inode.FileMode, nil
 }
 
-// GetNumberOfLinks retrieves the number of hard links
-// Corresponds to libfsapfs_file_entry_get_number_of_links
-func (fe *FileEntry) GetNumberOfLinks() (uint32, error) {
+// NumberOfLinks retrieves the number of hard links
+func (fe *FileEntry) NumberOfLinks() (uint32, error) {
 	if fe == nil {
 		return 0, fmt.Errorf("invalid file entry")
 	}
@@ -324,18 +308,17 @@ func (fe *FileEntry) GetNumberOfLinks() (uint32, error) {
 	return fe.Inode.NumberOfLinks, nil
 }
 
-// GetUTF8NameSize retrieves the size of the UTF-8 encoded name
-// Corresponds to libfsapfs_file_entry_get_utf8_name_size
-func (fe *FileEntry) GetUTF8NameSize() (int, error) {
+// UTF8NameSize retrieves the size of the UTF-8 encoded name
+func (fe *FileEntry) UTF8NameSize() (int, error) {
 	if fe == nil {
 		return 0, fmt.Errorf("invalid file entry")
 	}
 
-	if fe.DirectoryRecord != nil {
-		return fe.DirectoryRecord.GetUTF8NameSize()
+	if fe.DirectoryEntryRecord != nil {
+		return fe.DirectoryEntryRecord.UTF8NameSize()
 	}
 
-	// For root or entries without directory record, use inode name
+	// For root or entries without directory entry record, use inode name
 	if fe.Inode != nil && fe.Inode.Name != nil {
 		return len(fe.Inode.Name) + 1, nil // +1 for null terminator
 	}
@@ -343,18 +326,17 @@ func (fe *FileEntry) GetUTF8NameSize() (int, error) {
 	return 0, fmt.Errorf("no name available")
 }
 
-// GetUTF8Name retrieves the UTF-8 encoded name
-// Corresponds to libfsapfs_file_entry_get_utf8_name
-func (fe *FileEntry) GetUTF8Name() (string, error) {
+// UTF8Name retrieves the UTF-8 encoded name
+func (fe *FileEntry) UTF8Name() (string, error) {
 	if fe == nil {
 		return "", fmt.Errorf("invalid file entry")
 	}
 
-	if fe.DirectoryRecord != nil {
-		return fe.DirectoryRecord.GetUTF8Name()
+	if fe.DirectoryEntryRecord != nil {
+		return fe.DirectoryEntryRecord.UTF8Name()
 	}
 
-	// For root or entries without directory record, use inode name
+	// For root or entries without directory entry record, use inode name
 	if fe.Inode != nil && fe.Inode.Name != nil {
 		return string(fe.Inode.Name), nil
 	}
@@ -362,18 +344,17 @@ func (fe *FileEntry) GetUTF8Name() (string, error) {
 	return "", fmt.Errorf("no name available")
 }
 
-// GetUTF16NameSize retrieves the size of the UTF-16 encoded name
-// Corresponds to libfsapfs_file_entry_get_utf16_name_size
-func (fe *FileEntry) GetUTF16NameSize() (int, error) {
+// UTF16NameSize retrieves the size of the UTF-16 encoded name
+func (fe *FileEntry) UTF16NameSize() (int, error) {
 	if fe == nil {
 		return 0, fmt.Errorf("invalid file entry")
 	}
 
-	if fe.DirectoryRecord != nil {
-		return fe.DirectoryRecord.GetUTF16NameSize()
+	if fe.DirectoryEntryRecord != nil {
+		return fe.DirectoryEntryRecord.UTF16NameSize()
 	}
 
-	// For root or entries without directory record, use inode name
+	// For root or entries without directory entry record, use inode name
 	if fe.Inode != nil && fe.Inode.Name != nil {
 		// Count UTF-16 code units
 		utf16Count := 0
@@ -396,18 +377,17 @@ func (fe *FileEntry) GetUTF16NameSize() (int, error) {
 	return 0, fmt.Errorf("no name available")
 }
 
-// GetUTF16Name retrieves the UTF-16 encoded name
-// Corresponds to libfsapfs_file_entry_get_utf16_name
-func (fe *FileEntry) GetUTF16Name() ([]uint16, error) {
+// UTF16Name retrieves the UTF-16 encoded name
+func (fe *FileEntry) UTF16Name() ([]uint16, error) {
 	if fe == nil {
 		return nil, fmt.Errorf("invalid file entry")
 	}
 
-	if fe.DirectoryRecord != nil {
-		return fe.DirectoryRecord.GetUTF16Name()
+	if fe.DirectoryEntryRecord != nil {
+		return fe.DirectoryEntryRecord.UTF16Name()
 	}
 
-	// For root or entries without directory record, use inode name
+	// For root or entries without directory entry record, use inode name
 	if fe.Inode != nil && fe.Inode.Name != nil {
 		runes := []rune(string(fe.Inode.Name))
 		return utf16.Encode(runes), nil
@@ -417,7 +397,6 @@ func (fe *FileEntry) GetUTF16Name() ([]uint16, error) {
 }
 
 // getExtendedAttributes retrieves the extended attributes (lazy initialization)
-// Corresponds to libfsapfs_internal_file_entry_get_extended_attributes
 func (fe *FileEntry) getExtendedAttributes() error {
 	if fe.ExtendedAttributes != nil {
 		return nil
@@ -432,10 +411,10 @@ func (fe *FileEntry) getExtendedAttributes() error {
 	}
 
 	// Get extended attributes from the file system B-tree
-	attributes, err := fe.FileSystemBTree.GetAttributes(
+	attributes, err := fe.FileSystemBTree.Attributes(
 		fe.FileHandle,
 		fe.Inode.Identifier,
-		fe.TransactionIdentifier,
+		fe.XID,
 	)
 	if err != nil {
 		return fmt.Errorf("unable to retrieve extended attributes: %w", err)
@@ -445,7 +424,7 @@ func (fe *FileEntry) getExtendedAttributes() error {
 
 	// Look for special attributes
 	for _, attr := range attributes {
-		name := attr.GetName()
+		name := attr.NameString()
 		switch name {
 		case "com.apple.decmpfs":
 			fe.CompressedDataAttributeValues = attr
@@ -459,9 +438,8 @@ func (fe *FileEntry) getExtendedAttributes() error {
 	return nil
 }
 
-// GetNumberOfExtendedAttributes retrieves the number of extended attributes
-// Corresponds to libfsapfs_file_entry_get_number_of_extended_attributes
-func (fe *FileEntry) GetNumberOfExtendedAttributes() (int, error) {
+// NumberOfExtendedAttributes retrieves the number of extended attributes
+func (fe *FileEntry) NumberOfExtendedAttributes() (int, error) {
 	if fe == nil {
 		return 0, fmt.Errorf("invalid file entry")
 	}
@@ -474,9 +452,8 @@ func (fe *FileEntry) GetNumberOfExtendedAttributes() (int, error) {
 	return len(fe.ExtendedAttributes), nil
 }
 
-// GetExtendedAttributeByIndex retrieves an extended attribute by index
-// Corresponds to libfsapfs_file_entry_get_extended_attribute_by_index
-func (fe *FileEntry) GetExtendedAttributeByIndex(index int) (*ExtendedAttribute, error) {
+// ExtendedAttributeByIndex retrieves an extended attribute by index
+func (fe *FileEntry) ExtendedAttributeByIndex(index int) (*ExtendedAttribute, error) {
 	if fe == nil {
 		return nil, fmt.Errorf("invalid file entry")
 	}
@@ -497,12 +474,11 @@ func (fe *FileEntry) GetExtendedAttributeByIndex(index int) (*ExtendedAttribute,
 		fe.EncryptionContext,
 		fe.FileSystemBTree,
 		fe.ExtendedAttributes[index],
-		fe.TransactionIdentifier,
+		fe.XID,
 	)
 }
 
 // HasExtendedAttributeByName checks if an extended attribute exists by name
-// Corresponds to libfsapfs_file_entry_has_extended_attribute_by_utf8_name
 func (fe *FileEntry) HasExtendedAttributeByName(name string) (bool, error) {
 	if fe == nil {
 		return false, fmt.Errorf("invalid file entry")
@@ -514,7 +490,7 @@ func (fe *FileEntry) HasExtendedAttributeByName(name string) (bool, error) {
 	}
 
 	for _, attr := range fe.ExtendedAttributes {
-		if attr.GetName() == name {
+		if attr.NameString() == name {
 			return true, nil
 		}
 	}
@@ -522,9 +498,8 @@ func (fe *FileEntry) HasExtendedAttributeByName(name string) (bool, error) {
 	return false, nil
 }
 
-// GetExtendedAttributeByName retrieves an extended attribute by name
-// Corresponds to libfsapfs_file_entry_get_extended_attribute_by_utf8_name
-func (fe *FileEntry) GetExtendedAttributeByName(name string) (*ExtendedAttribute, error) {
+// ExtendedAttributeByName retrieves an extended attribute by name
+func (fe *FileEntry) ExtendedAttributeByName(name string) (*ExtendedAttribute, error) {
 	if fe == nil {
 		return nil, fmt.Errorf("invalid file entry")
 	}
@@ -535,7 +510,7 @@ func (fe *FileEntry) GetExtendedAttributeByName(name string) (*ExtendedAttribute
 	}
 
 	for _, attr := range fe.ExtendedAttributes {
-		if attr.GetName() == name {
+		if attr.NameString() == name {
 			// Create extended attribute from attribute values
 			return NewExtendedAttribute(
 				fe.IOHandle,
@@ -543,7 +518,7 @@ func (fe *FileEntry) GetExtendedAttributeByName(name string) (*ExtendedAttribute
 				fe.EncryptionContext,
 				fe.FileSystemBTree,
 				attr,
-				fe.TransactionIdentifier,
+				fe.XID,
 			)
 		}
 	}
@@ -552,7 +527,6 @@ func (fe *FileEntry) GetExtendedAttributeByName(name string) (*ExtendedAttribute
 }
 
 // HasExtendedAttributeByUTF16Name checks if an extended attribute exists by UTF-16 name
-// Corresponds to libfsapfs_file_entry_has_extended_attribute_by_utf16_name
 func (fe *FileEntry) HasExtendedAttributeByUTF16Name(utf16Name []uint16) (bool, error) {
 	if fe == nil {
 		return false, fmt.Errorf("invalid file entry")
@@ -565,9 +539,8 @@ func (fe *FileEntry) HasExtendedAttributeByUTF16Name(utf16Name []uint16) (bool, 
 	return fe.HasExtendedAttributeByName(name)
 }
 
-// GetExtendedAttributeByUTF16Name retrieves an extended attribute by UTF-16 name
-// Corresponds to libfsapfs_file_entry_get_extended_attribute_by_utf16_name
-func (fe *FileEntry) GetExtendedAttributeByUTF16Name(utf16Name []uint16) (*ExtendedAttribute, error) {
+// ExtendedAttributeByUTF16Name retrieves an extended attribute by UTF-16 name
+func (fe *FileEntry) ExtendedAttributeByUTF16Name(utf16Name []uint16) (*ExtendedAttribute, error) {
 	if fe == nil {
 		return nil, fmt.Errorf("invalid file entry")
 	}
@@ -576,11 +549,10 @@ func (fe *FileEntry) GetExtendedAttributeByUTF16Name(utf16Name []uint16) (*Exten
 	runes := utf16.Decode(utf16Name)
 	name := string(runes)
 
-	return fe.GetExtendedAttributeByName(name)
+	return fe.ExtendedAttributeByName(name)
 }
 
 // getSymbolicLinkData retrieves the symbolic link data (lazy initialization)
-// Corresponds to libfsapfs_internal_file_entry_get_symbolic_link_data
 func (fe *FileEntry) getSymbolicLinkData() error {
 	if fe.SymbolicLinkData != nil {
 		return nil
@@ -596,12 +568,12 @@ func (fe *FileEntry) getSymbolicLinkData() error {
 	}
 
 	// Get data stream from symbolic link attribute
-	dataStream, err := fe.SymbolicLinkAttributeValues.GetDataStream(
+	dataStream, err := fe.SymbolicLinkAttributeValues.DataStream(
 		fe.IOHandle,
 		fe.FileHandle,
 		fe.EncryptionContext,
 		fe.FileSystemBTree,
-		fe.TransactionIdentifier,
+		fe.XID,
 	)
 	if err != nil {
 		return fmt.Errorf("unable to retrieve symbolic link data stream: %w", err)
@@ -625,9 +597,8 @@ func (fe *FileEntry) getSymbolicLinkData() error {
 	return nil
 }
 
-// GetSymbolicLinkTargetSize retrieves the size of the symbolic link target
-// Corresponds to libfsapfs_file_entry_get_utf8_symbolic_link_target_size
-func (fe *FileEntry) GetSymbolicLinkTargetSize() (int, error) {
+// SymbolicLinkTargetSize retrieves the size of the symbolic link target
+func (fe *FileEntry) SymbolicLinkTargetSize() (int, error) {
 	if fe == nil {
 		return 0, fmt.Errorf("invalid file entry")
 	}
@@ -640,9 +611,8 @@ func (fe *FileEntry) GetSymbolicLinkTargetSize() (int, error) {
 	return len(fe.SymbolicLinkData) + 1, nil // +1 for null terminator
 }
 
-// GetSymbolicLinkTarget retrieves the symbolic link target
-// Corresponds to libfsapfs_file_entry_get_utf8_symbolic_link_target
-func (fe *FileEntry) GetSymbolicLinkTarget() (string, error) {
+// SymbolicLinkTarget retrieves the symbolic link target
+func (fe *FileEntry) SymbolicLinkTarget() (string, error) {
 	if fe == nil {
 		return "", fmt.Errorf("invalid file entry")
 	}
@@ -653,16 +623,15 @@ func (fe *FileEntry) GetSymbolicLinkTarget() (string, error) {
 	}
 
 	// Trim trailing null bytes and spaces to prevent "invalid argument" errors
-	// when creating symlinks on the filesystem
+	// when creating symlinks on the file system
 	target := string(fe.SymbolicLinkData)
 	target = strings.TrimRight(target, "\x00 \t\r\n")
 
 	return target, nil
 }
 
-// GetSymbolicLinkTargetUTF16Size retrieves the size of the UTF-16 encoded symbolic link target
-// Corresponds to libfsapfs_file_entry_get_utf16_symbolic_link_target_size
-func (fe *FileEntry) GetSymbolicLinkTargetUTF16Size() (int, error) {
+// SymbolicLinkTargetUTF16Size retrieves the size of the UTF-16 encoded symbolic link target
+func (fe *FileEntry) SymbolicLinkTargetUTF16Size() (int, error) {
 	if fe == nil {
 		return 0, fmt.Errorf("invalid file entry")
 	}
@@ -691,9 +660,8 @@ func (fe *FileEntry) GetSymbolicLinkTargetUTF16Size() (int, error) {
 	return utf16Count + 1, nil // +1 for null terminator
 }
 
-// GetSymbolicLinkTargetUTF16 retrieves the UTF-16 encoded symbolic link target
-// Corresponds to libfsapfs_file_entry_get_utf16_symbolic_link_target
-func (fe *FileEntry) GetSymbolicLinkTargetUTF16() ([]uint16, error) {
+// SymbolicLinkTargetUTF16 retrieves the UTF-16 encoded symbolic link target
+func (fe *FileEntry) SymbolicLinkTargetUTF16() ([]uint16, error) {
 	if fe == nil {
 		return nil, fmt.Errorf("invalid file entry")
 	}
@@ -708,7 +676,6 @@ func (fe *FileEntry) GetSymbolicLinkTargetUTF16() ([]uint16, error) {
 }
 
 // getDirectoryEntries retrieves the directory entries (lazy initialization)
-// Corresponds to libfsapfs_internal_file_entry_get_directory_entries
 func (fe *FileEntry) getDirectoryEntries() error {
 	if fe.DirectoryEntries != nil {
 		return nil
@@ -723,10 +690,10 @@ func (fe *FileEntry) getDirectoryEntries() error {
 	}
 
 	// Get directory entries from the file system B-tree
-	entries, err := fe.FileSystemBTree.GetDirectoryEntries(
+	entries, err := fe.FileSystemBTree.DirectoryEntries(
 		fe.FileHandle,
 		fe.Inode.Identifier,
-		fe.TransactionIdentifier,
+		fe.XID,
 	)
 	if err != nil {
 		return fmt.Errorf("unable to retrieve directory entries: %w", err)
@@ -736,9 +703,8 @@ func (fe *FileEntry) getDirectoryEntries() error {
 	return nil
 }
 
-// GetNumberOfSubFileEntries retrieves the number of sub-file entries (directory children)
-// Corresponds to libfsapfs_file_entry_get_number_of_sub_file_entries
-func (fe *FileEntry) GetNumberOfSubFileEntries() (int, error) {
+// NumberOfSubFileEntries retrieves the number of sub-file entries (directory children)
+func (fe *FileEntry) NumberOfSubFileEntries() (int, error) {
 	if fe == nil {
 		return 0, fmt.Errorf("invalid file entry")
 	}
@@ -751,9 +717,8 @@ func (fe *FileEntry) GetNumberOfSubFileEntries() (int, error) {
 	return len(fe.DirectoryEntries), nil
 }
 
-// GetSubFileEntryByIndex retrieves a sub-file entry by index
-// Corresponds to libfsapfs_file_entry_get_sub_file_entry_by_index
-func (fe *FileEntry) GetSubFileEntryByIndex(index int) (*FileEntry, error) {
+// SubFileEntryByIndex retrieves a sub-file entry by index
+func (fe *FileEntry) SubFileEntryByIndex(index int) (*FileEntry, error) {
 	if fe == nil {
 		return nil, fmt.Errorf("invalid file entry")
 	}
@@ -767,16 +732,16 @@ func (fe *FileEntry) GetSubFileEntryByIndex(index int) (*FileEntry, error) {
 		return nil, fmt.Errorf("invalid sub-file entry index: %d", index)
 	}
 
-	directoryRecord := fe.DirectoryEntries[index]
+	directoryEntryRecord := fe.DirectoryEntries[index]
 
 	// Get inode for this directory entry
-	inode, err := fe.FileSystemBTree.GetInodeByIdentifier(
+	inode, err := fe.FileSystemBTree.InodeByIdentifier(
 		fe.FileHandle,
-		directoryRecord.Identifier,
-		fe.TransactionIdentifier,
+		directoryEntryRecord.Identifier,
+		fe.XID,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("unable to retrieve inode for identifier %d: %w", directoryRecord.Identifier, err)
+		return nil, fmt.Errorf("unable to retrieve inode for identifier %d: %w", directoryEntryRecord.Identifier, err)
 	}
 
 	// Create file entry
@@ -786,14 +751,13 @@ func (fe *FileEntry) GetSubFileEntryByIndex(index int) (*FileEntry, error) {
 		fe.EncryptionContext,
 		fe.FileSystemBTree,
 		inode,
-		directoryRecord,
-		fe.TransactionIdentifier,
+		directoryEntryRecord,
+		fe.XID,
 	)
 }
 
-// GetSubFileEntryByName retrieves a sub-file entry by name
-// Corresponds to libfsapfs_file_entry_get_sub_file_entry_by_utf8_name
-func (fe *FileEntry) GetSubFileEntryByName(name string) (*FileEntry, error) {
+// SubFileEntryByName retrieves a sub-file entry by name
+func (fe *FileEntry) SubFileEntryByName(name string) (*FileEntry, error) {
 	if fe == nil {
 		return nil, fmt.Errorf("invalid file entry")
 	}
@@ -803,21 +767,21 @@ func (fe *FileEntry) GetSubFileEntryByName(name string) (*FileEntry, error) {
 		return nil, fmt.Errorf("unable to retrieve directory entries: %w", err)
 	}
 
-	for _, directoryRecord := range fe.DirectoryEntries {
-		entryName, err := directoryRecord.GetUTF8Name()
+	for _, directoryEntryRecord := range fe.DirectoryEntries {
+		entryName, err := directoryEntryRecord.UTF8Name()
 		if err != nil {
 			continue
 		}
 
 		if entryName == name {
 			// Get inode for this directory entry
-			inode, err := fe.FileSystemBTree.GetInodeByIdentifier(
+			inode, err := fe.FileSystemBTree.InodeByIdentifier(
 				fe.FileHandle,
-				directoryRecord.Identifier,
-				fe.TransactionIdentifier,
+				directoryEntryRecord.Identifier,
+				fe.XID,
 			)
 			if err != nil {
-				return nil, fmt.Errorf("unable to retrieve inode for identifier %d: %w", directoryRecord.Identifier, err)
+				return nil, fmt.Errorf("unable to retrieve inode for identifier %d: %w", directoryEntryRecord.Identifier, err)
 			}
 
 			// Create file entry
@@ -827,8 +791,8 @@ func (fe *FileEntry) GetSubFileEntryByName(name string) (*FileEntry, error) {
 				fe.EncryptionContext,
 				fe.FileSystemBTree,
 				inode,
-				directoryRecord,
-				fe.TransactionIdentifier,
+				directoryEntryRecord,
+				fe.XID,
 			)
 		}
 	}
@@ -836,9 +800,8 @@ func (fe *FileEntry) GetSubFileEntryByName(name string) (*FileEntry, error) {
 	return nil, fmt.Errorf("sub-file entry not found: %s", name)
 }
 
-// GetSubFileEntryByUTF16Name retrieves a sub-file entry by UTF-16 name
-// Corresponds to libfsapfs_file_entry_get_sub_file_entry_by_utf16_name
-func (fe *FileEntry) GetSubFileEntryByUTF16Name(utf16Name []uint16) (*FileEntry, error) {
+// SubFileEntryByUTF16Name retrieves a sub-file entry by UTF-16 name
+func (fe *FileEntry) SubFileEntryByUTF16Name(utf16Name []uint16) (*FileEntry, error) {
 	if fe == nil {
 		return nil, fmt.Errorf("invalid file entry")
 	}
@@ -847,11 +810,10 @@ func (fe *FileEntry) GetSubFileEntryByUTF16Name(utf16Name []uint16) (*FileEntry,
 	runes := utf16.Decode(utf16Name)
 	name := string(runes)
 
-	return fe.GetSubFileEntryByName(name)
+	return fe.SubFileEntryByName(name)
 }
 
 // getFileExtents retrieves the file extents (lazy initialization)
-// Corresponds to libfsapfs_internal_file_entry_get_file_extents
 func (fe *FileEntry) getFileExtents() error {
 	if fe.FileExtents != nil {
 		return nil
@@ -867,10 +829,10 @@ func (fe *FileEntry) getFileExtents() error {
 
 	// Get file extents from the file system B-tree
 	// First try using the inode identifier (most common case)
-	extents, err := fe.FileSystemBTree.GetFileExtents(
+	extents, err := fe.FileSystemBTree.FileExtents(
 		fe.FileHandle,
 		fe.Inode.Identifier,
-		fe.TransactionIdentifier,
+		fe.XID,
 	)
 	if err != nil {
 		return fmt.Errorf("unable to retrieve file extents: %w", err)
@@ -879,10 +841,10 @@ func (fe *FileEntry) getFileExtents() error {
 	// If no extents found and DataStreamIdentifier is set, try using that
 	// This handles files where data is stored via a separate data stream
 	if len(extents) == 0 && fe.Inode.DataStreamIdentifier != 0 {
-		extents, err = fe.FileSystemBTree.GetFileExtents(
+		extents, err = fe.FileSystemBTree.FileExtents(
 			fe.FileHandle,
 			fe.Inode.DataStreamIdentifier,
-			fe.TransactionIdentifier,
+			fe.XID,
 		)
 		if err != nil {
 			return fmt.Errorf("unable to retrieve file extents via data stream ID: %w", err)
@@ -914,7 +876,6 @@ func internalCompressionMethod(decmpfsType uint32) (int, error) {
 }
 
 // getDataStream retrieves the data stream (lazy initialization)
-// Corresponds to libfsapfs_internal_file_entry_get_data_stream
 func (fe *FileEntry) getDataStream() error {
 	if fe.DataStream != nil {
 		return nil
@@ -972,12 +933,12 @@ func (fe *FileEntry) getDataStream() error {
 					} else {
 						// Compressed data is stored in resource fork
 						if fe.ResourceForkAttributeValues != nil {
-							resourceForkStream, err := fe.ResourceForkAttributeValues.GetDataStream(
+							resourceForkStream, err := fe.ResourceForkAttributeValues.DataStream(
 								fe.IOHandle,
 								fe.FileHandle,
 								fe.EncryptionContext,
 								fe.FileSystemBTree,
-								fe.TransactionIdentifier,
+								fe.XID,
 							)
 							if err != nil {
 								return fmt.Errorf("unable to get resource fork data stream: %w", err)
@@ -1017,7 +978,7 @@ func (fe *FileEntry) getDataStream() error {
 
 	if len(fe.FileExtents) == 0 {
 		// Check if this is a zero-length file
-		size, err := fe.GetDataSize()
+		size, err := fe.DataSize()
 		if err == nil && size == 0 {
 			// Create empty data stream for zero-length files
 			dataStream, err := NewDataStreamFromData([]byte{})
@@ -1038,7 +999,7 @@ func (fe *FileEntry) getDataStream() error {
 	}
 
 	// Get data size
-	size, err := fe.GetDataSize()
+	size, err := fe.DataSize()
 	if err != nil {
 		return fmt.Errorf("unable to get data size: %w", err)
 	}
@@ -1065,7 +1026,6 @@ func (fe *FileEntry) getDataStream() error {
 }
 
 // Read reads data at the current offset into a buffer
-// Corresponds to libfsapfs_file_entry_read_buffer
 func (fe *FileEntry) Read(buffer []byte) (int, error) {
 	if fe == nil {
 		return 0, fmt.Errorf("invalid file entry")
@@ -1089,7 +1049,6 @@ func (fe *FileEntry) Read(buffer []byte) (int, error) {
 }
 
 // ReadAt reads data at a specific offset
-// Corresponds to libfsapfs_file_entry_read_buffer_at_offset
 func (fe *FileEntry) ReadAt(buffer []byte, offset int64) (int, error) {
 	if fe == nil {
 		return 0, fmt.Errorf("invalid file entry")
@@ -1110,14 +1069,13 @@ func (fe *FileEntry) ReadAt(buffer []byte, offset int64) (int, error) {
 }
 
 // Seek seeks to a certain offset
-// Corresponds to libfsapfs_file_entry_seek_offset
 func (fe *FileEntry) Seek(offset int64, whence int) (int64, error) {
 	if fe == nil {
 		return 0, fmt.Errorf("invalid file entry")
 	}
 
 	// Get the data size for calculations
-	size, err := fe.GetDataSize()
+	size, err := fe.DataSize()
 	if err != nil {
 		return 0, fmt.Errorf("unable to get data size: %w", err)
 	}
@@ -1144,9 +1102,8 @@ func (fe *FileEntry) Seek(offset int64, whence int) (int64, error) {
 	return newOffset, nil
 }
 
-// GetOffset retrieves the current offset
-// Corresponds to libfsapfs_file_entry_get_offset
-func (fe *FileEntry) GetOffset() (int64, error) {
+// Offset retrieves the current offset
+func (fe *FileEntry) Offset() (int64, error) {
 	if fe == nil {
 		return 0, fmt.Errorf("invalid file entry")
 	}
@@ -1154,16 +1111,15 @@ func (fe *FileEntry) GetOffset() (int64, error) {
 	return fe.currentOffset, nil
 }
 
-// GetDataSize retrieves the data size (lazy calculation)
-// Corresponds to libfsapfs_internal_file_entry_get_data_size
-func (fe *FileEntry) GetDataSize() (int64, error) {
+// DataSize retrieves the data size (lazy calculation)
+func (fe *FileEntry) DataSize() (int64, error) {
 	if fe == nil {
 		return 0, fmt.Errorf("invalid file entry")
 	}
 
 	// Return cached value if available
-	if fe.DataSize != -1 {
-		return fe.DataSize, nil
+	if fe.dataSize != -1 {
+		return fe.dataSize, nil
 	}
 
 	if fe.Inode == nil {
@@ -1176,31 +1132,29 @@ func (fe *FileEntry) GetDataSize() (int64, error) {
 		if err := fe.getExtendedAttributes(); err == nil && fe.CompressedDataAttributeValues != nil {
 			if len(fe.CompressedDataAttributeValues.ValueData) >= 16 {
 				if header, err := ParseCompressedDataHeader(fe.CompressedDataAttributeValues.ValueData); err == nil && header != nil {
-					fe.DataSize = int64(header.UncompressedDataSize)
-					return fe.DataSize, nil
+					fe.dataSize = int64(header.UncompressedDataSize)
+					return fe.dataSize, nil
 				}
 			}
 		}
 	}
 
 	// Use data stream size from inode
-	fe.DataSize = int64(fe.Inode.DataStreamSize)
-	return fe.DataSize, nil
+	fe.dataSize = int64(fe.Inode.DataStreamSize)
+	return fe.dataSize, nil
 }
 
-// GetSize retrieves the size
-// Corresponds to libfsapfs_file_entry_get_size
-func (fe *FileEntry) GetSize() (uint64, error) {
-	size, err := fe.GetDataSize()
+// Size retrieves the size
+func (fe *FileEntry) Size() (uint64, error) {
+	size, err := fe.DataSize()
 	if err != nil {
 		return 0, err
 	}
 	return uint64(size), nil
 }
 
-// GetNumberOfExtents retrieves the number of extents
-// Corresponds to libfsapfs_file_entry_get_number_of_extents
-func (fe *FileEntry) GetNumberOfExtents() (int, error) {
+// NumberOfExtents retrieves the number of extents
+func (fe *FileEntry) NumberOfExtents() (int, error) {
 	if fe == nil {
 		return 0, fmt.Errorf("invalid file entry")
 	}
@@ -1213,9 +1167,8 @@ func (fe *FileEntry) GetNumberOfExtents() (int, error) {
 	return len(fe.FileExtents), nil
 }
 
-// GetExtentByIndex retrieves an extent by index
-// Corresponds to libfsapfs_file_entry_get_extent_by_index
-func (fe *FileEntry) GetExtentByIndex(index int) (offset int64, size uint64, flags uint32, err error) {
+// ExtentByIndex retrieves an extent by index
+func (fe *FileEntry) ExtentByIndex(index int) (offset int64, size uint64, flags uint32, err error) {
 	if fe == nil {
 		return 0, 0, 0, fmt.Errorf("invalid file entry")
 	}

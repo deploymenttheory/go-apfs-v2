@@ -1,7 +1,7 @@
 // CLI acceptance tests for HFS+ images, exercised through the built binary
 // against the committed HFS+ fixture. Complements the pkg/hfsplus library
 // tests by covering the info/list/cat/extract path end to end.
-package cli_test
+package acceptance
 
 import (
 	"crypto/sha256"
@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/deploymenttheory/go-apfs-v2/pkg/exitcode"
 )
 
 func requireHFSFixture(t *testing.T) {
@@ -18,12 +20,12 @@ func requireHFSFixture(t *testing.T) {
 	}
 }
 
-// TestHFSInfoReportsFilesystem confirms the CLI detects and reports HFS+.
-func TestHFSInfoReportsFilesystem(t *testing.T) {
+// TestHFSInfoReportsFileSystem confirms the CLI detects and reports HFS+.
+func TestHFSInfoReportsFileSystem(t *testing.T) {
 	requireHFSFixture(t)
 	out := mustRun(t, "info", "-o", "json", fixtureHFS)
-	if !strings.Contains(out, `"filesystem":"hfs+"`) {
-		t.Errorf("info did not report hfs+ filesystem:\n%s", out)
+	if !strings.Contains(out, `"fileSystem":"hfs+"`) {
+		t.Errorf("info did not report hfs+ file system:\n%s", out)
 	}
 	if !strings.Contains(out, hfsManifest.VolumeName) {
 		t.Errorf("info missing volume name %q:\n%s", hfsManifest.VolumeName, out)
@@ -49,7 +51,7 @@ func TestHFSCatMatchesManifest(t *testing.T) {
 			continue
 		}
 		out, stderr, code := run(t, "cat", fixtureHFS, "/"+path)
-		if code != 0 {
+		if code != exitcode.OK {
 			t.Errorf("cat %s exited %d: %s", path, code, stderr)
 			continue
 		}
@@ -66,7 +68,7 @@ func TestHFSExtractMatchesManifest(t *testing.T) {
 	requireHFSFixture(t)
 	dest := t.TempDir()
 	// Auto symlink handling keeps exit 0 on every OS.
-	if _, stderr, code := run(t, "extract", fixtureHFS, "-C", dest); code != 0 {
+	if _, stderr, code := run(t, "extract", fixtureHFS, "-C", dest); code != exitcode.OK {
 		t.Fatalf("extract exited %d: %s", code, stderr)
 	}
 

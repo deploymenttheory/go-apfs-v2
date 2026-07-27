@@ -15,7 +15,6 @@ var CompressedDataHeaderSignature = [4]byte{'f', 'p', 'm', 'c'}
 const CompressedDataHeaderSize = 16
 
 // CompressedDataHeader represents the header for compressed data in APFS
-// Corresponds to fsapfs_compressed_data_header_t and libfsapfs_compressed_data_header_t
 type CompressedDataHeader struct {
 	// The compression method
 	CompressionMethod uint32
@@ -25,7 +24,6 @@ type CompressedDataHeader struct {
 }
 
 // NewCompressedDataHeader creates a new compressed data header
-// Corresponds to libfsapfs_compressed_data_header_initialize
 func NewCompressedDataHeader() (*CompressedDataHeader, error) {
 	return &CompressedDataHeader{
 		CompressionMethod:    0,
@@ -33,19 +31,8 @@ func NewCompressedDataHeader() (*CompressedDataHeader, error) {
 	}, nil
 }
 
-// Free releases resources associated with the compressed data header
-// In Go, this is primarily for consistency with the C API
-func (cdh *CompressedDataHeader) Free() error {
-	if cdh == nil {
-		return fmt.Errorf("invalid compressed data header")
-	}
-	// Nothing to free in Go, but method exists for API consistency
-	return nil
-}
-
 // ReadData reads the compressed data header from a byte slice
 // Returns true if successful, false if the signature does not match
-// Corresponds to libfsapfs_compressed_data_header_read_data
 func (cdh *CompressedDataHeader) ReadData(data []byte) (bool, error) {
 	if cdh == nil {
 		return false, fmt.Errorf("invalid compressed data header")

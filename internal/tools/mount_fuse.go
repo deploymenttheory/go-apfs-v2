@@ -1,8 +1,7 @@
 //go:build linux || darwin
 
-// FUSE filesystem integration for APFS mounting
+// FUSE file system integration for APFS mounting
 // Uses github.com/hanwen/go-fuse/v2 for FUSE operations
-// Corresponds to libfsapfs mount_fuse.c and mount_fuse.h
 package tools
 
 import (
@@ -16,7 +15,7 @@ import (
 	"github.com/hanwen/go-fuse/v2/fuse"
 )
 
-// APFSFileSystem implements the FUSE filesystem interface for APFS
+// APFSFileSystem implements the FUSE file system interface for APFS
 type APFSFileSystem struct {
 	fs.Inode
 	mountHandle    *MountHandle
@@ -27,14 +26,14 @@ type APFSFileSystem struct {
 	nextFileHandle uint64
 }
 
-// NewAPFSFileSystem creates a new APFS FUSE filesystem
+// NewAPFSFileSystem creates a new APFS FUSE file system
 func NewAPFSFileSystem(mountHandle *MountHandle, volumeIndex int) (*APFSFileSystem, error) {
 	if mountHandle == nil {
 		return nil, fmt.Errorf("mount handle cannot be nil")
 	}
 
 	// Get the volume
-	volume, err := mountHandle.GetVolumeByIndex(volumeIndex)
+	volume, err := mountHandle.VolumeByIndex(volumeIndex)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get volume %d: %w", volumeIndex, err)
 	}
@@ -89,18 +88,18 @@ func (afs *APFSFileSystem) Lookup(ctx context.Context, name string, out *fuse.En
 	}
 
 	// Search for the child
-	numChildren, err := parentEntry.GetNumberOfSubFileEntries()
+	numChildren, err := parentEntry.NumberOfSubFileEntries()
 	if err != nil {
 		return nil, syscall.EIO
 	}
 
 	for i := 0; i < numChildren; i++ {
-		childEntry, err := parentEntry.GetSubFileEntryByIndex(i)
+		childEntry, err := parentEntry.SubFileEntryByIndex(i)
 		if err != nil {
 			continue
 		}
 
-		childName, err := childEntry.GetName()
+		childName, err := childEntry.Name()
 		if err != nil {
 			continue
 		}
@@ -112,7 +111,7 @@ func (afs *APFSFileSystem) Lookup(ctx context.Context, name string, out *fuse.En
 			}
 
 			// Get the inode number
-			inode, err := childEntry.GetIdentifier()
+			inode, err := childEntry.Identifier()
 			if err != nil {
 				return nil, syscall.EIO
 			}
@@ -151,7 +150,7 @@ func (afs *APFSFileSystem) Readdir(ctx context.Context) (fs.DirStream, syscall.E
 		return nil, syscall.ENOENT
 	}
 
-	numChildren, err := entry.GetNumberOfSubFileEntries()
+	numChildren, err := entry.NumberOfSubFileEntries()
 	if err != nil {
 		return nil, syscall.EIO
 	}
@@ -176,22 +175,22 @@ func (afs *APFSFileSystem) Readdir(ctx context.Context) (fs.DirStream, syscall.E
 
 	// Add children
 	for i := 0; i < numChildren; i++ {
-		childEntry, err := entry.GetSubFileEntryByIndex(i)
+		childEntry, err := entry.SubFileEntryByIndex(i)
 		if err != nil {
 			continue
 		}
 
-		childName, err := childEntry.GetName()
+		childName, err := childEntry.Name()
 		if err != nil {
 			continue
 		}
 
-		childInode, err := childEntry.GetIdentifier()
+		childInode, err := childEntry.Identifier()
 		if err != nil {
 			continue
 		}
 
-		fileMode, err := childEntry.GetFileMode()
+		fileMode, err := childEntry.FileMode()
 		if err != nil {
 			continue
 		}
@@ -231,7 +230,7 @@ func (afs *APFSFileSystem) Readlink(ctx context.Context) ([]byte, syscall.Errno)
 		return nil, syscall.ENOENT
 	}
 
-	target, err := entry.GetSymbolicLinkTarget()
+	target, err := entry.SymbolicLinkTarget()
 	if err != nil {
 		return nil, syscall.EIO
 	}
@@ -249,7 +248,7 @@ func (afs *APFSFileSystem) getFileEntryForInode(inode uint64) (*MountFileEntry, 
 
 	// For root inode (typically 1 or 2), get root directory
 	if inode == 1 || inode == 2 {
-		root, err := afs.fileSystem.GetRootFileEntry()
+		root, err := afs.fileSystem.RootFileEntry()
 		if err != nil {
 			return nil, err
 		}
@@ -266,52 +265,52 @@ func (afs *APFSFileSystem) getFileEntryForInode(inode uint64) (*MountFileEntry, 
 
 func (afs *APFSFileSystem) fillAttr(entry *MountFileEntry, attr *fuse.Attr) error {
 	// Get file mode
-	fileMode, err := entry.GetFileMode()
+	fileMode, err := entry.FileMode()
 	if err != nil {
 		return err
 	}
 	attr.Mode = uint32(fileMode)
 
 	// Get size
-	size, err := entry.GetSize()
+	size, err := entry.Size()
 	if err != nil {
 		return err
 	}
 	attr.Size = size
 
 	// Get inode
-	inode, err := entry.GetIdentifier()
+	inode, err := entry.Identifier()
 	if err != nil {
 		return err
 	}
 	attr.Ino = inode
 
 	// Get owner and group
-	uid, err := entry.GetOwnerIdentifier()
+	uid, err := entry.OwnerIdentifier()
 	if err == nil {
 		attr.Uid = uid
 	}
-	gid, err := entry.GetGroupIdentifier()
+	gid, err := entry.GroupIdentifier()
 	if err == nil {
 		attr.Gid = gid
 	}
 
 	// Get number of links
-	nlink, err := entry.GetNumberOfHardLinks()
+	nlink, err := entry.NumberOfHardLinks()
 	if err == nil {
 		attr.Nlink = nlink
 	}
 
 	// Get timestamps (convert from nanoseconds to seconds)
-	if atime, err := entry.GetAccessTime(); err == nil {
+	if atime, err := entry.AccessTime(); err == nil {
 		atimeVal := time.Unix(0, atime)
 		attr.SetTimes(&atimeVal, &atimeVal, &atimeVal)
 	}
-	if mtime, err := entry.GetModificationTime(); err == nil {
+	if mtime, err := entry.ModificationTime(); err == nil {
 		attr.Mtime = uint64(mtime / 1e9)
 		attr.Mtimensec = uint32(mtime % 1e9)
 	}
-	if ctime, err := entry.GetInodeChangeTime(); err == nil {
+	if ctime, err := entry.InodeChangeTime(); err == nil {
 		attr.Ctime = uint64(ctime / 1e9)
 		attr.Ctimensec = uint32(ctime % 1e9)
 	}
@@ -346,10 +345,10 @@ func (fh *APFSFileHandle) Read(ctx context.Context, dest []byte, off int64) (fus
 
 // MountAPFS mounts an APFS volume using FUSE
 func MountAPFS(mountHandle *MountHandle, volumeIndex int, mountPoint string, debug bool) (MountServer, error) {
-	// Create the APFS filesystem
+	// Create the APFS file system
 	root, err := NewAPFSFileSystem(mountHandle, volumeIndex)
 	if err != nil {
-		return nil, fmt.Errorf("unable to create APFS filesystem: %w", err)
+		return nil, fmt.Errorf("unable to create APFS file system: %w", err)
 	}
 
 	// Mount options
@@ -363,7 +362,7 @@ func MountAPFS(mountHandle *MountHandle, volumeIndex int, mountPoint string, deb
 		},
 	}
 
-	// Mount the filesystem
+	// Mount the file system
 	server, err := fs.Mount(mountPoint, root, opts)
 	if err != nil {
 		return nil, fmt.Errorf("unable to mount: %w", err)

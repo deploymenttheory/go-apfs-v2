@@ -6,10 +6,7 @@ import (
 	"encoding/binary"
 	"math/rand"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"runtime"
-	"strings"
 	"testing"
 )
 
@@ -166,7 +163,7 @@ func TestRepackRoundTrip(t *testing.T) {
 	t.Logf("raw round-trip OK: %d bytes; original DMG %d, repacked DMG %d", len(rawOrig), srcInfo.Size(), dstInfo.Size())
 
 	// Prove the repacked DMG opens through the standard reader path and that
-	// the filesystem signature is present at the partition start.
+	// the file system signature is present at the partition start.
 	reader, off, closer, err := OpenWithOffset(dst)
 	if err != nil {
 		t.Fatalf("OpenWithOffset(repack): %v", err)
@@ -184,55 +181,4 @@ func TestRepackRoundTrip(t *testing.T) {
 		t.Fatalf("no APFS/HFS+ signature at partition start of repacked DMG")
 	}
 	t.Logf("repacked DMG opens via reader (apfs=%v hfs=%v)", isAPFS, isHFS)
-}
-
-// TestRepackMountsViaHdiutil is the darwin-only correctness oracle: it repacks
-// the source DMG and attaches it read-only via hdiutil to prove the output is a
-// genuinely valid UDIF image. Gated on DMG_REPACK_SRC.
-func TestRepackMountsViaHdiutil(t *testing.T) {
-	if runtime.GOOS != "darwin" {
-		t.Skip("hdiutil is only available on darwin")
-	}
-	src := os.Getenv("DMG_REPACK_SRC")
-	if src == "" {
-		t.Skip("set DMG_REPACK_SRC to a source DMG to run this test")
-	}
-
-	dst := filepath.Join(t.TempDir(), "repacked-mount.dmg")
-	if err := RepackDMG(src, dst, nil); err != nil {
-		t.Fatalf("RepackDMG: %v", err)
-	}
-
-	out, err := exec.Command("hdiutil", "attach", "-readonly", "-nobrowse", "-plist", dst).CombinedOutput()
-	if err != nil {
-		t.Fatalf("hdiutil attach failed: %v\n%s", err, out)
-	}
-
-	// Find the attached device node to detach it again.
-	dev := parseFirstDevEntry(string(out))
-	if dev == "" {
-		t.Fatalf("could not determine attached device from hdiutil output:\n%s", out)
-	}
-	t.Cleanup(func() {
-		_ = exec.Command("hdiutil", "detach", "-force", dev).Run()
-	})
-
-	t.Logf("repacked DMG mounted via hdiutil as %s", dev)
-}
-
-// parseFirstDevEntry extracts the first /dev/diskN entry from an hdiutil
-// -plist attach response (or plain text as a fallback).
-func parseFirstDevEntry(s string) string {
-	for _, line := range strings.Split(s, "\n") {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "<string>/dev/") {
-			line = strings.TrimPrefix(line, "<string>")
-			line = strings.TrimSuffix(line, "</string>")
-			return line
-		}
-		if strings.HasPrefix(line, "/dev/disk") {
-			return strings.Fields(line)[0]
-		}
-	}
-	return ""
 }

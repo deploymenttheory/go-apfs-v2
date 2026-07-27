@@ -7,9 +7,8 @@ import (
 	"unicode/utf8"
 )
 
-// DirectoryRecord represents an APFS directory record (directory entry)
-// Corresponds to libfsapfs_directory_record_t
-type DirectoryRecord struct {
+// DirectoryEntryRecord represents an APFS directory entry record (directory entry)
+type DirectoryEntryRecord struct {
 	// Identifier (inode number of the directory entry)
 	Identifier uint64
 
@@ -35,7 +34,7 @@ type DirectoryRecord struct {
 	ExtendedFields []ExtendedField
 }
 
-// ExtendedField represents an extended field in a directory record
+// ExtendedField represents an extended field in a directory entry record
 type ExtendedField struct {
 	Type  uint8
 	Flags uint8
@@ -44,19 +43,18 @@ type ExtendedField struct {
 
 // DirectoryRecordExtendedFieldType constants
 const (
-	DirectoryRecordExtendedFieldTypeSiblingID = 1
+	DirectoryEntryExtendedFieldTypeSiblingID = 1
 )
 
-// NewDirectoryRecord creates a new directory record
-// Corresponds to libfsapfs_directory_record_initialize
-func NewDirectoryRecord() *DirectoryRecord {
-	return &DirectoryRecord{}
+// NewDirectoryEntryRecord creates a new directory entry record
+func NewDirectoryEntryRecord() *DirectoryEntryRecord {
+	return &DirectoryEntryRecord{}
 }
 
-// ReadKeyData reads the directory record key data from a B-tree entry
-func (dr *DirectoryRecord) ReadKeyData(data []byte) error {
+// ReadKeyData reads the directory entry record key data from a B-tree entry
+func (dr *DirectoryEntryRecord) ReadKeyData(data []byte) error {
 	if dr == nil {
-		return fmt.Errorf("invalid directory record")
+		return fmt.Errorf("invalid directory entry record")
 	}
 
 	if dr.Name != nil {
@@ -83,7 +81,7 @@ func (dr *DirectoryRecord) ReadKeyData(data []byte) error {
 	// Determine if this key contains a hash
 	// If there's more data than just the name, it might be a hash variant
 	if int(nameSize) < (len(data) - dataOffset) {
-		// This is a directory record with hash
+		// This is a directory entry record with hash
 		if len(data) < 12 {
 			return fmt.Errorf("invalid key data size for hash variant: expected at least 12 bytes, got %d", len(data))
 		}
@@ -115,11 +113,10 @@ func (dr *DirectoryRecord) ReadKeyData(data []byte) error {
 	return nil
 }
 
-// ReadValueData reads the directory record value data from a B-tree entry
-// Corresponds to libfsapfs_directory_record_read_value_data
-func (dr *DirectoryRecord) ReadValueData(data []byte) error {
+// ReadValueData reads the directory entry record value data from a B-tree entry
+func (dr *DirectoryEntryRecord) ReadValueData(data []byte) error {
 	if dr == nil {
-		return fmt.Errorf("invalid directory record")
+		return fmt.Errorf("invalid directory entry record")
 	}
 
 	// Minimum size is FileSystemBTreeValueDirectoryRecord (8 + 8 + 2 = 18 bytes)
@@ -136,18 +133,18 @@ func (dr *DirectoryRecord) ReadValueData(data []byte) error {
 
 	// Debug output
 	if DebugOutput {
-		fmt.Printf("libfsapfs_directory_record_read_value_data: directory record value data:\n")
+		fmt.Printf("DirectoryEntryRecord.ReadValueData: directory entry record value data:\n")
 		PrintData(data, true)
 
-		fmt.Printf("libfsapfs_directory_record_read_value_data: identifier\t\t\t\t: %d\n", dr.Identifier)
+		fmt.Printf("DirectoryEntryRecord.ReadValueData: identifier\t\t\t\t: %d\n", dr.Identifier)
 
 		timeBytes := make([]byte, 8)
 		binary.LittleEndian.PutUint64(timeBytes, dr.AddedTime)
-		if err := PrintPOSIXTimeValue("libfsapfs_directory_record_read_value_data", "added time", timeBytes, binary.LittleEndian, "nanoseconds"); err != nil {
+		if err := PrintPOSIXTimeValue("DirectoryEntryRecord.ReadValueData", "added time", timeBytes, binary.LittleEndian, "nanoseconds"); err != nil {
 			fmt.Printf("Warning: unable to print added time: %v\n", err)
 		}
 
-		fmt.Printf("libfsapfs_directory_record_read_value_data: directory entry flags\t\t: 0x%04x\n", dr.Flags)
+		fmt.Printf("DirectoryEntryRecord.ReadValueData: directory entry flags\t\t: 0x%04x\n", dr.Flags)
 		PrintDirectoryEntryFlags(dr.Flags)
 		fmt.Printf("\n")
 	}
@@ -162,8 +159,8 @@ func (dr *DirectoryRecord) ReadValueData(data []byte) error {
 	return nil
 }
 
-// parseExtendedFields parses the extended fields from directory record value data
-func (dr *DirectoryRecord) parseExtendedFields(data []byte) error {
+// parseExtendedFields parses the extended fields from directory entry record value data
+func (dr *DirectoryEntryRecord) parseExtendedFields(data []byte) error {
 	if len(data) < 4 {
 		return fmt.Errorf("insufficient data for extended fields header")
 	}
@@ -172,9 +169,9 @@ func (dr *DirectoryRecord) parseExtendedFields(data []byte) error {
 	numberOfExtendedFields := binary.LittleEndian.Uint16(data[dataOffset : dataOffset+2])
 
 	if DebugOutput {
-		fmt.Printf("libfsapfs_directory_record_read_value_data: number of extended fields\t\t: %d\n", numberOfExtendedFields)
+		fmt.Printf("DirectoryEntryRecord.ReadValueData: number of extended fields\t\t: %d\n", numberOfExtendedFields)
 		unknown1 := binary.LittleEndian.Uint16(data[dataOffset+2 : dataOffset+4])
-		fmt.Printf("libfsapfs_directory_record_read_value_data: unknown1\t\t\t\t: 0x%04x\n", unknown1)
+		fmt.Printf("DirectoryEntryRecord.ReadValueData: unknown1\t\t\t\t: 0x%04x\n", unknown1)
 	}
 
 	dataOffset += 4
@@ -196,13 +193,13 @@ func (dr *DirectoryRecord) parseExtendedFields(data []byte) error {
 		valueDataSize := binary.LittleEndian.Uint16(data[dataOffset+2 : dataOffset+4])
 
 		if DebugOutput {
-			fmt.Printf("libfsapfs_directory_record_read_value_data: extended field: %d type\t\t: %d %s\n",
-				fieldIndex, fieldType, GetDirectoryRecordExtendedFieldTypeName(fieldType))
-			fmt.Printf("libfsapfs_directory_record_read_value_data: extended field: %d flags\t\t: 0x%02x\n",
+			fmt.Printf("DirectoryEntryRecord.ReadValueData: extended field: %d type\t\t: %d %s\n",
+				fieldIndex, fieldType, DirectoryEntryExtendedFieldTypeName(fieldType))
+			fmt.Printf("DirectoryEntryRecord.ReadValueData: extended field: %d flags\t\t: 0x%02x\n",
 				fieldIndex, fieldFlags)
 			PrintExtendedFieldFlags(fieldFlags)
 			fmt.Printf("\n")
-			fmt.Printf("libfsapfs_directory_record_read_value_data: extended field: %d value data size\t: %d\n",
+			fmt.Printf("DirectoryEntryRecord.ReadValueData: extended field: %d value data size\t: %d\n",
 				fieldIndex, valueDataSize)
 		}
 
@@ -216,13 +213,13 @@ func (dr *DirectoryRecord) parseExtendedFields(data []byte) error {
 		copy(valueData, data[valueDataOffset:valueDataOffset+int(valueDataSize)])
 
 		if DebugOutput && valueDataSize > 0 {
-			fmt.Printf("libfsapfs_directory_record_read_value_data: extended field: %d value data:\n", fieldIndex)
+			fmt.Printf("DirectoryEntryRecord.ReadValueData: extended field: %d value data:\n", fieldIndex)
 			PrintData(valueData, false)
 		}
 
 		// Validate supported field types
 		switch fieldType {
-		case DirectoryRecordExtendedFieldTypeSiblingID:
+		case DirectoryEntryExtendedFieldTypeSiblingID:
 			// Valid field type
 		default:
 			return fmt.Errorf("unsupported extended field type: %d", fieldType)
@@ -245,7 +242,7 @@ func (dr *DirectoryRecord) parseExtendedFields(data []byte) error {
 			}
 
 			if DebugOutput && trailingDataSize > 0 {
-				fmt.Printf("libfsapfs_directory_record_read_value_data: extended field: %d trailing data:\n", fieldIndex)
+				fmt.Printf("DirectoryEntryRecord.ReadValueData: extended field: %d trailing data:\n", fieldIndex)
 				PrintData(data[valueDataOffset:valueDataOffset+trailingDataSize], false)
 			}
 
@@ -260,14 +257,13 @@ func (dr *DirectoryRecord) parseExtendedFields(data []byte) error {
 	return nil
 }
 
-// Clone creates a deep copy of the directory record
-// Corresponds to libfsapfs_directory_record_clone
-func (dr *DirectoryRecord) Clone() (*DirectoryRecord, error) {
+// Clone creates a deep copy of the directory entry record
+func (dr *DirectoryEntryRecord) Clone() (*DirectoryEntryRecord, error) {
 	if dr == nil {
 		return nil, nil
 	}
 
-	clone := &DirectoryRecord{
+	clone := &DirectoryEntryRecord{
 		Identifier:       dr.Identifier,
 		ParentIdentifier: dr.ParentIdentifier,
 		NameSize:         dr.NameSize,
@@ -298,31 +294,20 @@ func (dr *DirectoryRecord) Clone() (*DirectoryRecord, error) {
 	return clone, nil
 }
 
-// GetIdentifier retrieves the identifier (inode number)
-// Corresponds to libfsapfs_directory_record_get_identifier
-func (dr *DirectoryRecord) GetIdentifier() (uint64, error) {
-	if dr == nil {
-		return 0, fmt.Errorf("invalid directory record")
-	}
-	return dr.Identifier, nil
-}
-
-// GetUTF8NameSize retrieves the size of the UTF-8 encoded name
+// UTF8NameSize retrieves the size of the UTF-8 encoded name
 // The returned size includes the end-of-string character
-// Corresponds to libfsapfs_directory_record_get_utf8_name_size
-func (dr *DirectoryRecord) GetUTF8NameSize() (int, error) {
+func (dr *DirectoryEntryRecord) UTF8NameSize() (int, error) {
 	if dr == nil {
-		return 0, fmt.Errorf("invalid directory record")
+		return 0, fmt.Errorf("invalid directory entry record")
 	}
 	// Return size + 1 for null terminator to match C API behavior
 	return len(dr.Name) + 1, nil
 }
 
-// GetUTF8Name retrieves the UTF-8 encoded name
-// Corresponds to libfsapfs_directory_record_get_utf8_name
-func (dr *DirectoryRecord) GetUTF8Name() (string, error) {
+// UTF8Name retrieves the UTF-8 encoded name
+func (dr *DirectoryEntryRecord) UTF8Name() (string, error) {
 	if dr == nil {
-		return "", fmt.Errorf("invalid directory record")
+		return "", fmt.Errorf("invalid directory entry record")
 	}
 	if dr.Name == nil {
 		return "", nil
@@ -330,12 +315,11 @@ func (dr *DirectoryRecord) GetUTF8Name() (string, error) {
 	return string(dr.Name), nil
 }
 
-// GetUTF16NameSize retrieves the size of the UTF-16 encoded name
+// UTF16NameSize retrieves the size of the UTF-16 encoded name
 // The returned size includes the end-of-string character
-// Corresponds to libfsapfs_directory_record_get_utf16_name_size
-func (dr *DirectoryRecord) GetUTF16NameSize() (int, error) {
+func (dr *DirectoryEntryRecord) UTF16NameSize() (int, error) {
 	if dr == nil {
-		return 0, fmt.Errorf("invalid directory record")
+		return 0, fmt.Errorf("invalid directory entry record")
 	}
 
 	// Count the UTF-16 code units needed
@@ -358,11 +342,10 @@ func (dr *DirectoryRecord) GetUTF16NameSize() (int, error) {
 	return utf16Count + 1, nil
 }
 
-// GetUTF16Name retrieves the UTF-16 encoded name
-// Corresponds to libfsapfs_directory_record_get_utf16_name
-func (dr *DirectoryRecord) GetUTF16Name() ([]uint16, error) {
+// UTF16Name retrieves the UTF-16 encoded name
+func (dr *DirectoryEntryRecord) UTF16Name() ([]uint16, error) {
 	if dr == nil {
-		return nil, fmt.Errorf("invalid directory record")
+		return nil, fmt.Errorf("invalid directory entry record")
 	}
 	if dr.Name == nil {
 		return nil, nil
@@ -375,10 +358,9 @@ func (dr *DirectoryRecord) GetUTF16Name() ([]uint16, error) {
 	return utf16Encoded, nil
 }
 
-// CompareNameWithUTF8String compares an UTF-8 string with a directory record name
+// CompareNameWithUTF8String compares an UTF-8 string with a directory entry record name
 // Returns -1 if less, 0 if equal, 1 if greater
-// Corresponds to libfsapfs_directory_record_compare_name_with_utf8_string
-func (dr *DirectoryRecord) CompareNameWithUTF8String(utf8String []byte, nameHash uint32, useCaseFolding bool) int {
+func (dr *DirectoryEntryRecord) CompareNameWithUTF8String(utf8String []byte, nameHash uint32, useCaseFolding bool) int {
 	if dr == nil {
 		return -1
 	}
@@ -401,10 +383,9 @@ func (dr *DirectoryRecord) CompareNameWithUTF8String(utf8String []byte, nameHash
 	return 0
 }
 
-// CompareNameWithUTF16String compares an UTF-16 string with a directory record name
+// CompareNameWithUTF16String compares an UTF-16 string with a directory entry record name
 // Returns -1 if less, 0 if equal, 1 if greater
-// Corresponds to libfsapfs_directory_record_compare_name_with_utf16_string
-func (dr *DirectoryRecord) CompareNameWithUTF16String(utf16String []uint16, nameHash uint32, useCaseFolding bool) int {
+func (dr *DirectoryEntryRecord) CompareNameWithUTF16String(utf16String []uint16, nameHash uint32, useCaseFolding bool) int {
 	if dr == nil {
 		return -1
 	}
@@ -430,18 +411,8 @@ func (dr *DirectoryRecord) CompareNameWithUTF16String(utf16String []uint16, name
 	return 0
 }
 
-// GetAddedTime retrieves the added time
-// The timestamp is a signed 64-bit POSIX date and time value in nanoseconds
-// Corresponds to libfsapfs_directory_record_get_added_time
-func (dr *DirectoryRecord) GetAddedTime() (int64, error) {
-	if dr == nil {
-		return 0, fmt.Errorf("invalid directory record")
-	}
-	return int64(dr.AddedTime), nil
-}
-
-// GetName returns the name as a string (convenience method)
-func (dr *DirectoryRecord) GetName() string {
+// Name returns the name as a string (convenience method)
+func (dr *DirectoryEntryRecord) NameString() string {
 	if dr == nil || dr.Name == nil {
 		return ""
 	}
@@ -449,19 +420,18 @@ func (dr *DirectoryRecord) GetName() string {
 }
 
 // IsDirectory returns true if this record represents a directory
-func (dr *DirectoryRecord) IsDirectory() bool {
+func (dr *DirectoryEntryRecord) IsDirectory() bool {
 	// Flag 0x0001 indicates a directory
 	return (dr.Flags & 0x0001) != 0
 }
 
-// CompareName compares the directory record name with the given name (convenience method)
+// CompareName compares the directory entry record name with the given name (convenience method)
 // Returns 0 if equal, <0 if dr.Name < name, >0 if dr.Name > name
-func (dr *DirectoryRecord) CompareName(name []byte, nameHash uint32, useCaseFolding bool) int {
+func (dr *DirectoryEntryRecord) CompareName(name []byte, nameHash uint32, useCaseFolding bool) int {
 	return dr.CompareNameWithUTF8String(name, nameHash, useCaseFolding)
 }
 
 // compareNamesWithUTF8 compares two UTF-8 encoded names
-// Corresponds to libfsapfs_name_compare_with_utf8_string
 // Uses the proper Unicode normalization and case folding implementation from name_hash.go
 func compareNamesWithUTF8(name1, name2 []byte, useCaseFolding bool) int {
 	// Use the full Unicode-aware comparison from name_hash.go

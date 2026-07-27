@@ -10,19 +10,16 @@ import (
 )
 
 // CRC32 table for name hash calculation
-// Corresponds to libfsapfs_checksum_crc32_table
-var crc32Table [256]uint32
-var crc32TableInitialized bool
+var crc32CTable [256]uint32
+var crc32CTableReady bool
 
-// initializeCRC32Table initializes the CRC-32 table
-// Corresponds to libfsapfs_checksum_initialize_crc32_table
-func initializeCRC32Table() {
-	if crc32TableInitialized {
+// initCRC32CTable initializes the CRC-32 table
+func initCRC32CTable() {
+	if crc32CTableReady {
 		return
 	}
 
-	// APFS uses the polynomial 0x82f63b78 for name hash CRC32
-	// This matches the C library libfsapfs_name_hash.c:165
+	// APFS hashes names with CRC-32C (Castagnoli), polynomial 0x82f63b78.
 	const polynomial uint32 = 0x82f63b78
 
 	for tableIndex := uint32(0); tableIndex < 256; tableIndex++ {
@@ -36,14 +33,13 @@ func initializeCRC32Table() {
 			}
 		}
 
-		crc32Table[tableIndex] = checksum
+		crc32CTable[tableIndex] = checksum
 	}
 
-	crc32TableInitialized = true
+	crc32CTableReady = true
 }
 
 // CalculateNameHash calculates the APFS name hash from a UTF-8 string
-// Corresponds to libfsapfs_name_hash_calculate_from_utf8_string
 //
 // Note: This implementation uses Go's unicode.ToLower() and norm.NFD for case folding
 // and normalization. The C library has special case mappings for certain Unicode
@@ -53,7 +49,7 @@ func initializeCRC32Table() {
 // special case mapping tables from the C implementation may need to be added.
 func CalculateNameHash(utf8String []byte, useCaseFolding bool) uint32 {
 	// Initialize CRC32 table if not already done
-	initializeCRC32Table()
+	initCRC32CTable()
 
 	var calculatedChecksum uint32 = common.Uint32Mask
 	utf8Index := 0
@@ -84,25 +80,25 @@ func CalculateNameHash(utf8String []byte, useCaseFolding bool) uint32 {
 			// Process byte 0
 			byteValue := uint8(unicodeValue & 0xFF)
 			checksumTableIndex := (calculatedChecksum ^ uint32(byteValue)) & 0xFF
-			calculatedChecksum = crc32Table[checksumTableIndex] ^ (calculatedChecksum >> 8)
+			calculatedChecksum = crc32CTable[checksumTableIndex] ^ (calculatedChecksum >> 8)
 			unicodeValue >>= 8
 
 			// Process byte 1
 			byteValue = uint8(unicodeValue & 0xFF)
 			checksumTableIndex = (calculatedChecksum ^ uint32(byteValue)) & 0xFF
-			calculatedChecksum = crc32Table[checksumTableIndex] ^ (calculatedChecksum >> 8)
+			calculatedChecksum = crc32CTable[checksumTableIndex] ^ (calculatedChecksum >> 8)
 			unicodeValue >>= 8
 
 			// Process byte 2
 			byteValue = uint8(unicodeValue & 0xFF)
 			checksumTableIndex = (calculatedChecksum ^ uint32(byteValue)) & 0xFF
-			calculatedChecksum = crc32Table[checksumTableIndex] ^ (calculatedChecksum >> 8)
+			calculatedChecksum = crc32CTable[checksumTableIndex] ^ (calculatedChecksum >> 8)
 			unicodeValue >>= 8
 
 			// Process byte 3
 			byteValue = uint8(unicodeValue & 0xFF)
 			checksumTableIndex = (calculatedChecksum ^ uint32(byteValue)) & 0xFF
-			calculatedChecksum = crc32Table[checksumTableIndex] ^ (calculatedChecksum >> 8)
+			calculatedChecksum = crc32CTable[checksumTableIndex] ^ (calculatedChecksum >> 8)
 		}
 	}
 
@@ -111,13 +107,12 @@ func CalculateNameHash(utf8String []byte, useCaseFolding bool) uint32 {
 }
 
 // CalculateNameHashFromUTF16 calculates the APFS name hash from a UTF-16 string
-// Corresponds to libfsapfs_name_hash_calculate_from_utf16_string
 //
 // Note: This implementation uses Go's unicode.ToLower() and norm.NFD for case folding
 // and normalization. See CalculateNameHash for details about special case handling.
 func CalculateNameHashFromUTF16(utf16String []uint16, useCaseFolding bool) uint32 {
 	// Initialize CRC32 table if not already done
-	initializeCRC32Table()
+	initCRC32CTable()
 
 	var calculatedChecksum uint32 = common.Uint32Mask
 
@@ -147,25 +142,25 @@ func CalculateNameHashFromUTF16(utf16String []uint16, useCaseFolding bool) uint3
 			// Process byte 0
 			byteValue := uint8(unicodeValue & 0xFF)
 			checksumTableIndex := (calculatedChecksum ^ uint32(byteValue)) & 0xFF
-			calculatedChecksum = crc32Table[checksumTableIndex] ^ (calculatedChecksum >> 8)
+			calculatedChecksum = crc32CTable[checksumTableIndex] ^ (calculatedChecksum >> 8)
 			unicodeValue >>= 8
 
 			// Process byte 1
 			byteValue = uint8(unicodeValue & 0xFF)
 			checksumTableIndex = (calculatedChecksum ^ uint32(byteValue)) & 0xFF
-			calculatedChecksum = crc32Table[checksumTableIndex] ^ (calculatedChecksum >> 8)
+			calculatedChecksum = crc32CTable[checksumTableIndex] ^ (calculatedChecksum >> 8)
 			unicodeValue >>= 8
 
 			// Process byte 2
 			byteValue = uint8(unicodeValue & 0xFF)
 			checksumTableIndex = (calculatedChecksum ^ uint32(byteValue)) & 0xFF
-			calculatedChecksum = crc32Table[checksumTableIndex] ^ (calculatedChecksum >> 8)
+			calculatedChecksum = crc32CTable[checksumTableIndex] ^ (calculatedChecksum >> 8)
 			unicodeValue >>= 8
 
 			// Process byte 3
 			byteValue = uint8(unicodeValue & 0xFF)
 			checksumTableIndex = (calculatedChecksum ^ uint32(byteValue)) & 0xFF
-			calculatedChecksum = crc32Table[checksumTableIndex] ^ (calculatedChecksum >> 8)
+			calculatedChecksum = crc32CTable[checksumTableIndex] ^ (calculatedChecksum >> 8)
 		}
 	}
 
@@ -187,7 +182,6 @@ func StringToUTF16(str string) []uint16 {
 
 // CompareNamesWithUTF8 compares two names using UTF-8 encoding with optional case folding
 // Returns 0 if equal, <0 if name1 < name2, >0 if name1 > name2
-// Corresponds to libfsapfs_name_compare_with_utf8_string
 func CompareNamesWithUTF8(name1 []byte, name2 []byte, useCaseFolding bool) int {
 	// Apply normalization and case folding as needed
 	str1 := string(name1)
@@ -224,7 +218,6 @@ func CompareNamesWithUTF8(name1 []byte, name2 []byte, useCaseFolding bool) int {
 
 // CompareNamesWithUTF16 compares two names using UTF-16 encoding with optional case folding
 // Returns 0 if equal, <0 if name1 < name2, >0 if name1 > name2
-// Corresponds to libfsapfs_name_compare_with_utf16_string
 func CompareNamesWithUTF16(name1 []uint16, name2 []uint16, useCaseFolding bool) int {
 	// Convert UTF-16 to string
 	str1 := UTF16ToString(name1)

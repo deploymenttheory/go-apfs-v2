@@ -53,7 +53,7 @@ type CreateOptions struct {
 
 	// Snapshots are APFS snapshots to create on the volume, each capturing the
 	// built state (the volume's contents at creation time). They are written as
-	// spec-compliant snapshots — a snapshot-metadata record pair, a frozen
+	// spec-compliant snapshots — a snapshot-metadata record pair, a physical copy of the
 	// physical volume superblock, an object-map snapshot entry and pinned extent
 	// refcounts — recognized by macOS. Names must be unique and non-empty.
 	Snapshots []SnapshotSpec
@@ -139,14 +139,14 @@ type RootFile struct {
 	Data []byte
 }
 
-// builderEntry holds the resolved on-disk placement for a single catalog
+// builderEntry holds the resolved on-disk placement for a single file-system tree
 // entry (a directory or a regular file).
 type builderEntry struct {
 	name      string
 	isDir     bool
 	isSymlink bool   // true for a symbolic link (target stored in a symlink xattr)
-	cnid      uint64 // catalog node id / inode number
-	parent    uint64 // parent directory cnid
+	oid       uint64 // object identifier / inode number
+	parent    uint64 // parent directory oid
 	nchildren uint32 // directories: number of direct children
 
 	// Inode metadata.
@@ -233,16 +233,16 @@ func CreateContainer(w io.WriterAt, sizeBytes int64, opts *CreateOptions) error 
 	const minBytes = 512 * 1024
 	if sizeBytes == 0 {
 		// Size the image to comfortably hold the post-pool payload (extra
-		// catalog leaves, extref leaves, file data, snapshot objects) plus the
+		// file-system tree leaves, extentref leaves, file data, snapshot objects) plus the
 		// fixed metadata, block-aligned, with headroom for the pool and
 		// checkpoint areas.
-		payload := b.numCatLeaves + b.numExtrefLeaves + b.fileDataBlocks + b.snapBlocks
+		payload := b.numFSTreeLeaves + b.numExtentrefLeaves + b.fileDataBlocks + b.snapBlocks
 		needBlocks := payload + payload/8 + 2048
 		sizeBytes = max(int64(needBlocks)*int64(b.blocksize), minBytes)
 	}
-	b.mainBlkcnt = uint64(sizeBytes) / uint64(b.blocksize)
-	b.blockCount = b.mainBlkcnt
-	if b.mainBlkcnt*uint64(b.blocksize) < minBytes {
+	b.mainBlockCount = uint64(sizeBytes) / uint64(b.blocksize)
+	b.blockCount = b.mainBlockCount
+	if b.mainBlockCount*uint64(b.blocksize) < minBytes {
 		return fmt.Errorf("apfswrite: container too small (%d bytes); minimum is %d", sizeBytes, minBytes)
 	}
 
@@ -265,7 +265,7 @@ func CreateContainer(w io.WriterAt, sizeBytes int64, opts *CreateOptions) error 
 
 	// Only the blocks actually used are written, so grow the image to its full
 	// size by writing its final byte.
-	total := b.mainBlkcnt * uint64(b.blocksize)
+	total := b.mainBlockCount * uint64(b.blocksize)
 	if total > 0 {
 		if _, err := w.WriteAt([]byte{0}, int64(total)-1); err != nil {
 			return fmt.Errorf("apfswrite: sizing image: %w", err)
@@ -350,55 +350,55 @@ func readDirEntries(dir string) ([]*Entry, error) {
 	return out, nil
 }
 
-// builder holds all filesystem parameters and the fixed block layout while the
+// builder holds all file system parameters and the fixed block layout while the
 // container is being written: the requested geometry, the resolved directory
 // tree, and every block position derived from them.
 type builder struct {
 	w io.WriterAt
 
 	// Parameters.
-	blocksize     uint32
-	blockCount    uint64
-	mainBlkcnt    uint64
-	label         string
-	mainUUID      [16]byte
-	volUUID       [16]byte
-	caseSensitive bool
-	normSensitive bool
+	blocksize      uint32
+	blockCount     uint64
+	mainBlockCount uint64
+	label          string
+	mainUUID       [16]byte
+	volUUID        [16]byte
+	caseSensitive  bool
+	normSensitive  bool
 
 	// Checkpoint areas, sized and positioned for this container.
-	cpDescBase   uint64
-	cpDescBlocks uint32
-	cpDataBase   uint64
-	cpDataBlocks uint32
-	cpEnd        uint64
+	xpDescBase   uint64
+	xpDescBlocks uint32
+	xpDataBase   uint64
+	xpDataBlocks uint32
+	xpEnd        uint64
 
 	// Fixed block numbers derived from the checkpoint areas.
-	cpMapBno              uint64
-	cpSbBno               uint64
-	mainOmapBno           uint64
-	mainOmapRootBno       uint64
-	firstVolBno           uint64
-	firstVolOmapBno       uint64
-	firstVolOmapRootBno   uint64
-	firstVolCatRootBno    uint64
-	firstVolExtrefRootBno uint64
-	firstVolSnapRootBno   uint64
-	ipBmapBase            uint64
+	xpMapPaddr                 uint64
+	xpSuperPaddr               uint64
+	mainOmapPaddr              uint64
+	mainOmapRootPaddr          uint64
+	firstVolPaddr              uint64
+	firstVolOmapPaddr          uint64
+	firstVolOmapRootPaddr      uint64
+	firstVolFSTreeRootPaddr    uint64
+	firstVolExtentrefRootPaddr uint64
+	firstVolSnapRootPaddr      uint64
+	ipBmapBase                 uint64
 
 	// Ephemeral objects (eph_info).
-	reaperBno        uint64
-	spacemanBno      uint64
-	spacemanSz       uint32
-	spacemanBlkcnt   uint32
-	ipFreeQueueBno   uint64
-	mainFreeQueueBno uint64
-	totalBlkcnt      uint32
+	reaperPaddr        uint64
+	spacemanPaddr      uint64
+	spacemanSz         uint32
+	spacemanBlockCount uint32
+	ipFreeQueuePaddr   uint64
+	mainFreeQueuePaddr uint64
+	totalBlockCount    uint32
 
 	// Space-manager geometry, populated by spacemanGeometry/spacemanPlacement.
 	sm spacemanLayout
 
-	// The user directory tree, flattened into catalog entries in cnid order,
+	// The user directory tree, flattened into file-system tree entries in oid order,
 	// plus the subset that are regular files with a data extent.
 	entries     []*builderEntry
 	streamFiles []*builderEntry
@@ -407,37 +407,37 @@ type builder struct {
 	numDirs     uint64 // directories (user, excludes root and private-dir)
 	numSymlinks uint64 // symbolic links (user)
 
-	// Catalog B-tree shape, decided in setTree from the record sizes.
-	numCatLeaves uint64 // extra leaf nodes when the catalog is a 2-level tree
-	catTwoLevel  bool   // true when the catalog needs an index root + leaves
+	// file-system tree shape, decided in setTree from the record sizes.
+	numFSTreeLeaves uint64 // extra leaf nodes when the file-system tree is a 2-level tree
+	fsTreeTwoLevel  bool   // true when the file-system tree needs an index root + leaves
 
 	// Extent-reference B-tree shape, decided in setTree from the extent count.
-	numExtrefLeaves uint64 // leaf nodes when the extref tree is a 2-level tree
-	extrefTwoLevel  bool   // true when the extref tree needs an index root + leaves
+	numExtentrefLeaves uint64 // leaf nodes when the extentref tree is a 2-level tree
+	extentrefTwoLevel  bool   // true when the extentref tree needs an index root + leaves
 
 	// Post-internal-pool allocation region. All blocks the volume owns beyond
 	// the fixed metadata are laid out contiguously starting at postIPBase, in
-	// order: extra catalog leaf nodes, extra extent-reference leaf nodes, then
+	// order: extra file-system tree leaf nodes, extra extent-reference leaf nodes, then
 	// file data. This region may span several space-manager chunks.
 	postIPBase   uint64
 	postIPBlocks uint64
 
-	// Physical-block bases within the post-internal-pool region. catLeafBase is
-	// the first extra catalog leaf; extrefLeafBase the first extra extref leaf;
+	// Physical-block bases within the post-internal-pool region. fsTreeLeafBase is
+	// the first extra file-system tree leaf; extentrefLeafBase the first extra extentref leaf;
 	// fileDataBase the first block of file content.
-	catLeafBase    uint64
-	extrefLeafBase uint64
-	fileDataBase   uint64
-	fileDataBlocks uint64
+	fsTreeLeafBase    uint64
+	extentrefLeafBase uint64
+	fileDataBase      uint64
+	fileDataBlocks    uint64
 
 	// Snapshots. Each captures the built state (snapshot == live). The snapshot
-	// objects (a per-snapshot frozen superblock + snap_meta_ext, and one shared
+	// objects (a per-snapshot snapshot volume superblock + snap_meta_ext, and one shared
 	// object-map snapshot tree) live at the end of the post-internal-pool region.
-	snapshots      []*snapBuild
-	liveXID        uint64 // the live volume's transaction id (> snapshot xids)
-	snapBase       uint64 // first block of the snapshot object region
-	snapBlocks     uint64 // total blocks in the snapshot object region
-	volSnapTreeBno uint64 // the volume omap's snapshot tree (0 when no snapshots)
+	snapshots        []*snapBuild
+	liveXID          uint64 // the live volume's transaction id (> snapshot xids)
+	snapBase         uint64 // first block of the snapshot object region
+	snapBlocks       uint64 // total blocks in the snapshot object region
+	volSnapTreePaddr uint64 // the volume omap's snapshot tree (0 when no snapshots)
 
 	timestamp   uint64
 	defaultTime uint64 // deterministic inode timestamp when an Entry has no ModTime
@@ -447,19 +447,19 @@ type builder struct {
 // access times when an Entry supplies no ModTime, keeping output deterministic.
 var defaultInodeTime = time.Date(2024, time.January, 1, 0, 0, 0, 0, time.UTC)
 
-// catLeafOIDBase is the first virtual object id handed to extra catalog leaf
-// nodes (2-level catalog). It sits just past the named reserved object ids and
+// fsTreeLeafOIDBase is the first virtual object id handed to extra file-system tree leaf
+// nodes (2-level file-system tree). It sits just past the named reserved object ids and
 // below the container's NextOID reservation.
-const catLeafOIDBase = mainFreeQueueOID + 1 // 1030
+const fsTreeLeafOIDBase = mainFreeQueueOID + 1 // 1030
 
 // Fixed object ids, assigned just past the format's reserved-oid range.
 const (
-	spacemanOID        = oidReservedCount       // 1024
-	reaperOID          = spacemanOID + 1        // 1025
-	firstVolOID        = reaperOID + 1          // 1026
-	firstVolCatRootOID = firstVolOID + 1        // 1027
-	ipFreeQueueOID     = firstVolCatRootOID + 1 // 1028
-	mainFreeQueueOID   = ipFreeQueueOID + 1     // 1029
+	spacemanOID           = oidReservedCount          // 1024
+	reaperOID             = spacemanOID + 1           // 1025
+	firstVolOID           = reaperOID + 1             // 1026
+	firstVolFSTreeRootOID = firstVolOID + 1           // 1027
+	ipFreeQueueOID        = firstVolFSTreeRootOID + 1 // 1028
+	mainFreeQueueOID      = ipFreeQueueOID + 1        // 1029
 )
 
 // Checkpoint-area floors. fsck_apfs rejects a container whose checkpoint areas
@@ -475,10 +475,10 @@ const (
 // checkpoint writes, then raised to the format floor: the descriptor area holds
 // the mapping block and the superblock copy (two blocks), and the data area
 // holds the ephemeral objects — the reaper, the spaceman and the two free-queue
-// roots — whose count spacemanGeometry recorded in totalBlkcnt.
+// roots — whose count spacemanGeometry recorded in totalBlockCount.
 func (b *builder) sizeCheckpointAreas() {
-	b.cpDescBlocks = minCheckpointDescBlocks
-	b.cpDataBlocks = uint32(max(uint64(b.totalBlkcnt), minCheckpointDataBlocks))
+	b.xpDescBlocks = minCheckpointDescBlocks
+	b.xpDataBlocks = uint32(max(uint64(b.totalBlockCount), minCheckpointDataBlocks))
 }
 
 // layoutFixedBlocks assigns every fixed block position, given the sized
@@ -488,38 +488,38 @@ func (b *builder) sizeCheckpointAreas() {
 // blocks past the data area (two of which — the Fusion middle-tree and
 // write-back-cache slots — are intentionally left unused).
 func (b *builder) layoutFixedBlocks() {
-	b.cpDescBase = nxBlockNum + 1
-	b.cpDataBase = b.cpDescBase + uint64(b.cpDescBlocks)
-	b.cpEnd = b.cpDataBase + uint64(b.cpDataBlocks)
+	b.xpDescBase = nxBlockNum + 1
+	b.xpDataBase = b.xpDescBase + uint64(b.xpDescBlocks)
+	b.xpEnd = b.xpDataBase + uint64(b.xpDataBlocks)
 
-	b.cpMapBno = b.cpDescBase
-	b.cpSbBno = b.cpDescBase + 1
-	b.mainOmapBno = b.cpEnd
-	b.mainOmapRootBno = b.cpEnd + 1
-	b.firstVolBno = b.cpEnd + 2
-	b.firstVolOmapBno = b.cpEnd + 3
-	b.firstVolOmapRootBno = b.cpEnd + 4
-	b.firstVolCatRootBno = b.cpEnd + 5
-	b.firstVolExtrefRootBno = b.cpEnd + 6
-	b.firstVolSnapRootBno = b.cpEnd + 7
-	b.ipBmapBase = b.cpEnd + 10 // +8 and +9 are the unused Fusion slots
+	b.xpMapPaddr = b.xpDescBase
+	b.xpSuperPaddr = b.xpDescBase + 1
+	b.mainOmapPaddr = b.xpEnd
+	b.mainOmapRootPaddr = b.xpEnd + 1
+	b.firstVolPaddr = b.xpEnd + 2
+	b.firstVolOmapPaddr = b.xpEnd + 3
+	b.firstVolOmapRootPaddr = b.xpEnd + 4
+	b.firstVolFSTreeRootPaddr = b.xpEnd + 5
+	b.firstVolExtentrefRootPaddr = b.xpEnd + 6
+	b.firstVolSnapRootPaddr = b.xpEnd + 7
+	b.ipBmapBase = b.xpEnd + 10 // +8 and +9 are the unused Fusion slots
 
 	b.timestamp = uint64(time.Now().UnixNano())
 	b.defaultTime = uint64(defaultInodeTime.UnixNano())
 }
 
-// writeBlocks writes count blocks of data starting at block number bno.
-func (b *builder) writeBlocks(data []byte, bno uint64) error {
-	off := int64(bno) * int64(b.blocksize)
+// writeBlocks writes count blocks of data starting at block number paddr.
+func (b *builder) writeBlocks(data []byte, paddr uint64) error {
+	off := int64(paddr) * int64(b.blocksize)
 	if _, err := b.w.WriteAt(data, off); err != nil {
-		return fmt.Errorf("apfswrite: write at block %d: %w", bno, err)
+		return fmt.Errorf("apfswrite: write at block %d: %w", paddr, err)
 	}
 	return nil
 }
 
-// writeBlock writes a single block of data at block number bno.
-func (b *builder) writeBlock(data []byte, bno uint64) error {
-	return b.writeBlocks(data, bno)
+// writeBlock writes a single block of data at block number paddr.
+func (b *builder) writeBlock(data []byte, paddr uint64) error {
+	return b.writeBlocks(data, paddr)
 }
 
 // zeroedBlock returns a zeroed buffer of count blocks.
@@ -558,7 +558,7 @@ func (b *builder) ipFreeQueueNodeLimit() uint16 {
 // mainFreeQueueNodeLimit is the main device's free queue node cap.
 func (b *builder) mainFreeQueueNodeLimit() uint16 {
 	const blocks1G, blocks4G = 0x40000, 0x100000
-	blocks := b.mainBlkcnt
+	blocks := b.mainBlockCount
 	var n uint16
 	switch {
 	case blocks < blocks1G:

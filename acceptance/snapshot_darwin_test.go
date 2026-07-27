@@ -1,6 +1,6 @@
 //go:build darwin
 
-package cli_test
+package acceptance
 
 import (
 	"os"
@@ -13,7 +13,7 @@ import (
 )
 
 // reconstructToRaw decompresses a DMG to a raw image file (fsck/attach need the
-// raw filesystem image, not the compressed DMG wrapper).
+// raw file system image, not the compressed DMG wrapper).
 func reconstructToRaw(t *testing.T, dmg string) string {
 	t.Helper()
 	raw, err := disk.ReconstructRawImage(dmg)
@@ -48,7 +48,7 @@ func fsckRaw(t *testing.T, rawPath string) string {
 
 // TestSnapshotCreateRevertFsckDarwin validates that the rebuilt `snapshot create`
 // output is fsck-clean and the `snapshot revert` output carries the revert marker
-// (macOS/Apple fsck_apfs is the oracle).
+// (macOS only; fsck_apfs does the checking).
 func TestSnapshotCreateRevertFsckDarwin(t *testing.T) {
 	dir := t.TempDir()
 	src := filepath.Join(dir, "src")

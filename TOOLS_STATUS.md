@@ -5,11 +5,11 @@ A snapshot of what is implemented. See [`README.md`](README.md) for usage and
 
 Legend: ✅ implemented · 🟡 partial · ⬜ not yet
 
-## Filesystems
+## File systems
 
 | Area | APFS | HFS+ / HFSX |
 | --- | :---: | :---: |
-| Read (containers, volumes, catalog, extents) | ✅ | ✅ |
+| Read (containers, volumes, file-system tree, extents) | ✅ | ✅ |
 | Transparent compression (zlib / LZVN / LZFSE) | ✅ | ✅ |
 | Symlinks, hardlinks | ✅ | ✅ |
 | Extended attributes (read) | ✅ | 🟡 |
@@ -31,7 +31,7 @@ The APFS writer lives in `pkg/apfswrite` (pure Go, MIT).
 | --- | :---: |
 | DMG read: zlib, bzip2, ADC, LZFSE, LZMA chunks | ✅ |
 | GPT and Apple Partition Map location | ✅ |
-| Raw images, bare containers (content sniffing) | ✅ |
+| Raw images, containers without a partition map (content sniffing) | ✅ |
 | DMG write / lossless repack | ✅ |
 | Decompressed-chunk LRU cache | ✅ |
 | hdiutil-mountable created DMG wrappers | 🟡 |
@@ -44,7 +44,7 @@ The APFS writer lives in `pkg/apfswrite` (pure Go, MIT).
 | `list` | ✅ | recursive; JSON lines |
 | `cat` | ✅ | multi-file to stdout |
 | `extract` | ✅ | metadata, verify, symlink policy, name sanitization |
-| `inspect` | ✅ | APFS only (walk / block / btree) |
+| `inspect` | ✅ | APFS only (walk / block / fstree) |
 | `mount` | ✅ | APFS only; Linux/macOS FUSE |
 | `pack` | ✅ | directory→HFS+ or APFS DMG (`--fs`), or lossless DMG repack |
 | `create` | ✅ | empty HFS+ or APFS volume (`--fs`) |

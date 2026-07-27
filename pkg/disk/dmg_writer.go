@@ -416,10 +416,10 @@ func RepackDMG(srcPath, dstPath string, opts *EncodeOptions) error {
 	return nil
 }
 
-// WrapRawImageDMG writes a UDIF DMG at dstPath wrapping a raw filesystem
+// WrapRawImageDMG writes a UDIF DMG at dstPath wrapping a raw file system
 // image as a single Apple partition block. partitionHint is the Apple
 // partition type name embedded in the block name so the reader (and hdiutil)
-// locate the filesystem, e.g. "Apple_HFSX", "Apple_HFS" or "Apple_APFS".
+// locate the file system, e.g. "Apple_HFSX", "Apple_HFS" or "Apple_APFS".
 func WrapRawImageDMG(dstPath string, raw []byte, partitionHint string, opts *EncodeOptions) error {
 	if len(raw)%sectorSize != 0 {
 		return fmt.Errorf("WrapRawImageDMG: raw image length %d is not a multiple of %d", len(raw), sectorSize)

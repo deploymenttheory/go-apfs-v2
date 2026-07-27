@@ -1,5 +1,4 @@
-// Volume key bag functions
-// Corresponds to libfsapfs_volume_key_bag.c and libfsapfs_volume_key_bag.h
+// Volume keybag functions
 package apfs
 
 import (
@@ -10,25 +9,22 @@ import (
 	"github.com/deploymenttheory/go-apfs-v2/internal/common"
 )
 
-// VolumeKeyBag represents an APFS volume key bag
-// Corresponds to libfsapfs_volume_key_bag_t
-type VolumeKeyBag struct {
-	Entries []*KeyBagEntry
+// VolumeKeybag represents an APFS volume keybag
+type VolumeKeybag struct {
+	Entries []*KeybagEntry
 }
 
-// NewVolumeKeyBag creates a new volume key bag
-// Corresponds to libfsapfs_volume_key_bag_initialize
-func NewVolumeKeyBag() (*VolumeKeyBag, error) {
-	return &VolumeKeyBag{
-		Entries: make([]*KeyBagEntry, 0),
+// NewVolumeKeybag creates a new volume keybag
+func NewVolumeKeybag() (*VolumeKeybag, error) {
+	return &VolumeKeybag{
+		Entries: make([]*KeybagEntry, 0),
 	}, nil
 }
 
-// Free releases resources associated with the volume key bag
-// Corresponds to libfsapfs_volume_key_bag_free
-func (v *VolumeKeyBag) Free() error {
+// Close releases resources associated with the volume keybag
+func (v *VolumeKeybag) Close() error {
 	if v == nil {
-		return fmt.Errorf("invalid volume key bag")
+		return fmt.Errorf("invalid volume keybag")
 	}
 
 	// Clear entries (Go's GC will handle the cleanup)
@@ -36,17 +32,16 @@ func (v *VolumeKeyBag) Free() error {
 	return nil
 }
 
-// ReadFileIOHandle reads the volume key bag from a file at the specified offset
-// Corresponds to libfsapfs_volume_key_bag_read_file_io_handle
-func (v *VolumeKeyBag) ReadFileIOHandle(
+// ReadFrom reads the volume keybag from a file at the specified offset
+func (v *VolumeKeybag) ReadFrom(
 	ioHandle *IOHandle,
-	fileHandle io.ReaderAt,
+	reader io.ReaderAt,
 	fileOffset int64,
 	dataSize uint64,
 	volumeIdentifier []byte,
 ) error {
 	if v == nil {
-		return fmt.Errorf("invalid volume key bag")
+		return fmt.Errorf("invalid volume keybag")
 	}
 
 	if ioHandle == nil {
@@ -58,18 +53,18 @@ func (v *VolumeKeyBag) ReadFileIOHandle(
 	}
 
 	if dataSize == 0 || dataSize > common.Int32Max {
-		return fmt.Errorf("invalid volume key bag size value out of bounds")
+		return fmt.Errorf("invalid volume keybag size value out of bounds")
 	}
 
 	// Read encrypted data
 	encryptedData := make([]byte, dataSize)
 
-	if IsVerbose() {
-		Printf("%s: reading volume key bag data at offset: %d (0x%08x)\n",
-			"ReadFileIOHandle", fileOffset, fileOffset)
+	if isVerbose() {
+		notifyPrintf("%s: reading volume keybag data at offset: %d (0x%08x)\n",
+			"ReadFrom", fileOffset, fileOffset)
 	}
 
-	n, err := fileHandle.ReadAt(encryptedData, fileOffset)
+	n, err := reader.ReadAt(encryptedData, fileOffset)
 	if err != nil && err != io.EOF {
 		return fmt.Errorf("unable to read encrypted data at offset: %d (0x%08x): %w",
 			fileOffset, fileOffset, err)
@@ -100,32 +95,31 @@ func (v *VolumeKeyBag) ReadFileIOHandle(
 		return fmt.Errorf("unable to decrypt data: %w", err)
 	}
 
-	if IsVerbose() {
-		Printf("%s: unencrypted volume key bag data:\n", "ReadFileIOHandle")
+	if isVerbose() {
+		notifyPrintf("%s: unencrypted volume keybag data:\n", "ReadFrom")
 		PrintData(data, true)
 	}
 
 	// Read the decrypted data
 	if err := v.ReadData(data); err != nil {
-		return fmt.Errorf("unable to read volume key bag: %w", err)
+		return fmt.Errorf("unable to read volume keybag: %w", err)
 	}
 
 	return nil
 }
 
-// ReadData reads the volume key bag from binary data
-// Corresponds to libfsapfs_volume_key_bag_read_data
-func (v *VolumeKeyBag) ReadData(data []byte) error {
+// ReadData reads the volume keybag from binary data
+func (v *VolumeKeybag) ReadData(data []byte) error {
 	if v == nil {
-		return fmt.Errorf("invalid volume key bag")
+		return fmt.Errorf("invalid volume keybag")
 	}
 
 	if len(data) < 32 || len(data) > common.Int32Max {
 		return fmt.Errorf("invalid data size value out of bounds")
 	}
 
-	if IsVerbose() {
-		Printf("%s: volume key bag object data:\n", "ReadData")
+	if isVerbose() {
+		notifyPrintf("%s: volume keybag object data:\n", "ReadData")
 		PrintData(data[:32], true)
 	}
 
@@ -142,46 +136,46 @@ func (v *VolumeKeyBag) ReadData(data []byte) error {
 		return fmt.Errorf("invalid object subtype: 0x%08x", objectSubtype)
 	}
 
-	if IsVerbose() {
+	if isVerbose() {
 		objectChecksum := binary.LittleEndian.Uint64(data[0:8])
-		objectIdentifier := binary.LittleEndian.Uint64(data[8:16])
+		oid := binary.LittleEndian.Uint64(data[8:16])
 		objectTransactionIdentifier := binary.LittleEndian.Uint64(data[16:24])
 
-		Printf("%s: object checksum\t\t\t: 0x%08x\n", "ReadData", objectChecksum)
-		Printf("%s: object identifier\t\t\t: %d\n", "ReadData", objectIdentifier)
-		Printf("%s: object transaction identifier\t: %d\n", "ReadData", objectTransactionIdentifier)
-		Printf("%s: object type\t\t\t\t: 0x%08x\n", "ReadData", objectType)
-		Printf("%s: object subtype\t\t\t\t: 0x%08x\n", "ReadData", objectSubtype)
-		Printf("\n")
+		notifyPrintf("%s: object checksum\t\t\t: 0x%08x\n", "ReadData", objectChecksum)
+		notifyPrintf("%s: object identifier\t\t\t: %d\n", "ReadData", oid)
+		notifyPrintf("%s: object transaction identifier\t: %d\n", "ReadData", objectTransactionIdentifier)
+		notifyPrintf("%s: object type\t\t\t\t: 0x%08x\n", "ReadData", objectType)
+		notifyPrintf("%s: object subtype\t\t\t\t: 0x%08x\n", "ReadData", objectSubtype)
+		notifyPrintf("\n")
 	}
 
 	dataOffset := 32
 
-	// Read key bag header (16 bytes)
-	bagHeader, err := NewKeyBagHeader()
+	// Read keybag header (16 bytes)
+	bagHeader, err := NewKeybagHeader()
 	if err != nil {
-		return fmt.Errorf("unable to create key bag header: %w", err)
+		return fmt.Errorf("unable to create keybag header: %w", err)
 	}
 
 	if err := bagHeader.ReadData(data[dataOffset:]); err != nil {
-		return fmt.Errorf("unable to read key bag header: %w", err)
+		return fmt.Errorf("unable to read keybag header: %w", err)
 	}
 
 	if int(bagHeader.DataSize) > len(data)-dataOffset {
-		return fmt.Errorf("invalid key bag header data size value out of bounds")
+		return fmt.Errorf("invalid keybag header data size value out of bounds")
 	}
 
 	dataOffset += 16
 
 	// Read all entries
 	for bagEntryIndex := uint16(0); bagEntryIndex < bagHeader.NumberOfEntries; bagEntryIndex++ {
-		bagEntry, err := NewKeyBagEntry()
+		bagEntry, err := NewKeybagEntry()
 		if err != nil {
-			return fmt.Errorf("unable to create key bag entry: %d: %w", bagEntryIndex, err)
+			return fmt.Errorf("unable to create keybag entry: %d: %w", bagEntryIndex, err)
 		}
 
 		if err := bagEntry.ReadData(data[dataOffset:]); err != nil {
-			return fmt.Errorf("unable to read key bag entry: %d: %w", bagEntryIndex, err)
+			return fmt.Errorf("unable to read keybag entry: %d: %w", bagEntryIndex, err)
 		}
 
 		v.Entries = append(v.Entries, bagEntry)
@@ -197,8 +191,8 @@ func (v *VolumeKeyBag) ReadData(data []byte) error {
 				return fmt.Errorf("invalid data size value out of bounds")
 			}
 
-			if IsVerbose() {
-				Printf("%s: alignment padding data:\n", "ReadData")
+			if isVerbose() {
+				notifyPrintf("%s: alignment padding data:\n", "ReadData")
 				PrintData(data[dataOffset:dataOffset+alignmentPaddingSize], true)
 			}
 
@@ -209,15 +203,14 @@ func (v *VolumeKeyBag) ReadData(data []byte) error {
 	return nil
 }
 
-// GetVolumeKey retrieves the volume key that can be unlocked with the given passwords
+// VolumeKey retrieves the volume key that can be unlocked with the given passwords
 // Returns true and the key if successful, false if no key could be unlocked
-// Corresponds to libfsapfs_volume_key_bag_get_volume_key
-func (v *VolumeKeyBag) GetVolumeKey(
+func (v *VolumeKeybag) VolumeKey(
 	userPassword []byte,
 	recoveryPassword []byte,
 ) ([]byte, bool, error) {
 	if v == nil {
-		return nil, false, fmt.Errorf("invalid volume key bag")
+		return nil, false, fmt.Errorf("invalid volume keybag")
 	}
 
 	// Iterate through all entries looking for type 3 (KEK entries)
@@ -226,19 +219,19 @@ func (v *VolumeKeyBag) GetVolumeKey(
 			return nil, false, fmt.Errorf("missing entry: %d", entryIndex)
 		}
 
-		// Type 3 is the key encrypted key (KEK) entry
+		// Type 3 is the key encryption key (KEK) entry
 		if bagEntry.Type != 3 {
 			continue
 		}
 
-		// Parse the key encrypted key
-		keyEncryptedKey, err := NewKeyEncryptedKey()
+		// Parse the key encryption key
+		keyEncryptedKey, err := NewKeyEncryptionKey()
 		if err != nil {
-			return nil, false, fmt.Errorf("unable to create key encrypted key: %w", err)
+			return nil, false, fmt.Errorf("unable to create key encryption key: %w", err)
 		}
 
 		if err := keyEncryptedKey.ReadData(bagEntry.Data); err != nil {
-			return nil, false, fmt.Errorf("unable to read key encrypted key: %w", err)
+			return nil, false, fmt.Errorf("unable to read key encryption key: %w", err)
 		}
 
 		// Try to unlock with user password first

@@ -5,7 +5,6 @@ import (
 )
 
 // BTreeEntry represents a B-tree entry (key-value pair)
-// Corresponds to libfsapfs_btree_entry.h
 type BTreeEntry struct {
 	// The key data
 	KeyData []byte

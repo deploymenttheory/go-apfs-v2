@@ -315,7 +315,7 @@ func (r *DMGReader) parsePartition(block *blkxEntry) (*DMGPartition, error) {
 	return partition, nil
 }
 
-// findAPFSPartition locates the filesystem data partition in the DMG:
+// findAPFSPartition locates the file system data partition in the DMG:
 // GPT-partitioned images via the GPT entries, Apple Partition Map images
 // via the blkx partition names (e.g. "Mac_OS_X (Apple_HFSX : 3)").
 func (r *DMGReader) findAPFSPartition() error {

@@ -8,7 +8,6 @@ import (
 )
 
 // EncryptionContext represents an APFS encryption context
-// Corresponds to libfsapfs_encryption_context_t
 type EncryptionContext struct {
 	// Method is the encryption method
 	Method uint32
@@ -21,7 +20,6 @@ type EncryptionContext struct {
 }
 
 // NewEncryptionContext creates a new encryption context
-// Corresponds to libfsapfs_encryption_context_initialize
 func NewEncryptionContext(method uint32) (*EncryptionContext, error) {
 	// Validate that method is supported (only AES-128-XTS)
 	if method != uint32(EncryptionMethodAES128XTS) {
@@ -34,7 +32,6 @@ func NewEncryptionContext(method uint32) (*EncryptionContext, error) {
 }
 
 // SetKeys sets the de- and encryption keys
-// Corresponds to libfsapfs_encryption_context_set_keys
 func (ec *EncryptionContext) SetKeys(key []byte, tweakKey []byte) error {
 	if ec == nil {
 		return fmt.Errorf("invalid context")
@@ -82,7 +79,6 @@ func (ec *EncryptionContext) SetKeys(key []byte, tweakKey []byte) error {
 }
 
 // Crypt encrypts or decrypts a block of data
-// Corresponds to libfsapfs_encryption_context_crypt
 func (ec *EncryptionContext) Crypt(
 	mode CryptMode,
 	inputData []byte,
@@ -212,7 +208,6 @@ func multiplyTweakByAlpha(tweak []byte) {
 }
 
 // AESKeyUnwrap unwraps data using AES Key Wrap (RFC 3394)
-// Corresponds to libfsapfs_encryption_aes_key_unwrap
 func AESKeyUnwrap(key []byte, keyBitSize int, wrappedData []byte) ([]byte, error) {
 	if key == nil {
 		return nil, fmt.Errorf("invalid AES key")
@@ -253,8 +248,8 @@ func AESKeyUnwrap(key []byte, keyBitSize int, wrappedData []byte) ([]byte, error
 	numberOfBlocks := len(wrappedData) / 8
 
 	if DebugOutput {
-		fmt.Printf("libfsapfs_encryption_aes_key_unwrap: number of blocks: %d\n", numberOfBlocks)
-		fmt.Printf("libfsapfs_encryption_aes_key_unwrap: wrapped data:\n")
+		fmt.Printf("EncryptionContext.AESKeyUnwrap: number of blocks: %d\n", numberOfBlocks)
+		fmt.Printf("EncryptionContext.AESKeyUnwrap: wrapped data:\n")
 		PrintData(wrappedData, false)
 	}
 
@@ -295,7 +290,7 @@ func AESKeyUnwrap(key []byte, keyBitSize int, wrappedData []byte) ([]byte, error
 	}
 
 	if DebugOutput {
-		fmt.Printf("libfsapfs_encryption_aes_key_unwrap: unwrapped data:\n")
+		fmt.Printf("EncryptionContext.AESKeyUnwrap: unwrapped data:\n")
 		PrintData(unwrappedData, false)
 	}
 

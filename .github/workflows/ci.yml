@@ -42,13 +42,13 @@ jobs:
           go-version-file: go.mod
       - name: Vet
         run: go vet ./...
-      - name: Build apfsck oracle (Linux; pinned version)
+      - name: Build apfsck (Linux; pinned version)
         if: runner.os == 'Linux'
         run: |
-          # apfsck is the Linux-side validation oracle for the containers
-          # pkg/apfswrite produces (fsck_apfs is the macOS oracle). The apt
-          # package is stale (Dec 2023); build a pinned recent version from
-          # source so the oracle's checks are stable across CI runs.
+          # apfsck checks the containers pkg/apfswrite produces on Linux;
+          # fsck_apfs does the same job on macOS. The apt package is stale
+          # (Dec 2023), so build a pinned version from source and keep its
+          # checks stable across runs.
           git clone --depth 1 --branch v0.2.1 https://github.com/linux-apfs/apfsprogs /tmp/apfsprogs
           make -C /tmp/apfsprogs/apfsck
           sudo cp /tmp/apfsprogs/apfsck/apfsck /usr/local/bin/
@@ -56,11 +56,12 @@ jobs:
       - name: Unit tests
         env:
           CGO_ENABLED: "0"
-        run: go test ./pkg/...
-      - name: CLI acceptance tests (fixtures)
+        # Everything except the acceptance suite, which runs separately below.
+        run: go test ./pkg/... ./internal/...
+      - name: Acceptance tests (committed fixtures)
         env:
           CGO_ENABLED: "0"
-        run: go test -v ./internal/cli/
+        run: go test -v ./acceptance/
       - name: Cache acceptance images
         id: dmg-cache
         uses: actions/cache@v4
@@ -86,7 +87,7 @@ jobs:
           CGO_ENABLED: "0"
           APFS_ACCEPTANCE_DMG: ${{ github.workspace }}/.acceptance-cache/Firefox.dmg
         shell: bash
-        run: go test -v -run TestAcceptance ./internal/cli/
+        run: go test -v -run TestAcceptance ./acceptance/
       - name: Acceptance tests (Zed 0.196.5 image, APFS)
         env:
           CGO_ENABLED: "0"
@@ -96,4 +97,4 @@ jobs:
           APFS_ACCEPTANCE_BUNDLE_ID: dev.zed.Zed
           APFS_ACCEPTANCE_BINARY: zed
         shell: bash
-        run: go test -v -run TestAcceptance ./internal/cli/
+        run: go test -v -run TestAcceptance ./acceptance/

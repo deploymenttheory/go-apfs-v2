@@ -7,25 +7,25 @@ import (
 	"github.com/deploymenttheory/go-apfs-v2/internal/common"
 )
 
-// BTreeFooterSize is the size of the B-tree footer in bytes
-const BTreeFooterSize = 40
+// BTreeInfoSize is the size of the B-tree info in bytes
+const BTreeInfoSize = 40
 
-// NewBTreeFooter creates a new B-tree footer
-func NewBTreeFooter() *BTreeFooter {
-	return &BTreeFooter{}
+// NewBTreeInfo creates a new B-tree info
+func NewBTreeInfo() *BTreeInfo {
+	return &BTreeInfo{}
 }
 
-// ReadData reads the B-tree footer from binary data
-func (f *BTreeFooter) ReadData(data []byte) error {
+// ReadData reads the B-tree info from binary data
+func (f *BTreeInfo) ReadData(data []byte) error {
 	if f == nil {
-		return fmt.Errorf("invalid B-tree footer")
+		return fmt.Errorf("invalid B-tree info")
 	}
 
 	if data == nil {
 		return fmt.Errorf("invalid data")
 	}
 
-	if len(data) < BTreeFooterSize || len(data) > common.Int32Max {
+	if len(data) < BTreeInfoSize || len(data) > common.Int32Max {
 		return fmt.Errorf("invalid data size value out of bounds")
 	}
 
@@ -50,16 +50,16 @@ func (f *BTreeFooter) ReadData(data []byte) error {
 }
 
 // HasFixedSizeKeys returns true if keys are fixed size
-func (f *BTreeFooter) HasFixedSizeKeys() bool {
+func (f *BTreeInfo) HasFixedSizeKeys() bool {
 	return (f.Flags & 0x00000001) != 0
 }
 
 // HasFixedSizeValues returns true if values are fixed size
-func (f *BTreeFooter) HasFixedSizeValues() bool {
+func (f *BTreeInfo) HasFixedSizeValues() bool {
 	return (f.Flags & 0x00000002) != 0
 }
 
 // UsesHashes returns true if the B-tree uses hashes
-func (f *BTreeFooter) UsesHashes() bool {
+func (f *BTreeInfo) UsesHashes() bool {
 	return (f.Flags & 0x00000004) != 0
 }

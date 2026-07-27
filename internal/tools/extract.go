@@ -21,7 +21,7 @@ import (
 	"github.com/schollz/progressbar/v3"
 )
 
-// VolumeFS is the filesystem contract the extractor walks. APFS and HFS+
+// VolumeFS is the file system contract the extractor walks. APFS and HFS+
 // volumes both implement it.
 type VolumeFS interface {
 	fs.FS
@@ -77,7 +77,7 @@ func (e *Extractor) warnSkip(format string, args ...any) {
 // trailing spaces/dots, reserved characters and reserved device names). When
 // a component is remapped the change is reported and counted, so extraction
 // stays lossless in content and never fails purely because the source used a
-// name the destination filesystem cannot store verbatim.
+// name the destination file system cannot store verbatim.
 func (e *Extractor) destPath(rel string) string {
 	if rel == "" {
 		return e.Destination
@@ -85,7 +85,7 @@ func (e *Extractor) destPath(rel string) string {
 	sanitized, changed := sanitizePathForHost(rel)
 	if changed {
 		e.namesRemapped++
-		fmt.Fprintf(os.Stderr, "Note: %q cannot be represented on this filesystem; extracted as %q\n", rel, sanitized)
+		fmt.Fprintf(os.Stderr, "Note: %q cannot be represented on this file system; extracted as %q\n", rel, sanitized)
 	}
 	return filepath.Join(e.Destination, filepath.FromSlash(sanitized))
 }
@@ -97,7 +97,7 @@ func (e *Extractor) ExtractAll() error {
 
 // ExtractByPath extracts a specific file or directory by absolute volume path.
 func (e *Extractor) ExtractByPath(volumePath string, recursive bool) error {
-	name := fsNameFromVolumePath(volumePath)
+	name := FSNameFromVolumePath(volumePath)
 
 	info, err := e.Volume.Stat(name)
 	if err != nil {
@@ -343,9 +343,9 @@ func (e *Extractor) applyMetadata(destPath string, info fs.FileInfo) {
 	}
 }
 
-// fsNameFromVolumePath converts an absolute volume path ("/a/b") to an fs.FS
+// FSNameFromVolumePath converts an absolute volume path ("/a/b") to an fs.FS
 // name ("a/b", or "." for the root).
-func fsNameFromVolumePath(volumePath string) string {
+func FSNameFromVolumePath(volumePath string) string {
 	name := strings.Trim(path.Clean("/"+volumePath), "/")
 	if name == "" {
 		return "."
@@ -386,13 +386,13 @@ func (e *Extractor) SymlinksDegraded() int {
 }
 
 // NamesRemapped returns the number of entries whose names were sanitized to
-// be storable on the host filesystem.
+// be storable on the host file system.
 func (e *Extractor) NamesRemapped() int {
 	return e.namesRemapped
 }
 
-// GetStats returns extraction statistics
-func (e *Extractor) GetStats() (filesExtracted int, bytesExtracted uint64) {
+// Stats returns extraction statistics
+func (e *Extractor) Stats() (filesExtracted int, bytesExtracted uint64) {
 	return e.filesExtracted, e.bytesExtracted
 }
 

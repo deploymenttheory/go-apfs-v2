@@ -1,6 +1,5 @@
 // Mount path string manipulation utilities for APFS mount operations
-// Corresponds to libfsapfs mount_path_string.c and mount_path_string.h
-// This differs from path_string.go in that it handles filesystem path separators differently
+// This differs from path_string.go in that it handles file system path separators differently
 package tools
 
 import (
@@ -27,7 +26,6 @@ func getOSPathSeparator() rune {
 // This differs from escapePath in that it:
 // - Escapes the OS path separator (/ on Unix, \ on Windows)
 // - On Windows, also escapes special filename characters: < > : " / | ? *
-// Corresponds to mount_path_string_copy_from_file_entry_path
 func EscapeMountPath(fileEntryPath string) string {
 	var result strings.Builder
 	result.Grow(len(fileEntryPath) * 10)
@@ -68,7 +66,6 @@ func shouldEscapeWindowsChar(r rune) bool {
 }
 
 // UnescapeMountPath converts an escaped mount path back to a file entry path
-// Corresponds to mount_path_string_copy_to_file_entry_path
 func UnescapeMountPath(mountPath string) (string, error) {
 	if mountPath == "" {
 		return "", nil

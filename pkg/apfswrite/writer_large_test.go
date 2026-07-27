@@ -4,15 +4,10 @@
 package apfswrite_test
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"fmt"
 	"io/fs"
 	"math/rand"
-	"os/exec"
-	"path/filepath"
-	"runtime"
-	"strings"
 	"testing"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
@@ -28,7 +23,7 @@ func randomBytes(n int, seed int64) []byte {
 }
 
 // openVolumeSize creates a container of the given size and returns its first
-// volume as an fs.FS, using the MIT reader as the cross-platform oracle.
+// volume as an fs.FS, reading it back with the MIT reader in pkg/apfs.
 func openVolumeSize(t *testing.T, size int64, opts *apfswrite.CreateOptions) *apfs.Volume {
 	t.Helper()
 	img := &memImage{}
@@ -142,7 +137,7 @@ func TestCreateContainerEmptyFile(t *testing.T) {
 }
 
 // TestCreateContainerManyExtents writes enough files to overflow a single
-// extent-reference leaf, forcing the extref tree to grow to two physical
+// extent-reference leaf, forcing the extentref tree to grow to two physical
 // levels, and verifies every file still reads back correctly. Runs on every OS.
 func TestCreateContainerManyExtents(t *testing.T) {
 	const nFiles = 200
@@ -160,41 +155,6 @@ func TestCreateContainerManyExtents(t *testing.T) {
 	walkAndAssert(t, v, collectWants(root))
 }
 
-// TestCreateContainerManyExtentsFsckClean runs fsck_apfs against a container
-// whose extent-reference tree has grown to two physical levels (macOS only).
-func TestCreateContainerManyExtentsFsckClean(t *testing.T) {
-	if runtime.GOOS != "darwin" {
-		t.Skip("fsck_apfs is only available on macOS")
-	}
-	requireTools(t, "hdiutil", "fsck_apfs")
-
-	const nFiles = 200
-	children := make([]*apfswrite.Entry, 0, nFiles)
-	for i := 0; i < nFiles; i++ {
-		children = append(children, &apfswrite.Entry{
-			Name: fmt.Sprintf("blob_%03d.bin", i),
-			Data: randomBytes(1000+i, int64(1000+i)),
-		})
-	}
-	root := &apfswrite.Entry{Children: children}
-
-	const size = 32 * 1024 * 1024
-	imgPath := filepath.Join(t.TempDir(), "manyextents.img")
-	writeImage(t, imgPath, size, &apfswrite.CreateOptions{VolumeName: "FsckManyExtents", Root: root})
-
-	dev := attachRaw(t, imgPath)
-	defer detach(t, dev)
-
-	out, err := exec.Command("fsck_apfs", "-n", dev).CombinedOutput()
-	t.Logf("fsck_apfs output:\n%s", out)
-	if err != nil {
-		t.Fatalf("fsck_apfs reported errors (exit %v)", err)
-	}
-	if !strings.Contains(string(out), "appears to be OK") {
-		t.Errorf("fsck_apfs did not report the container clean")
-	}
-}
-
 // TestCreateContainerAutoSize verifies that passing size 0 sizes the image to
 // fit a large file plus metadata automatically.
 func TestCreateContainerAutoSize(t *testing.T) {
@@ -210,6 +170,12 @@ func TestCreateContainerAutoSize(t *testing.T) {
 // chunk boundary (a 4 KiB-block chunk spans 32768 blocks = 128 MiB), exercising
 // the multi-chunk bitmap / chunk-info / free-count accounting. Reads back on
 // every OS; runs fsck_apfs on darwin.
+// multiChunkSize is the container size used by the multi-chunk tests: enough
+// for 130 MiB of file data plus metadata, which pushes the used region past
+// block 32768 (the end of chunk 0). The acceptance half of this test lives in
+// acceptance/writer_apfs_test.go.
+const multiChunkSize = 160 * 1024 * 1024
+
 func TestCreateContainerMultiChunk(t *testing.T) {
 	// 130 MiB of data pushes the used region past block 32768 (chunk 0).
 	big := randomBytes(130*(1<<20)+777, 7)
@@ -218,62 +184,6 @@ func TestCreateContainerMultiChunk(t *testing.T) {
 		{Name: "note.txt", Data: []byte("crosses a chunk boundary\n")},
 	}}
 
-	const size = 160 * 1024 * 1024
-
-	// Cross-platform reader check.
-	v := openVolumeSize(t, size, &apfswrite.CreateOptions{VolumeName: "MultiChunk", Root: root})
+	v := openVolumeSize(t, multiChunkSize, &apfswrite.CreateOptions{VolumeName: "MultiChunk", Root: root})
 	walkAndAssert(t, v, collectWants(root))
-
-	if runtime.GOOS != "darwin" {
-		return
-	}
-	requireTools(t, "hdiutil", "fsck_apfs")
-	imgPath := filepath.Join(t.TempDir(), "multichunk.img")
-	writeImage(t, imgPath, size, &apfswrite.CreateOptions{VolumeName: "MultiChunk", Root: root})
-	dev := attachRaw(t, imgPath)
-	defer detach(t, dev)
-	out, err := exec.Command("fsck_apfs", "-n", dev).CombinedOutput()
-	t.Logf("fsck_apfs output:\n%s", out)
-	if err != nil {
-		t.Fatalf("fsck_apfs reported errors (exit %v)", err)
-	}
-	if !strings.Contains(string(out), "appears to be OK") {
-		t.Errorf("fsck_apfs did not report the container clean")
-	}
-}
-
-// TestCreateContainerLargeFileFsckClean runs Apple's fsck_apfs against a tree
-// containing large multi-block files and an empty file (macOS only).
-func TestCreateContainerLargeFileFsckClean(t *testing.T) {
-	if runtime.GOOS != "darwin" {
-		t.Skip("fsck_apfs is only available on macOS")
-	}
-	requireTools(t, "hdiutil", "fsck_apfs")
-
-	root := &apfswrite.Entry{Children: []*apfswrite.Entry{
-		{Name: "onemib.bin", Data: randomBytes(1<<20, 1)},
-		{Name: "partial.bin", Data: randomBytes(1<<20+123, 2)},
-		{Name: "five.bin", Data: randomBytes(5*(1<<20)+4095, 3)},
-		{Name: "empty.txt", Data: []byte{}},
-		{Name: "docs", Mode: fs.ModeDir, Children: []*apfswrite.Entry{
-			{Name: "twoblk.bin", Data: bytes.Repeat([]byte{0x5A}, 2*4096)},
-			{Name: "emptytoo", Data: nil},
-		}},
-	}}
-
-	const size = 64 * 1024 * 1024
-	imgPath := filepath.Join(t.TempDir(), "large.img")
-	writeImage(t, imgPath, size, &apfswrite.CreateOptions{VolumeName: "FsckLargeVol", Root: root})
-
-	dev := attachRaw(t, imgPath)
-	defer detach(t, dev)
-
-	out, err := exec.Command("fsck_apfs", "-n", dev).CombinedOutput()
-	t.Logf("fsck_apfs output:\n%s", out)
-	if err != nil {
-		t.Fatalf("fsck_apfs reported errors (exit %v)", err)
-	}
-	if !strings.Contains(string(out), "appears to be OK") {
-		t.Errorf("fsck_apfs did not report the container clean")
-	}
 }

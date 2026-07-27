@@ -1,5 +1,4 @@
 // Bodyfile output functions for APFS
-// Corresponds to libfsapfs bodyfile.c and bodyfile.h
 package tools
 
 import (
@@ -45,7 +44,6 @@ func (be *BodyfileEntry) FormatBodyfileLine() string {
 }
 
 // escapePath escapes special characters in a path for bodyfile format
-// This matches the behavior of bodyfile_path_string_copy_from_file_entry_path in libfsapfs
 // It handles:
 // - Control characters (U+0-U+1f, U+7f-U+9f) -> \x##
 // - Unicode surrogate characters and undefined Unicode -> \U########
@@ -130,46 +128,46 @@ func FileEntryToBodyfileEntry(entry *apfs.FileEntry, path string, calculateMD5 b
 	}
 
 	// Get inode/identifier
-	if identifier, err := entry.GetIdentifier(); err == nil {
+	if identifier, err := entry.Identifier(); err == nil {
 		be.Inode = identifier
 	}
 
 	// Get file mode
-	if fileMode, err := entry.GetFileMode(); err == nil {
+	if fileMode, err := entry.FileMode(); err == nil {
 		be.Mode = formatFileMode(fileMode)
 	}
 
 	// Get owner/group
-	if uid, err := entry.GetOwnerIdentifier(); err == nil {
+	if uid, err := entry.OwnerIdentifier(); err == nil {
 		be.UID = uid
 	}
-	if gid, err := entry.GetGroupIdentifier(); err == nil {
+	if gid, err := entry.GroupIdentifier(); err == nil {
 		be.GID = gid
 	}
 
 	// Get size
-	if size, err := entry.GetSize(); err == nil {
+	if size, err := entry.Size(); err == nil {
 		be.Size = size
 	}
 
 	// Get timestamps (convert from nanoseconds to seconds)
-	if atime, err := entry.GetAccessTime(); err == nil {
+	if atime, err := entry.AccessTime(); err == nil {
 		be.AccessTime = atime / 1000000000 // Convert nanoseconds to seconds
 	}
-	if mtime, err := entry.GetModificationTime(); err == nil {
+	if mtime, err := entry.ModificationTime(); err == nil {
 		be.ModTime = mtime / 1000000000
 	}
-	if ctime, err := entry.GetInodeChangeTime(); err == nil {
+	if ctime, err := entry.InodeChangeTime(); err == nil {
 		be.ChangeTime = ctime / 1000000000
 	}
-	if crtime, err := entry.GetCreationTime(); err == nil {
+	if crtime, err := entry.CreationTime(); err == nil {
 		be.CreationTime = crtime / 1000000000
 	}
 
 	// Calculate MD5 if requested
 	if calculateMD5 {
 		// Check if it's a regular file
-		if fileMode, err := entry.GetFileMode(); err == nil {
+		if fileMode, err := entry.FileMode(); err == nil {
 			isRegularFile := (fileMode & 0x8000) != 0 // S_IFREG
 			if isRegularFile {
 				md5Hash, err := CalculateMD5Hash(entry)

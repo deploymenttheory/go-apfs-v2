@@ -10,7 +10,6 @@ import (
 )
 
 // PBKDF2 computes a PBKDF2-derived key from the given input using HMAC-SHA256
-// Corresponds to libfsapfs_password_pbkdf2
 //
 // Parameters:
 //   - password: The password to derive the key from
@@ -48,26 +47,26 @@ func PBKDF2(password []byte, salt []byte, numberOfIterations uint32, outputSize 
 		return nil, fmt.Errorf("invalid output data size value exceeds maximum")
 	}
 
-	if IsVerbose() {
-		Printf("%s: password:\n", "PBKDF2")
+	if isVerbose() {
+		notifyPrintf("%s: password:\n", "PBKDF2")
 		PrintData(password, false)
 
-		Printf("%s: salt:\n", "PBKDF2")
+		notifyPrintf("%s: salt:\n", "PBKDF2")
 		PrintData(salt, false)
 
-		Printf("%s: number of iterations\t\t\t\t: %d\n", "PBKDF2", numberOfIterations)
-		Printf("%s: output size\t\t\t\t\t: %d\n", "PBKDF2", outputSize)
-		Printf("\n")
+		notifyPrintf("%s: number of iterations\t\t\t\t: %d\n", "PBKDF2", numberOfIterations)
+		notifyPrintf("%s: output size\t\t\t\t\t: %d\n", "PBKDF2", outputSize)
+		notifyPrintf("\n")
 	}
 
 	// Use Go's standard PBKDF2 implementation with HMAC-SHA256
 	// This is equivalent to the manual implementation in the C code but more robust
 	derivedKey := pbkdf2.Key(password, salt, int(numberOfIterations), outputSize, sha256.New)
 
-	if IsVerbose() {
-		Printf("%s: derived key:\n", "PBKDF2")
+	if isVerbose() {
+		notifyPrintf("%s: derived key:\n", "PBKDF2")
 		PrintData(derivedKey, false)
-		Printf("\n")
+		notifyPrintf("\n")
 	}
 
 	return derivedKey, nil

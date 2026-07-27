@@ -1,5 +1,4 @@
-// The key encrypted key (KEK) functions
-// Corresponds to libfsapfs_key_encrypted_key.c and libfsapfs_key_encrypted_key.h
+// The key encryption key (KEK) functions
 package apfs
 
 import (
@@ -10,12 +9,10 @@ import (
 )
 
 // WrappedKEKInitializationVector is the expected IV for wrapped KEK
-// Corresponds to libfsapfs_key_encrypted_key_wrapped_kek_initialization_vector
 var WrappedKEKInitializationVector = [8]byte{0xa6, 0xa6, 0xa6, 0xa6, 0xa6, 0xa6, 0xa6, 0xa6}
 
-// KeyEncryptedKey represents an APFS key encrypted key (KEK)
-// Corresponds to libfsapfs_key_encrypted_key_t
-type KeyEncryptedKey struct {
+// KeyEncryptionKey represents an APFS key encryption key (KEK)
+type KeyEncryptionKey struct {
 	// The identifier (UUID)
 	Identifier [16]byte
 
@@ -31,14 +28,13 @@ type KeyEncryptedKey struct {
 	// The encryption method
 	EncryptionMethod uint32
 
-	// The wrapped key encrypted key (KEK)
+	// The wrapped key encryption key (KEK)
 	WrappedKEK [40]byte
 }
 
-// NewKeyEncryptedKey creates a new key encrypted key
-// Corresponds to libfsapfs_key_encrypted_key_initialize
-func NewKeyEncryptedKey() (*KeyEncryptedKey, error) {
-	return &KeyEncryptedKey{
+// NewKeyEncryptionKey creates a new key encryption key
+func NewKeyEncryptionKey() (*KeyEncryptionKey, error) {
+	return &KeyEncryptionKey{
 		Identifier:         [16]byte{},
 		HMAC:               [32]byte{},
 		NumberOfIterations: 0,
@@ -96,11 +92,10 @@ func readTagLengthValue(data []byte, offset int) (tag uint8, valueData []byte, n
 	return tag, valueData, newOffset, nil
 }
 
-// ReadData reads the key encrypted key from binary data
-// Corresponds to libfsapfs_key_encrypted_key_read_data
-func (kek *KeyEncryptedKey) ReadData(data []byte) error {
+// ReadData reads the key encryption key from binary data
+func (kek *KeyEncryptionKey) ReadData(data []byte) error {
 	if kek == nil {
-		return fmt.Errorf("invalid key encrypted key")
+		return fmt.Errorf("invalid key encryption key")
 	}
 
 	if len(data) < 2 {
@@ -232,12 +227,11 @@ func (kek *KeyEncryptedKey) ReadData(data []byte) error {
 	return nil
 }
 
-// UnlockWithKey unlocks the key encrypted key using a key
+// UnlockWithKey unlocks the key encryption key using a key
 // Returns the unlocked key, or nil if unlocking failed
-// Corresponds to libfsapfs_key_encrypted_key_unlock_with_key
-func (kek *KeyEncryptedKey) UnlockWithKey(key []byte) ([]byte, error) {
+func (kek *KeyEncryptionKey) UnlockWithKey(key []byte) ([]byte, error) {
 	if kek == nil {
-		return nil, fmt.Errorf("invalid key encrypted key")
+		return nil, fmt.Errorf("invalid key encryption key")
 	}
 
 	if key == nil || len(key) != 32 {
@@ -295,12 +289,11 @@ func (kek *KeyEncryptedKey) UnlockWithKey(key []byte) ([]byte, error) {
 	return unlockedKey, nil
 }
 
-// UnlockWithPassword unlocks the key encrypted key using a password
+// UnlockWithPassword unlocks the key encryption key using a password
 // Returns the unlocked key, or nil if unlocking failed
-// Corresponds to libfsapfs_key_encrypted_key_unlock_with_password
-func (kek *KeyEncryptedKey) UnlockWithPassword(password []byte) ([]byte, error) {
+func (kek *KeyEncryptionKey) UnlockWithPassword(password []byte) ([]byte, error) {
 	if kek == nil {
-		return nil, fmt.Errorf("invalid key encrypted key")
+		return nil, fmt.Errorf("invalid key encryption key")
 	}
 
 	// Determine sizes based on encryption method
@@ -318,7 +311,6 @@ func (kek *KeyEncryptedKey) UnlockWithPassword(password []byte) ([]byte, error) 
 	}
 
 	// Derive password key using PBKDF2
-	// Corresponds to libfsapfs_password_pbkdf2 call in C implementation
 	passwordKey, err := PBKDF2(password, kek.Salt[:], uint32(kek.NumberOfIterations), passwordKeySize)
 	if err != nil {
 		return nil, fmt.Errorf("unable to derive password key: %w", err)

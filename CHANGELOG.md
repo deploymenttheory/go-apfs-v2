@@ -27,7 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `fsck_apfs`/`hdiutil` (macOS) and `apfsck` (Linux). Exposed via
   `apfs create --fs apfs` and `apfs pack <dir> --fs apfs`.
 - **DMG/UDIF writer** (`pkg/disk`): `apfs pack` repacks a DMG losslessly
-  (raw filesystem image preserved bit-for-bit); LZMA (ULMO) chunk support and
+  (raw file system image preserved bit-for-bit); LZMA (ULMO) chunk support and
   Apple Partition Map handling on the read side.
 - **CLI**: `info`, `list`, `cat`, `extract`, `inspect`, `mount`, `pack`,
   `create` — all behind cobra/viper with `--output json`, `APFS_*` environment

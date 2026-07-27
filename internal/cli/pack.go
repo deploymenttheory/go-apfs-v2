@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/disk"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/hfsplus"
@@ -27,7 +28,7 @@ var packCmd = &cobra.Command{
 	Long: `Pack SOURCE into a new UDIF DMG at OUT.dmg.
 
 If SOURCE is a directory, its contents are written into a new volume and
-wrapped in a DMG (this is the write/inverse of extract). The volume filesystem
+wrapped in a DMG (this is the write/inverse of extract). The volume file system
 is chosen with --fs:
 
   --fs hfs+  writes an HFS+ (HFSX) volume (default).
@@ -36,7 +37,7 @@ is chosen with --fs:
 If SOURCE is an existing DMG, its exact block layout is preserved while its
 chunks are recompressed. A repack is not byte-identical to the original —
 different compressors produce different container bytes — but the raw
-filesystem image round-trips bit-for-bit and the result mounts under both this
+file system image round-trips bit-for-bit and the result mounts under both this
 tool and macOS.
 
 Examples:
@@ -51,7 +52,7 @@ func init() {
 	packCmd.Flags().StringVar(&packCompression, "compression", "zlib", "chunk compression: zlib or none")
 	packCmd.Flags().UintVar(&packChunkKiB, "chunk-size", 1024, "chunk size in KiB (must be a multiple of 512 bytes)")
 	packCmd.Flags().StringVar(&packVolumeName, "volname", "", "volume name when packing a directory (default: directory name)")
-	packCmd.Flags().StringVar(&packFS, "fs", "hfs+", "filesystem when packing a directory: hfs+ or apfs")
+	packCmd.Flags().StringVar(&packFS, "fs", "hfs+", "file system when packing a directory: HFS+ or APFS (case-insensitive)")
 	packCmd.Flags().StringVar(&packSnapshot, "snapshot", "", "APFS only: also create a snapshot with this name capturing the packed volume")
 }
 
@@ -103,13 +104,13 @@ func packDirectory(srcDir, dstPath string, encOpts *disk.EncodeOptions) error {
 		}
 	}
 
-	switch packFS {
+	switch strings.ToLower(packFS) {
 	case "hfs+", "hfsx":
 		return packDirectoryHFS(srcDir, dstPath, volname, encOpts)
 	case "apfs":
 		return packDirectoryAPFS(srcDir, dstPath, volname, encOpts)
 	default:
-		return usageErrorf("invalid --fs %q: must be hfs+ or apfs", packFS)
+		return usageErrorf("invalid --fs %q: must be HFS+ or APFS", packFS)
 	}
 }
 
@@ -162,7 +163,7 @@ func packReport(srcPath, dstPath string, srcSize int64) error {
 }
 
 // writeAtBuffer is a growable in-memory io.WriterAt used to capture a raw
-// filesystem image before wrapping it in a DMG.
+// file system image before wrapping it in a DMG.
 type writeAtBuffer struct {
 	buf bytes.Buffer
 }

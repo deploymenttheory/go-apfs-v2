@@ -7,62 +7,7 @@ import (
 	"github.com/deploymenttheory/go-apfs-v2/internal/common"
 )
 
-// CRC32 polynomial used for checksum calculation
-const CRC32Polynomial = 0x82f63b78
-
-// CRC32Table stores precomputed CRC-32 values for lookup
-var CRC32Table [256]uint32
-
-// CRC32TableComputed indicates whether the CRC-32 table has been initialized
-var CRC32TableComputed = false
-
-// InitializeCRC32Table initializes the internal CRC-32 table
-// The table speeds up the CRC-32 calculation
-func InitializeCRC32Table() {
-	if CRC32TableComputed {
-		return
-	}
-
-	for tableIndex := 0; tableIndex < 256; tableIndex++ {
-		checksum := uint32(tableIndex)
-
-		for bitIterator := 0; bitIterator < 8; bitIterator++ {
-			if checksum&1 != 0 {
-				checksum = CRC32Polynomial ^ (checksum >> 1)
-			} else {
-				checksum = checksum >> 1
-			}
-		}
-		CRC32Table[tableIndex] = checksum
-	}
-	CRC32TableComputed = true
-}
-
-// CalculateWeakCRC32 calculates the weak CRC-32 checksum of a buffer of data
-func CalculateWeakCRC32(buffer []byte, initialValue uint32) (uint32, error) {
-	if buffer == nil {
-		return 0, fmt.Errorf("invalid buffer")
-	}
-
-	if int64(len(buffer)) > common.Int32Max {
-		return 0, fmt.Errorf("invalid size value exceeds maximum")
-	}
-
-	if !CRC32TableComputed {
-		InitializeCRC32Table()
-	}
-
-	safeChecksum := initialValue
-
-	for _, b := range buffer {
-		tableIndex := (safeChecksum ^ uint32(b)) & 0x000000ff
-		safeChecksum = CRC32Table[tableIndex] ^ (safeChecksum >> 8)
-	}
-
-	return safeChecksum, nil
-}
-
-// CalculateFletcher64 calculates the Fletcher-64 checksum of a buffer of data
+// CalculateFletcher64 calculates the Fletcher 64 checksum of a buffer of data
 func CalculateFletcher64(buffer []byte, initialValue uint64) (uint64, error) {
 	if buffer == nil {
 		return 0, fmt.Errorf("invalid buffer")
@@ -95,7 +40,7 @@ func CalculateFletcher64(buffer []byte, initialValue uint64) (uint64, error) {
 	return (upper32bit << 32) | value32bit, nil
 }
 
-// ValidateChecksum validates the Fletcher-64 checksum of an APFS object
+// ValidateChecksum validates the Fletcher 64 checksum of an APFS object
 // Returns true if the checksum is valid (non-zero and correct)
 func ValidateChecksum(data []byte) bool {
 	if len(data) < 8 {

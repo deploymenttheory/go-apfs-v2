@@ -6,13 +6,12 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/go-compressions/lzfse"
 	"github.com/deploymenttheory/go-apfs-v2/internal/common"
+	"github.com/go-compressions/lzfse"
 )
 
 // DecompressData decompresses data using the specified compression method
 // Returns the number of bytes written to uncompressedData, or an error
-// Corresponds to libfsapfs_decompress_data
 func DecompressData(
 	compressedData []byte,
 	compressionMethod int,

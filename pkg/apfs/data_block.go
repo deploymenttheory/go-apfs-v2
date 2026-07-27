@@ -8,7 +8,6 @@ import (
 )
 
 // DataBlock represents a data block that can be read from disk
-// Corresponds to libfsapfs_data_block_t
 type DataBlock struct {
 	// The data buffer
 	Data []byte
@@ -21,7 +20,6 @@ type DataBlock struct {
 const MaxDataBlockSize = 1024 * 1024 * 1024 // 1GB
 
 // NewDataBlock creates a new data block with the specified size
-// Corresponds to libfsapfs_data_block_initialize
 func NewDataBlock(size int) (*DataBlock, error) {
 	if size <= 0 {
 		return nil, fmt.Errorf("invalid data block size: %d", size)
@@ -37,10 +35,9 @@ func NewDataBlock(size int) (*DataBlock, error) {
 	}, nil
 }
 
-// Free releases resources associated with the data block
-// Corresponds to libfsapfs_data_block_free
+// Close releases resources associated with the data block
 // This method clears sensitive data before allowing garbage collection
-func (db *DataBlock) Free() error {
+func (db *DataBlock) Close() error {
 	if db == nil {
 		return fmt.Errorf("invalid data block")
 	}
@@ -60,7 +57,6 @@ func (db *DataBlock) Free() error {
 }
 
 // Clear clears the data in the block
-// Corresponds to libfsapfs_data_block_clear_data
 func (db *DataBlock) Clear() error {
 	if db == nil {
 		return fmt.Errorf("invalid data block")
@@ -83,9 +79,8 @@ func (db *DataBlock) Clear() error {
 }
 
 // Read reads the data block from disk at the specified offset
-// Corresponds to libfsapfs_data_block_read
 func (db *DataBlock) Read(
-	fileHandle io.ReaderAt,
+	reader io.ReaderAt,
 	ioHandle *IOHandle,
 	encryptionContext *EncryptionContext,
 	offset int64,
@@ -111,7 +106,7 @@ func (db *DataBlock) Read(
 		return fmt.Errorf("invalid IO handle - missing bytes per sector")
 	}
 
-	if fileHandle == nil {
+	if reader == nil {
 		return fmt.Errorf("invalid file handle")
 	}
 
@@ -126,7 +121,7 @@ func (db *DataBlock) Read(
 	}
 
 	// Read data from disk
-	n, err := fileHandle.ReadAt(readBuffer, offset)
+	n, err := reader.ReadAt(readBuffer, offset)
 	if err != nil && err != io.EOF {
 		return fmt.Errorf("unable to read data block at offset %d: %w", offset, err)
 	}
@@ -159,7 +154,7 @@ func (db *DataBlock) Read(
 // ReadBTreeNode reads a B-tree node from a data block
 // This is a convenience function that reads a block and then parses it as a B-tree node
 func ReadBTreeNode(
-	fileHandle io.ReaderAt,
+	reader io.ReaderAt,
 	ioHandle *IOHandle,
 	encryptionContext *EncryptionContext,
 	blockNumber uint64,
@@ -185,7 +180,7 @@ func ReadBTreeNode(
 	}
 
 	// Read the block
-	err = dataBlock.Read(fileHandle, ioHandle, encryptionContext, offset, blockNumber)
+	err = dataBlock.Read(reader, ioHandle, encryptionContext, offset, blockNumber)
 	if err != nil {
 		return nil, fmt.Errorf("unable to read data block: %w", err)
 	}

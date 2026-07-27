@@ -5,15 +5,15 @@ package apfswrite
 
 import "encoding/binary"
 
-// makeCatTree builds the volume's catalog (file-system) B-tree. When every
+// makeFSTree builds the volume's file-system tree (file-system) B-tree. When every
 // record fits in one node the tree is a single root-leaf. When the records
-// overflow one leaf the tree grows to two levels: an index root at (bno, oid)
+// overflow one leaf the tree grows to two levels: an index root at (paddr, oid)
 // plus one leaf per group of records,
 // each leaf a virtual object mapped by the volume object map. Child-node
 // pointers in the index are virtual oids, which the reader and fsck resolve
 // through that object map.
-func (b *builder) makeCatTree(bno, oid uint64) error {
-	recs := b.buildCatRecords()
+func (b *builder) makeFSTree(paddr, oid uint64) error {
+	recs := b.buildFSTreeRecords()
 
 	longestKey, longestVal := 0, 0
 	for _, r := range recs {
@@ -29,44 +29,44 @@ func (b *builder) makeCatTree(bno, oid uint64) error {
 		longestKey = sizeofDrecHashedKeyFixed + len("private-dir") + 1
 	}
 
-	if !b.catTwoLevel {
-		return b.writeCatNode(bno, oid, recs, true /* root */, 0, /* level */
-			&catFooter{longestKey: longestKey, longestVal: longestVal, keyCount: len(recs), nodeCount: 1})
+	if !b.fsTreeTwoLevel {
+		return b.writeFSTreeNode(paddr, oid, recs, true /* root */, 0, /* level */
+			&fsTreeInfo{longestKey: longestKey, longestVal: longestVal, keyCount: len(recs), nodeCount: 1})
 	}
 
-	leaves := packCatLeaves(recs, int(b.blocksize), 0)
-	idx := make([]catRecord, 0, len(leaves))
+	leaves := packFSTreeLeaves(recs, int(b.blocksize), 0)
+	idx := make([]fsTreeRecord, 0, len(leaves))
 	for i, leaf := range leaves {
-		leafOID := catLeafOIDBase + uint64(i)
-		leafBno := b.catLeafBase + uint64(i)
-		if err := b.writeCatNode(leafBno, leafOID, leaf, false /* not root */, 0 /* level */, nil); err != nil {
+		leafOID := fsTreeLeafOIDBase + uint64(i)
+		leafPaddr := b.fsTreeLeafBase + uint64(i)
+		if err := b.writeFSTreeNode(leafPaddr, leafOID, leaf, false /* not root */, 0 /* level */, nil); err != nil {
 			return err
 		}
 		// Index record: the leaf's first key -> the leaf's virtual oid.
 		val := make([]byte, 8)
 		binary.LittleEndian.PutUint64(val, leafOID)
-		idx = append(idx, catRecord{key: leaf[0].key, val: val})
+		idx = append(idx, fsTreeRecord{key: leaf[0].key, val: val})
 	}
 
 	nodeCount := 1 + len(leaves)
-	return b.writeCatIndex(bno, oid, idx, &catFooter{
+	return b.writeFSTreeIndex(paddr, oid, idx, &fsTreeInfo{
 		longestKey: longestKey, longestVal: longestVal, keyCount: len(recs), nodeCount: nodeCount,
 	})
 }
 
-// catFooter holds the values written into a catalog root node's btree_info.
-type catFooter struct {
+// fsTreeInfo holds the values written into a file-system tree root node's btree_info.
+type fsTreeInfo struct {
 	longestKey int
 	longestVal int
 	keyCount   int
 	nodeCount  int
 }
 
-// writeCatNode writes a catalog leaf node (level 0) holding recs. isRoot marks a
+// writeFSTreeNode writes a file-system tree leaf node (level 0) holding recs. isRoot marks a
 // single-node tree (root+leaf), which carries the btree_info footer; a plain
 // leaf of a taller tree has no footer and its values are counted from the end
 // of the block.
-func (b *builder) writeCatNode(bno, oid uint64, recs []catRecord, isRoot bool, level uint16, footer *catFooter) error {
+func (b *builder) writeFSTreeNode(paddr, oid uint64, recs []fsTreeRecord, isRoot bool, level uint16, footer *fsTreeInfo) error {
 	block := b.zeroedBlock()
 	headLen := sizeofBtreeNodePhys
 	infoLen := 0
@@ -82,7 +82,7 @@ func (b *builder) writeCatNode(bno, oid uint64, recs []catRecord, isRoot bool, l
 	tocLen := tocBytesFor(len(recs))
 	putNloc(block, btnOffTableSpace, 0, uint16(tocLen))
 
-	cur := &catCursor{
+	cur := &fsTreeCursor{
 		b:          b,
 		block:      block,
 		tocOff:     headLen,
@@ -105,15 +105,15 @@ func (b *builder) writeCatNode(bno, oid uint64, recs []catRecord, isRoot bool, l
 	objType := uint32(objectTypeBtreeNode) | objVirtual
 	if isRoot {
 		objType = objectTypeBtree | objVirtual
-		b.setCatFooter(block[int(b.blocksize)-infoLen:], footer)
+		b.setFSTreeInfo(block[int(b.blocksize)-infoLen:], footer)
 	}
 	setObjectHeader(block, int(b.blocksize), oid, objType, objectTypeFSTree)
-	return b.writeBlock(block, bno)
+	return b.writeBlock(block, paddr)
 }
 
-// writeCatIndex writes the catalog index root (level 1). Its records map the
+// writeFSTreeIndex writes the file-system tree index root (level 1). Its records map the
 // first key of each child leaf to that leaf's virtual oid (an 8-byte value).
-func (b *builder) writeCatIndex(bno, oid uint64, idx []catRecord, footer *catFooter) error {
+func (b *builder) writeFSTreeIndex(paddr, oid uint64, idx []fsTreeRecord, footer *fsTreeInfo) error {
 	block := b.zeroedBlock()
 	headLen := sizeofBtreeNodePhys
 	infoLen := sizeofBtreeInfo
@@ -125,7 +125,7 @@ func (b *builder) writeCatIndex(bno, oid uint64, idx []catRecord, footer *catFoo
 	tocLen := tocBytesFor(len(idx))
 	putNloc(block, btnOffTableSpace, 0, uint16(tocLen))
 
-	cur := &catCursor{
+	cur := &fsTreeCursor{
 		b:          b,
 		block:      block,
 		tocOff:     headLen,
@@ -145,14 +145,14 @@ func (b *builder) writeCatIndex(bno, oid uint64, idx []catRecord, footer *catFoo
 	putNloc(block, btnOffKeyFreeList, btoffInvalid, 0)
 	putNloc(block, btnOffValFreeList, btoffInvalid, 0)
 
-	b.setCatFooter(block[int(b.blocksize)-infoLen:], footer)
+	b.setFSTreeInfo(block[int(b.blocksize)-infoLen:], footer)
 	setObjectHeader(block, int(b.blocksize), oid,
 		objectTypeBtree|objVirtual, objectTypeFSTree)
-	return b.writeBlock(block, bno)
+	return b.writeBlock(block, paddr)
 }
 
-// setCatFooter writes a catalog root node's btree_info trailer.
-func (b *builder) setCatFooter(info []byte, f *catFooter) {
+// setFSTreeInfo writes a file-system tree root node's btree_info trailer.
+func (b *builder) setFSTreeInfo(info []byte, f *fsTreeInfo) {
 	binary.LittleEndian.PutUint32(info[0:], btreeKVNonaligned)     // bt_flags
 	binary.LittleEndian.PutUint32(info[4:], b.blocksize)           // bt_node_size
 	binary.LittleEndian.PutUint32(info[16:], uint32(f.longestKey)) // bt_longest_key
@@ -161,10 +161,10 @@ func (b *builder) setCatFooter(info []byte, f *catFooter) {
 	binary.LittleEndian.PutUint64(info[32:], uint64(f.nodeCount))  // bt_node_count
 }
 
-// putRecord lays out one variable-size (key, value) pair in a catalog node:
+// putRecord lays out one variable-size (key, value) pair in a file-system tree node:
 // the key grows forward from the key area, the value backward from the value
 // area, and a kvloc TOC entry records their offsets and lengths.
-func (c *catCursor) putRecord(key, val []byte) {
+func (c *fsTreeCursor) putRecord(key, val []byte) {
 	kStart := c.keyOff
 	copy(c.block[c.keyOff:], key)
 	c.keyOff += len(key)

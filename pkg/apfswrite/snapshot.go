@@ -11,20 +11,20 @@ import (
 )
 
 // snapBuild is a resolved snapshot to write: its name, transaction id, timestamp
-// and the block holding its frozen volume superblock.
+// and the block holding its snapshot's volume superblock.
 type snapBuild struct {
-	name      string
-	xid       uint64
-	mtime     uint64
-	inum      uint64
-	sblockBno uint64 // frozen volume superblock
-	extrefBno uint64 // the snapshot's own extent-reference tree
+	name           string
+	xid            uint64
+	mtime          uint64
+	inum           uint64
+	sblockPaddr    uint64 // snapshot's volume superblock
+	extentrefPaddr uint64 // the snapshot's own extentref tree
 }
 
-// snapNameObjID is the object-id field used in every snapshot-name key. The
+// objIDMask is the object-id field used in every snapshot-name key. The
 // format uses an all-ones id (the 60-bit object-id mask) so name records sort
 // after the metadata records within the snapshot-metadata tree.
-const snapNameObjID = 0x0fffffffffffffff
+const objIDMask = 0x0fffffffffffffff
 
 // maxSnapshots caps how many snapshots one volume may carry. The writer builds a
 // single static checkpoint at one transaction id, which macOS requires to mount
@@ -37,19 +37,19 @@ const maxSnapshots = 1
 // setSnapshots resolves opts.Snapshots into the builder. It validates the names,
 // assigns each snapshot a transaction id (1..N in request order), sets the live
 // xid one past the last snapshot, and counts the snapshot object blocks. With no
-// snapshots the live xid stays at mkfsXID, preserving the single-state layout.
+// snapshots the live xid stays at formatXID, preserving the single-state layout.
 func (b *builder) setSnapshots(opts *CreateOptions) error {
-	b.liveXID = mkfsXID
+	b.liveXID = formatXID
 	if len(opts.Snapshots) == 0 {
 		return nil
 	}
 	if len(opts.Snapshots) > maxSnapshots {
 		return fmt.Errorf("apfswrite: %d snapshots requested; at most %d are supported", len(opts.Snapshots), maxSnapshots)
 	}
-	// Each snapshot copies the extent-reference tree; only the single-leaf shape
+	// Each snapshot copies the extentref tree; only the single-leaf shape
 	// is supported for now, which covers volumes up to a few thousand extents.
-	if b.extrefTwoLevel {
-		return fmt.Errorf("apfswrite: snapshots are not yet supported for volumes with a 2-level extent-reference tree")
+	if b.extentrefTwoLevel {
+		return fmt.Errorf("apfswrite: snapshots are not yet supported for volumes with a 2-level extentref tree")
 	}
 	defaultTime := uint64(defaultInodeTime.UnixNano())
 	// Each snapshot is associated with a distinct inode number reserved past the
@@ -77,24 +77,24 @@ func (b *builder) setSnapshots(opts *CreateOptions) error {
 	}
 	// The snapshot and the live volume share the single static checkpoint's
 	// transaction id, so the live xid stays at the base xid.
-	b.liveXID = mkfsXID
-	// One shared omap snapshot tree, plus a frozen superblock and an
-	// extent-reference tree copy per snapshot.
+	b.liveXID = formatXID
+	// One shared omap snapshot tree, plus a snapshot volume superblock and an
+	// extentref tree copy per snapshot.
 	b.snapBlocks = 1 + 2*uint64(len(b.snapshots))
 	return nil
 }
 
 // placeSnapshots assigns block numbers to the snapshot objects starting at base:
-// the volume omap's snapshot tree first, then one frozen superblock per snapshot.
+// the volume omap's snapshot tree first, then one snapshot volume superblock per snapshot.
 func (b *builder) placeSnapshots(base uint64) {
 	if len(b.snapshots) == 0 {
 		return
 	}
 	b.snapBase = base
-	b.volSnapTreeBno = base
+	b.volSnapTreePaddr = base
 	for i := range b.snapshots {
-		b.snapshots[i].sblockBno = base + 1 + uint64(i)*2
-		b.snapshots[i].extrefBno = base + 2 + uint64(i)*2
+		b.snapshots[i].sblockPaddr = base + 1 + uint64(i)*2
+		b.snapshots[i].extentrefPaddr = base + 2 + uint64(i)*2
 	}
 }
 
@@ -109,18 +109,18 @@ func (b *builder) extentRefcount() uint32 {
 // writeSnapMetaTree writes the volume's snapshot-metadata tree: an empty
 // root-leaf when there are no snapshots, otherwise a root-leaf holding a
 // j_snap_metadata + j_snap_name record pair per snapshot.
-func (b *builder) writeSnapMetaTree(bno uint64) error {
+func (b *builder) writeSnapMetaTree(paddr uint64) error {
 	if len(b.snapshots) == 0 {
-		return b.writeEmptyTree(bno, bno, objectTypeSnapMetaTree)
+		return b.writeEmptyTree(paddr, paddr, objectTypeSnapMetaTree)
 	}
-	return b.writeSnapMetaNode(bno, b.snapMetaRecords())
+	return b.writeSnapMetaNode(paddr, b.snapMetaRecords())
 }
 
 // snapMetaRecords builds the (key, value) records for the snapshot-metadata
 // tree: per snapshot a j_snap_metadata record (keyed by xid) and a j_snap_name
 // record (keyed by name), sorted by the tree's key order.
-func (b *builder) snapMetaRecords() []catRecord {
-	recs := make([]catRecord, 0, 2*len(b.snapshots))
+func (b *builder) snapMetaRecords() []fsTreeRecord {
+	recs := make([]fsTreeRecord, 0, 2*len(b.snapshots))
 	for _, s := range b.snapshots {
 		name := append([]byte(s.name), 0) // NUL-terminated
 
@@ -128,8 +128,8 @@ func (b *builder) snapMetaRecords() []catRecord {
 		mkey := make([]byte, sizeofInodeKey)
 		setKeyHeader(mkey, 0, s.xid, typeSnapMetadata)
 		mval := make([]byte, sizeofSnapMetadataVal+len(name))
-		binary.LittleEndian.PutUint64(mval[0:], s.extrefBno)                  // extentref_tree_oid
-		binary.LittleEndian.PutUint64(mval[8:], s.sblockBno)                  // sblock_oid (physical)
+		binary.LittleEndian.PutUint64(mval[0:], s.extentrefPaddr)             // extentref_tree_oid
+		binary.LittleEndian.PutUint64(mval[8:], s.sblockPaddr)                // sblock_oid (physical)
 		binary.LittleEndian.PutUint64(mval[16:], s.mtime)                     // create_time
 		binary.LittleEndian.PutUint64(mval[24:], s.mtime)                     // change_time
 		binary.LittleEndian.PutUint64(mval[32:], s.inum)                      // inum
@@ -137,16 +137,16 @@ func (b *builder) snapMetaRecords() []catRecord {
 		binary.LittleEndian.PutUint32(mval[44:], 0)                           // flags
 		binary.LittleEndian.PutUint16(mval[48:], uint16(len(name)))           // name_len
 		copy(mval[sizeofSnapMetadataVal:], name)
-		recs = append(recs, catRecord{id: s.xid, typ: typeSnapMetadata, key: mkey, val: mval})
+		recs = append(recs, fsTreeRecord{id: s.xid, typ: typeSnapMetadata, key: mkey, val: mval})
 
 		// j_snap_name: key (~0, TYPE_SNAP_NAME) + name -> j_snap_name_val (xid).
 		nkey := make([]byte, sizeofInodeKey+2+len(name))
-		setKeyHeader(nkey, 0, snapNameObjID, typeSnapName)
+		setKeyHeader(nkey, 0, objIDMask, typeSnapName)
 		binary.LittleEndian.PutUint16(nkey[sizeofInodeKey:], uint16(len(name)))
 		copy(nkey[sizeofInodeKey+2:], name)
 		nval := make([]byte, 8)
 		binary.LittleEndian.PutUint64(nval[0:], s.xid)
-		recs = append(recs, catRecord{id: snapNameObjID, typ: typeSnapName, name: s.name, key: nkey, val: nval})
+		recs = append(recs, fsTreeRecord{id: objIDMask, typ: typeSnapName, name: s.name, key: nkey, val: nval})
 	}
 	sort.SliceStable(recs, func(i, j int) bool {
 		if recs[i].id != recs[j].id {
@@ -162,7 +162,7 @@ func (b *builder) snapMetaRecords() []catRecord {
 
 // writeSnapMetaNode writes the snapshot-metadata tree as a single physical
 // root-leaf holding variable-size records.
-func (b *builder) writeSnapMetaNode(bno uint64, recs []catRecord) error {
+func (b *builder) writeSnapMetaNode(paddr uint64, recs []fsTreeRecord) error {
 	block := b.zeroedBlock()
 	headLen := sizeofBtreeNodePhys
 	infoLen := sizeofBtreeInfo
@@ -173,7 +173,7 @@ func (b *builder) writeSnapMetaNode(bno uint64, recs []catRecord) error {
 	tocLen := tocBytesFor(len(recs))
 	putNloc(block, btnOffTableSpace, 0, uint16(tocLen))
 
-	cur := &catCursor{
+	cur := &fsTreeCursor{
 		b: b, block: block, tocOff: headLen,
 		keyArea: headLen + tocLen, keyOff: headLen + tocLen,
 		valAreaEnd: int(b.blocksize) - infoLen, valEnd: int(b.blocksize) - infoLen,
@@ -204,48 +204,66 @@ func (b *builder) writeSnapMetaNode(bno uint64, recs []catRecord) error {
 	binary.LittleEndian.PutUint64(info[24:], uint64(len(recs)))              // bt_key_count
 	binary.LittleEndian.PutUint64(info[32:], 1)                              // bt_node_count
 
-	setObjectHeader(block, int(b.blocksize), bno, objectTypeBtree|objPhysical, objectTypeSnapMetaTree)
-	return b.writeBlock(block, bno)
+	setObjectHeader(block, int(b.blocksize), paddr, objectTypeBtree|objPhysical, objectTypeSnapMetaTree)
+	return b.writeBlock(block, paddr)
 }
 
-// writeSnapshots writes each snapshot's frozen volume superblock and the volume
+// writeSnapshots writes each snapshot's snapshot's volume superblock and the volume
 // omap's snapshot tree.
 func (b *builder) writeSnapshots() error {
 	if len(b.snapshots) == 0 {
 		return nil
 	}
 	for _, s := range b.snapshots {
-		// Each snapshot owns a copy of the extent-reference tree so its extent
-		// refcounts are checked against its own frozen fsroot, independent of the
+		// Each snapshot owns a copy of the extentref tree so its extent
+		// refcounts are checked against its own snapshot fsroot, independent of the
 		// live volume's tree.
-		if err := b.makeExtrefRoot(s.extrefBno, s.extrefBno); err != nil {
+		if err := b.makeExtentrefRoot(s.extentrefPaddr, s.extentrefPaddr); err != nil {
 			return err
 		}
-		if err := b.writeFrozenSblock(s); err != nil {
+		if err := b.writeSnapshotVolumeSuperblock(s); err != nil {
 			return err
 		}
 	}
-	return b.writeOmapSnapshotTree(b.volSnapTreeBno)
+	return b.writeOmapSnapshotTree(b.volSnapTreePaddr)
 }
 
-// writeFrozenSblock writes a snapshot's frozen volume superblock: a physical copy
-// of the volume superblock as it stood at the snapshot's xid, referenced by the
-// snapshot record's sblock_oid.
-func (b *builder) writeFrozenSblock(s *snapBuild) error {
+// writeSnapshotVolumeSuperblock writes a snapshot's volume superblock: a
+// physical copy of the volume superblock as it stood at the snapshot's xid,
+// referenced by the snapshot record's sblock_oid.
+func (b *builder) writeSnapshotVolumeSuperblock(s *snapBuild) error {
 	vsb := b.volumeSuperblock()
-	vsb.NumSnapshots = 0               // the state before this snapshot existed
-	vsb.ExtentrefTreeOID = s.extrefBno // the snapshot's own extent-reference tree
+	vsb.NumSnapshots = 0 // the state before this snapshot existed
+
+	// A snapshot's volume superblock is a partial copy: the object map, the
+	// extentref tree and the snapshot metadata tree are *not* reached through
+	// it. The reader takes the object map and snapshot metadata tree from the
+	// live volume superblock, and the snapshot's extentref tree from the
+	// snapshot metadata record's extentref_tree_oid (see snapMetaRecords),
+	// which is why that record carries the field at all. apfsck asserts all
+	// three, in apfsck/snapshot.c:check_snapshot():
+	//
+	//	if (vsb->v_extref_oid != 0)
+	//		report("Snapshot volume superblock", "has extentref tree.");
+	//	if (vsb->v_omap_oid != 0)
+	//		report("Snapshot volume superblock", "has object map.");
+	//	if (vsb->v_snap_meta_oid != 0)
+	//		report("Snapshot volume superblock", "has snapshot tree.");
+	vsb.ExtentrefTreeOID = 0
+	vsb.OmapOID = 0
+	vsb.SnapMetaTreeOID = 0
+
 	block := b.zeroedBlock()
 	marshalInto(block, vsb)
-	setObjectHeaderXID(block, int(b.blocksize), s.sblockBno,
+	setObjectHeaderXID(block, int(b.blocksize), s.sblockPaddr,
 		objPhysical|objectTypeFS, objectTypeInvalid, s.xid)
-	return b.writeBlock(block, s.sblockBno)
+	return b.writeBlock(block, s.sblockPaddr)
 }
 
 // writeOmapSnapshotTree writes the volume omap's snapshot tree: a physical,
 // fixed-layout root-leaf keyed by snapshot xid, each value an omap_snapshot_t
 // (flags, pad, oid — all zero for a plain snapshot).
-func (b *builder) writeOmapSnapshotTree(bno uint64) error {
+func (b *builder) writeOmapSnapshotTree(paddr uint64) error {
 	const keySz, valSz = 8, sizeofOmapSnapshot
 	block := b.zeroedBlock()
 	headLen := sizeofBtreeNodePhys
@@ -282,6 +300,6 @@ func (b *builder) writeOmapSnapshotTree(bno uint64) error {
 	binary.LittleEndian.PutUint64(info[24:], uint64(n))    // bt_key_count
 	binary.LittleEndian.PutUint64(info[32:], 1)            // bt_node_count
 
-	setObjectHeader(block, int(b.blocksize), bno, objectTypeBtree|objPhysical, objectTypeOmapSnapshot)
-	return b.writeBlock(block, bno)
+	setObjectHeader(block, int(b.blocksize), paddr, objectTypeBtree|objPhysical, objectTypeOmapSnapshot)
+	return b.writeBlock(block, paddr)
 }

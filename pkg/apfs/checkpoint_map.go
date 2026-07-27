@@ -16,15 +16,15 @@ const CheckpointMapSize = 40
 type CheckpointMap struct {
 	// The object checksum
 	// Consists of 8 bytes
-	ObjectChecksum uint64
+	Checksum uint64
 
 	// The object identifier
 	// Consists of 8 bytes
-	ObjectIdentifier uint64
+	OID uint64
 
 	// The object transaction identifier
 	// Consists of 8 bytes
-	ObjectTransactionIdentifier uint64
+	XID uint64
 
 	// The object type
 	// Consists of 4 bytes
@@ -47,11 +47,11 @@ type CheckpointMap struct {
 	EntriesArray [4040]byte
 
 	// Parsed entries
-	Entries []*CheckpointMapEntry
+	Entries []*CheckpointMapping
 }
 
-// CheckpointMapEntry represents the APFS checkpoint map entry structure
-type CheckpointMapEntry struct {
+// CheckpointMapping represents the APFS checkpoint map entry structure
+type CheckpointMapping struct {
 	// The object type
 	// Consists of 4 bytes
 	ObjectType uint32
@@ -74,7 +74,7 @@ type CheckpointMapEntry struct {
 
 	// The object identifier
 	// Consists of 8 bytes
-	ObjectIdentifier uint64
+	OID uint64
 
 	// The physical address
 	// Consists of 8 bytes
@@ -84,12 +84,12 @@ type CheckpointMapEntry struct {
 // NewCheckpointMap creates a new checkpoint map
 func NewCheckpointMap() *CheckpointMap {
 	return &CheckpointMap{
-		Entries: make([]*CheckpointMapEntry, 0),
+		Entries: make([]*CheckpointMapping, 0),
 	}
 }
 
-// ReadFileIOHandle reads the checkpoint map from a file handle at the specified offset
-func (cm *CheckpointMap) ReadFileIOHandle(fileHandle io.ReaderAt, fileOffset int64) error {
+// ReadFrom reads the checkpoint map from a file handle at the specified offset
+func (cm *CheckpointMap) ReadFrom(reader io.ReaderAt, fileOffset int64) error {
 	if cm == nil {
 		return fmt.Errorf("invalid checkpoint map")
 	}
@@ -98,7 +98,7 @@ func (cm *CheckpointMap) ReadFileIOHandle(fileHandle io.ReaderAt, fileOffset int
 	checkpointMapData := make([]byte, 4096)
 
 	// Read data from file
-	n, err := fileHandle.ReadAt(checkpointMapData, fileOffset)
+	n, err := reader.ReadAt(checkpointMapData, fileOffset)
 	if err != nil && err != io.EOF {
 		return fmt.Errorf("unable to read checkpoint map data at offset %d: %w", fileOffset, err)
 	}
@@ -130,9 +130,9 @@ func (cm *CheckpointMap) ReadData(data []byte) error {
 	}
 
 	// Read checkpoint map header fields
-	cm.ObjectChecksum = binary.LittleEndian.Uint64(data[0:8])
-	cm.ObjectIdentifier = binary.LittleEndian.Uint64(data[8:16])
-	cm.ObjectTransactionIdentifier = binary.LittleEndian.Uint64(data[16:24])
+	cm.Checksum = binary.LittleEndian.Uint64(data[0:8])
+	cm.OID = binary.LittleEndian.Uint64(data[8:16])
+	cm.XID = binary.LittleEndian.Uint64(data[16:24])
 	cm.ObjectType = binary.LittleEndian.Uint32(data[24:28])
 	cm.ObjectSubtype = binary.LittleEndian.Uint32(data[28:32])
 	cm.Flags = binary.LittleEndian.Uint32(data[32:36])
@@ -163,37 +163,37 @@ func (cm *CheckpointMap) ReadData(data []byte) error {
 	copy(cm.EntriesArray[:], data[40:])
 
 	// Parse entries
-	cm.Entries = make([]*CheckpointMapEntry, 0, cm.NumberOfEntries)
+	cm.Entries = make([]*CheckpointMapping, 0, cm.NumberOfEntries)
 	dataOffset := 40
 
 	for i := uint32(0); i < cm.NumberOfEntries; i++ {
-		entry := NewCheckpointMapEntry()
+		entry := NewCheckpointMapping()
 
-		entryData := data[dataOffset : dataOffset+CheckpointMapEntrySize]
+		entryData := data[dataOffset : dataOffset+CheckpointMappingSize]
 		if err := entry.ReadData(entryData); err != nil {
 			return fmt.Errorf("unable to read checkpoint map entry %d: %w", i, err)
 		}
 
 		cm.Entries = append(cm.Entries, entry)
-		dataOffset += CheckpointMapEntrySize
+		dataOffset += CheckpointMappingSize
 	}
 
 	return nil
 }
 
-// GetPhysicalAddressByObjectIdentifier retrieves the physical address for a specific object identifier
+// PhysicalAddressByObjectIdentifier retrieves the physical address for a specific object identifier
 // Returns the physical address and a boolean indicating if found
-func (cm *CheckpointMap) GetPhysicalAddressByObjectIdentifier(objectIdentifier uint64) (uint64, error) {
+func (cm *CheckpointMap) PhysicalAddressByObjectIdentifier(oid uint64) (uint64, error) {
 	if cm == nil {
 		return 0, fmt.Errorf("invalid checkpoint map")
 	}
 
 	// Search through entries
 	for _, entry := range cm.Entries {
-		if entry.ObjectIdentifier == objectIdentifier {
+		if entry.OID == oid {
 			return entry.PhysicalAddress, nil
 		}
 	}
 
-	return 0, fmt.Errorf("object identifier not found: %d", objectIdentifier)
+	return 0, fmt.Errorf("object identifier not found: %d", oid)
 }

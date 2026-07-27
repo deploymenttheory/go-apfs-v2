@@ -28,9 +28,9 @@ var (
 var infoCmd = &cobra.Command{
 	Use:   "info IMAGE",
 	Short: "Display container and volume information",
-	Long: `Display information about the filesystem in an image and each of its
-volumes. The filesystem (APFS or HFS+) is detected automatically; the JSON
-output includes a "filesystem" field ("apfs" or "hfs+"), the container and
+	Long: `Display information about the file system in an image and each of its
+volumes. The file system (APFS or HFS+) is detected automatically; the JSON
+output includes a "fileSystem" field ("apfs" or "hfs+"), the container and
 per-volume UUIDs, sizes, and file/directory/symlink counts.
 
 Legacy forensic flags (--hierarchy, --bodyfile, --md5, --entry, --file-path)
@@ -40,7 +40,7 @@ text-only.
 Examples:
   apfs info image.dmg
   apfs info -o json image.dmg | jq '.volumes[0].name'
-  apfs info -o json image.dmg | jq -r .filesystem
+  apfs info -o json image.dmg | jq -r .fileSystem
   apfs info -v "Macintosh HD" image.dmg     # select a volume by name or UUID
   apfs info --hierarchy image.dmg           # full tree (APFS, text)
   apfs info --bodyfile out.body image.dmg   # Sleuth Kit bodyfile`,
@@ -58,7 +58,7 @@ func init() {
 
 // containerInfo is the JSON schema for apfs info.
 type containerInfo struct {
-	Filesystem  string       `json:"filesystem"` // "apfs" or "hfs+"
+	FileSystem  string       `json:"fileSystem"` // "apfs" or "hfs+"
 	UUID        string       `json:"uuid"`
 	Size        uint64       `json:"size"`
 	BlockSize   uint32       `json:"blockSize"`
@@ -68,17 +68,17 @@ type containerInfo struct {
 }
 
 type volumeInfo struct {
-	Index           int       `json:"index"`
-	Name            string    `json:"name"`
-	UUID            string    `json:"uuid"`
-	CaseInsensitive bool      `json:"caseInsensitive"`
-	Locked          bool      `json:"locked"`
-	Files           uint64    `json:"files"`
-	Directories     uint64    `json:"directories"`
-	Symlinks        uint64    `json:"symlinks"`
-	Snapshots       uint64    `json:"snapshots"`
-	Size            uint64    `json:"size"`
-	LastUnmounted   time.Time `json:"lastUnmounted"`
+	Index         int       `json:"index"`
+	Name          string    `json:"name"`
+	UUID          string    `json:"uuid"`
+	CaseSensitive bool      `json:"caseSensitive"`
+	Locked        bool      `json:"locked"`
+	Files         uint64    `json:"files"`
+	Directories   uint64    `json:"directories"`
+	Symlinks      uint64    `json:"symlinks"`
+	Snapshots     uint64    `json:"snapshots"`
+	Size          uint64    `json:"size"`
+	UnmountTime   time.Time `json:"unmountTime"`
 }
 
 func runInfo(cmd *cobra.Command, args []string) error {
@@ -110,7 +110,7 @@ func runInfo(cmd *cobra.Command, args []string) error {
 
 	var info *containerInfo
 
-	switch sniffFilesystem(base) {
+	switch sniffFileSystem(base) {
 	case "apfs":
 		container, err := apfs.Open(base, &apfs.OpenOptions{
 			Password:         opts.Password,
@@ -119,7 +119,7 @@ func runInfo(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return withCode(ExitBadImage, fmt.Errorf("unable to open APFS container: %w", err))
 		}
-		defer container.Free()
+		defer container.Close()
 		info, err = collectContainerInfo(container)
 		if err != nil {
 			return err
@@ -133,7 +133,7 @@ func runInfo(cmd *cobra.Command, args []string) error {
 		info = collectHFSInfo(volume)
 
 	default:
-		return withCode(ExitBadImage, fmt.Errorf("%s does not contain a recognizable APFS or HFS+ filesystem", imagePath))
+		return withCode(ExitBadImage, fmt.Errorf("%s does not contain a recognizable APFS or HFS+ file system", imagePath))
 	}
 
 	if opts.Output == "json" {
@@ -169,32 +169,32 @@ func collectHFSInfo(volume *hfsplus.Volume) *containerInfo {
 	uuid := strings.ToLower(volume.UUID())
 
 	return &containerInfo{
-		Filesystem:  "hfs+",
+		FileSystem:  "hfs+",
 		UUID:        uuid,
 		Size:        uint64(header.TotalBlocks) * uint64(header.BlockSize),
 		BlockSize:   header.BlockSize,
 		VolumeCount: 1,
 		Volumes: []volumeInfo{{
-			Index:           0,
-			Name:            volume.Name(),
-			UUID:            uuid,
-			CaseInsensitive: !volume.CaseSensitive(),
-			Files:           files,
-			Directories:     dirs,
-			Symlinks:        symlinks,
-			Size:            uint64(header.TotalBlocks-header.FreeBlocks) * uint64(header.BlockSize),
-			LastUnmounted:   volume.Modified().UTC(),
+			Index:         0,
+			Name:          volume.Name(),
+			UUID:          uuid,
+			CaseSensitive: volume.CaseSensitive(),
+			Files:         files,
+			Directories:   dirs,
+			Symlinks:      symlinks,
+			Size:          uint64(header.TotalBlocks-header.FreeBlocks) * uint64(header.BlockSize),
+			UnmountTime:   volume.Modified().UTC(),
 		}},
 	}
 }
 
 func collectContainerInfo(container *apfs.Container) (*containerInfo, error) { //nolint:unparam
-	uuid, err := container.GetIdentifier()
+	uuid, err := container.Identifier()
 	if err != nil {
 		return nil, fmt.Errorf("unable to get container identifier: %w", err)
 	}
 
-	size, err := container.GetSize()
+	size, err := container.Size()
 	if err != nil {
 		return nil, fmt.Errorf("unable to get container size: %w", err)
 	}
@@ -207,7 +207,7 @@ func collectContainerInfo(container *apfs.Container) (*containerInfo, error) { /
 	}
 
 	info := &containerInfo{
-		Filesystem:  "apfs",
+		FileSystem:  "apfs",
 		UUID:        formatUUIDBytes(uuid),
 		Size:        size,
 		BlockSize:   container.IOHandle.BlockSize,
@@ -218,14 +218,14 @@ func collectContainerInfo(container *apfs.Container) (*containerInfo, error) { /
 	for index, volume := range volumes {
 		vi := volumeInfo{Index: index}
 
-		if name, err := volume.GetUTF8Name(); err == nil {
+		if name, err := volume.UTF8Name(); err == nil {
 			vi.Name = name
 		}
-		if volUUID, err := volume.GetIdentifier(); err == nil {
+		if volUUID, err := volume.Identifier(); err == nil {
 			vi.UUID = formatUUIDBytes(volUUID[:])
 		}
 		if ci, err := volume.IsCaseInsensitive(); err == nil {
-			vi.CaseInsensitive = ci
+			vi.CaseSensitive = !ci
 		}
 		if volLocked, err := volume.IsLocked(); err == nil {
 			vi.Locked = volLocked
@@ -235,10 +235,10 @@ func collectContainerInfo(container *apfs.Container) (*containerInfo, error) { /
 			vi.Files = sb.NumberOfFiles
 			vi.Directories = sb.NumberOfDirectories
 			vi.Symlinks = sb.NumberOfSymlinks
-			vi.Snapshots = sb.NumberOfSnapshots
+			vi.Snapshots = sb.SnapshotCount
 			vi.Size = sb.TotalBlocksAllocated * uint64(container.IOHandle.BlockSize)
 			if sb.UnmountTime != 0 {
-				vi.LastUnmounted = time.Unix(0, int64(sb.UnmountTime)).UTC()
+				vi.UnmountTime = time.Unix(0, int64(sb.UnmountTime)).UTC()
 			}
 		}
 
@@ -249,7 +249,7 @@ func collectContainerInfo(container *apfs.Container) (*containerInfo, error) { /
 }
 
 func printContainerInfo(info *containerInfo) {
-	switch info.Filesystem {
+	switch info.FileSystem {
 	case "hfs+":
 		fmt.Println("HFS+ volume:")
 	default:
@@ -273,12 +273,12 @@ func printContainerInfo(info *containerInfo) {
 		if vi.Snapshots > 0 {
 			fmt.Printf("  %-18s %d\n", "Snapshots", vi.Snapshots)
 		}
-		fmt.Printf("  %-18s %v\n", "Case-insensitive", vi.CaseInsensitive)
+		fmt.Printf("  %-18s %v\n", "Case-sensitive", vi.CaseSensitive)
 		if vi.Locked {
 			fmt.Printf("  %-18s yes\n", "Locked")
 		}
-		if !vi.LastUnmounted.IsZero() {
-			fmt.Printf("  %-18s %s\n", "Last unmounted", vi.LastUnmounted.Format(time.RFC3339))
+		if !vi.UnmountTime.IsZero() {
+			fmt.Printf("  %-18s %s\n", "Unmount time", vi.UnmountTime.Format(time.RFC3339))
 		}
 	}
 }
@@ -309,7 +309,7 @@ func runLegacyInfo(imagePath string) error {
 	handle.NotifyStream = os.Stdout
 
 	if opts.Volume != "" {
-		if err := handle.SetFileSystemIndex(opts.Volume); err != nil {
+		if err := handle.SetVolumeIndex(opts.Volume); err != nil {
 			return usageErrorf("legacy info flags select volumes by index: %v", err)
 		}
 	}

@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 
+	"github.com/deploymenttheory/go-apfs-v2/internal/tools"
 	"github.com/spf13/cobra"
 )
 
@@ -30,14 +31,14 @@ Examples:
 func runCat(cmd *cobra.Command, args []string) error {
 	imagePath := args[0]
 
-	volume, closer, err := openFilesystem(imagePath)
+	volume, closer, err := openFileSystem(imagePath)
 	if err != nil {
 		return err
 	}
 	defer closer.Close()
 
 	for _, volumePath := range args[1:] {
-		name := fsNameFromVolumePath(volumePath)
+		name := tools.FSNameFromVolumePath(volumePath)
 
 		file, err := volume.Open(name)
 		if err != nil {

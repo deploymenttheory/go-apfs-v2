@@ -1,5 +1,4 @@
 // Huffman tree functions
-// Corresponds to libfsapfs_huffman_tree.c and libfsapfs_huffman_tree.h
 package apfs
 
 import (
@@ -19,7 +18,6 @@ type HuffmanTree struct {
 }
 
 // NewHuffmanTree creates a new Huffman tree
-// Corresponds to libfsapfs_huffman_tree_initialize
 func NewHuffmanTree(numberOfSymbols int, maximumCodeSize uint8) (*HuffmanTree, error) {
 	if numberOfSymbols < 0 || numberOfSymbols > 1024 {
 		return nil, fmt.Errorf("invalid number of symbols value out of bounds: %d", numberOfSymbols)
@@ -38,9 +36,8 @@ func NewHuffmanTree(numberOfSymbols int, maximumCodeSize uint8) (*HuffmanTree, e
 	return ht, nil
 }
 
-// Free releases resources associated with the Huffman tree
-// Corresponds to libfsapfs_huffman_tree_free
-func (ht *HuffmanTree) Free() error {
+// Close releases resources associated with the Huffman tree
+func (ht *HuffmanTree) Close() error {
 	if ht == nil {
 		return fmt.Errorf("invalid Huffman tree")
 	}
@@ -54,7 +51,6 @@ func (ht *HuffmanTree) Free() error {
 
 // Build builds the Huffman tree from code sizes
 // Returns true on success, false if the tree is empty
-// Corresponds to libfsapfs_huffman_tree_build
 func (ht *HuffmanTree) Build(codeSizesArray []uint8, numberOfCodeSizes int) (bool, error) {
 	if ht == nil {
 		return false, fmt.Errorf("invalid Huffman tree")
@@ -137,9 +133,8 @@ func (ht *HuffmanTree) Build(codeSizesArray []uint8, numberOfCodeSizes int) (boo
 	return true, nil
 }
 
-// GetSymbolFromBitStream retrieves a symbol based on the Huffman code read from the bit-stream
-// Corresponds to libfsapfs_huffman_tree_get_symbol_from_bit_stream
-func (ht *HuffmanTree) GetSymbolFromBitStream(bitStream *BitStream) (uint16, error) {
+// SymbolFromBitStream retrieves a symbol based on the Huffman code read from the bit-stream
+func (ht *HuffmanTree) SymbolFromBitStream(bitStream *BitStream) (uint16, error) {
 	if ht == nil {
 		return 0, fmt.Errorf("invalid Huffman tree")
 	}
@@ -160,7 +155,7 @@ func (ht *HuffmanTree) GetSymbolFromBitStream(bitStream *BitStream) (uint16, err
 	// Performance profiling should be done before optimizing
 
 	for bitIndex := uint8(1); bitIndex <= ht.MaximumCodeSize; bitIndex++ {
-		value32bit, err := bitStream.GetValue(1)
+		value32bit, err := bitStream.Value(1)
 		if err != nil {
 			return 0, fmt.Errorf("unable to retrieve value from bit stream: %w", err)
 		}

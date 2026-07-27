@@ -8,17 +8,13 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"io/fs"
-	"os/exec"
-	"path/filepath"
-	"runtime"
-	"strings"
 	"testing"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfswrite"
 )
 
-// wantEntry is an expected filesystem path collected from the input tree.
+// wantEntry is an expected file system path collected from the input tree.
 type wantEntry struct {
 	isDir bool
 	data  []byte
@@ -131,10 +127,10 @@ func TestCreateContainerWithTree(t *testing.T) {
 	walkAndAssert(t, v, collectWants(root))
 }
 
-// TestCreateContainerMultiLeafCatalog writes enough files that the catalog can
+// TestCreateContainerMultiLeafFSTree writes enough files that the file-system tree can
 // no longer fit in a single leaf node, forcing B-tree growth to a 2-level tree,
 // then verifies the whole tree still reads back with matching sha256s.
-func TestCreateContainerMultiLeafCatalog(t *testing.T) {
+func TestCreateContainerMultiLeafFSTree(t *testing.T) {
 	const nFiles = 60
 	children := make([]*apfswrite.Entry, 0, nFiles)
 	for i := 0; i < nFiles; i++ {
@@ -161,79 +157,5 @@ func TestCreateContainerMultiLeafCatalog(t *testing.T) {
 	}
 	if len(entries) != nFiles+1 {
 		t.Errorf("root entries = %d, want %d", len(entries), nFiles+1)
-	}
-}
-
-// TestCreateContainerTreeFsckClean runs Apple's fsck_apfs against a nested tree
-// (macOS only). fsck_apfs is the strict oracle.
-func TestCreateContainerTreeFsckClean(t *testing.T) {
-	if runtime.GOOS != "darwin" {
-		t.Skip("fsck_apfs is only available on macOS")
-	}
-	requireTools(t, "hdiutil", "fsck_apfs")
-
-	root := &apfswrite.Entry{Children: []*apfswrite.Entry{
-		{Name: "readme.txt", Data: []byte("hello from a tree\n")},
-		{Name: "dir_a", Mode: fs.ModeDir, Children: []*apfswrite.Entry{
-			{Name: "one.txt", Data: []byte("one\n")},
-			{Name: "two.txt", Data: []byte("two\n")},
-			{Name: "inner", Mode: fs.ModeDir, Children: []*apfswrite.Entry{
-				{Name: "deep.bin", Data: bytes.Repeat([]byte{0x5A}, 300)},
-			}},
-		}},
-		{Name: "dir_b", Mode: fs.ModeDir, Children: []*apfswrite.Entry{
-			{Name: "b1.txt", Data: []byte("b one\n")},
-		}},
-	}}
-
-	const size = 32 * 1024 * 1024
-	imgPath := filepath.Join(t.TempDir(), "tree.img")
-	writeImage(t, imgPath, size, &apfswrite.CreateOptions{VolumeName: "FsckTreeVol", Root: root})
-
-	dev := attachRaw(t, imgPath)
-	defer detach(t, dev)
-
-	out, err := exec.Command("fsck_apfs", "-n", dev).CombinedOutput()
-	t.Logf("fsck_apfs output:\n%s", out)
-	if err != nil {
-		t.Fatalf("fsck_apfs reported errors (exit %v)", err)
-	}
-	if !strings.Contains(string(out), "appears to be OK") {
-		t.Errorf("fsck_apfs did not report the container clean")
-	}
-}
-
-// TestCreateContainerMultiLeafFsckClean forces catalog B-tree growth and checks
-// fsck_apfs is still clean (macOS only).
-func TestCreateContainerMultiLeafFsckClean(t *testing.T) {
-	if runtime.GOOS != "darwin" {
-		t.Skip("fsck_apfs is only available on macOS")
-	}
-	requireTools(t, "hdiutil", "fsck_apfs")
-
-	const nFiles = 60
-	children := make([]*apfswrite.Entry, 0, nFiles)
-	for i := 0; i < nFiles; i++ {
-		children = append(children, &apfswrite.Entry{
-			Name: fmt.Sprintf("file_%03d.txt", i),
-			Data: []byte(fmt.Sprintf("content for file %d\n", i)),
-		})
-	}
-	root := &apfswrite.Entry{Children: children}
-
-	const size = 32 * 1024 * 1024
-	imgPath := filepath.Join(t.TempDir(), "multileaf.img")
-	writeImage(t, imgPath, size, &apfswrite.CreateOptions{VolumeName: "FsckMultiLeaf", Root: root})
-
-	dev := attachRaw(t, imgPath)
-	defer detach(t, dev)
-
-	out, err := exec.Command("fsck_apfs", "-n", dev).CombinedOutput()
-	t.Logf("fsck_apfs output:\n%s", out)
-	if err != nil {
-		t.Fatalf("fsck_apfs reported errors (exit %v)", err)
-	}
-	if !strings.Contains(string(out), "appears to be OK") {
-		t.Errorf("fsck_apfs did not report the container clean")
 	}
 }

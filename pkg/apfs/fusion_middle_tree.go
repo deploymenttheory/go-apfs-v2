@@ -13,19 +13,18 @@ import (
 const FusionMiddleTreeSize = 40
 
 // FusionMiddleTree represents the APFS Fusion middle tree structure
-// Corresponds to libfsapfs_fusion_middle_tree_t and fsapfs_fusion_middle_tree_t
 type FusionMiddleTree struct {
 	// The object checksum
 	// Consists of 8 bytes
-	ObjectChecksum uint64
+	Checksum uint64
 
 	// The object identifier
 	// Consists of 8 bytes
-	ObjectIdentifier uint64
+	OID uint64
 
 	// The object transaction identifier
 	// Consists of 8 bytes
-	ObjectTransactionIdentifier uint64
+	XID uint64
 
 	// The object type
 	// Consists of 4 bytes
@@ -41,24 +40,12 @@ type FusionMiddleTree struct {
 }
 
 // NewFusionMiddleTree creates a new Fusion middle tree
-// Corresponds to libfsapfs_fusion_middle_tree_initialize
 func NewFusionMiddleTree() (*FusionMiddleTree, error) {
 	return &FusionMiddleTree{}, nil
 }
 
-// Free releases resources associated with the Fusion middle tree
-// Corresponds to libfsapfs_fusion_middle_tree_free
-func (f *FusionMiddleTree) Free() error {
-	if f == nil {
-		return fmt.Errorf("invalid Fusion middle tree")
-	}
-	// Nothing to free in Go
-	return nil
-}
-
-// ReadFileIOHandle reads the Fusion middle tree from a file at the specified offset
-// Corresponds to libfsapfs_fusion_middle_tree_read_file_io_handle
-func (f *FusionMiddleTree) ReadFileIOHandle(fileHandle io.ReaderAt, fileOffset int64) error {
+// ReadFrom reads the Fusion middle tree from a file at the specified offset
+func (f *FusionMiddleTree) ReadFrom(reader io.ReaderAt, fileOffset int64) error {
 	if f == nil {
 		return fmt.Errorf("invalid Fusion middle tree")
 	}
@@ -67,7 +54,7 @@ func (f *FusionMiddleTree) ReadFileIOHandle(fileHandle io.ReaderAt, fileOffset i
 	fusionMiddleTreeData := make([]byte, 4096)
 
 	// Read data from file
-	n, err := fileHandle.ReadAt(fusionMiddleTreeData, fileOffset)
+	n, err := reader.ReadAt(fusionMiddleTreeData, fileOffset)
 	if err != nil && err != io.EOF {
 		return fmt.Errorf("unable to read Fusion middle tree data at offset %d (0x%08x): %w", fileOffset, fileOffset, err)
 	}
@@ -85,7 +72,6 @@ func (f *FusionMiddleTree) ReadFileIOHandle(fileHandle io.ReaderAt, fileOffset i
 }
 
 // ReadData reads the Fusion middle tree from binary data
-// Corresponds to libfsapfs_fusion_middle_tree_read_data
 func (f *FusionMiddleTree) ReadData(data []byte) error {
 	if f == nil {
 		return fmt.Errorf("invalid Fusion middle tree")
@@ -100,9 +86,9 @@ func (f *FusionMiddleTree) ReadData(data []byte) error {
 	}
 
 	// Read Fusion middle tree fields
-	f.ObjectChecksum = binary.LittleEndian.Uint64(data[0:8])
-	f.ObjectIdentifier = binary.LittleEndian.Uint64(data[8:16])
-	f.ObjectTransactionIdentifier = binary.LittleEndian.Uint64(data[16:24])
+	f.Checksum = binary.LittleEndian.Uint64(data[0:8])
+	f.OID = binary.LittleEndian.Uint64(data[8:16])
+	f.XID = binary.LittleEndian.Uint64(data[16:24])
 	f.ObjectType = binary.LittleEndian.Uint32(data[24:28])
 	f.ObjectSubtype = binary.LittleEndian.Uint32(data[28:32])
 	f.Unknown1 = binary.LittleEndian.Uint32(data[32:36])
@@ -118,17 +104,17 @@ func (f *FusionMiddleTree) ReadData(data []byte) error {
 	}
 
 	// Debug output
-	if IsVerbose() {
-		Printf("Fusion middle tree data:\n")
+	if isVerbose() {
+		notifyPrintf("Fusion middle tree data:\n")
 		PrintData(data, true)
 
-		Printf("object checksum\t\t\t: 0x%08x\n", f.ObjectChecksum)
-		Printf("object identifier\t\t: %d\n", f.ObjectIdentifier)
-		Printf("object transaction identifier\t: %d\n", f.ObjectTransactionIdentifier)
-		Printf("object type\t\t\t: 0x%08x\n", f.ObjectType)
-		Printf("object subtype\t\t\t: 0x%08x\n", f.ObjectSubtype)
-		Printf("unknown1\t\t\t: 0x%08x\n", f.Unknown1)
-		Printf("\n")
+		notifyPrintf("object checksum\t\t\t: 0x%08x\n", f.Checksum)
+		notifyPrintf("object identifier\t\t: %d\n", f.OID)
+		notifyPrintf("object transaction identifier\t: %d\n", f.XID)
+		notifyPrintf("object type\t\t\t: 0x%08x\n", f.ObjectType)
+		notifyPrintf("object subtype\t\t\t: 0x%08x\n", f.ObjectSubtype)
+		notifyPrintf("unknown1\t\t\t: 0x%08x\n", f.Unknown1)
+		notifyPrintf("\n")
 	}
 
 	return nil

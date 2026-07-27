@@ -8,14 +8,12 @@ import (
 )
 
 // ContainerDataHandle represents a handle for reading data blocks from the container
-// Corresponds to libfsapfs_container_data_handle_t
 type ContainerDataHandle struct {
 	// The IO handle
 	IOHandle *IOHandle
 }
 
 // NewContainerDataHandle creates a new container data handle
-// Corresponds to libfsapfs_container_data_handle_initialize
 func NewContainerDataHandle(ioHandle *IOHandle) (*ContainerDataHandle, error) {
 	if ioHandle == nil {
 		return nil, fmt.Errorf("invalid IO handle")
@@ -26,23 +24,11 @@ func NewContainerDataHandle(ioHandle *IOHandle) (*ContainerDataHandle, error) {
 	}, nil
 }
 
-// Free releases resources associated with the container data handle
-// In Go, this is primarily for API consistency with the C implementation
-func (cdh *ContainerDataHandle) Free() error {
-	if cdh == nil {
-		return fmt.Errorf("invalid container data handle")
-	}
-
-	// Nothing to free in Go, but method exists for API consistency
-	return nil
-}
-
 // ReadDataBlock reads a data block from the container
 // This is a callback function for a data block vector
-// Corresponds to libfsapfs_container_data_handle_read_data_block
 //
-// Parameters align with the libfdata vector callback structure:
-//   - fileIOHandle: The file handle to read from
+// Parameters follow the segment-reader shape used by DataBlockVector.
+//   - reader: The file handle to read from
 //   - elementIndex: The index of the element in the vector (unused here)
 //   - elementDataFileIndex: The file index (unused for containers)
 //   - elementDataOffset: The offset in the file to read from
@@ -51,7 +37,7 @@ func (cdh *ContainerDataHandle) Free() error {
 //
 // Returns the data block read from the container
 func (cdh *ContainerDataHandle) ReadDataBlock(
-	fileIOHandle io.ReaderAt,
+	reader io.ReaderAt,
 	elementIndex int,
 	elementDataFileIndex int,
 	elementDataOffset int64,
@@ -80,7 +66,7 @@ func (cdh *ContainerDataHandle) ReadDataBlock(
 	// Container blocks are not encrypted (encryption is at the volume level)
 	// So we pass nil for the encryption context and 0 for encryption identifier
 	err = dataBlock.Read(
-		fileIOHandle,
+		reader,
 		cdh.IOHandle,
 		nil, // No encryption at container level
 		elementDataOffset,

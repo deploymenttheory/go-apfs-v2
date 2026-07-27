@@ -1,17 +1,22 @@
 // Exit code contract for pipeline use.
 package cli
 
-import "fmt"
+import (
+	"fmt"
 
-// Exit codes. Stable interface for scripts and pipelines.
+	"github.com/deploymenttheory/go-apfs-v2/pkg/exitcode"
+)
+
+// Exit codes. The contract lives in pkg/exitcode so that scripts, pipelines
+// and the acceptance suite can depend on it without importing internal code.
 const (
-	ExitOK          = 0 // success
-	ExitError       = 1 // generic runtime error
-	ExitUsage       = 2 // bad flags or arguments
-	ExitBadImage    = 3 // image not found or not a recognizable APFS image
-	ExitAuth        = 4 // authentication required or failed
-	ExitUnsupported = 5 // feature not supported on this platform
-	ExitPartial     = 6 // operation completed partially (e.g. some files skipped)
+	ExitOK          = exitcode.OK
+	ExitError       = exitcode.Error
+	ExitUsage       = exitcode.Usage
+	ExitBadImage    = exitcode.BadImage
+	ExitAuth        = exitcode.Auth
+	ExitUnsupported = exitcode.Unsupported
+	ExitPartial     = exitcode.Partial
 )
 
 // codedError carries an exit code with an error.

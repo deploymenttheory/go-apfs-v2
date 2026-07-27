@@ -1,5 +1,4 @@
 // Snapshot functions
-// Corresponds to libfsapfs_snapshot.c and libfsapfs_snapshot.h
 package apfs
 
 import (
@@ -9,7 +8,6 @@ import (
 )
 
 // Snapshot represents an APFS snapshot
-// Corresponds to libfsapfs_internal_snapshot_t
 type Snapshot struct {
 	// The volume superblock
 	VolumeSuperblock *VolumeSuperblock
@@ -18,24 +16,23 @@ type Snapshot struct {
 	IOHandle *IOHandle
 
 	// The file IO handle
-	FileIOHandle io.ReaderAt
+	Reader io.ReaderAt
 
 	// The snapshot metadata
 	SnapshotMetadata *SnapshotMetadata
 }
 
 // NewSnapshot creates a new snapshot
-// Corresponds to libfsapfs_snapshot_initialize
 func NewSnapshot(
 	ioHandle *IOHandle,
-	fileIOHandle io.ReaderAt,
+	reader io.ReaderAt,
 	snapshotMetadata *SnapshotMetadata,
 ) (*Snapshot, error) {
 	if ioHandle == nil {
 		return nil, fmt.Errorf("invalid IO handle")
 	}
-	if fileIOHandle == nil {
-		return nil, fmt.Errorf("invalid file IO handle")
+	if reader == nil {
+		return nil, fmt.Errorf("invalid reader")
 	}
 	if snapshotMetadata == nil {
 		return nil, fmt.Errorf("invalid snapshot metadata")
@@ -44,30 +41,13 @@ func NewSnapshot(
 	return &Snapshot{
 		VolumeSuperblock: nil, // Will be set when opened
 		IOHandle:         ioHandle,
-		FileIOHandle:     fileIOHandle,
+		Reader:           reader,
 		SnapshotMetadata: snapshotMetadata,
 	}, nil
 }
 
-// Free releases resources associated with the snapshot
-// Corresponds to libfsapfs_snapshot_free
-func (s *Snapshot) Free() error {
-	if s == nil {
-		return fmt.Errorf("invalid snapshot")
-	}
-
-	// Set fields to nil to help garbage collection
-	s.VolumeSuperblock = nil
-	s.SnapshotMetadata = nil
-	s.FileIOHandle = nil
-	s.IOHandle = nil
-
-	return nil
-}
-
 // OpenRead opens a snapshot for reading
-// Corresponds to libfsapfs_internal_snapshot_open_read
-func (s *Snapshot) OpenRead(fileHandle io.ReaderAt, fileOffset int64) error {
+func (s *Snapshot) OpenRead(reader io.ReaderAt, fileOffset int64) error {
 	if s == nil {
 		return fmt.Errorf("invalid snapshot")
 	}
@@ -89,7 +69,7 @@ func (s *Snapshot) OpenRead(fileHandle io.ReaderAt, fileOffset int64) error {
 	}
 
 	// Read volume superblock
-	if err := volumeSuperblock.ReadFileIOHandle(fileHandle, fileOffset, true); err != nil {
+	if err := volumeSuperblock.ReadFrom(reader, fileOffset, true); err != nil {
 		return fmt.Errorf("unable to read volume superblock at offset %d (0x%08x): %w",
 			fileOffset, fileOffset, err)
 	}
@@ -100,7 +80,6 @@ func (s *Snapshot) OpenRead(fileHandle io.ReaderAt, fileOffset int64) error {
 }
 
 // Close closes a snapshot
-// Corresponds to libfsapfs_internal_snapshot_close
 func (s *Snapshot) Close() error {
 	if s == nil {
 		return fmt.Errorf("invalid snapshot")
@@ -110,7 +89,7 @@ func (s *Snapshot) Close() error {
 	}
 
 	// Clear file IO handle reference
-	s.FileIOHandle = nil
+	s.Reader = nil
 
 	// Free volume superblock if allocated
 	if s.VolumeSuperblock != nil {
@@ -120,10 +99,9 @@ func (s *Snapshot) Close() error {
 	return nil
 }
 
-// GetUTF8NameSize retrieves the size of the UTF-8 encoded name
+// UTF8NameSize retrieves the size of the UTF-8 encoded name
 // The returned size includes the end of string character
-// Corresponds to libfsapfs_snapshot_get_utf8_name_size
-func (s *Snapshot) GetUTF8NameSize() (int, error) {
+func (s *Snapshot) UTF8NameSize() (int, error) {
 	if s == nil {
 		return 0, fmt.Errorf("invalid snapshot")
 	}
@@ -132,12 +110,11 @@ func (s *Snapshot) GetUTF8NameSize() (int, error) {
 		return 0, fmt.Errorf("invalid snapshot - missing snapshot metadata")
 	}
 
-	return s.SnapshotMetadata.GetUTF8NameSize()
+	return s.SnapshotMetadata.UTF8NameSize()
 }
 
-// GetUTF8Name retrieves the UTF-8 encoded name
-// Corresponds to libfsapfs_snapshot_get_utf8_name
-func (s *Snapshot) GetUTF8Name() (string, error) {
+// UTF8Name retrieves the UTF-8 encoded name
+func (s *Snapshot) UTF8Name() (string, error) {
 	if s == nil {
 		return "", fmt.Errorf("invalid snapshot")
 	}
@@ -146,13 +123,12 @@ func (s *Snapshot) GetUTF8Name() (string, error) {
 		return "", fmt.Errorf("invalid snapshot - missing snapshot metadata")
 	}
 
-	return s.SnapshotMetadata.GetUTF8Name()
+	return s.SnapshotMetadata.UTF8Name()
 }
 
-// GetUTF16NameSize retrieves the size of the UTF-16 encoded name
+// UTF16NameSize retrieves the size of the UTF-16 encoded name
 // The returned size includes the end of string character
-// Corresponds to libfsapfs_snapshot_get_utf16_name_size
-func (s *Snapshot) GetUTF16NameSize() (int, error) {
+func (s *Snapshot) UTF16NameSize() (int, error) {
 	if s == nil {
 		return 0, fmt.Errorf("invalid snapshot")
 	}
@@ -161,12 +137,11 @@ func (s *Snapshot) GetUTF16NameSize() (int, error) {
 		return 0, fmt.Errorf("invalid snapshot - missing snapshot metadata")
 	}
 
-	return s.SnapshotMetadata.GetUTF16NameSize()
+	return s.SnapshotMetadata.UTF16NameSize()
 }
 
-// GetUTF16Name retrieves the UTF-16 encoded name
-// Corresponds to libfsapfs_snapshot_get_utf16_name
-func (s *Snapshot) GetUTF16Name() ([]uint16, error) {
+// UTF16Name retrieves the UTF-16 encoded name
+func (s *Snapshot) UTF16Name() ([]uint16, error) {
 	if s == nil {
 		return nil, fmt.Errorf("invalid snapshot")
 	}
@@ -175,13 +150,12 @@ func (s *Snapshot) GetUTF16Name() ([]uint16, error) {
 		return nil, fmt.Errorf("invalid snapshot - missing snapshot metadata")
 	}
 
-	return s.SnapshotMetadata.GetUTF16Name()
+	return s.SnapshotMetadata.UTF16Name()
 }
 
-// GetUTF8NameSize retrieves the size of the UTF-8 encoded name from snapshot metadata
+// UTF8NameSize retrieves the size of the UTF-8 encoded name from snapshot metadata
 // The returned size includes the end of string character
-// Corresponds to libfsapfs_snapshot_metadata_get_utf8_name_size
-func (m *SnapshotMetadata) GetUTF8NameSize() (int, error) {
+func (m *SnapshotMetadata) UTF8NameSize() (int, error) {
 	if m == nil {
 		return 0, fmt.Errorf("invalid snapshot metadata")
 	}
@@ -190,9 +164,8 @@ func (m *SnapshotMetadata) GetUTF8NameSize() (int, error) {
 	return len(m.Name) + 1, nil
 }
 
-// GetUTF8Name retrieves the UTF-8 encoded name from snapshot metadata
-// Corresponds to libfsapfs_snapshot_metadata_get_utf8_name
-func (m *SnapshotMetadata) GetUTF8Name() (string, error) {
+// UTF8Name retrieves the UTF-8 encoded name from snapshot metadata
+func (m *SnapshotMetadata) UTF8Name() (string, error) {
 	if m == nil {
 		return "", fmt.Errorf("invalid snapshot metadata")
 	}
@@ -200,10 +173,9 @@ func (m *SnapshotMetadata) GetUTF8Name() (string, error) {
 	return m.Name, nil
 }
 
-// GetUTF16NameSize retrieves the size of the UTF-16 encoded name from snapshot metadata
+// UTF16NameSize retrieves the size of the UTF-16 encoded name from snapshot metadata
 // The returned size includes the end of string character
-// Corresponds to libfsapfs_snapshot_metadata_get_utf16_name_size
-func (m *SnapshotMetadata) GetUTF16NameSize() (int, error) {
+func (m *SnapshotMetadata) UTF16NameSize() (int, error) {
 	if m == nil {
 		return 0, fmt.Errorf("invalid snapshot metadata")
 	}
@@ -216,9 +188,8 @@ func (m *SnapshotMetadata) GetUTF16NameSize() (int, error) {
 	return len(utf16Data) + 1, nil
 }
 
-// GetUTF16Name retrieves the UTF-16 encoded name from snapshot metadata
-// Corresponds to libfsapfs_snapshot_metadata_get_utf16_name
-func (m *SnapshotMetadata) GetUTF16Name() ([]uint16, error) {
+// UTF16Name retrieves the UTF-16 encoded name from snapshot metadata
+func (m *SnapshotMetadata) UTF16Name() ([]uint16, error) {
 	if m == nil {
 		return nil, fmt.Errorf("invalid snapshot metadata")
 	}

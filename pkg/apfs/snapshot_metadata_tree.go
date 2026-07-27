@@ -1,5 +1,4 @@
 // Snapshot metadata tree functions
-// Corresponds to libfsapfs_snapshot_metadata_tree.c and libfsapfs_snapshot_metadata_tree.h
 package apfs
 
 import (
@@ -11,20 +10,18 @@ import (
 )
 
 // SnapshotMetadataTree represents the APFS snapshot metadata B-tree
-// Corresponds to libfsapfs_snapshot_metadata_tree_t
 type SnapshotMetadataTree struct {
-	IOHandle            *IOHandle
-	ObjectMapBTree      *ObjectMapBTree
-	RootNodeBlockNumber uint64
-	nodeCache           map[uint64]*BTreeNode
+	IOHandle       *IOHandle
+	ObjectMapBTree *ObjectMapBTree
+	RootNodeOID    uint64
+	nodeCache      map[uint64]*BTreeNode
 }
 
 // NewSnapshotMetadataTree creates a new snapshot metadata tree
-// Corresponds to libfsapfs_snapshot_metadata_tree_initialize
 func NewSnapshotMetadataTree(
 	ioHandle *IOHandle,
 	objectMapBTree *ObjectMapBTree,
-	rootNodeBlockNumber uint64,
+	rootNodeOID uint64,
 ) (*SnapshotMetadataTree, error) {
 	if ioHandle == nil {
 		return nil, fmt.Errorf("invalid IO handle")
@@ -35,16 +32,15 @@ func NewSnapshotMetadataTree(
 	}
 
 	return &SnapshotMetadataTree{
-		IOHandle:            ioHandle,
-		ObjectMapBTree:      objectMapBTree,
-		RootNodeBlockNumber: rootNodeBlockNumber,
-		nodeCache:           make(map[uint64]*BTreeNode),
+		IOHandle:       ioHandle,
+		ObjectMapBTree: objectMapBTree,
+		RootNodeOID:    rootNodeOID,
+		nodeCache:      make(map[uint64]*BTreeNode),
 	}, nil
 }
 
-// Free releases resources associated with the snapshot metadata tree
-// Corresponds to libfsapfs_snapshot_metadata_tree_free
-func (t *SnapshotMetadataTree) Free() error {
+// Close releases resources associated with the snapshot metadata tree
+func (t *SnapshotMetadataTree) Close() error {
 	if t == nil {
 		return fmt.Errorf("invalid snapshot metadata tree")
 	}
@@ -55,12 +51,11 @@ func (t *SnapshotMetadataTree) Free() error {
 	return nil
 }
 
-// GetSubNodeBlockNumberFromEntry retrieves the sub node block number from a B-tree entry
-// Corresponds to libfsapfs_snapshot_metadata_tree_get_sub_node_block_number_from_entry
-func (t *SnapshotMetadataTree) GetSubNodeBlockNumberFromEntry(
-	fileHandle io.ReaderAt,
+// SubNodeOIDFromEntry retrieves the sub node block number from a B-tree entry
+func (t *SnapshotMetadataTree) SubNodeOIDFromEntry(
+	reader io.ReaderAt,
 	entry *BTreeEntry,
-	transactionIdentifier uint64,
+	xid uint64,
 ) (uint64, error) {
 	if t == nil {
 		return 0, fmt.Errorf("invalid snapshot metadata tree")
@@ -77,54 +72,53 @@ func (t *SnapshotMetadataTree) GetSubNodeBlockNumberFromEntry(
 	// Parse sub node object identifier
 	subNodeObjectIdentifier := binary.LittleEndian.Uint64(entry.ValueData)
 
-	if IsVerbose() {
-		Printf("%s: sub node object identifier: %d (transaction: %d)\n",
-			"GetSubNodeBlockNumberFromEntry", subNodeObjectIdentifier, transactionIdentifier)
+	if isVerbose() {
+		notifyPrintf("%s: sub node object identifier: %d (transaction: %d)\n",
+			"SubNodeOIDFromEntry", subNodeObjectIdentifier, xid)
 	}
 
 	// Get the physical block number from the object map
-	descriptor, err := t.ObjectMapBTree.GetDescriptorByObjectIdentifier(
-		fileHandle,
+	descriptor, err := t.ObjectMapBTree.DescriptorByObjectIdentifier(
+		reader,
 		subNodeObjectIdentifier,
-		transactionIdentifier,
+		xid,
 	)
 	if err != nil {
 		return 0, fmt.Errorf("unable to retrieve object map descriptor for sub node object identifier: %d (transaction: %d): %w",
-			subNodeObjectIdentifier, transactionIdentifier, err)
+			subNodeObjectIdentifier, xid, err)
 	}
 
 	if descriptor == nil {
 		return 0, nil
 	}
 
-	physicalAddress, err := descriptor.GetPhysicalAddress()
+	physicalAddress, err := descriptor.PhysicalAddress()
 	if err != nil {
 		return 0, fmt.Errorf("unable to get physical address: %w", err)
 	}
 
-	if IsVerbose() {
-		Printf("%s: sub node block number: %d\n", "GetSubNodeBlockNumberFromEntry", physicalAddress)
+	if isVerbose() {
+		notifyPrintf("%s: sub node block number: %d\n", "SubNodeOIDFromEntry", physicalAddress)
 	}
 
 	return physicalAddress, nil
 }
 
-// GetRootNode retrieves the snapshot metadata tree root node
-// Corresponds to libfsapfs_snapshot_metadata_tree_get_root_node
-func (t *SnapshotMetadataTree) GetRootNode(
-	fileHandle io.ReaderAt,
-	rootNodeBlockNumber uint64,
+// RootNode retrieves the snapshot metadata tree root node
+func (t *SnapshotMetadataTree) RootNode(
+	reader io.ReaderAt,
+	rootNodeOID uint64,
 ) (*BTreeNode, error) {
 	if t == nil {
 		return nil, fmt.Errorf("invalid snapshot metadata tree")
 	}
 
-	if rootNodeBlockNumber > common.Int32Max {
+	if rootNodeOID > common.Int32Max {
 		return nil, fmt.Errorf("invalid root node block number value out of bounds")
 	}
 
 	// Check cache first
-	if node, found := t.nodeCache[rootNodeBlockNumber]; found {
+	if node, found := t.nodeCache[rootNodeOID]; found {
 		return node, nil
 	}
 
@@ -139,14 +133,14 @@ func (t *SnapshotMetadataTree) GetRootNode(
 	}
 
 	// Read the block data
-	blockOffset := int64(rootNodeBlockNumber) * int64(t.IOHandle.BlockSize)
+	blockOffset := int64(rootNodeOID) * int64(t.IOHandle.BlockSize)
 	blockData := make([]byte, t.IOHandle.BlockSize)
-	n, err := fileHandle.ReadAt(blockData, blockOffset)
+	n, err := reader.ReadAt(blockData, blockOffset)
 	if err != nil && err != io.EOF {
-		return nil, fmt.Errorf("unable to read data block: %d: %w", rootNodeBlockNumber, err)
+		return nil, fmt.Errorf("unable to read data block: %d: %w", rootNodeOID, err)
 	}
 	if n != int(t.IOHandle.BlockSize) {
-		return nil, fmt.Errorf("unable to read data block: %d", rootNodeBlockNumber)
+		return nil, fmt.Errorf("unable to read data block: %d", rootNodeOID)
 	}
 
 	// Parse the B-tree node
@@ -175,24 +169,24 @@ func (t *SnapshotMetadataTree) GetRootNode(
 	}
 
 	// Validate footer
-	if node.Footer == nil {
+	if node.Info == nil {
 		return nil, fmt.Errorf("invalid B-tree node - missing footer")
 	}
 
-	if node.Footer.NodeSize != 4096 {
+	if node.Info.NodeSize != 4096 {
 		return nil, fmt.Errorf("invalid node size value out of bounds")
 	}
 
-	if node.Footer.KeySize != 0 {
+	if node.Info.KeySize != 0 {
 		return nil, fmt.Errorf("invalid key size value out of bounds")
 	}
 
-	if node.Footer.ValueSize != 0 {
+	if node.Info.ValueSize != 0 {
 		return nil, fmt.Errorf("invalid value size value out of bounds")
 	}
 
 	// Cache the node
-	t.nodeCache[rootNodeBlockNumber] = node
+	t.nodeCache[rootNodeOID] = node
 
 	// Stop profiling if enabled
 	if t.IOHandle.Profiler != nil {
@@ -209,22 +203,21 @@ func (t *SnapshotMetadataTree) GetRootNode(
 	return node, nil
 }
 
-// GetSubNode retrieves a snapshot metadata tree sub node
-// Corresponds to libfsapfs_snapshot_metadata_tree_get_sub_node
-func (t *SnapshotMetadataTree) GetSubNode(
-	fileHandle io.ReaderAt,
-	subNodeBlockNumber uint64,
+// SubNode retrieves a snapshot metadata tree sub node
+func (t *SnapshotMetadataTree) SubNode(
+	reader io.ReaderAt,
+	subNodeOID uint64,
 ) (*BTreeNode, error) {
 	if t == nil {
 		return nil, fmt.Errorf("invalid snapshot metadata tree")
 	}
 
-	if subNodeBlockNumber > common.Int32Max {
+	if subNodeOID > common.Int32Max {
 		return nil, fmt.Errorf("invalid sub node block number value out of bounds")
 	}
 
 	// Check cache first
-	if node, found := t.nodeCache[subNodeBlockNumber]; found {
+	if node, found := t.nodeCache[subNodeOID]; found {
 		return node, nil
 	}
 
@@ -239,14 +232,14 @@ func (t *SnapshotMetadataTree) GetSubNode(
 	}
 
 	// Read the block data
-	blockOffset := int64(subNodeBlockNumber) * int64(t.IOHandle.BlockSize)
+	blockOffset := int64(subNodeOID) * int64(t.IOHandle.BlockSize)
 	blockData := make([]byte, t.IOHandle.BlockSize)
-	n, err := fileHandle.ReadAt(blockData, blockOffset)
+	n, err := reader.ReadAt(blockData, blockOffset)
 	if err != nil && err != io.EOF {
-		return nil, fmt.Errorf("unable to read data block: %d: %w", subNodeBlockNumber, err)
+		return nil, fmt.Errorf("unable to read data block: %d: %w", subNodeOID, err)
 	}
 	if n != int(t.IOHandle.BlockSize) {
-		return nil, fmt.Errorf("unable to read data block: %d", subNodeBlockNumber)
+		return nil, fmt.Errorf("unable to read data block: %d", subNodeOID)
 	}
 
 	// Parse the B-tree node
@@ -266,16 +259,16 @@ func (t *SnapshotMetadataTree) GetSubNode(
 	}
 
 	// Validate footer
-	if node.Footer == nil {
+	if node.Info == nil {
 		return nil, fmt.Errorf("invalid B-tree node - missing footer")
 	}
 
-	if node.Footer.NodeSize != 4096 {
+	if node.Info.NodeSize != 4096 {
 		return nil, fmt.Errorf("invalid node size value out of bounds")
 	}
 
 	// Cache the node
-	t.nodeCache[subNodeBlockNumber] = node
+	t.nodeCache[subNodeOID] = node
 
 	// Stop profiling if enabled
 	if t.IOHandle.Profiler != nil {
@@ -292,11 +285,10 @@ func (t *SnapshotMetadataTree) GetSubNode(
 	return node, nil
 }
 
-// GetEntryFromNodeByIdentifier retrieves a B-tree entry from a node by object identifier
-// Corresponds to libfsapfs_snapshot_metadata_tree_get_entry_from_node_by_identifier
-func (t *SnapshotMetadataTree) GetEntryFromNodeByIdentifier(
+// EntryFromNodeByIdentifier retrieves a B-tree entry from a node by object identifier
+func (t *SnapshotMetadataTree) EntryFromNodeByIdentifier(
 	node *BTreeNode,
-	objectIdentifier uint64,
+	oid uint64,
 ) (*BTreeEntry, error) {
 	if t == nil {
 		return nil, fmt.Errorf("invalid snapshot metadata tree")
@@ -318,7 +310,7 @@ func (t *SnapshotMetadataTree) GetEntryFromNodeByIdentifier(
 
 		entryObjectIdentifier := binary.LittleEndian.Uint64(entry.KeyData[0:8])
 
-		if entryObjectIdentifier == objectIdentifier {
+		if entryObjectIdentifier == oid {
 			return entry, nil
 		}
 	}
@@ -326,18 +318,17 @@ func (t *SnapshotMetadataTree) GetEntryFromNodeByIdentifier(
 	return nil, nil
 }
 
-// GetEntryByIdentifier retrieves a B-tree entry by object identifier
-// Corresponds to libfsapfs_snapshot_metadata_tree_get_entry_by_identifier
-func (t *SnapshotMetadataTree) GetEntryByIdentifier(
-	fileHandle io.ReaderAt,
-	objectIdentifier uint64,
+// EntryByIdentifier retrieves a B-tree entry by object identifier
+func (t *SnapshotMetadataTree) EntryByIdentifier(
+	reader io.ReaderAt,
+	oid uint64,
 ) (*BTreeNode, *BTreeEntry, error) {
 	if t == nil {
 		return nil, nil, fmt.Errorf("invalid snapshot metadata tree")
 	}
 
 	// Get the root node
-	node, err := t.GetRootNode(fileHandle, t.RootNodeBlockNumber)
+	node, err := t.RootNode(reader, t.RootNodeOID)
 	if err != nil {
 		return nil, nil, fmt.Errorf("unable to get root node: %w", err)
 	}
@@ -353,7 +344,7 @@ func (t *SnapshotMetadataTree) GetEntryByIdentifier(
 
 		if isLeaf {
 			// Search for the entry in the leaf node
-			entry, err := t.GetEntryFromNodeByIdentifier(node, objectIdentifier)
+			entry, err := t.EntryFromNodeByIdentifier(node, oid)
 			if err != nil {
 				return nil, nil, fmt.Errorf("unable to get entry from node: %w", err)
 			}
@@ -361,7 +352,7 @@ func (t *SnapshotMetadataTree) GetEntryByIdentifier(
 		}
 
 		// Branch node - find the appropriate sub node
-		var subNodeBlockNumber uint64
+		var subNodeOID uint64
 		found := false
 
 		for _, entry := range node.Entries {
@@ -371,9 +362,9 @@ func (t *SnapshotMetadataTree) GetEntryByIdentifier(
 
 			entryObjectIdentifier := binary.LittleEndian.Uint64(entry.KeyData[0:8])
 
-			if objectIdentifier <= entryObjectIdentifier {
+			if oid <= entryObjectIdentifier {
 				// Get sub node block number
-				subNodeBlockNumber, err = t.GetSubNodeBlockNumberFromEntry(fileHandle, entry, 0)
+				subNodeOID, err = t.SubNodeOIDFromEntry(reader, entry, 0)
 				if err != nil {
 					return nil, nil, fmt.Errorf("unable to get sub node block number: %w", err)
 				}
@@ -388,7 +379,7 @@ func (t *SnapshotMetadataTree) GetEntryByIdentifier(
 		}
 
 		// Get the sub node
-		node, err = t.GetSubNode(fileHandle, subNodeBlockNumber)
+		node, err = t.SubNode(reader, subNodeOID)
 		if err != nil {
 			return nil, nil, fmt.Errorf("unable to get sub node: %w", err)
 		}
@@ -396,29 +387,35 @@ func (t *SnapshotMetadataTree) GetEntryByIdentifier(
 }
 
 // SnapshotMetadata represents snapshot metadata
-// Corresponds to libfsapfs_snapshot_metadata_t
 type SnapshotMetadata struct {
-	ObjectIdentifier               uint64 // the snapshot's transaction id (xid)
-	VolumeSuperblockBlockNumber    uint64 // physical block of the frozen volume superblock
-	SuperblockObjectIdentifier     uint64 // Alias for VolumeSuperblockBlockNumber
-	ExtentReferenceTreeBlockNumber uint64 // physical block of the snapshot's extent-reference tree
-	CreationTime                   uint64 // ns since 1970-01-01 UTC
-	ChangeTime                     uint64 // ns since 1970-01-01 UTC
-	Name                           string
+	// The transaction identifier of the snapshot. This is the object
+	// identifier half of the snapshot metadata record's key (j_key_t.obj_id),
+	// which for snapshot metadata records holds an xid rather than an oid.
+	XID uint64
+	// The physical object identifier of the snapshot's volume superblock
+	// (j_snap_metadata_val_t.sblock_oid).
+	VolumeSuperblockOID uint64
+	// The physical object identifier of the snapshot's extentref tree
+	// (j_snap_metadata_val_t.extentref_tree_oid).
+	ExtentrefTreeOID uint64
+	// Creation time, in nanoseconds since 1970-01-01 UTC (create_time).
+	CreationTime uint64
+	// Last-modified time, in nanoseconds since 1970-01-01 UTC (change_time).
+	ChangeTime uint64
+	Name       string
 }
 
-// GetMetadataByObjectIdentifier retrieves snapshot metadata by object identifier
-// Corresponds to libfsapfs_snapshot_metadata_tree_get_metadata_by_object_identifier
-func (t *SnapshotMetadataTree) GetMetadataByObjectIdentifier(
-	fileHandle io.ReaderAt,
-	objectIdentifier uint64,
+// MetadataByObjectIdentifier retrieves snapshot metadata by object identifier
+func (t *SnapshotMetadataTree) MetadataByObjectIdentifier(
+	reader io.ReaderAt,
+	oid uint64,
 ) (*SnapshotMetadata, error) {
 	if t == nil {
 		return nil, fmt.Errorf("invalid snapshot metadata tree")
 	}
 
 	// Get the entry
-	_, entry, err := t.GetEntryByIdentifier(fileHandle, objectIdentifier)
+	_, entry, err := t.EntryByIdentifier(reader, oid)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get entry by identifier: %w", err)
 	}
@@ -429,13 +426,12 @@ func (t *SnapshotMetadataTree) GetMetadataByObjectIdentifier(
 
 	// Parse the metadata
 	metadata := &SnapshotMetadata{
-		ObjectIdentifier: objectIdentifier,
+		XID: oid,
 	}
 
 	// Parse value data
 	if len(entry.ValueData) >= 46 {
-		metadata.VolumeSuperblockBlockNumber = binary.LittleEndian.Uint64(entry.ValueData[8:16])
-		metadata.SuperblockObjectIdentifier = metadata.VolumeSuperblockBlockNumber
+		metadata.VolumeSuperblockOID = binary.LittleEndian.Uint64(entry.ValueData[8:16])
 
 		// Parse name
 		nameSize := binary.LittleEndian.Uint16(entry.ValueData[44:46])
@@ -447,18 +443,17 @@ func (t *SnapshotMetadataTree) GetMetadataByObjectIdentifier(
 	return metadata, nil
 }
 
-// GetSnapshots retrieves all snapshots from the tree
-// Corresponds to libfsapfs_snapshot_metadata_tree_get_snapshots
-func (t *SnapshotMetadataTree) GetSnapshots(
-	fileHandle io.ReaderAt,
-	transactionIdentifier uint64,
+// Snapshots retrieves all snapshots from the tree
+func (t *SnapshotMetadataTree) Snapshots(
+	reader io.ReaderAt,
+	xid uint64,
 ) ([]*SnapshotMetadata, error) {
 	if t == nil {
 		return nil, fmt.Errorf("invalid snapshot metadata tree")
 	}
 
 	// Get the root node
-	node, err := t.GetRootNode(fileHandle, t.RootNodeBlockNumber)
+	node, err := t.RootNode(reader, t.RootNodeOID)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get root node: %w", err)
 	}
@@ -476,7 +471,7 @@ func (t *SnapshotMetadataTree) GetSnapshots(
 		}
 	} else {
 		// Get snapshots from branch node
-		if err := t.getSnapshotsFromBranchNode(fileHandle, node, transactionIdentifier, &snapshots, 0); err != nil {
+		if err := t.getSnapshotsFromBranchNode(reader, node, xid, &snapshots, 0); err != nil {
 			return nil, fmt.Errorf("unable to get snapshots from branch node: %w", err)
 		}
 	}
@@ -485,7 +480,6 @@ func (t *SnapshotMetadataTree) GetSnapshots(
 }
 
 // getSnapshotsFromLeafNode retrieves snapshots from a leaf node
-// Corresponds to libfsapfs_snapshot_metadata_tree_get_snapshots_from_leaf_node
 func (t *SnapshotMetadataTree) getSnapshotsFromLeafNode(
 	node *BTreeNode,
 	snapshots *[]*SnapshotMetadata,
@@ -524,14 +518,13 @@ func (t *SnapshotMetadataTree) getSnapshotsFromLeafNode(
 		}
 
 		metadata := &SnapshotMetadata{
-			ObjectIdentifier: objIDAndType & objIDMask, // the snapshot's xid
+			XID: objIDAndType & objIDMask,
 		}
 
 		v := entry.ValueData
 		if len(v) >= snapMetaValFixed {
-			metadata.ExtentReferenceTreeBlockNumber = binary.LittleEndian.Uint64(v[0:8])
-			metadata.VolumeSuperblockBlockNumber = binary.LittleEndian.Uint64(v[8:16])
-			metadata.SuperblockObjectIdentifier = metadata.VolumeSuperblockBlockNumber
+			metadata.ExtentrefTreeOID = binary.LittleEndian.Uint64(v[0:8])
+			metadata.VolumeSuperblockOID = binary.LittleEndian.Uint64(v[8:16])
 			metadata.CreationTime = binary.LittleEndian.Uint64(v[16:24])
 			metadata.ChangeTime = binary.LittleEndian.Uint64(v[24:32])
 
@@ -548,15 +541,14 @@ func (t *SnapshotMetadataTree) getSnapshotsFromLeafNode(
 	return nil
 }
 
-// GetNumberOfEntries retrieves the number of snapshot entries in the tree
-// Corresponds to libfsapfs_snapshot_metadata_tree_get_number_of_entries
-func (t *SnapshotMetadataTree) GetNumberOfEntries(fileHandle io.ReaderAt) (int, error) {
+// NumberOfEntries retrieves the number of snapshot entries in the tree
+func (t *SnapshotMetadataTree) NumberOfEntries(reader io.ReaderAt) (int, error) {
 	if t == nil {
 		return 0, fmt.Errorf("invalid snapshot metadata tree")
 	}
 
 	// Get all snapshots
-	snapshots, err := t.GetSnapshots(fileHandle, 0)
+	snapshots, err := t.Snapshots(reader, 0)
 	if err != nil {
 		return 0, fmt.Errorf("unable to get snapshots: %w", err)
 	}
@@ -564,15 +556,14 @@ func (t *SnapshotMetadataTree) GetNumberOfEntries(fileHandle io.ReaderAt) (int, 
 	return len(snapshots), nil
 }
 
-// GetEntryByIndex retrieves a snapshot metadata entry by index
-// Corresponds to libfsapfs_snapshot_metadata_tree_get_entry_by_index
-func (t *SnapshotMetadataTree) GetEntryByIndex(fileHandle io.ReaderAt, index int) (*SnapshotMetadata, error) {
+// EntryByIndex retrieves a snapshot metadata entry by index
+func (t *SnapshotMetadataTree) EntryByIndex(reader io.ReaderAt, index int) (*SnapshotMetadata, error) {
 	if t == nil {
 		return nil, fmt.Errorf("invalid snapshot metadata tree")
 	}
 
 	// Get all snapshots
-	snapshots, err := t.GetSnapshots(fileHandle, 0)
+	snapshots, err := t.Snapshots(reader, 0)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get snapshots: %w", err)
 	}
@@ -585,11 +576,10 @@ func (t *SnapshotMetadataTree) GetEntryByIndex(fileHandle io.ReaderAt, index int
 }
 
 // getSnapshotsFromBranchNode retrieves snapshots from a branch node (recursive)
-// Corresponds to libfsapfs_snapshot_metadata_tree_get_snapshots_from_branch_node
 func (t *SnapshotMetadataTree) getSnapshotsFromBranchNode(
-	fileHandle io.ReaderAt,
+	reader io.ReaderAt,
 	node *BTreeNode,
-	transactionIdentifier uint64,
+	xid uint64,
 	snapshots *[]*SnapshotMetadata,
 	recursionDepth int,
 ) error {
@@ -605,24 +595,24 @@ func (t *SnapshotMetadataTree) getSnapshotsFromBranchNode(
 		return fmt.Errorf("invalid snapshots array")
 	}
 
-	if recursionDepth > MaximumBTreeNodeRecursionDepth {
+	if recursionDepth > MaxBTreeNodeDepth {
 		return fmt.Errorf("maximum recursion depth exceeded")
 	}
 
 	// Iterate through all entries in the branch node
 	for _, entry := range node.Entries {
 		// Get sub node block number
-		subNodeBlockNumber, err := t.GetSubNodeBlockNumberFromEntry(fileHandle, entry, transactionIdentifier)
+		subNodeOID, err := t.SubNodeOIDFromEntry(reader, entry, xid)
 		if err != nil {
 			return fmt.Errorf("unable to get sub node block number: %w", err)
 		}
 
-		if subNodeBlockNumber == 0 {
+		if subNodeOID == 0 {
 			continue
 		}
 
 		// Get the sub node
-		subNode, err := t.GetSubNode(fileHandle, subNodeBlockNumber)
+		subNode, err := t.SubNode(reader, subNodeOID)
 		if err != nil {
 			return fmt.Errorf("unable to get sub node: %w", err)
 		}
@@ -637,7 +627,7 @@ func (t *SnapshotMetadataTree) getSnapshotsFromBranchNode(
 			}
 		} else {
 			// Recursively get snapshots from branch node
-			if err := t.getSnapshotsFromBranchNode(fileHandle, subNode, transactionIdentifier, snapshots, recursionDepth+1); err != nil {
+			if err := t.getSnapshotsFromBranchNode(reader, subNode, xid, snapshots, recursionDepth+1); err != nil {
 				return fmt.Errorf("unable to get snapshots from branch node: %w", err)
 			}
 		}

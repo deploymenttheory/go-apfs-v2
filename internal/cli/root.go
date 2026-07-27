@@ -15,6 +15,7 @@ import (
 	"github.com/spf13/viper"
 )
 
+// version must track tools.ToolsVersion in internal/tools/output.go.
 const version = "0.2.0"
 
 // globalOptions are the persistent flags shared by all commands, resolved
@@ -36,7 +37,7 @@ var rootCmd = &cobra.Command{
 	Use:   "apfs",
 	Short: "Read, extract and build Apple File System (APFS) and HFS+ disk images",
 	Long: `A cross-platform, self-contained toolkit for Apple disk images. It reads
-APFS and HFS+ filesystems directly from DMGs (zlib, bzip2, ADC, LZFSE or LZMA
+APFS and HFS+ file systems directly from DMGs (zlib, bzip2, ADC, LZFSE or LZMA
 compressed), GPT- or Apple-Partition-Map raw images, or bare containers —
 without mounting and without macOS — and can also build and repack DMGs.
 
@@ -44,7 +45,7 @@ Read commands:
   info     Container and volume summary (text or JSON)
   list     List directory contents (recursive, JSON lines)
   cat      Write file contents to stdout, for pipelines
-  extract  Extract files/directories to the local filesystem
+  extract  Extract files/directories to the local file system
   inspect  Low-level structural inspection (container walk, blocks, B-trees)
   mount    Mount read-only via FUSE (Linux and macOS)
 

@@ -1,5 +1,4 @@
-// Mount handle for APFS filesystem mounting
-// Corresponds to libfsapfs mount_handle.c and mount_handle.h
+// Mount handle for APFS file system mounting
 package tools
 
 import (
@@ -14,7 +13,7 @@ import (
 
 // MountHandle manages the state for mounting an APFS container
 type MountHandle struct {
-	FileSystemIndex   int
+	VolumeIndex       int
 	VolumeOffset      int64
 	UserPassword      string
 	RecoveryPassword  string
@@ -28,17 +27,17 @@ type MountHandle struct {
 // NewMountHandle creates a new mount handle
 func NewMountHandle() *MountHandle {
 	return &MountHandle{
-		FileSystemIndex: -1, // -1 means mount all volumes
-		VolumeOffset:    0,
-		NotifyStream:    os.Stderr,
+		VolumeIndex:  -1, // -1 means mount all volumes
+		VolumeOffset: 0,
+		NotifyStream: os.Stderr,
 	}
 }
 
-// SetFileSystemIndex sets the file system index from a string
+// SetVolumeIndex sets the volume index from a string
 // Accepts a number or "all" to mount all volumes
-func (mh *MountHandle) SetFileSystemIndex(indexStr string) error {
+func (mh *MountHandle) SetVolumeIndex(indexStr string) error {
 	if indexStr == "all" {
-		mh.FileSystemIndex = -1 // -1 indicates all volumes
+		mh.VolumeIndex = -1 // -1 indicates all volumes
 		return nil
 	}
 
@@ -51,7 +50,7 @@ func (mh *MountHandle) SetFileSystemIndex(indexStr string) error {
 		return fmt.Errorf("file system index must be non-negative")
 	}
 
-	mh.FileSystemIndex = index
+	mh.VolumeIndex = index
 	return nil
 }
 
@@ -144,13 +143,13 @@ func (mh *MountHandle) unlockVolumes() error {
 		return fmt.Errorf("container not opened")
 	}
 
-	numberOfVolumes, err := mh.InputContainer.GetNumberOfVolumes()
+	numberOfVolumes, err := mh.InputContainer.NumberOfVolumes()
 	if err != nil {
 		return fmt.Errorf("unable to get number of volumes: %w", err)
 	}
 
 	for i := 0; i < numberOfVolumes; i++ {
-		volume, err := mh.InputContainer.GetVolume(i)
+		volume, err := mh.InputContainer.Volume(i)
 		if err != nil {
 			if mh.NotifyStream != nil {
 				fmt.Fprintf(mh.NotifyStream, "Warning: unable to get volume %d: %v\n", i, err)
@@ -195,7 +194,7 @@ func (mh *MountHandle) unlockVolumes() error {
 // Close closes the mount handle
 func (mh *MountHandle) Close() error {
 	if mh.InputContainer != nil {
-		if err := mh.InputContainer.Free(); err != nil {
+		if err := mh.InputContainer.Close(); err != nil {
 			return fmt.Errorf("unable to free container: %w", err)
 		}
 		mh.InputContainer = nil
@@ -216,33 +215,33 @@ func (mh *MountHandle) SignalAbort() {
 	mh.IsLocked = true
 }
 
-// GetVolumeByIndex retrieves a volume by its index
-func (mh *MountHandle) GetVolumeByIndex(index int) (*apfs.Volume, error) {
+// VolumeByIndex retrieves a volume by its index
+func (mh *MountHandle) VolumeByIndex(index int) (*apfs.Volume, error) {
 	if mh.InputContainer == nil {
 		return nil, fmt.Errorf("container not opened")
 	}
 
-	return mh.InputContainer.GetVolume(index)
+	return mh.InputContainer.Volume(index)
 }
 
-// GetNumberOfVolumes returns the number of volumes in the container
-func (mh *MountHandle) GetNumberOfVolumes() (int, error) {
+// NumberOfVolumes returns the number of volumes in the container
+func (mh *MountHandle) NumberOfVolumes() (int, error) {
 	if mh.InputContainer == nil {
 		return 0, fmt.Errorf("container not opened")
 	}
 
-	return mh.InputContainer.GetNumberOfVolumes()
+	return mh.InputContainer.NumberOfVolumes()
 }
 
-// GetFileEntryByPath retrieves a file entry by its path from a specific volume
-func (mh *MountHandle) GetFileEntryByPath(volumeIndex int, path string) (*apfs.FileEntry, error) {
-	volume, err := mh.GetVolumeByIndex(volumeIndex)
+// FileEntryByPath retrieves a file entry by its path from a specific volume
+func (mh *MountHandle) FileEntryByPath(volumeIndex int, path string) (*apfs.FileEntry, error) {
+	volume, err := mh.VolumeByIndex(volumeIndex)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get volume %d: %w", volumeIndex, err)
 	}
 
 	// Get the root directory
-	root, err := volume.GetRootDirectory()
+	root, err := volume.RootDirectory()
 	if err != nil {
 		return nil, fmt.Errorf("unable to get root directory: %w", err)
 	}
@@ -266,7 +265,7 @@ func (mh *MountHandle) GetFileEntryByPath(volumeIndex int, path string) (*apfs.F
 		}
 
 		// Get the number of sub-entries
-		numSubEntries, err := currentEntry.GetNumberOfSubFileEntries()
+		numSubEntries, err := currentEntry.NumberOfSubFileEntries()
 		if err != nil {
 			return nil, fmt.Errorf("unable to get number of sub-entries at level %d: %w", i, err)
 		}
@@ -274,12 +273,12 @@ func (mh *MountHandle) GetFileEntryByPath(volumeIndex int, path string) (*apfs.F
 		// Search for the segment
 		found := false
 		for j := 0; j < numSubEntries; j++ {
-			subEntry, err := currentEntry.GetSubFileEntryByIndex(j)
+			subEntry, err := currentEntry.SubFileEntryByIndex(j)
 			if err != nil {
 				continue
 			}
 
-			name, err := subEntry.GetUTF8Name()
+			name, err := subEntry.UTF8Name()
 			if err != nil {
 				continue
 			}

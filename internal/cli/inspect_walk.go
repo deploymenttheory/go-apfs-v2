@@ -15,7 +15,7 @@ import (
 func runInspectWalk(imagePath string, inspectVolume int, inspectVerbose bool) error {
 	// Open the container image with content-based format detection
 	fmt.Printf("Opening container: %s\n\n", imagePath)
-	fileHandle, containerOffset, closer, err := disk.OpenWithOffset(imagePath)
+	reader, containerOffset, closer, err := disk.OpenWithOffset(imagePath)
 	if err != nil {
 		return withCode(ExitBadImage, fmt.Errorf("unable to open container: %w", err))
 	}
@@ -24,7 +24,7 @@ func runInspectWalk(imagePath string, inspectVolume int, inspectVerbose bool) er
 	// Read block 0 of the container
 	blockSize := uint32(4096) // Default, will be updated from actual superblock
 	block0Data := make([]byte, blockSize)
-	if _, err := fileHandle.ReadAt(block0Data, containerOffset); err != nil {
+	if _, err := reader.ReadAt(block0Data, containerOffset); err != nil {
 		return fmt.Errorf("failed to read block 0: %w", err)
 	}
 
@@ -44,22 +44,22 @@ func runInspectWalk(imagePath string, inspectVolume int, inspectVerbose bool) er
 	if err != nil {
 		return fmt.Errorf("unable to create container: %w", err)
 	}
-	if err := container.OpenRead(fileHandle, containerOffset); err != nil {
+	if err := container.OpenRead(reader, containerOffset); err != nil {
 		return fmt.Errorf("unable to parse container: %w", err)
 	}
 
 	// Print checkpoint and container info
 	nxsb := container.Superblock
-	xpDescBlocks := nxsb.CheckpointDescriptorAreaNumberOfBlocks & ^uint32(1<<31)
+	xpDescBlocks := nxsb.XPDescBlocks & ^uint32(1<<31)
 
 	fmt.Println("  Container Structure")
 	fmt.Printf("    %-30s  %d blocks\n", "Checkpoint descriptor area", xpDescBlocks)
-	fmt.Printf("    %-30s  %#x\n", "Checkpoint base address", nxsb.CheckpointDescriptorAreaBlockNumber)
-	fmt.Printf("    %-30s  %#x\n", "Object map physical OID", nxsb.ObjectMapBlockNumber)
+	fmt.Printf("    %-30s  %#x\n", "Checkpoint base address", nxsb.XPDescBase)
+	fmt.Printf("    %-30s  %#x\n", "Object map object identifier", nxsb.OmapOID)
 	fmt.Println()
 
 	// List volumes
-	volumeOIDs, err := nxsb.GetVolumeObjectIdentifiers()
+	volumeOIDs, err := nxsb.VolumeObjectIdentifiers()
 	if err != nil {
 		return fmt.Errorf("unable to get volume object identifiers: %w", err)
 	}
@@ -82,7 +82,7 @@ func runInspectWalk(imagePath string, inspectVolume int, inspectVerbose bool) er
 
 	for volIdx := startVol; volIdx < endVol; volIdx++ {
 		// Get volume
-		volume, err := container.GetVolume(volIdx)
+		volume, err := container.Volume(volIdx)
 		if err != nil {
 			fmt.Printf("Error: unable to get volume %d: %v\n\n", volIdx, err)
 			continue
@@ -104,7 +104,7 @@ func runInspectWalk(imagePath string, inspectVolume int, inspectVerbose bool) er
 		if volumeName != "" {
 			headerText += fmt.Sprintf(": %s", volumeName)
 		}
-		uuid := formatVolumeUUID(vsb.VolumeIdentifier[:])
+		uuid := formatVolumeUUID(vsb.VolumeUUID[:])
 
 		boxWidth := max(len(headerText), len("UUID: "+uuid)) + 2
 		fmt.Printf("╭─%s─╮\n", repeatChar('─', boxWidth))
@@ -114,24 +114,22 @@ func runInspectWalk(imagePath string, inspectVolume int, inspectVerbose bool) er
 
 		// Storage section
 		fmt.Println("  Storage")
-		volumeSize, _ := volume.GetSize()
+		volumeSize, _ := volume.Size()
 		fmt.Printf("    %-30s  %s (%s bytes)\n", "Size", formatBytes(volumeSize), formatNumber(volumeSize))
 		fmt.Printf("    %-30s  %s\n", "Allocated blocks", formatNumber(vsb.NumberOfAllocatedBlocks))
 		fmt.Printf("    %-30s  %s\n", "Reserved blocks", formatNumber(vsb.NumberOfReservedBlocks))
 		fmt.Printf("    %-30s  %s\n", "Quota blocks", formatNumber(vsb.NumberOfQuotaBlocks))
 
-		totalAllocated, _ := vsb.GetTotalBlocksAllocated()
-		totalFreed, _ := vsb.GetTotalBlocksFreed()
-		fmt.Printf("    %-30s  %s\n", "Total blocks allocated ever", formatNumber(totalAllocated))
-		fmt.Printf("    %-30s  %s\n", "Total blocks freed ever", formatNumber(totalFreed))
+		fmt.Printf("    %-30s  %s\n", "Total blocks allocated", formatNumber(vsb.TotalBlocksAllocated))
+		fmt.Printf("    %-30s  %s\n", "Total blocks freed", formatNumber(vsb.TotalBlocksFreed))
 		fmt.Println()
 
 		// Contents section
 		fmt.Println("  Contents")
-		numFiles, _ := vsb.GetNumberOfFiles()
-		numDirs, _ := vsb.GetNumberOfDirectories()
-		numSymlinks, _ := vsb.GetNumberOfSymlinks()
-		numSnapshots, _ := vsb.GetNumberOfSnapshots()
+		numFiles := vsb.NumberOfFiles
+		numDirs := vsb.NumberOfDirectories
+		numSymlinks := vsb.NumberOfSymlinks
+		numSnapshots := vsb.SnapshotCount
 
 		fmt.Printf("    %-30s  %s\n", "Files", formatNumber(numFiles))
 		fmt.Printf("    %-30s  %s\n", "Directories", formatNumber(numDirs))
@@ -141,8 +139,8 @@ func runInspectWalk(imagePath string, inspectVolume int, inspectVerbose bool) er
 		}
 
 		// Try to get root directory
-		if rootEntry, err := volume.GetRootDirectory(); err == nil {
-			if numRootEntries, err := rootEntry.GetNumberOfSubFileEntries(); err == nil {
+		if rootEntry, err := volume.RootDirectory(); err == nil {
+			if numRootEntries, err := rootEntry.NumberOfSubFileEntries(); err == nil {
 				fmt.Printf("    %-30s  %s entries\n", "Root directory", formatNumber(uint64(numRootEntries)))
 			}
 		}
@@ -150,15 +148,15 @@ func runInspectWalk(imagePath string, inspectVolume int, inspectVerbose bool) er
 
 		// Features section
 		fmt.Println("  Features")
-		compatFeatures, _ := volume.GetCompatibleFeatureNames()
+		compatFeatures, _ := volume.CompatibleFeatureNames()
 		for _, feature := range compatFeatures {
 			fmt.Printf("    ✓ %s\n", feature)
 		}
-		incompatFeatures, _ := volume.GetIncompatibleFeatureNames()
+		incompatFeatures, _ := volume.IncompatibleFeatureNames()
 		for _, feature := range incompatFeatures {
 			fmt.Printf("    ✓ %s\n", feature)
 		}
-		roCompatFeatures, _ := volume.GetReadOnlyCompatibleFeatureNames()
+		roCompatFeatures, _ := volume.ReadOnlyCompatibleFeatureNames()
 		for _, feature := range roCompatFeatures {
 			fmt.Printf("    ✓ %s\n", feature)
 		}
@@ -166,26 +164,25 @@ func runInspectWalk(imagePath string, inspectVolume int, inspectVerbose bool) er
 
 		// Metadata section
 		fmt.Println("  Metadata")
-		fmt.Printf("    %-30s  %#x\n", "Object map OID", vsb.ObjectMapBlockNumber)
-		fmt.Printf("    %-30s  %#x\n", "File-system tree root OID", vsb.FileSystemRootObjectIdentifier)
-		caseInsensitive := (vsb.IncompatibleFeaturesFlags & 0x00000001) != 0
+		fmt.Printf("    %-30s  %#x\n", "Object map object identifier", vsb.OmapOID)
+		fmt.Printf("    %-30s  %#x\n", "File-system tree object identifier", vsb.RootTreeOID)
 		caseSensitive := "Yes"
-		if caseInsensitive {
+		if vsb.IncompatibleFeaturesFlags&0x00000001 != 0 { // APFS_INCOMPAT_CASE_INSENSITIVE
 			caseSensitive = "No"
 		}
-		fmt.Printf("    %-30s  %s\n", "Case sensitive", caseSensitive)
+		fmt.Printf("    %-30s  %s\n", "Case-sensitive", caseSensitive)
 		encrypted := (vsb.IncompatibleFeaturesFlags & 0x00000004) != 0
 		encryptedStr := "No"
 		if encrypted {
 			encryptedStr = "Yes"
 		}
 		fmt.Printf("    %-30s  %s\n", "Encrypted", encryptedStr)
-		fmt.Printf("    %-30s  %s\n", "Formatted by", vsb.GetFormattedBy())
-		fmt.Printf("    %-30s  %s\n", "Last modified by", vsb.GetLastModifiedBy())
+		fmt.Printf("    %-30s  %s\n", "Formatted by", vsb.FormattedByString())
+		fmt.Printf("    %-30s  %s\n", "Last modified by", vsb.LastModifiedBy())
 		fmt.Println()
 
 		// Modification History section
-		modHistory := vsb.GetModifiedByHistory()
+		modHistory := vsb.ModifiedByHistory()
 		if len(modHistory) > 1 {
 			fmt.Println("  Modification History")
 			for i, entry := range modHistory {

@@ -3,7 +3,7 @@
 // testing/fstest and passed to anything that consumes an fs.FS.
 //
 // Symlinks are never followed: Stat and Open return the link itself, like
-// archive-backed filesystems. Use Readlink to resolve targets.
+// archive-backed file systems. Use Readlink to resolve targets.
 package apfs
 
 import (
@@ -33,7 +33,7 @@ func (v *Volume) entryByFSName(op, name string) (*FileEntry, error) {
 		apfsPath = "/" + name
 	}
 
-	entry, err := v.GetFileEntryByPath(apfsPath)
+	entry, err := v.FileEntryByPath(apfsPath)
 	if err != nil {
 		return nil, &fs.PathError{Op: op, Path: name, Err: fmt.Errorf("%w: %v", fs.ErrNotExist, err)}
 	}
@@ -98,7 +98,7 @@ func (v *Volume) ReadFile(name string) ([]byte, error) {
 		return nil, err
 	}
 
-	size, err := entry.GetSize()
+	size, err := entry.Size()
 	if err != nil {
 		return nil, &fs.PathError{Op: "readfile", Path: name, Err: err}
 	}
@@ -123,7 +123,7 @@ func (v *Volume) Readlink(name string) (string, error) {
 		return "", err
 	}
 
-	target, err := entry.GetSymbolicLinkTarget()
+	target, err := entry.SymbolicLinkTarget()
 	if err != nil {
 		return "", &fs.PathError{Op: "readlink", Path: name, Err: err}
 	}
@@ -138,19 +138,19 @@ func (v *Volume) Xattrs(name string) (map[string][]byte, error) {
 		return nil, err
 	}
 
-	count, err := entry.GetNumberOfExtendedAttributes()
+	count, err := entry.NumberOfExtendedAttributes()
 	if err != nil {
 		return nil, &fs.PathError{Op: "xattrs", Path: name, Err: err}
 	}
 
 	attrs := make(map[string][]byte, count)
 	for index := range count {
-		attr, err := entry.GetExtendedAttributeByIndex(index)
+		attr, err := entry.ExtendedAttributeByIndex(index)
 		if err != nil {
 			return nil, &fs.PathError{Op: "xattrs", Path: name, Err: err}
 		}
 
-		attrName, err := attr.GetUTF8Name()
+		attrName, err := attr.UTF8Name()
 		if err != nil {
 			continue
 		}
@@ -215,7 +215,7 @@ func newFileInfo(name string, entry *FileEntry) (*fileInfo, error) {
 
 	size := int64(0)
 	if mode&fs.ModeDir == 0 {
-		fileSize, err := entry.GetSize()
+		fileSize, err := entry.Size()
 		if err == nil {
 			size = int64(fileSize)
 		}
@@ -248,19 +248,19 @@ func (de dirEntry) Type() fs.FileMode          { return de.info.mode.Type() }
 func (de dirEntry) Info() (fs.FileInfo, error) { return de.info, nil }
 
 func readDirEntries(dir *FileEntry) ([]fs.DirEntry, error) {
-	count, err := dir.GetNumberOfSubFileEntries()
+	count, err := dir.NumberOfSubFileEntries()
 	if err != nil {
 		return nil, err
 	}
 
 	entries := make([]fs.DirEntry, 0, count)
 	for index := range count {
-		child, err := dir.GetSubFileEntryByIndex(index)
+		child, err := dir.SubFileEntryByIndex(index)
 		if err != nil {
 			return nil, fmt.Errorf("unable to read directory entry %d: %w", index, err)
 		}
 
-		childName, err := child.GetUTF8Name()
+		childName, err := child.UTF8Name()
 		if err != nil {
 			return nil, fmt.Errorf("unable to get name of directory entry %d: %w", index, err)
 		}

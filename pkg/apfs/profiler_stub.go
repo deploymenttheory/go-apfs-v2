@@ -2,7 +2,6 @@
 // +build !profiler
 
 // Profiler stub functions (no-op implementations when profiling is disabled)
-// Corresponds to libfsapfs_profiler.c and libfsapfs_profiler.h
 package apfs
 
 import "fmt"
@@ -15,14 +14,6 @@ type Profiler struct {
 // NewProfiler creates a new profiler (no-op when profiling is disabled)
 func NewProfiler() (*Profiler, error) {
 	return &Profiler{}, nil
-}
-
-// Free releases resources associated with the profiler (no-op when profiling is disabled)
-func (p *Profiler) Free() error {
-	if p == nil {
-		return fmt.Errorf("invalid profiler")
-	}
-	return nil
 }
 
 // Open opens the profiler output file (no-op when profiling is disabled)

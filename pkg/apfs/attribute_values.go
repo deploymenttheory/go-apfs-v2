@@ -126,8 +126,8 @@ func (av *AttributeValues) ReadValueData(data []byte) error {
 	return nil
 }
 
-// GetName returns the attribute name as a string
-func (av *AttributeValues) GetName() string {
+// Name returns the attribute name as a string
+func (av *AttributeValues) NameString() string {
 	// Remove null terminator if present
 	name := bytes.TrimRight(av.Name, "\x00")
 	return string(name)
@@ -139,16 +139,16 @@ func (av *AttributeValues) CompareName(name string) int {
 	return bytes.Compare(bytes.TrimRight(av.Name, "\x00"), []byte(name))
 }
 
-// GetNumberOfExtents returns the number of file extents
-func (av *AttributeValues) GetNumberOfExtents() int {
+// NumberOfExtents returns the number of file extents
+func (av *AttributeValues) NumberOfExtents() int {
 	if av.ValueDataFileExtents == nil {
 		return 0
 	}
 	return len(av.ValueDataFileExtents)
 }
 
-// GetExtentByIndex retrieves a file extent by index
-func (av *AttributeValues) GetExtentByIndex(index int) (*FileExtent, error) {
+// ExtentByIndex retrieves a file extent by index
+func (av *AttributeValues) ExtentByIndex(index int) (*FileExtent, error) {
 	if av.ValueDataFileExtents == nil || index < 0 || index >= len(av.ValueDataFileExtents) {
 		return nil, fmt.Errorf("invalid extent index: %d", index)
 	}

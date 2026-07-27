@@ -56,9 +56,9 @@ const (
 	objectTypeInvalid           = 0x00000000
 )
 
-// mkfsXID is the transaction id stamped on every object. Because the container
+// formatXID is the transaction id stamped on every object. Because the container
 // is written as a single static checkpoint, there is only ever one xid.
-const mkfsXID = 1
+const formatXID = 1
 
 // B-tree node flags.
 const (
@@ -89,7 +89,7 @@ const (
 	minUserInoNum = 16
 )
 
-// Catalog record types (APFS_TYPE_*).
+// File-system tree record types (APFS_TYPE_*).
 const (
 	typeSnapMetadata = 1
 	typeExtent       = 2
@@ -103,11 +103,11 @@ const (
 
 // Snapshot on-disk sizes.
 const (
-	sizeofSnapMetadataVal = 50 // extentref_oid(8)+sblock_oid(8)+create(8)+change(8)+inum(8)+extref_type(4)+flags(4)+name_len(2)
+	sizeofSnapMetadataVal = 50 // extentref_oid(8)+sblock_oid(8)+create(8)+change(8)+inum(8)+extentref_type(4)+flags(4)+name_len(2)
 	sizeofOmapSnapshot    = 16 // oms_flags(4)+oms_pad(4)+oms_oid(8)
 )
 
-// Extended-attribute value flags (j_xattr_val_t flags, APFS_XATTR_DATA_*).
+// Extended-attribute value flags (j_xattr_val_t flags, XATTR_DATA_*).
 const (
 	xattrDataStream      = 0x0001
 	xattrDataEmbedded    = 0x0002
@@ -152,7 +152,7 @@ const (
 )
 
 // Physical-extent record kinds and the shift of the kind field within
-// len_and_kind (APFS_PEXT_KIND_*, APFS_PEXT_KIND_SHIFT).
+// len_and_kind (PEXT_KIND_*, PEXT_KIND_SHIFT).
 const (
 	pextKindNew   = 1
 	pextKindShift = 60
@@ -193,12 +193,12 @@ const (
 
 // Volume feature / flag constants.
 const (
-	featureHardlinkMapRecords = 0x00000002
+	apfsFeatureHardlinkMapRecords = 0x00000002
 
-	fsUnencrypted = 0x00000001
+	apfsFSUnencrypted = 0x00000001
 
-	incompatCaseInsensitive          = 0x00000001
-	incompatNormalizationInsensitive = 0x00000008
+	apfsIncompatCaseInsensitive          = 0x00000001
+	apfsIncompatNormalizationInsensitive = 0x00000008
 )
 
 // Wrapped meta crypto state versions and protection classes.
