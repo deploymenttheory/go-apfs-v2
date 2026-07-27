@@ -142,11 +142,31 @@ func gunzipFile(src, dst string) error {
 	return err
 }
 
+// cleanEnv returns the ambient environment with the variables the CLI reads
+// blanked, so a value set in the developer's shell or by a CI reproducible-build
+// wrapper cannot perturb a test. SOURCE_DATE_EPOCH matters as much as the APFS_
+// variables here, because it changes the bytes every write command produces.
+func cleanEnv(extra ...string) []string {
+	env := append(os.Environ(),
+		"APFS_OUTPUT=",
+		"SOURCE_DATE_EPOCH=",
+		"APFS_SOURCE_DATE_EPOCH=",
+	)
+	return append(env, extra...)
+}
+
 // run executes the CLI and returns stdout, stderr and the exit code.
 func run(t *testing.T, args ...string) (string, string, int) {
 	t.Helper()
+	return runEnv(t, nil, args...)
+}
+
+// runEnv is run() with extra environment entries appended, for the tests that
+// exercise SOURCE_DATE_EPOCH and its precedence.
+func runEnv(t *testing.T, env []string, args ...string) (string, string, int) {
+	t.Helper()
 	cmd := exec.Command(binPath, args...)
-	cmd.Env = append(os.Environ(), "APFS_OUTPUT=") // isolate from ambient config
+	cmd.Env = cleanEnv(env...)
 	var stdout, stderr strings.Builder
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -166,7 +186,7 @@ func run(t *testing.T, args ...string) (string, string, int) {
 func runWithStdin(t *testing.T, stdin string, args ...string) (string, string, int) {
 	t.Helper()
 	cmd := exec.Command(binPath, args...)
-	cmd.Env = append(os.Environ(), "APFS_OUTPUT=")
+	cmd.Env = cleanEnv()
 	cmd.Stdin = strings.NewReader(stdin)
 	var stdout, stderr strings.Builder
 	cmd.Stdout = &stdout

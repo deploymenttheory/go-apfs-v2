@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Reproducible output** (`pkg/apfswrite`, `pkg/hfsplus`, CLI): `create`,
+  `pack` and `snapshot create` now produce byte-identical images for identical
+  input, making a built image content-addressable, "did the vendor change
+  anything?" hash-decidable, and attestation over the output meaningful.
+  `--source-date-epoch` (and the standard bare `SOURCE_DATE_EPOCH`) pins the
+  build timestamp and clamps source modification times newer than it, per the
+  reproducible-builds convention; `--uuid`, `--volume-uuid` and
+  `--container-uuid` pin the volume and container identity, with the APFS
+  container UUID derived from the volume UUID as an RFC 4122 v5 UUID when only
+  the latter is given. `SOURCE_DATE_EPOCH` resolves as flag > bare variable >
+  `APFS_SOURCE_DATE_EPOCH` > config file — the one deliberate exception to the
+  tool's usual precedence, because build systems set the unprefixed name. See
+  [`docs/reproducible-output.md`](docs/reproducible-output.md).
+
 - **APFS snapshots** (`pkg/apfswrite`, `pkg/apfs`, CLI): spec-compliant snapshot
   creation recognized by macOS (`diskutil apfs listSnapshots`) and validated
   with `fsck_apfs`/`apfsck`. `apfs snapshot {list,create,revert,verify}` plus a
@@ -37,6 +51,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Image bytes for a given input have moved once, and are stable from here.**
+  `pkg/apfswrite` and `pkg/hfsplus` no longer call `time.Now()`;
+  `CreateOptions.FixedTime` defaults to an exported `DefaultTime`
+  (2024-01-01T00:00:00Z). Previously the wall clock reached the APFS volume
+  superblock's formatted-by field and every directory entry's date-added, and
+  the HFS+ volume header dates and volume identifier, so output differed on
+  every run and nothing could depend on it.
 - Complete rearchitecture from the initial libfsapfs port: public `pkg/apfs`
   and `pkg/disk` libraries, `Volume` implements `io/fs.FS`, and all commands
   route through a single content-sniffing image opener.
