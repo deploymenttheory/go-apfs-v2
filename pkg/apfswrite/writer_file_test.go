@@ -6,10 +6,6 @@ package apfswrite_test
 import (
 	"bytes"
 	"crypto/sha256"
-	"os/exec"
-	"path/filepath"
-	"runtime"
-	"strings"
 	"testing"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
@@ -147,33 +143,4 @@ func TestCreateContainerWithFileRejectsUnsupported(t *testing.T) {
 			t.Fatalf("empty file should now be supported: %v", err)
 		}
 	})
-}
-
-// TestCreateContainerWithFileFsckClean runs Apple's fsck_apfs against a
-// container holding one file (macOS only). fsck_apfs is the strict oracle.
-func TestCreateContainerWithFileFsckClean(t *testing.T) {
-	if runtime.GOOS != "darwin" {
-		t.Skip("fsck_apfs is only available on macOS")
-	}
-	requireTools(t, "hdiutil", "fsck_apfs")
-
-	const size = 32 * 1024 * 1024
-	imgPath := filepath.Join(t.TempDir(), "file.img")
-	content := []byte("Hello, APFS milestone 1! fsck oracle content.\n")
-	writeImage(t, imgPath, size, &apfswrite.CreateOptions{
-		VolumeName: "FsckFileVol",
-		RootFiles:  []apfswrite.RootFile{{Name: "hello.txt", Data: content}},
-	})
-
-	dev := attachRaw(t, imgPath)
-	defer detach(t, dev)
-
-	out, err := exec.Command("fsck_apfs", "-n", dev).CombinedOutput()
-	t.Logf("fsck_apfs output:\n%s", out)
-	if err != nil {
-		t.Fatalf("fsck_apfs reported errors (exit %v)", err)
-	}
-	if !strings.Contains(string(out), "appears to be OK") {
-		t.Errorf("fsck_apfs did not report the container clean")
-	}
 }

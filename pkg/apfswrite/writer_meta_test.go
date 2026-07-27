@@ -7,10 +7,8 @@ import (
 	"crypto/sha256"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"testing"
 	"time"
 
@@ -225,44 +223,5 @@ func TestCreateContainerFromDir(t *testing.T) {
 		if target != "hello.txt" {
 			t.Errorf("link target = %q, want %q", target, "hello.txt")
 		}
-	}
-}
-
-// TestCreateContainerMetadataFsckClean runs Apple's fsck_apfs against a tree
-// carrying non-default modes, owners, timestamps and a symbolic link (macOS
-// only). fsck_apfs is the strict oracle for the inode fields and the symlink
-// xattr representation.
-func TestCreateContainerMetadataFsckClean(t *testing.T) {
-	if runtime.GOOS != "darwin" {
-		t.Skip("fsck_apfs is only available on macOS")
-	}
-	requireTools(t, "hdiutil", "fsck_apfs")
-
-	modTime := time.Unix(1_600_000_000, 0).UTC()
-	root := &apfswrite.Entry{Children: []*apfswrite.Entry{
-		{Name: "private.txt", Mode: 0o600, ModTime: modTime, UID: 501, GID: 20, Data: []byte("secret\n")},
-		{Name: "script.sh", Mode: 0o755, ModTime: modTime, Data: []byte("#!/bin/sh\n")},
-		{Name: "README.md", Mode: 0o644, ModTime: modTime, Data: []byte("Upper And café name\n")},
-		{Name: "rel.link", Mode: fs.ModeSymlink | 0o777, Data: []byte("private.txt")},
-		{Name: "sub", Mode: fs.ModeDir | 0o750, ModTime: modTime, UID: 501, GID: 20, Children: []*apfswrite.Entry{
-			{Name: "inner.txt", Mode: 0o640, ModTime: modTime, Data: []byte("inner\n")},
-			{Name: "deep.link", Mode: fs.ModeSymlink, Data: []byte("../README.md")},
-		}},
-	}}
-
-	const size = 32 * 1024 * 1024
-	imgPath := filepath.Join(t.TempDir(), "meta.img")
-	writeImage(t, imgPath, size, &apfswrite.CreateOptions{VolumeName: "FsckMetaVol", Root: root})
-
-	dev := attachRaw(t, imgPath)
-	defer detach(t, dev)
-
-	out, err := exec.Command("fsck_apfs", "-n", dev).CombinedOutput()
-	t.Logf("fsck_apfs output:\n%s", out)
-	if err != nil {
-		t.Fatalf("fsck_apfs reported errors (exit %v)", err)
-	}
-	if !strings.Contains(string(out), "appears to be OK") {
-		t.Errorf("fsck_apfs did not report the container clean")
 	}
 }

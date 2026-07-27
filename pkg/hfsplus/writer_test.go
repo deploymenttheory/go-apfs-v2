@@ -5,9 +5,7 @@ import (
 	"crypto/sha256"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"runtime"
 	"testing"
 	"testing/fstest"
 	"time"
@@ -173,116 +171,4 @@ func mustMkdir(t *testing.T, path string) {
 	if err := os.Mkdir(path, 0o755); err != nil {
 		t.Fatal(err)
 	}
-}
-
-// TestWriteFsckClean writes an image, attaches it as a raw device and runs
-// fsck_hfs -n, asserting the volume is reported OK. darwin only.
-func TestWriteFsckClean(t *testing.T) {
-	if runtime.GOOS != "darwin" {
-		t.Skip("fsck_hfs is macOS-only")
-	}
-	requireTools(t, "hdiutil", "fsck_hfs")
-
-	img, _ := buildSampleImage(t)
-	path := filepath.Join(t.TempDir(), "vol.img")
-	if err := os.WriteFile(path, img, 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	dev := attachRaw(t, path)
-	defer detach(t, dev)
-
-	out, _ := exec.Command("fsck_hfs", "-n", dev).CombinedOutput()
-	// fsck_hfs exits non-zero when it cannot open the raw device for the
-	// character-device pass, yet still completes the check via the buffered
-	// device; the authoritative signal is the "appears to be OK" line.
-	if !bytes.Contains(out, []byte("appears to be OK")) {
-		t.Fatalf("fsck_hfs did not report clean:\n%s", out)
-	}
-}
-
-// TestWriteMountsViaHdiutil mounts the written image read-only and verifies
-// file content, a symlink target and directory structure. darwin only.
-func TestWriteMountsViaHdiutil(t *testing.T) {
-	if runtime.GOOS != "darwin" {
-		t.Skip("hdiutil is macOS-only")
-	}
-	requireTools(t, "hdiutil")
-
-	img, big := buildSampleImage(t)
-	path := filepath.Join(t.TempDir(), "vol.img")
-	if err := os.WriteFile(path, img, 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	mnt := t.TempDir()
-	out, err := exec.Command("hdiutil", "attach", "-readonly", "-nobrowse",
-		"-mountpoint", mnt, path).CombinedOutput()
-	if err != nil {
-		t.Fatalf("hdiutil attach: %v\n%s", err, out)
-	}
-	dev := firstField(string(out))
-	defer detach(t, dev)
-
-	// Small file.
-	if got, err := os.ReadFile(filepath.Join(mnt, "hello.txt")); err != nil || string(got) != "hello world\n" {
-		t.Errorf("hello.txt = %q, %v", got, err)
-	}
-	// Large file by sha.
-	got, err := os.ReadFile(filepath.Join(mnt, "big.bin"))
-	if err != nil {
-		t.Fatalf("read big.bin: %v", err)
-	}
-	if sha256.Sum256(got) != sha256.Sum256(big) {
-		t.Errorf("big.bin sha mismatch")
-	}
-	// Symlink.
-	if tgt, err := os.Readlink(filepath.Join(mnt, "link")); err != nil || tgt != "hello.txt" {
-		t.Errorf("readlink = %q, %v", tgt, err)
-	}
-	// Nested.
-	if got, err := os.ReadFile(filepath.Join(mnt, "sub", "deep", "leaf.txt")); err != nil || string(got) != "leaf\n" {
-		t.Errorf("leaf.txt = %q, %v", got, err)
-	}
-}
-
-func requireTools(t *testing.T, tools ...string) {
-	t.Helper()
-	for _, tool := range tools {
-		if _, err := exec.LookPath(tool); err != nil {
-			t.Skipf("%s not available", tool)
-		}
-	}
-}
-
-func attachRaw(t *testing.T, path string) string {
-	t.Helper()
-	out, err := exec.Command("hdiutil", "attach",
-		"-imagekey", "diskimage-class=CRawDiskImage",
-		"-nomount", "-readonly", path).CombinedOutput()
-	if err != nil {
-		t.Fatalf("hdiutil attach: %v\n%s", err, out)
-	}
-	dev := firstField(string(out))
-	if dev == "" {
-		t.Fatalf("could not parse device from: %s", out)
-	}
-	return dev
-}
-
-func detach(t *testing.T, dev string) {
-	t.Helper()
-	if dev == "" {
-		return
-	}
-	if out, err := exec.Command("hdiutil", "detach", dev).CombinedOutput(); err != nil {
-		t.Logf("hdiutil detach %s: %v\n%s", dev, err, out)
-	}
-}
-
-func firstField(s string) string {
-	for _, line := range bytes.Fields([]byte(s)) {
-		return string(line)
-	}
-	return ""
 }

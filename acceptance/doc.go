@@ -1,20 +1,30 @@
-// Package acceptance holds the black-box acceptance suite for the apfs
-// command. It contains no production code: every test here builds the real
-// binary from ./cmd/apfs and drives it as a subprocess, asserting on stdout,
-// stderr and the exit-code contract in pkg/exitcode. Nothing in this package
-// imports internal/cli, so the tests exercise the tool exactly as a user or a
-// pipeline would.
+// Package acceptance holds the acceptance suite for this repository. It
+// contains no production code. What distinguishes a test here from a unit test
+// is that it judges the result against something outside the code under test:
+// either the real apfs binary run as a subprocess, or a filesystem checker
+// that ships with the platform. Tests that verify behaviour purely in memory
+// stay in the package they exercise.
 //
 // # Tiers
 //
-// The suite has two tiers, both run by CI on Linux, macOS and Windows.
+// The suite has three tiers, all run by CI on Linux, macOS and Windows.
 //
-// The fixture tier needs nothing but the repository. It runs against the
-// images committed under testdata/cli (UDZO, UDBZ, ULFO and a gzipped raw GPT
-// image, plus an HFS+ image) and checks their contents against
-// testdata/cli/manifest.json. Run it with:
+// The fixture tier needs nothing but the repository. It builds ./cmd/apfs and
+// drives it as a subprocess against the images committed under testdata/cli
+// (UDZO, UDBZ, ULFO and a gzipped raw GPT image, plus an HFS+ image), checking
+// their contents against testdata/cli/manifest.json and asserting the
+// exit-code contract in pkg/exitcode. Nothing in this tier imports
+// internal/cli, so it exercises the tool exactly as a pipeline would. Run it
+// with:
 //
 //	go test ./acceptance/
+//
+// The writer-oracle tier calls pkg/apfswrite, pkg/hfsplus and pkg/disk
+// directly and hands the result to a platform checker: fsck_apfs, hdiutil and
+// diskutil on macOS, apfsck on Linux. These are the tests that catch on-disk
+// format errors a round-trip through our own reader would agree with and
+// therefore miss. They skip when the tool is absent, so a green run on a
+// machine without them proves less than a green run in CI.
 //
 // The vendor-image tier runs against a real application DMG and is skipped
 // unless APFS_ACCEPTANCE_DMG is set. It extracts the whole volume, verifies
