@@ -1,11 +1,15 @@
 // HFS+ / HFSX volume writer: serialises an in-memory directory tree into a
 // raw, mountable HFSX volume image (bytes).
 //
-// v1 produces a case-sensitive HFSX volume (signature "HX", version 5,
-// catalog keyCompareType 0xBC / kHFSBinaryCompare), unjournaled, with no
-// attributes (xattr) file. Binary key comparison means catalog ordering is a
-// plain lexicographic compare of the big-endian UTF-16 name code units, so no
-// Unicode case-folding table is needed.
+// It produces a case-sensitive HFSX volume (signature "HX", version 5, catalog
+// keyCompareType 0xBC / kHFSBinaryCompare), unjournaled. Binary key comparison
+// means catalog ordering is a plain lexicographic compare of the big-endian
+// UTF-16 name code units, so no Unicode case-folding table is needed.
+//
+// Files carry their data fork, their resource fork and their extended
+// attributes; the attributes file is emitted only when something needs it, so a
+// volume with no attributes is byte-identical to one this writer produced
+// before it could emit one.
 //
 // Extension point for a future case-insensitive "H+" v4 writer: switch the
 // signature/version and set keyCompareType to 0xCF (kHFSCaseFolding); the
@@ -42,6 +46,11 @@ type Entry struct {
 	// HFS+ this is a fork of the catalog record rather than an extended
 	// attribute, even though macOS presents it as com.apple.ResourceFork.
 	ResourceFork []byte
+
+	// Xattrs are the entry's extended attributes. Directories may carry them
+	// too. com.apple.ResourceFork does not belong here -- it is a fork, and
+	// goes in ResourceFork above.
+	Xattrs map[string][]byte
 }
 
 // CreateOptions tunes image creation. The zero value is valid.
@@ -88,6 +97,19 @@ type fileNode struct {
 	rsrcLen    int
 	rsrcBlocks uint32
 	rsrcStart  uint32 // first allocation block of the resource fork
+
+	// attrs are the node's extended attributes, sorted by name. A value too
+	// large to sit inside its record gets an extent of its own.
+	attrs []*attrWrite
+}
+
+// attrWrite is one extended attribute to be written.
+type attrWrite struct {
+	name   string
+	value  []byte
+	inline bool
+	blocks uint32
+	start  uint32
 }
 
 // layout describes where each metadata region and file data lives, in
@@ -101,6 +123,8 @@ type layout struct {
 	extentBlocks uint32
 	catalogStart uint32
 	catalogBlks  uint32
+	attrStart    uint32 // attributes B-tree (zero blocks when there are none)
+	attrBlks     uint32
 	dataStart    uint32 // first file-data block
 	firstFree    uint32 // first free block after all data
 }
@@ -139,12 +163,20 @@ func CreateImage(w io.WriterAt, sizeBytes int64, volumeName string, root *Entry,
 	}
 	rootNode := b.flatten(root, volumeName)
 
-	// 2. Determine catalog node count (independent of fork contents).
+	// 2. Determine node counts. Both are independent of the fork values the
+	// records will eventually carry -- only the record count and sizes matter,
+	// and those are already fixed -- so counting now and rebuilding later with
+	// real extents cannot change the answer. Step 5 asserts exactly that.
 	tree0 := buildBTree(blockSize, b.catalogRecords(rootNode), HFSBinaryCompare, 0x00000006, 516, 0)
 	catalogBlks := tree0.totalNodes
 
+	var attrBlks uint32
+	if b.attrCount > 0 {
+		attrBlks = buildBTree(blockSize, b.attrRecords(), 0, attrTreeAttributes, attrMaxKeyLength, 0).totalNodes
+	}
+
 	// 3. Compute the layout (and total size).
-	lay, err := b.computeLayout(sizeBytes, catalogBlks)
+	lay, err := b.computeLayout(sizeBytes, catalogBlks, attrBlks)
 	if err != nil {
 		return err
 	}
@@ -159,6 +191,18 @@ func CreateImage(w io.WriterAt, sizeBytes int64, volumeName string, root *Entry,
 		return fmt.Errorf("hfsplus: catalog node count changed (%d -> %d)", catalogBlks, catTree.totalNodes)
 	}
 	extTree := buildBTree(blockSize, nil, 0, 0x00000002, 10, 0)
+
+	// A volume with no attributes gets no attributes file at all, rather than
+	// an empty one-node tree: that keeps every image this writer produced
+	// before byte-identical, so nothing downstream churns on a feature it does
+	// not use.
+	var attrTree builtTree
+	if b.attrCount > 0 {
+		attrTree = buildBTree(blockSize, b.attrRecords(), 0, attrTreeAttributes, attrMaxKeyLength, 0)
+		if attrTree.totalNodes != attrBlks {
+			return fmt.Errorf("hfsplus: attributes node count changed (%d -> %d)", attrBlks, attrTree.totalNodes)
+		}
+	}
 
 	// 6. Write the image out region by region, rather than assembling it in
 	// memory first. Regions no region covers stay zero: on a file, unwritten
@@ -177,6 +221,12 @@ func CreateImage(w io.WriterAt, sizeBytes int64, volumeName string, root *Entry,
 	for i, n := range extTree.nodes {
 		if _, err := w.WriteAt(n, blockAt(lay.extentsStart+uint32(i))); err != nil {
 			return fmt.Errorf("hfsplus: writing extents node %d: %w", i, err)
+		}
+	}
+	// Attributes nodes.
+	for i, n := range attrTree.nodes {
+		if _, err := w.WriteAt(n, blockAt(lay.attrStart+uint32(i))); err != nil {
+			return fmt.Errorf("hfsplus: writing attributes node %d: %w", i, err)
 		}
 	}
 	// File data.
@@ -238,6 +288,7 @@ type builder struct {
 
 	fileCount   uint32
 	folderCount uint32 // excludes the root folder
+	attrCount   uint32 // total extended attributes across every node
 }
 
 // flatten converts the Entry tree into fileNodes, assigning CNIDs depth-first
@@ -252,6 +303,9 @@ func (b *builder) flatten(rootEntry *Entry, volumeName string) *fileNode {
 	}
 	b.root = root
 	b.allNodes = append(b.allNodes, root)
+	// The root folder can carry attributes like any other directory, and it is
+	// built here rather than in addChildren, so it needs collecting here too.
+	b.collectAttrs(root)
 	b.addChildren(root, rootEntry.Children)
 	return root
 }
@@ -292,6 +346,7 @@ func (b *builder) addChildren(parent *fileNode, children []*Entry) {
 				n.rsrcBlocks = uint32((n.rsrcLen + b.blockSize - 1) / b.blockSize)
 			}
 		}
+		b.collectAttrs(n)
 		parent.children = append(parent.children, n)
 		b.allNodes = append(b.allNodes, n)
 		if n.isDir {
@@ -300,13 +355,66 @@ func (b *builder) addChildren(parent *fileNode, children []*Entry) {
 	}
 }
 
+// collectAttrs turns a node's Entry.Xattrs into the writer's own list, sorted
+// by name so the image is byte-identical for identical input, and decides which
+// values fit inside their record.
+func (b *builder) collectAttrs(n *fileNode) {
+	if len(n.entry.Xattrs) == 0 {
+		return
+	}
+	names := make([]string, 0, len(n.entry.Xattrs))
+	for name := range n.entry.Xattrs {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	limit := maxInlineAttrSize(b.blockSize)
+	for _, name := range names {
+		value := n.entry.Xattrs[name]
+		a := &attrWrite{name: name, value: value, inline: len(value) <= limit}
+		if !a.inline {
+			a.blocks = uint32((len(value) + b.blockSize - 1) / b.blockSize)
+		}
+		n.attrs = append(n.attrs, a)
+		b.attrCount++
+	}
+}
+
+// attrRecords builds every attributes-file leaf record, in key order.
+func (b *builder) attrRecords() []btRecord {
+	if b.attrCount == 0 {
+		return nil
+	}
+	recs := make([]btRecord, 0, b.attrCount)
+	for _, n := range b.allNodes {
+		for _, a := range n.attrs {
+			key := encodeAttrKey(n.cnid, a.name, 0)
+			if a.inline {
+				recs = append(recs, btRecord{key: key, payload: attrInlineRecord(a.value)})
+				continue
+			}
+			recs = append(recs, btRecord{
+				key:     key,
+				payload: attrForkRecord(forkDescriptor(len(a.value), a.blocks, a.start)),
+			})
+		}
+	}
+	sort.Slice(recs, func(i, j int) bool { return compareAttrKeys(recs[i].key, recs[j].key) < 0 })
+	return recs
+}
+
 // computeLayout places metadata and file data in allocation blocks and
 // determines the total block count.
-func (b *builder) computeLayout(sizeBytes int64, catalogBlks uint32) (layout, error) {
+func (b *builder) computeLayout(sizeBytes int64, catalogBlks, attrBlks uint32) (layout, error) {
 	bs := b.blockSize
 	var totalData uint32
 	for _, f := range b.fileNodes {
 		totalData += f.dataBlocks + f.rsrcBlocks
+	}
+	for _, n := range b.allNodes {
+		for _, a := range n.attrs {
+			totalData += a.blocks
+		}
 	}
 
 	// Metadata before data: block 0, bitmap, extents (1 node), catalog.
@@ -322,6 +430,8 @@ func (b *builder) computeLayout(sizeBytes int64, catalogBlks uint32) (layout, er
 		next++
 		lay.catalogStart, lay.catalogBlks = next, catalogBlks
 		next += catalogBlks
+		lay.attrStart, lay.attrBlks = next, attrBlks
+		next += attrBlks
 		lay.dataStart = next
 		next += totalData
 		lay.firstFree = next
@@ -369,6 +479,16 @@ func (b *builder) assignData(lay *layout) {
 			next += f.rsrcBlocks
 		}
 	}
+	// Attribute values too large to sit inside their record get extents of
+	// their own, after the file forks.
+	for _, n := range b.allNodes {
+		for _, a := range n.attrs {
+			if a.blocks > 0 {
+				a.start = next
+				next += a.blocks
+			}
+		}
+	}
 }
 
 // writeFileData copies every file's bytes into the image at its data extent.
@@ -384,6 +504,17 @@ func (b *builder) writeFileData(w io.WriterAt) error {
 			off := int64(f.rsrcStart) * int64(b.blockSize)
 			if _, err := w.WriteAt(f.entry.ResourceFork, off); err != nil {
 				return fmt.Errorf("hfsplus: writing resource fork of %s: %w", f.name, err)
+			}
+		}
+	}
+	for _, n := range b.allNodes {
+		for _, a := range n.attrs {
+			if a.blocks == 0 {
+				continue
+			}
+			off := int64(a.start) * int64(b.blockSize)
+			if _, err := w.WriteAt(a.value, off); err != nil {
+				return fmt.Errorf("hfsplus: writing attribute %s of %s: %w", a.name, n.name, err)
 			}
 		}
 	}
@@ -458,10 +589,12 @@ func (b *builder) normalRecord(n *fileNode) btRecord {
 		}
 		// Directories must NOT set kHFSThreadExistsMask/kHFSFileLockedMask;
 		// fsck_hfs treats those bits as reserved-must-be-zero on folders
-		// (E_CatalogFlagsNotZero). Only the folder-count flag is set.
+		// (E_CatalogFlagsNotZero). The folder-count flag is always set; the
+		// attributes flag only when the node actually has attributes, because
+		// fsck_hfs checks it in both directions.
 		folder := HFSPlusCatalogFolder{
 			RecordType:       HFSPlusFolderRecord,
-			Flags:            HFSHasFolderCountMask,
+			Flags:            HFSHasFolderCountMask | attrFlag(n),
 			Valence:          uint32(len(n.children)),
 			FolderID:         n.cnid,
 			CreateDate:       ht,
@@ -476,7 +609,7 @@ func (b *builder) normalRecord(n *fileNode) btRecord {
 
 	file := HFSPlusCatalogFile{
 		RecordType:       HFSPlusFileRecord,
-		Flags:            HFSThreadExistsMask,
+		Flags:            HFSThreadExistsMask | attrFlag(n),
 		FileID:           n.cnid,
 		CreateDate:       ht,
 		ContentModDate:   ht,
@@ -491,6 +624,17 @@ func (b *builder) normalRecord(n *fileNode) btRecord {
 		file.UserInfo.FileCreator = SymLinkCreator
 	}
 	return btRecord{key: key, payload: marshalBE(&file)}
+}
+
+// attrFlag is kHFSHasAttributesMask when the node carries any extended
+// attribute, and zero otherwise. fsck_hfs compares the flag against the
+// attributes file in both directions, so setting it optimistically is as wrong
+// as omitting it.
+func attrFlag(n *fileNode) CatalogFlags {
+	if len(n.attrs) > 0 {
+		return HFSHasAttributesMask
+	}
+	return 0
 }
 
 // threadRecord builds the thread record keyed by (cnid, emptyName) that
@@ -534,9 +678,15 @@ func (b *builder) buildBitmap(lay *layout) []byte {
 	setRange(lay.bitmapStart, lay.bitmapBlocks)
 	setRange(lay.extentsStart, lay.extentBlocks)
 	setRange(lay.catalogStart, lay.catalogBlks)
+	setRange(lay.attrStart, lay.attrBlks)
 	for _, f := range b.fileNodes {
 		setRange(f.dataStart, f.dataBlocks)
 		setRange(f.rsrcStart, f.rsrcBlocks)
+	}
+	for _, n := range b.allNodes {
+		for _, a := range n.attrs {
+			setRange(a.start, a.blocks)
+		}
 	}
 	set(lay.totalBlocks - 1) // alternate volume header
 	return bitmap
@@ -611,7 +761,17 @@ func (b *builder) volumeHeader(volumeName string, lay *layout, _, _ builtTree) V
 	}
 	vh.CatalogFile.Extents[0] = ExtentDescriptor{StartBlock: lay.catalogStart, BlockCount: lay.catalogBlks}
 
-	// Attributes and startup files are absent (all-zero forks).
+	// The attributes file exists only when something needs it; a volume with no
+	// extended attributes keeps an all-zero fork, as it did before this writer
+	// could emit one. The startup file is always absent.
+	if lay.attrBlks > 0 {
+		vh.AttributesFile = ForkData{
+			LogicalSize: uint64(lay.attrBlks) * uint64(b.blockSize),
+			ClumpSize:   65536,
+			TotalBlocks: lay.attrBlks,
+		}
+		vh.AttributesFile.Extents[0] = ExtentDescriptor{StartBlock: lay.attrStart, BlockCount: lay.attrBlks}
+	}
 	return vh
 }
 
@@ -621,8 +781,14 @@ func (b *builder) countUsedBlocks(lay *layout) uint32 {
 	used += lay.bitmapBlocks
 	used += lay.extentBlocks
 	used += lay.catalogBlks
+	used += lay.attrBlks
 	for _, f := range b.fileNodes {
 		used += f.dataBlocks + f.rsrcBlocks
+	}
+	for _, n := range b.allNodes {
+		for _, a := range n.attrs {
+			used += a.blocks
+		}
 	}
 	used++ // alternate volume header (last block, in the trailing free region)
 	return used

@@ -23,7 +23,7 @@ Legend: ✅ implemented · 🟡 partial · ⬜ not yet
 | Volume roles and volume groups (read + write) | ✅² | — |
 | Write-fidelity reporting (`--strict`) | ✅ | ✅ |
 | Resource forks (write) | ✅⁴ | ✅ |
-| Extended attributes (write) | ✅⁴ | ⬜ |
+| Extended attributes (write) | ✅⁴ | ✅⁷ |
 | Hard links (write) | ✅ | ⬜ |
 
 ¹ One snapshot per image (single static checkpoint); multiple snapshots need
@@ -50,6 +50,11 @@ needs macOS plus `afsctool`. One real one is committed: `compressed.txt` in
 covered. Both storage shapes are read: data held inline in the attribute, and
 data held in the file's resource fork in 64 KiB chunks. A compressed file's
 size is taken from its decmpfs header, since its data fork is empty.
+
+⁷ Values of any size: a small one lives inside its attribute record and a
+larger one gets an allocation extent of its own. `com.apple.decmpfs` is refused,
+because it would declare content this writer does not produce, and is reported
+as dropped. A volume with no attributes carries no attributes file at all.
 
 ⁶ All three attribute record shapes are read on HFS+ — a value stored inside its
 record, one given a fork of its own, and a fork whose extents spill past the

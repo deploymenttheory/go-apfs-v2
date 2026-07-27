@@ -98,7 +98,7 @@ func TestDecmpfsInlineZlib(t *testing.T) {
 	attrValue := append(decmpfsHeaderBytes(3, uint64(len(payload))), zlibCompress(t, payload)...)
 
 	v := attrVolume(t, 512, []btRecord{
-		{key: encodeAttrKey(fileID, decmpfsAttrName, 0), payload: inlineAttrRecord(attrValue)},
+		{key: encodeAttrKey(fileID, decmpfsAttrName, 0), payload: attrInlineRecord(attrValue)},
 	}, nil)
 
 	reader, err := v.dataForkReader(compressedEntry(fileID, ForkData{}))
@@ -135,7 +135,7 @@ func TestDecmpfsResourceForkMultiBlock(t *testing.T) {
 	copy(data, fork)
 
 	v := attrVolume(t, nodeSize, []btRecord{
-		{key: encodeAttrKey(fileID, decmpfsAttrName, 0), payload: inlineAttrRecord(attrValue)},
+		{key: encodeAttrKey(fileID, decmpfsAttrName, 0), payload: attrInlineRecord(attrValue)},
 	}, data)
 
 	e := compressedEntry(fileID, ForkData{
@@ -185,7 +185,7 @@ func TestDecmpfsRejectsInconsistentVolume(t *testing.T) {
 		// Type 13 is LZBITMAP: recognized, deliberately not decoded.
 		attrValue := append(decmpfsHeaderBytes(13, 100), make([]byte, 8)...)
 		v := attrVolume(t, 512, []btRecord{
-			{key: encodeAttrKey(fileID, decmpfsAttrName, 0), payload: inlineAttrRecord(attrValue)},
+			{key: encodeAttrKey(fileID, decmpfsAttrName, 0), payload: attrInlineRecord(attrValue)},
 		}, nil)
 		_, err := v.dataForkReader(compressedEntry(fileID, ForkData{}))
 		if err == nil {
@@ -198,7 +198,7 @@ func TestDecmpfsRejectsInconsistentVolume(t *testing.T) {
 
 	t.Run("empty file", func(t *testing.T) {
 		v := attrVolume(t, 512, []btRecord{
-			{key: encodeAttrKey(fileID, decmpfsAttrName, 0), payload: inlineAttrRecord(decmpfsHeaderBytes(3, 0))},
+			{key: encodeAttrKey(fileID, decmpfsAttrName, 0), payload: attrInlineRecord(decmpfsHeaderBytes(3, 0))},
 		}, nil)
 		reader, err := v.dataForkReader(compressedEntry(fileID, ForkData{}))
 		if err != nil {

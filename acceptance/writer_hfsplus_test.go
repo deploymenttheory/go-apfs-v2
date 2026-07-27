@@ -42,6 +42,13 @@ func hfsSampleTree() (*hfsplus.Entry, []byte) {
 		// rather than only the data fork.
 		{Name: "forked.txt", Mode: 0o644, Data: []byte("has a resource fork\n"),
 			ResourceFork: []byte("resource fork payload\n")},
+		// Extended attributes in both record shapes, so fsck_hfs judges the
+		// attributes file on every run: one value small enough to sit inside
+		// its record, one that needs an allocation extent of its own.
+		{Name: "attrs.txt", Mode: 0o644, Data: []byte("has attributes\n"), Xattrs: map[string][]byte{
+			"com.example.small": []byte("value42"),
+			"com.example.big":   bytes.Repeat([]byte("big attribute value. "), 400),
+		}},
 		{Name: "big.bin", Mode: 0o644, Data: big},
 		{Name: "run.sh", Mode: 0o755, Data: []byte("#!/bin/sh\necho hi\n")},
 		{Name: "link", Mode: os.ModeSymlink | 0o755, Data: []byte("hello.txt")},
@@ -163,5 +170,41 @@ func TestWriteMountsViaHdiutil(t *testing.T) {
 		t.Errorf("xattr -p com.apple.ResourceFork: %v\n%s", err, xattr)
 	} else if !bytes.Contains(xattr, []byte("resource fork payload")) {
 		t.Errorf("com.apple.ResourceFork = %q", xattr)
+	}
+
+	// Extended attributes, read back through macOS rather than our own reader.
+	// fsck_hfs reporting the attributes file well-formed is a weaker claim than
+	// the kernel being able to hand the values back, so both are checked.
+	attrsPath := filepath.Join(mnt, "attrs.txt")
+	small, err := exec.Command("xattr", "-p", "com.example.small", attrsPath).CombinedOutput()
+	if err != nil {
+		t.Errorf("xattr -p com.example.small: %v\n%s", err, small)
+	} else if !bytes.Contains(small, []byte("value42")) {
+		t.Errorf("com.example.small = %q, want value42", small)
+	}
+
+	// The large one exercises the fork-data record: its value lives in an
+	// allocation extent rather than inside the attribute record.
+	big2, err := exec.Command("xattr", "-p", "-x", "com.example.big", attrsPath).CombinedOutput()
+	if err != nil {
+		t.Errorf("xattr -p com.example.big: %v\n%s", err, big2)
+	} else {
+		want := len(bytes.Repeat([]byte("big attribute value. "), 400))
+		// -x prints hex bytes; two hex digits per byte, whitespace separated.
+		if got := len(bytes.Fields(big2)); got != want {
+			t.Errorf("com.example.big is %d bytes, want %d", got, want)
+		}
+	}
+
+	// A listing must name both and not invent others.
+	list, err := exec.Command("xattr", attrsPath).CombinedOutput()
+	if err != nil {
+		t.Errorf("xattr listing: %v\n%s", err, list)
+	} else {
+		for _, want := range []string{"com.example.small", "com.example.big"} {
+			if !bytes.Contains(list, []byte(want)) {
+				t.Errorf("attribute listing %q is missing %s", list, want)
+			}
+		}
 	}
 }

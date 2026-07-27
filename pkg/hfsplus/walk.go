@@ -1,6 +1,8 @@
 package hfsplus
 
 import (
+	"strings"
+
 	"github.com/deploymenttheory/go-apfs-v2/internal/hostmeta"
 	"github.com/deploymenttheory/go-apfs-v2/internal/hostwalk"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/fidelity"
@@ -32,9 +34,13 @@ type WalkOptions struct {
 // it, but it is returned rather than hidden because a lossy conversion that
 // does not say so is the failure mode this exists to prevent.
 //
-// Resource forks are carried, in the catalog record's resource fork where HFS+
-// keeps them. Ordinary extended attributes are still dropped: this writer emits
-// no attributes file. Several names for one file become independent copies.
+// Extended attributes are carried, whatever their size: a small value lives
+// inside its record in the attributes file and a larger one gets an allocation
+// extent of its own. A resource fork is carried too, in the catalog record's
+// resource fork where HFS+ actually keeps it. com.apple.decmpfs is the
+// exception -- it declares content this writer does not produce -- and is
+// reported as dropped. Several names for one file still become independent
+// copies.
 func EntryTreeFromDir(srcDir string, opts *WalkOptions) (*Entry, *fidelity.Report, error) {
 	var o hostwalk.Options
 	if opts != nil {
@@ -55,10 +61,15 @@ func EntryTreeFromDir(srcDir string, opts *WalkOptions) (*Entry, *fidelity.Repor
 // what the writer does: an attribute accepted here and then silently discarded
 // would make the fidelity report claim a loss did not happen.
 func CanWriteXattr(name string, value []byte) bool {
-	// A resource fork is not an attributes-file record on HFS+ -- it is a fork
-	// of the catalog record -- so it is carried, while ordinary attributes,
-	// which would need the attributes file this writer does not emit, are not.
-	return name == hostmeta.ResourceForkName
+	// A compression header would declare content this writer does not produce:
+	// the file's data is written plain, so a decmpfs attribute would describe
+	// bytes that are not there. Refused, and reported as dropped.
+	if name == decmpfsAttrName {
+		return false
+	}
+	// A resource fork is carried, but not through the attributes file -- it is
+	// a fork of the catalog record, and newEntry routes it there.
+	return name != "" && !strings.ContainsRune(name, 0)
 }
 
 // newEntry builds one HFS+ Entry from the walker's platform-neutral node.
@@ -71,6 +82,24 @@ func newEntry(n hostwalk.Node, children []*Entry) *Entry {
 		GID:          n.GID,
 		Data:         n.Data,
 		ResourceFork: n.Xattrs[hostmeta.ResourceForkName],
+		Xattrs:       attrsWithoutResourceFork(n.Xattrs),
 		Children:     children,
 	}
+}
+
+// attrsWithoutResourceFork drops the resource fork from the attribute map: it
+// reaches a walker as an attribute, but HFS+ stores it as a fork, and writing
+// it into the attributes file as well would both duplicate the content and
+// disagree with what a reader reports.
+func attrsWithoutResourceFork(attrs map[string][]byte) map[string][]byte {
+	if _, ok := attrs[hostmeta.ResourceForkName]; !ok {
+		return attrs
+	}
+	out := make(map[string][]byte, len(attrs)-1)
+	for name, value := range attrs {
+		if name != hostmeta.ResourceForkName {
+			out[name] = value
+		}
+	}
+	return out
 }

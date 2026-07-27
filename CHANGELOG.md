@@ -9,6 +9,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The HFS+ writer carries extended attributes** (`pkg/hfsplus`, CLI). It
+  emitted no attributes file at all, so every attribute was dropped. Packing the
+  committed HFS+ fixture now reports **every fidelity counter at zero**, and
+  `extract --xattrs` → `pack --fs hfs+` → `extract --xattrs` returns all
+  fourteen attributes, including a 6000-byte one.
+
+  Values of any size are carried: a small one lives inside its record, and a
+  larger one gets an allocation extent of its own with a fork-data record
+  pointing at it. `com.apple.decmpfs` is refused rather than written wrong — the
+  data is written plain, so the header would describe bytes that are not there —
+  and is reported as dropped.
+
+  `HFSHasAttributesMask` is set on exactly the catalog records that have
+  attributes, because `fsck_hfs` checks the flag against the attributes file in
+  both directions. A volume with no attributes carries no attributes file at
+  all, so images this writer produced before stay byte-identical.
+
+  The tree's header constants were read off a volume macOS created rather than
+  guessed: `maxKeyLength` 266, `attributes` 0x06, and `keyCompareType` 0 — the
+  last notably not one of the catalog's compare types, because attribute names
+  are ordered as plain UTF-16 code units.
+
 - **The HFS+ writer carries resource forks** (`pkg/hfsplus`, CLI). They were
   dropped entirely, so a resource fork could be read off an HFS+ image and not
   written back to one. A file's fork now survives `extract --xattrs` → `pack
