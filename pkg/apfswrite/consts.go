@@ -270,6 +270,9 @@ const (
 	sizeofXattrKeyFixed        = 10 // hdr(8)+name_len(2)
 	sizeofXattrValFixed        = 4  // flags(2)+xdata_len(2)
 
+	// sizeofXattrDstream is j_xattr_dstream_t: xattr_obj_id(8) + j_dstream_t.
+	sizeofXattrDstream = 8 + sizeofDstream
+
 	sizeofDstream       = 40 // size(8)+alloced_size(8)+default_crypto_id(8)+total_bytes_written(8)+total_bytes_read(8)
 	sizeofDstreamIDVal  = 4  // refcnt(4)
 	sizeofFileExtentKey = 16 // hdr(8)+logical_addr(8)

@@ -63,6 +63,7 @@ func (b *builder) setTree(opts *CreateOptions) error {
 			if err != nil {
 				return 0, err
 			}
+			embedded, streamed := splitXattrs(xattrs)
 
 			be := &builderEntry{
 				name:       e.Name,
@@ -72,11 +73,36 @@ func (b *builder) setTree(opts *CreateOptions) error {
 				uid:        e.UID,
 				gid:        e.GID,
 				mtime:      mtime,
-				xattrs:     xattrs,
+				xattrs:     embedded,
 				xattrFlags: xattrFlags,
 			}
 			nextOID++
 			b.entries = append(b.entries, be)
+
+			// Each streamed attribute owns an object of its own: a data stream
+			// with its own oid, extent and refcount, referenced by the
+			// attribute record. It carries no inode and no directory entry —
+			// it is not a file, only somewhere for the bytes to live.
+			for _, name := range sortedNames(streamed) {
+				value := streamed[name]
+				stream := &builderEntry{
+					name:        e.Name + ":" + name,
+					oid:         nextOID,
+					data:        value,
+					hasStream:   true,
+					blocks:      divRoundUp(uint64(len(value)), uint64(b.blocksize)),
+					allocedSize: 0,
+				}
+				stream.allocedSize = stream.blocks * uint64(b.blocksize)
+				nextOID++
+
+				if be.streamedXattrs == nil {
+					be.streamedXattrs = map[string]*builderEntry{}
+				}
+				be.streamedXattrs[name] = stream
+				b.streamFiles = append(b.streamFiles, stream)
+				b.xattrStreams = append(b.xattrStreams, stream)
+			}
 
 			switch {
 			case e.isSymlinkEntry():
@@ -180,6 +206,47 @@ const (
 	decmpfsName      = "com.apple.decmpfs"
 )
 
+// splitXattrs divides an entry's attributes into those small enough to store
+// inside their record and those needing a data stream.
+func splitXattrs(xattrs map[string][]byte) (embedded, streamed map[string][]byte) {
+	for name, value := range xattrs {
+		if needsXattrStream(name, value) {
+			if streamed == nil {
+				streamed = map[string][]byte{}
+			}
+			streamed[name] = value
+			continue
+		}
+		if embedded == nil {
+			embedded = map[string][]byte{}
+		}
+		embedded[name] = value
+	}
+	return embedded, streamed
+}
+
+// needsXattrStream reports whether an attribute must be stored as a data
+// stream rather than inside its record.
+//
+// Size is the obvious reason. A resource fork is the other: fsck_apfs requires
+// one to be stream based however small it is — "com.apple.ResourceFork is
+// expected to be stream based" — and accepts nothing else.
+func needsXattrStream(name string, value []byte) bool {
+	return name == resourceForkName || len(value) > maxEmbeddedXattrSize
+}
+
+// sortedNames returns a map's keys in order, so records are emitted the same
+// way every time. Attributes arrive in a map, and reproducible output depends
+// on their order being fixed.
+func sortedNames[V any](m map[string]V) []string {
+	names := make([]string, 0, len(m))
+	for name := range m {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
 // validateXattrs checks an entry's extended attributes can be written, and
 // returns the inode flags their presence requires.
 //
@@ -194,7 +261,7 @@ func validateXattrs(e *Entry) (map[string][]byte, uint64, error) {
 		return nil, flags, nil
 	}
 
-	for name, value := range e.Xattrs {
+	for name := range e.Xattrs {
 		if name == "" {
 			return nil, 0, fmt.Errorf("apfswrite: %q has an extended attribute with an empty name", e.Name)
 		}
@@ -204,19 +271,12 @@ func validateXattrs(e *Entry) (map[string][]byte, uint64, error) {
 		if name == symlinkName {
 			return nil, 0, fmt.Errorf("apfswrite: %q sets %s, which the writer emits itself for symbolic links", e.Name, symlinkName)
 		}
-		if len(value) > maxEmbeddedXattrSize {
-			return nil, 0, fmt.Errorf("apfswrite: extended attribute %q on %q is %d bytes; only values up to %d are supported, larger ones need a data stream",
-				name, e.Name, len(value), maxEmbeddedXattrSize)
-		}
 
 		switch name {
 		case resourceForkName:
-			// Apple's fsck_apfs requires a resource fork to be stream based
-			// whatever its size — "com.apple.ResourceFork is expected to be
-			// stream based" — and this writer only embeds. Writing one anyway
-			// produces an image macOS calls corrupt, so refuse it instead.
-			// Note apfsck accepts the embedded form; only fsck_apfs objects.
-			return nil, 0, fmt.Errorf("apfswrite: %q carries a resource fork, which must be stored as a data stream; this writer only stores attributes inline", e.Name)
+			// HAS and NO are mutually exclusive, and a checker compares each
+			// against whether the attribute is actually there.
+			flags = flags&^uint64(inodeNoRsrcFork) | inodeHasRsrcFork
 		case decmpfsName:
 			// A decmpfs attribute declares the file's content compressed, and
 			// requires APFS_INOBSD_COMPRESSED in bsd_flags — which this writer
@@ -252,7 +312,10 @@ func validateName(name string) error {
 // oid in use (APFS_MIN_USER_INO_NUM when there are no entries).
 func (b *builder) nextObjID() uint64 {
 	next := uint64(minUserInoNum)
-	for _, e := range b.entries {
+	// Streamed extended attributes take object ids from the same counter as
+	// entries, so a volume whose highest id belongs to one must still report a
+	// next id past it.
+	for _, e := range append(append([]*builderEntry{}, b.entries...), b.xattrStreams...) {
 		if e.oid+1 > next {
 			next = e.oid + 1
 		}
@@ -354,6 +417,17 @@ func (b *builder) buildFSTreeRecords() []fsTreeRecord {
 			recs = append(recs, b.symlinkXattrRecord(e))
 		}
 		recs = append(recs, b.userXattrRecords(e)...)
+		for _, name := range sortedNames(e.streamedXattrs) {
+			stream := e.streamedXattrs[name]
+			recs = append(recs, b.streamedXattrRecord(e.oid, name, stream))
+			// No DSTREAM_ID record here, unlike a file's data stream. That
+			// record carries a reference count, and an attribute's stream
+			// cannot be cloned, so it has exactly one reference and no count
+			// to keep. apfsck reports one as "xattrs can't be cloned".
+			if stream.blocks > 0 {
+				recs = append(recs, b.fileExtentRecord(stream))
+			}
+		}
 		if e.hasStream {
 			recs = append(recs, b.dstreamIDRecord(e))
 			// A 0-byte file has a data stream but no physical extent, so no
@@ -592,6 +666,22 @@ func (b *builder) symlinkXattrRecord(e *builderEntry) fsTreeRecord {
 	target := make([]byte, len(e.linkTarget)+1)
 	copy(target, e.linkTarget)
 	return b.xattrRecord(e.oid, symlinkName, target, xattrDataEmbedded|xattrFileSystemOwned)
+}
+
+// streamedXattrRecord builds an extended-attribute record whose value lives in
+// a data stream rather than inside the record. The record carries a
+// j_xattr_dstream_t: the stream object's id followed by a j_dstream_t
+// describing it.
+func (b *builder) streamedXattrRecord(oid uint64, name string, stream *builderEntry) fsTreeRecord {
+	xdata := make([]byte, sizeofXattrDstream)
+	binary.LittleEndian.PutUint64(xdata[0:], stream.oid)               // xattr_obj_id
+	binary.LittleEndian.PutUint64(xdata[8:], uint64(len(stream.data))) // size
+	binary.LittleEndian.PutUint64(xdata[16:], stream.allocedSize)      // alloced_size
+	// default_crypto_id (24) = 0 on an unencrypted volume.
+	binary.LittleEndian.PutUint64(xdata[32:], uint64(len(stream.data))) // total_bytes_written
+	// total_bytes_read (40) = 0.
+
+	return b.xattrRecord(oid, name, xdata, xattrDataStream)
 }
 
 // userXattrRecords builds the records for an entry's caller-supplied extended

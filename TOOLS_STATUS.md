@@ -32,9 +32,10 @@ distinct xids and incremental checkpoints.
 system volume: a group is a system/data pair and the writer emits one volume
 per container, so the resulting group has no data half.
 
-⁴ Attributes are stored inline, up to the format's 3804-byte embedded limit.
-Larger ones, resource forks and `com.apple.decmpfs` need a data stream, which
-the writer does not yet produce, and are reported as dropped.
+⁴ Attributes of any size, including resource forks: small values are stored
+inline and larger ones get a data stream. `com.apple.decmpfs` is refused,
+because it declares content this writer does not produce, and is reported as
+dropped.
 
 ³ decmpfs types 3/4 (zlib), 5, 7/8 (LZVN) and 11/12 (LZFSE), stored inline in
 the attribute or in a resource fork. Types 9/10 (uncompressed) and 13/14

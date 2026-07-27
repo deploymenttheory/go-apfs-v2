@@ -19,10 +19,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   are set accordingly; a checker compares each against its attribute and
   complains either way.
 
-  Resource forks, `com.apple.decmpfs`, and values over the embedded limit are
-  refused rather than written wrong, and reported as dropped. `fsck_apfs`
-  requires a resource fork to be stream based whatever its size, and a decmpfs
-  attribute declares content this writer does not produce. See
+  Attributes of any size are carried: a small value lives inside its record, and
+  a larger one — along with any resource fork, however small — gets a data
+  stream of its own. A resource fork has no size threshold because `fsck_apfs`
+  requires one to be stream based whatever its size. An attribute's stream
+  carries no `DSTREAM_ID` record, unlike a file's, because it cannot be cloned
+  and so has no reference count to keep.
+
+  `com.apple.decmpfs` is refused rather than written wrong, and reported as
+  dropped: it declares content this writer does not produce. See
   [`docs/write-fidelity.md`](docs/write-fidelity.md).
 
 - **Building an image no longer holds it in memory** (`internal/imagefile`,
