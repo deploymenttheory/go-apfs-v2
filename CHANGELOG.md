@@ -169,6 +169,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The documented HFS+ capabilities now match the code.** Three claims were
+  wrong, and each of them would have sent someone down a path that could not
+  work:
+
+  `README.md` and `TOOLS_STATUS.md` marked transparent compression as
+  implemented for HFS+. It is not: a file with the `UF_COMPRESSED` flag returns
+  an error instead of its contents, and the resource fork that decmpfs stores
+  compressed data in is never read.
+
+  `TOOLS_STATUS.md` marked HFS+ extended-attribute reading as partial. There is
+  no partial support — the attributes file is not parsed at all, so no attribute
+  is visible through the `io/fs` adapter and `extract --xattrs` silently carries
+  nothing off an HFS+ image. The `extract` synopsis in `README.md` also omitted
+  `--xattrs` entirely, and did not say that both it and transparent
+  decompression apply only to APFS.
+
+  Finally, the decmpfs note in `TOOLS_STATUS.md` and the preamble to
+  `pkg/apfs/decmpfs_test.go` both said no image available to this project
+  contains a decmpfs-compressed file. One does, and always has:
+  `compressed.txt` in `testdata/cli/basic.dmg` is type 8 — LZVN in a resource
+  fork, written by `ditto --hfsCompression` — so that path is covered against
+  bytes macOS produced rather than only against synthesized fixtures.
+
+  Both HFS+ gaps are now listed under "Near term" in `TOOLS_ROADMAP.md`.
+
 - **`pack <dir>` no longer hangs on a device node, FIFO or socket**
   (`pkg/apfswrite`, `pkg/hfsplus`). Both directory walks fell through to reading
   such a file as though it were regular, and none of the three failure modes was

@@ -17,6 +17,13 @@ what is planned or under consideration, roughly in priority order.
 
 ## Near term
 
+- **Extended attributes on the HFS+ read side** — the attributes file is not
+  parsed at all, so no attribute is visible through the `io/fs` adapter and
+  `extract --xattrs` carries nothing off an HFS+ image.
+- **decmpfs on HFS+** — a file with the `UF_COMPRESSED` flag currently returns
+  an error instead of its contents. The decoders already exist for APFS; the
+  missing pieces are the attributes file (which carries `com.apple.decmpfs`)
+  and resource-fork reading.
 - **Case-insensitive HFS+ (`H+` v4)** — the writer currently emits
   case-sensitive HFSX (`HX`). Case-insensitive volumes need the Unicode
   case-folding comparison for catalog key ordering.

@@ -10,9 +10,9 @@ Legend: ✅ implemented · 🟡 partial · ⬜ not yet
 | Area | APFS | HFS+ / HFSX |
 | --- | :---: | :---: |
 | Read (containers, volumes, file-system tree, extents) | ✅ | ✅ |
-| Transparent compression (zlib / LZVN / LZFSE) | ✅³ | ✅ |
+| Transparent compression (zlib / LZVN / LZFSE) | ✅³ | ⬜⁵ |
 | Symlinks, hardlinks | ✅ | ✅ |
-| Extended attributes (read) | ✅ | 🟡 |
+| Extended attributes (read) | ✅ | ⬜⁵ |
 | Snapshots (read / list) | ✅ | — |
 | Snapshots (create, revert) | ✅¹ | — |
 | FileVault / encryption unlock | ✅ | — |
@@ -40,9 +40,16 @@ dropped.
 ³ decmpfs types 3/4 (zlib), 5, 7/8 (LZVN) and 11/12 (LZFSE), stored inline in
 the attribute or in a resource fork. Types 9/10 (uncompressed) and 13/14
 (LZBITMAP) are recognized and reported as unsupported rather than decoded.
-Coverage is by synthesized fixtures: no image available to the project contains
-a decmpfs-compressed file, and producing a real LZFSE one needs macOS plus
-`afsctool`.
+Coverage is mostly by synthesized fixtures, because producing a real LZFSE file
+needs macOS plus `afsctool`. One real one is committed: `compressed.txt` in
+`testdata/cli/basic.dmg` is type 8 — LZVN in a resource fork — written by
+`ditto --hfsCompression`.
+
+⁵ Not implemented on HFS+. A file with the `UF_COMPRESSED` flag returns an error
+instead of its contents, and the attributes file is not parsed at all, so
+`extract --xattrs` carries nothing off an HFS+ image and no attribute is visible
+through the `io/fs` adapter. Both are planned; see
+[`TOOLS_ROADMAP.md`](TOOLS_ROADMAP.md).
 
 The APFS writer lives in `pkg/apfswrite` (pure Go, MIT).
 
