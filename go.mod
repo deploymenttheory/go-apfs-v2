@@ -1,6 +1,6 @@
 module github.com/deploymenttheory/go-apfs-v2
 
-go 1.24.4
+go 1.25.0
 
 require (
 	github.com/go-compressions/lzfse v0.3.0
@@ -13,7 +13,7 @@ require (
 	golang.org/x/crypto v0.45.0
 	golang.org/x/sys v0.38.0
 	golang.org/x/term v0.37.0
-	golang.org/x/text v0.31.0
+	golang.org/x/text v0.40.0
 	howett.net/plist v1.0.1
 )
 
