@@ -16,8 +16,14 @@ import (
 // a 4096-byte-block, normalization-sensitive-by-default, case-insensitive
 // volume named "untitled" with deterministic default UUIDs.
 type CreateOptions struct {
-	// BlockSize is the container block size in bytes. Zero means 4096. Must be
-	// a power of two between 4096 and 65536.
+	// BlockSize is the container block size in bytes. Zero means 4096, and 4096
+	// is the only accepted value.
+	//
+	// Deprecated: the format permits any power of two from NX_MINIMUM_BLOCK_SIZE
+	// to NX_MAXIMUM_BLOCK_SIZE, but this writer does not produce a sound
+	// container at any of them, so the field no longer selects anything. It is
+	// kept because it is public API; see the error returned by CreateContainer
+	// for the evidence.
 	BlockSize uint32
 
 	// VolumeName is the volume label. Empty means "untitled".
@@ -260,12 +266,29 @@ func CreateContainer(w io.WriterAt, sizeBytes int64, opts *CreateOptions) error 
 
 	b := &builder{w: w}
 
+	// The format allows any power of two in [nxMinimumBlockSize,
+	// nxMaximumBlockSize], and this writer's arithmetic is parameterised by
+	// b.blocksize throughout, so larger sizes look supported. They are not, and
+	// the containers produced are unsound rather than merely unreadable:
+	//
+	//	 8192   fsck_apfs and apfsck -cw both clean
+	//	16384   fsck_apfs: "invalid btn_table_space (0, 1812)", no valid
+	//	        checkpoint; apfsck: "Omap record: bad alignment for key or value"
+	//	65536   fsck_apfs spins indefinitely rather than reaching a verdict
+	//
+	// Every one of them is also unreadable by pkg/apfs, which reads a fixed
+	// 4096-byte container superblock and so checksums a different span than the
+	// writer sealed (see the note in pkg/apfs/container_superblock.go). Emitting
+	// an image that neither Apple's checker nor our own reader accepts is worse
+	// than refusing, so refuse.
 	b.blocksize = opts.BlockSize
 	if b.blocksize == 0 {
 		b.blocksize = nxDefaultBlockSize
 	}
-	if b.blocksize < nxMinimumBlockSize || b.blocksize > nxMaximumBlockSize || b.blocksize&(b.blocksize-1) != 0 {
-		return fmt.Errorf("apfswrite: unsupported block size %d", b.blocksize)
+	if b.blocksize != nxDefaultBlockSize {
+		return fmt.Errorf("apfswrite: unsupported block size %d: only %d is supported, "+
+			"because this writer does not lay out a sound container at any other size",
+			b.blocksize, nxDefaultBlockSize)
 	}
 
 	b.label = opts.VolumeName

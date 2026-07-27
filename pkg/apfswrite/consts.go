@@ -180,6 +180,9 @@ const (
 	nxMaxFileSystemEphStructs = 4
 	nxEphInfoVersion1         = 1
 
+	// nxDefaultBlockSize is the only block size this writer emits. The minimum
+	// and maximum are the format's, recorded because they are what the spec
+	// allows -- not what this writer supports; see CreateContainer.
 	nxDefaultBlockSize = 4096
 	nxMinimumBlockSize = 4096
 	nxMaximumBlockSize = 65536
