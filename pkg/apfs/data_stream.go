@@ -286,7 +286,6 @@ func (r *compressedDataReader) Read(p []byte) (n int, err error) {
 	}
 
 	n, err = r.dataHandle.ReadSegmentData(
-		r.reader,
 		0, // segment index
 		p,
 	)
@@ -315,7 +314,6 @@ func (r *compressedDataReader) ReadAt(p []byte, off int64) (n int, err error) {
 
 	// Read the data
 	n, err = r.dataHandle.ReadSegmentData(
-		r.reader,
 		0, // segment index
 		p,
 	)

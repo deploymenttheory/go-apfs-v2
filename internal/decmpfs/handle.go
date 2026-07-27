@@ -1,4 +1,4 @@
-package apfs
+package decmpfs
 
 import (
 	"bytes"
@@ -9,25 +9,20 @@ import (
 	"github.com/deploymenttheory/go-apfs-v2/internal/common"
 )
 
-// Compression method constants
-const (
-	CompressionMethodNone     = 0
-	CompressionMethodDeflate  = 1
-	CompressionMethodLZFSE    = 2
-	CompressionMethodLZVN     = 3
-	CompressionMethodUnknown5 = 5
-)
-
-// CompressedDataHandleBlockSize is the size of each compressed block
-const CompressedDataHandleBlockSize = 65536
-
-// CompressedDataHandle represents a handle for compressed data in APFS
-type CompressedDataHandle struct {
+// Handle decodes one compressed stream: it locates the chunk boundaries in the
+// Source, then decompresses on demand, caching the current chunk.
+//
+// A Handle is stateful and not safe for concurrent use. It also holds two
+// BlockSize buffers, so opening many compressed files at once is not free —
+// build one per open file and let it go when the file closes.
+type Handle struct {
 	// The current segment offset
 	CurrentSegmentOffset int64
 
-	// The compressed data stream
-	CompressedDataStream *DataStream
+	// CompressedDataStream is the compressed byte range. The field keeps its
+	// original name because it is reachable as a field of pkg/apfs's
+	// CompressedDataHandle, which is an alias for this type.
+	CompressedDataStream Source
 
 	// The uncompressed data size
 	UncompressedDataSize uint64
@@ -54,23 +49,24 @@ type CompressedDataHandle struct {
 	CompressedBlockOffsets []uint32
 }
 
-// NewCompressedDataHandle creates a new compressed data handle
-func NewCompressedDataHandle(
-	compressedDataStream *DataStream,
+// NewHandle creates a decoder for a compressed stream. compressionMethod is one
+// of this package's method codes, as returned by MethodFor.
+func NewHandle(
+	compressedDataStream Source,
 	uncompressedDataSize uint64,
 	compressionMethod int,
-) (*CompressedDataHandle, error) {
+) (*Handle, error) {
 	if compressedDataStream == nil {
 		return nil, fmt.Errorf("invalid compressed data stream")
 	}
 
 	switch compressionMethod {
-	case CompressionMethodDeflate, CompressionMethodLZVN, CompressionMethodLZFSE, CompressionMethodUnknown5:
+	case MethodDeflate, MethodLZVN, MethodLZFSE:
 	default:
 		return nil, fmt.Errorf("unsupported compression method: %d", compressionMethod)
 	}
 
-	handle := &CompressedDataHandle{
+	handle := &Handle{
 		CurrentSegmentOffset:        0,
 		CompressedDataStream:        compressedDataStream,
 		UncompressedDataSize:        uncompressedDataSize,
@@ -81,20 +77,16 @@ func NewCompressedDataHandle(
 
 	// Allocate compressed segment data buffer
 	// Size is BlockSize + 1 to handle edge cases
-	handle.CompressedSegmentData = make([]byte, CompressedDataHandleBlockSize+1)
+	handle.CompressedSegmentData = make([]byte, BlockSize+1)
 
 	// Allocate uncompressed segment data buffer
-	// Not needed for UNKNOWN5 compression method
-	if compressionMethod != CompressionMethodUnknown5 {
-		handle.SegmentData = make([]byte, CompressedDataHandleBlockSize)
-	}
+	handle.SegmentData = make([]byte, BlockSize)
 
 	return handle, nil
 }
 
-// Close releases resources associated with the compressed data handle
-// In Go, this is primarily for explicit cleanup if needed
-func (cdh *CompressedDataHandle) Close() error {
+// Close releases the decoder's buffers.
+func (cdh *Handle) Close() error {
 	if cdh == nil {
 		return fmt.Errorf("invalid compressed data handle")
 	}
@@ -108,7 +100,7 @@ func (cdh *CompressedDataHandle) Close() error {
 }
 
 // loadCompressedBlockOffsets determines the compressed block offsets
-func (cdh *CompressedDataHandle) loadCompressedBlockOffsets(reader io.ReaderAt) error {
+func (cdh *Handle) loadCompressedBlockOffsets() error {
 	if cdh == nil {
 		return fmt.Errorf("invalid compressed data handle")
 	}
@@ -128,19 +120,20 @@ func (cdh *CompressedDataHandle) loadCompressedBlockOffsets(reader io.ReaderAt) 
 		return fmt.Errorf("unable to read 4 bytes at offset 0")
 	}
 
-	// Check for "fpmc" signature
-	isFPMC := bytes.Equal(cdh.CompressedSegmentData[:4], []byte("fpmc"))
+	// Inline storage is identified by the header magic at offset zero; see
+	// CheckInline for why the header must still be attached.
+	isFPMC := bytes.Equal(cdh.CompressedSegmentData[:4], HeaderSignature[:])
 
 	var compressedBlockDescriptorSize int
 	var compressedDescriptorsOffset uint32
 	var segmentDataOffset int
 
 	if isFPMC {
-		if compressedDataSize > uint64(CompressedDataHandleBlockSize+1) {
+		if compressedDataSize > uint64(BlockSize+1) {
 			return fmt.Errorf("invalid segment data size value out of bounds")
 		}
 		cdh.NumberOfCompressedBlocks = 1
-	} else if cdh.CompressionMethod == CompressionMethodDeflate {
+	} else if cdh.CompressionMethod == MethodDeflate {
 		// Read compressed descriptors offset (big endian)
 		compressedDescriptorsOffset = binary.BigEndian.Uint32(cdh.CompressedSegmentData[:4])
 
@@ -168,8 +161,8 @@ func (cdh *CompressedDataHandle) loadCompressedBlockOffsets(reader io.ReaderAt) 
 		segmentDataOffset = 264
 		compressedDescriptorsOffset += 4
 		compressedBlockDescriptorSize = 8
-	} else if cdh.CompressionMethod == CompressionMethodLZVN ||
-		cdh.CompressionMethod == CompressionMethodLZFSE {
+	} else if cdh.CompressionMethod == MethodLZVN ||
+		cdh.CompressionMethod == MethodLZFSE {
 		// LZVN and LZFSE resource forks share one block-table layout, and it
 		// differs from zlib's: a flat array of little-endian uint32 at offset 0
 		// with no HFS resource-fork header, entry i being block i's absolute
@@ -183,7 +176,7 @@ func (cdh *CompressedDataHandle) loadCompressedBlockOffsets(reader io.ReaderAt) 
 		compressedBlockOffset := binary.LittleEndian.Uint32(cdh.CompressedSegmentData[:4])
 
 		if compressedBlockOffset <= 0x00000004 ||
-			compressedBlockOffset >= uint32(CompressedDataHandleBlockSize+1) {
+			compressedBlockOffset >= uint32(BlockSize+1) {
 			return fmt.Errorf("invalid compressed block offset: 0x%08x", compressedBlockOffset)
 		}
 
@@ -205,16 +198,16 @@ func (cdh *CompressedDataHandle) loadCompressedBlockOffsets(reader io.ReaderAt) 
 	var previousCompressedBlockOffset uint32
 
 	if isFPMC {
-		cdh.CompressedBlockOffsets[0] = 16
+		cdh.CompressedBlockOffsets[0] = HeaderSize
 		compressedBlockIndex = 1
-		previousCompressedBlockOffset = 16
+		previousCompressedBlockOffset = HeaderSize
 	} else {
 		// Read the first block offset
 		compressedBlockOffset := binary.LittleEndian.Uint32(cdh.CompressedSegmentData[segmentDataOffset:])
 		segmentDataOffset += 4
 
 		if compressedBlockOffset <= uint32(compressedBlockDescriptorSize) ||
-			compressedBlockOffset >= uint32(CompressedDataHandleBlockSize+1) {
+			compressedBlockOffset >= uint32(BlockSize+1) {
 			return fmt.Errorf("invalid compressed block offset: 0x%08x", compressedBlockOffset)
 		}
 
@@ -222,7 +215,7 @@ func (cdh *CompressedDataHandle) loadCompressedBlockOffsets(reader io.ReaderAt) 
 		cdh.CompressedBlockOffsets[0] = compressedBlockOffset
 		previousCompressedBlockOffset = compressedBlockOffset
 
-		if cdh.CompressionMethod == CompressionMethodDeflate {
+		if cdh.CompressionMethod == MethodDeflate {
 			segmentDataOffset += 4 // Skip size field
 		}
 
@@ -254,7 +247,7 @@ func (cdh *CompressedDataHandle) loadCompressedBlockOffsets(reader io.ReaderAt) 
 			compressedBlockOffset += compressedDescriptorsOffset
 
 			if previousCompressedBlockOffset > compressedBlockOffset ||
-				(compressedBlockOffset-previousCompressedBlockOffset) > uint32(CompressedDataHandleBlockSize+1) {
+				(compressedBlockOffset-previousCompressedBlockOffset) > uint32(BlockSize+1) {
 				return fmt.Errorf("invalid compressed block offset: 0x%08x", compressedBlockOffset)
 			}
 
@@ -267,7 +260,7 @@ func (cdh *CompressedDataHandle) loadCompressedBlockOffsets(reader io.ReaderAt) 
 
 	// Store the end offset (size of compressed data)
 	if previousCompressedBlockOffset > uint32(compressedDataSize) ||
-		(uint32(compressedDataSize)-previousCompressedBlockOffset) > uint32(CompressedDataHandleBlockSize+1) {
+		(uint32(compressedDataSize)-previousCompressedBlockOffset) > uint32(BlockSize+1) {
 		return fmt.Errorf("invalid compressed block offset: 0x%08x", previousCompressedBlockOffset)
 	}
 
@@ -276,10 +269,9 @@ func (cdh *CompressedDataHandle) loadCompressedBlockOffsets(reader io.ReaderAt) 
 	return nil
 }
 
-// ReadSegmentData reads data from the current offset into a buffer
-// This is a callback for the data stream
-func (cdh *CompressedDataHandle) ReadSegmentData(
-	reader io.ReaderAt,
+// ReadSegmentData reads decompressed data from the current offset into
+// segmentData. It is the read callback a data stream drives.
+func (cdh *Handle) ReadSegmentData(
 	segmentIndex int,
 	segmentData []byte,
 ) (int, error) {
@@ -301,7 +293,7 @@ func (cdh *CompressedDataHandle) ReadSegmentData(
 
 	// Get compressed block offsets if not already loaded
 	if cdh.CompressedBlockOffsets == nil {
-		if err := cdh.loadCompressedBlockOffsets(reader); err != nil {
+		if err := cdh.loadCompressedBlockOffsets(); err != nil {
 			return 0, fmt.Errorf("unable to determine compressed block offsets: %w", err)
 		}
 	}
@@ -311,26 +303,10 @@ func (cdh *CompressedDataHandle) ReadSegmentData(
 		return 0, io.EOF
 	}
 
-	// Handle UNKNOWN5 compression method (sparse data)
-	if cdh.CompressionMethod == CompressionMethodUnknown5 {
-		readSize := len(segmentData)
-		if uint64(cdh.CurrentSegmentOffset)+uint64(readSize) > cdh.UncompressedDataSize {
-			readSize = int(cdh.UncompressedDataSize - uint64(cdh.CurrentSegmentOffset))
-		}
-
-		// Zero out the data for sparse blocks
-		for i := 0; i < readSize; i++ {
-			segmentData[i] = 0
-		}
-
-		cdh.CurrentSegmentOffset += int64(readSize)
-		return readSize, nil
-	}
-
 	// Calculate which compressed block we need
-	compressedBlockIndex := uint32(cdh.CurrentSegmentOffset / CompressedDataHandleBlockSize)
+	compressedBlockIndex := uint32(cdh.CurrentSegmentOffset / BlockSize)
 	segmentDataOffset := 0
-	dataOffset := int(cdh.CurrentSegmentOffset % CompressedDataHandleBlockSize)
+	dataOffset := int(cdh.CurrentSegmentOffset % BlockSize)
 
 	totalBytesRead := 0
 
@@ -356,10 +332,10 @@ func (cdh *CompressedDataHandle) ReadSegmentData(
 			}
 
 			// Decompress the data
-			cdh.SegmentDataSize = CompressedDataHandleBlockSize
+			cdh.SegmentDataSize = BlockSize
 
 			// Decompress the compressed segment data
-			if err := DecompressData(
+			if err := Decompress(
 				cdh.CompressedSegmentData[:readCount],
 				cdh.CompressionMethod,
 				cdh.SegmentData,
@@ -369,9 +345,9 @@ func (cdh *CompressedDataHandle) ReadSegmentData(
 			}
 
 			// Verify segment data size for non-final blocks
-			uncompressedBlockOffset := int64(compressedBlockIndex+1) * CompressedDataHandleBlockSize
+			uncompressedBlockOffset := int64(compressedBlockIndex+1) * BlockSize
 			if uint64(uncompressedBlockOffset) < cdh.UncompressedDataSize &&
-				cdh.SegmentDataSize != CompressedDataHandleBlockSize {
+				cdh.SegmentDataSize != BlockSize {
 				return totalBytesRead, fmt.Errorf("invalid uncompressed segment data size value out of bounds")
 			}
 
@@ -403,9 +379,8 @@ func (cdh *CompressedDataHandle) ReadSegmentData(
 	return totalBytesRead, nil
 }
 
-// SeekSegmentOffset seeks to a specific offset in the data
-// This is a callback for the data stream
-func (cdh *CompressedDataHandle) SeekSegmentOffset(
+// SeekSegmentOffset moves the decoder to an offset in the uncompressed data.
+func (cdh *Handle) SeekSegmentOffset(
 	segmentIndex int,
 	segmentOffset int64,
 ) (int64, error) {

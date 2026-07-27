@@ -6,7 +6,6 @@ import (
 	"encoding/binary"
 	"io"
 	"math/rand"
-	"strings"
 	"testing"
 
 	"github.com/go-compressions/lzfse"
@@ -127,14 +126,14 @@ func openDecmpfs(t *testing.T, payload []byte, uncompressedSize uint64, method i
 	return stream
 }
 
-// TestInternalCompressionMethodLZFSE checks the decmpfs type mapping. Types 11
-// and 12 used to return "not supported yet" even though the LZFSE decompressor
-// already existed, just unreachable.
+// The mapping itself is exercised in internal/decmpfs, which owns it. What is
+// checked here is that this package's wrapper still reaches it and still speaks
+// in this package's method constants -- the aliases would compile even if the
+// two drifted apart numerically.
 func TestInternalCompressionMethodLZFSE(t *testing.T) {
 	supported := map[uint32]int{
 		3:  CompressionMethodDeflate,
 		4:  CompressionMethodDeflate,
-		5:  CompressionMethodUnknown5,
 		7:  CompressionMethodLZVN,
 		8:  CompressionMethodLZVN,
 		11: CompressionMethodLZFSE,
@@ -151,22 +150,10 @@ func TestInternalCompressionMethodLZFSE(t *testing.T) {
 		}
 	}
 
-	// The remaining defined types are named rather than swallowed by a generic
-	// "unsupported" message, so the error says what the file actually uses.
-	named := map[uint32]string{9: "uncompressed", 10: "uncompressed", 13: "LZBITMAP", 14: "LZBITMAP"}
-	for decmpfsType, want := range named {
-		_, err := internalCompressionMethod(decmpfsType)
-		if err == nil {
-			t.Errorf("type %d is not implemented but returned no error", decmpfsType)
-			continue
+	for _, decmpfsType := range []uint32{5, 9, 10, 13, 14, 99} {
+		if _, err := internalCompressionMethod(decmpfsType); err == nil {
+			t.Errorf("type %d is not decodable but returned no error", decmpfsType)
 		}
-		if !strings.Contains(err.Error(), want) {
-			t.Errorf("type %d error = %q, want it to mention %q", decmpfsType, err, want)
-		}
-	}
-
-	if _, err := internalCompressionMethod(99); err == nil {
-		t.Error("an undefined decmpfs type returned no error")
 	}
 }
 
@@ -182,62 +169,6 @@ func TestNewCompressedDataHandleAcceptsLZFSE(t *testing.T) {
 	if handle.SegmentData == nil {
 		t.Error("SegmentData buffer was not allocated for LZFSE")
 	}
-}
-
-// TestDecompressLZFSEEscape covers the leaf decompressor, including the raw
-// escape. The escape is signalled by the absence of the LZFSE block magic, not
-// by a fixed sentinel: any first byte other than 'b' means "stored raw". Using
-// LZVN's 0x06 as a sentinel here would misread every other raw chunk.
-func TestDecompressLZFSEEscape(t *testing.T) {
-	payload := compressiblePattern(4096)
-	compressed, err := lzfse.Compress(payload)
-	if err != nil {
-		t.Fatalf("lzfse.Compress: %v", err)
-	}
-
-	t.Run("compressed round trip", func(t *testing.T) {
-		out := make([]byte, len(payload))
-		size := len(out)
-		if err := decompressLZFSE(compressed, out, &size); err != nil {
-			t.Fatalf("decompressLZFSE: %v", err)
-		}
-		if !bytes.Equal(out[:size], payload) {
-			t.Error("round trip through decompressLZFSE changed the data")
-		}
-	})
-
-	// macOS writes 0xff, but any non-magic first byte must be treated the same.
-	for _, marker := range []byte{0xff, 0x00, 0x06, 0x61} {
-		t.Run("raw escape marker", func(t *testing.T) {
-			raw := append([]byte{marker}, payload...)
-			out := make([]byte, len(payload))
-			size := len(out)
-			if err := decompressLZFSE(raw, out, &size); err != nil {
-				t.Fatalf("marker %#02x: %v", marker, err)
-			}
-			if size != len(payload) || !bytes.Equal(out[:size], payload) {
-				t.Errorf("marker %#02x: raw chunk did not round-trip", marker)
-			}
-		})
-	}
-
-	t.Run("rejects bad input without panicking", func(t *testing.T) {
-		out := make([]byte, 128)
-		for name, input := range map[string][]byte{
-			"empty":          {},
-			"magic only":     {0x62},
-			"truncated bvx2": append([]byte("bvx2"), 1, 2, 3),
-			"output exceeds buffer": func() []byte {
-				big, _ := lzfse.Compress(compressiblePattern(8192))
-				return big
-			}(),
-		} {
-			size := len(out)
-			if err := decompressLZFSE(input, out, &size); err == nil {
-				t.Errorf("%s: decompressLZFSE succeeded, want an error", name)
-			}
-		}
-	})
 }
 
 // TestLZFSEResourceForkRoundTrip is the headline case: a multi-block type-12
@@ -396,39 +327,5 @@ func TestNewInlineDecmpfsStreamRejectsBadInput(t *testing.T) {
 				t.Error("newInlineDecmpfsStream accepted it, want an error")
 			}
 		})
-	}
-}
-
-// TestZlibResourceForkManyBlocksIsAnError guards the descriptor-table read: a
-// zlib resource fork needs 8 bytes per block, so a file over roughly 510 MB has
-// more descriptors than the fixed 65537-byte segment scratch holds. That used
-// to fault on a slice bound instead of returning an error.
-func TestZlibResourceForkManyBlocksIsAnError(t *testing.T) {
-	// 8 bytes per descriptor from offset 272 overruns the 65537-byte segment
-	// scratch past roughly 8159 blocks.
-	const blocks = 20000
-
-	// A zlib resource fork: big-endian 0x100 header offset, block count at 260,
-	// descriptors from 264. The first descriptor must be *valid*, or the loader
-	// rejects it before ever reaching the bulk descriptor read — which is where
-	// the fault was.
-	fork := make([]byte, 4096)
-	binary.BigEndian.PutUint32(fork[0:4], 0x00000100)
-	binary.LittleEndian.PutUint32(fork[260:264], blocks)
-	binary.LittleEndian.PutUint32(fork[264:268], 0x200) // first block offset
-	binary.LittleEndian.PutUint32(fork[268:272], 0x100) // its length
-
-	compressed, err := NewDataStreamFromData(fork)
-	if err != nil {
-		t.Fatalf("NewDataStreamFromData: %v", err)
-	}
-	handle, err := NewCompressedDataHandle(compressed, blocks*CompressedDataHandleBlockSize, CompressionMethodDeflate)
-	if err != nil {
-		t.Fatalf("NewCompressedDataHandle: %v", err)
-	}
-
-	// Must return an error, and must not fault with a slice-bounds panic.
-	if err := handle.loadCompressedBlockOffsets(bytes.NewReader(fork)); err == nil {
-		t.Fatalf("a resource fork claiming %d blocks was accepted", blocks)
 	}
 }

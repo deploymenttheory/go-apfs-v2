@@ -156,6 +156,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **decmpfs decoding moved to `internal/decmpfs`**, shared rather than owned by
+  `pkg/apfs`. Transparent compression is a property of the file, not of the file
+  system: the `com.apple.decmpfs` header, the 64 KiB block table and the codecs
+  are identical on HFS+ and APFS, and HFS+ is where it started. Keeping the
+  decoder inside the APFS reader would have meant either making `pkg/hfsplus`
+  depend on the whole APFS engine, or writing the block-table parser a second
+  time — and the block table is the part that has cost the most to get right.
+
+  `pkg/apfs`'s published names are unchanged, kept as type aliases:
+  `CompressedDataHandle`, `CompressedDataHeader`, `DecompressData`,
+  `NewCompressedDataHandle`, `ParseCompressedDataHeader`, `CompressionMethod*`,
+  `CompressedDataHandleBlockSize`, `CompressedDataHeaderSize` and
+  `CompressedDataHeaderSignature`. One field changes type:
+  `CompressedDataHandle.CompressedDataStream` is now a `CompressedDataSource`
+  (an `io.ReaderAt` that knows its size) rather than a `*DataStream`. Passing a
+  `*DataStream` still compiles, since it satisfies the interface.
+
+  Two dead parameters went with the move: `loadCompressedBlockOffsets` and
+  `ReadSegmentData` each took an `io.ReaderAt` they never read from.
+
 - **The APFS writer now accepts only a 4096-byte block** (`pkg/apfswrite`).
   `CreateOptions.BlockSize` previously took any power of two from 4096 to 65536,
   as the format allows, and the writer's arithmetic is parameterised by it
@@ -194,6 +214,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   route through a single content-sniffing image opener.
 
 ### Fixed
+
+- **decmpfs type 5 is no longer decoded as sparse and answered with zeros.**
+  It was mapped to a "compression method" that filled the caller's buffer with
+  zeros, and documented as "uncompressed, stored inline". Both are wrong: per
+  Apple's `copyfile.c`, type 5 marks de-duplication within the generation store,
+  so the attribute does not describe the file's content at all. A file using it
+  therefore read back as the right length of nothing, with no error — the worst
+  failure mode available to a reader. It is now refused by name, alongside the
+  other recognized-but-undecoded types.
+
+  `CompressionMethodUnknown5` is deprecated and unreachable: nothing maps to it,
+  and `NewCompressedDataHandle` rejects it.
 
 - **The documented HFS+ capabilities now match the code.** Three claims were
   wrong, and each of them would have sent someone down a path that could not
