@@ -16,6 +16,7 @@ copied through bit-for-bit.
 | Directories | mode, owner, group, modification time |
 | Symbolic links | target, mode, owner, group, modification time |
 | Extended attributes | **APFS only**, any size, including resource forks |
+| Hard links | **APFS only**: several names share one inode and one copy of the content |
 
 ## What is not
 
@@ -26,7 +27,7 @@ copied through bit-for-bit.
 | Resource forks on HFS+ | dropped | `resourceForksDropped` |
 | `com.apple.decmpfs` | dropped | `xattrsDropped` |
 | ACLs on HFS+ | dropped | `aclsDropped` |
-| Hard links | each name becomes an independent copy | `hardLinksCollapsed` |
+| Hard links on HFS+ | each name becomes an independent copy | `hardLinksCollapsed` |
 | BSD flags (`uchg`, `hidden`, …) | dropped | `bsdFlagsDropped` |
 | Volume role and group (`snapshot create` only) | not carried | `volumeIdentityDropped` |
 

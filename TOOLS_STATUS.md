@@ -23,7 +23,7 @@ Legend: ✅ implemented · 🟡 partial · ⬜ not yet
 | Volume roles and volume groups (read + write) | ✅² | — |
 | Write-fidelity reporting (`--strict`) | ✅ | ✅ |
 | Extended attributes (write) | ✅⁴ | ⬜ |
-| Hard links (write) | ⬜ | ⬜ |
+| Hard links (write) | ✅ | ⬜ |
 
 ¹ One snapshot per image (single static checkpoint); multiple snapshots need
 distinct xids and incremental checkpoints.
