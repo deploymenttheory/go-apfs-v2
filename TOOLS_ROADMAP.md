@@ -24,8 +24,6 @@ what is planned or under consideration, roughly in priority order.
 
 ## Medium term
 
-- **Extended attributes in the HFS+ writer** — it has no attributes file at
-  all, so every attribute is dropped. The APFS writer carries them.
 - **decmpfs on write** — needs the compression machinery and the inode's
   BSD flags, not just the attribute.
 - **Hard links in the HFS+ writer** — the APFS writer represents them; HFS+

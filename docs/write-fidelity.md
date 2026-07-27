@@ -15,7 +15,7 @@ copied through bit-for-bit.
 | Regular files | content, mode, owner, group, modification time |
 | Directories | mode, owner, group, modification time |
 | Symbolic links | target, mode, owner, group, modification time |
-| Extended attributes | **APFS only**, any size, including resource forks |
+| Extended attributes | both, any size |
 | Resource forks | both: on APFS as an attribute stream, on HFS+ as the catalog record's resource fork |
 | Hard links | **APFS only**: several names share one inode and one copy of the content |
 
@@ -24,7 +24,6 @@ copied through bit-for-bit.
 | | What happens | Reported as |
 |---|---|---|
 | Device nodes, FIFOs, sockets | **skipped entirely** | `specialFilesSkipped` |
-| Extended attributes, all of them, on HFS+ | dropped | `xattrsDropped` |
 | `com.apple.decmpfs` | dropped | `xattrsDropped` |
 | ACLs on HFS+ | dropped | `aclsDropped` |
 | Hard links on HFS+ | each name becomes an independent copy | `hardLinksCollapsed` |

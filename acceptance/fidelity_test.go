@@ -346,11 +346,28 @@ func TestPackCarriesXattrs(t *testing.T) {
 		}
 	})
 
-	t.Run("hfs+ reports it dropped", func(t *testing.T) {
+	t.Run("hfs+ carries it too", func(t *testing.T) {
 		out := filepath.Join(t.TempDir(), "packed.dmg")
 		report, _ := packJSON(t, dir, out, "--fs", "hfs+", "--volname", "XATTR", "-o", "json")
-		if got := intField(t, report, "xattrsDropped"); got == 0 {
-			t.Error("xattrsDropped = 0 for HFS+, which has no attributes file")
+		if got := intField(t, report, "xattrsDropped"); got != 0 {
+			t.Errorf("xattrsDropped = %d for HFS+, which now writes an attributes file", got)
+		}
+
+		dest := t.TempDir()
+		mustRun(t, "extract", out, "-C", dest, "--xattrs", "-q")
+
+		names, err := readXattrNames(filepath.Join(dest, "file.txt"))
+		if err != nil {
+			t.Fatalf("reading the extracted attributes: %v", err)
+		}
+		found := false
+		for _, name := range names {
+			if name == "user.marker" {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("user.marker did not survive pack and extract on HFS+; attributes present: %v", names)
 		}
 	})
 }

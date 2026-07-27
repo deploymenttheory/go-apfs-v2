@@ -4,42 +4,12 @@ import (
 	"bytes"
 	"encoding/binary"
 	"testing"
-	"unicode/utf16"
 )
 
 // Attribute fixtures are synthesized rather than committed, because this
 // package's writer emits no attributes file yet: there is nothing that could
 // produce one to commit. buildBTree is the writer's own tree builder, so the
 // records below are laid out exactly as a real volume's would be.
-
-// encodeAttrKey builds an attributes B-tree key with its keyLength prefix:
-// keyLength(2) pad(2) fileID(4) startBlock(4) nameLength(2) name(UTF-16BE).
-func encodeAttrKey(fileID CatalogNodeID, name string, startBlock uint32) []byte {
-	units := utf16.Encode([]rune(name))
-	keyLen := attrKeyMinLen + 2*len(units) // bytes after the keyLength field
-	b := make([]byte, 2+keyLen)
-	binary.BigEndian.PutUint16(b[0:], uint16(keyLen))
-	// b[2:4] is the pad, left zero.
-	binary.BigEndian.PutUint32(b[4:], uint32(fileID))
-	binary.BigEndian.PutUint32(b[8:], startBlock)
-	binary.BigEndian.PutUint16(b[12:], uint16(len(units)))
-	for i, u := range units {
-		binary.BigEndian.PutUint16(b[14+2*i:], u)
-	}
-	return b
-}
-
-// inlineAttrRecord builds a kHFSPlusAttrInlineData payload.
-func inlineAttrRecord(value []byte) []byte {
-	payload := make([]byte, 16+len(value))
-	binary.BigEndian.PutUint32(payload[0:], attrInlineData)
-	binary.BigEndian.PutUint32(payload[12:], uint32(len(value)))
-	copy(payload[16:], value)
-	if len(payload)%2 == 1 {
-		payload = append(payload, 0) // keep the next record 2-byte aligned
-	}
-	return payload
-}
 
 // forkAttrRecord builds a kHFSPlusAttrForkData payload describing a fork of
 // logicalSize bytes living at the given extents.
@@ -102,9 +72,9 @@ func TestAttributesInlineValues(t *testing.T) {
 	const fileID = CatalogNodeID(20)
 
 	recs := []btRecord{
-		{key: encodeAttrKey(fileID, "com.apple.FinderInfo", 0), payload: inlineAttrRecord(bytes.Repeat([]byte{0xAB}, 32))},
-		{key: encodeAttrKey(fileID, "com.example.test", 0), payload: inlineAttrRecord([]byte("value42"))},
-		{key: encodeAttrKey(fileID+1, "com.example.other", 0), payload: inlineAttrRecord([]byte("elsewhere"))},
+		{key: encodeAttrKey(fileID, "com.apple.FinderInfo", 0), payload: attrInlineRecord(bytes.Repeat([]byte{0xAB}, 32))},
+		{key: encodeAttrKey(fileID, "com.example.test", 0), payload: attrInlineRecord([]byte("value42"))},
+		{key: encodeAttrKey(fileID+1, "com.example.other", 0), payload: attrInlineRecord([]byte("elsewhere"))},
 	}
 
 	v := attrVolume(t, 512, recs, nil)
@@ -149,7 +119,7 @@ func TestAttributesDoNotAliasAcrossNodes(t *testing.T) {
 		name := string(rune('a'+i)) + ".attr"
 		value := bytes.Repeat([]byte{byte(i + 1)}, 100)
 		want[name] = value
-		recs = append(recs, btRecord{key: encodeAttrKey(fileID, name, 0), payload: inlineAttrRecord(value)})
+		recs = append(recs, btRecord{key: encodeAttrKey(fileID, name, 0), payload: attrInlineRecord(value)})
 	}
 
 	v := attrVolume(t, nodeSize, recs, nil)
