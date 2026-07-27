@@ -12,7 +12,7 @@ Legend: ✅ implemented · 🟡 partial · ⬜ not yet
 | Read (containers, volumes, file-system tree, extents) | ✅ | ✅ |
 | Transparent compression (zlib / LZVN / LZFSE) | ✅³ | ⬜⁵ |
 | Symlinks, hardlinks | ✅ | ✅ |
-| Extended attributes (read) | ✅ | ⬜⁵ |
+| Extended attributes (read) | ✅ | ✅⁶ |
 | Snapshots (read / list) | ✅ | — |
 | Snapshots (create, revert) | ✅¹ | — |
 | FileVault / encryption unlock | ✅ | — |
@@ -45,11 +45,14 @@ needs macOS plus `afsctool`. One real one is committed: `compressed.txt` in
 `testdata/cli/basic.dmg` is type 8 — LZVN in a resource fork — written by
 `ditto --hfsCompression`.
 
-⁵ Not implemented on HFS+. A file with the `UF_COMPRESSED` flag returns an error
-instead of its contents, and the attributes file is not parsed at all, so
-`extract --xattrs` carries nothing off an HFS+ image and no attribute is visible
-through the `io/fs` adapter. Both are planned; see
-[`TOOLS_ROADMAP.md`](TOOLS_ROADMAP.md).
+⁵ Not implemented on HFS+: a file with the `UF_COMPRESSED` flag returns an error
+instead of its contents. Planned; see [`TOOLS_ROADMAP.md`](TOOLS_ROADMAP.md).
+
+⁶ All three attribute record shapes are read on HFS+ — a value stored inside its
+record, one given a fork of its own, and a fork whose extents spill past the
+eight it can hold inline. A file's resource fork is reported as
+`com.apple.ResourceFork`, matching what macOS presents, although HFS+ stores it
+as a fork of the catalog record rather than in the attributes file.
 
 The APFS writer lives in `pkg/apfswrite` (pure Go, MIT).
 

@@ -9,6 +9,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **HFS+ extended attributes are read** (`pkg/hfsplus`, CLI). The attributes
+  file — the third of the volume's B-trees — was not parsed at all, so no
+  attribute reached the `io/fs` adapter. `extract --xattrs` was therefore a
+  silent no-op on every HFS+ image: `internal/tools` asks the volume for
+  attributes through an interface `*hfsplus.Volume` did not satisfy, so it
+  returned without doing anything. Extracting the committed HFS+ fixture with
+  `--xattrs` now restores seven attributes where it restored none.
+
+  All three record shapes are handled: a value stored inside its own record, a
+  value given a fork of its own, and a fork whose extents spill past the eight
+  it holds inline. Those spilled extents live in the attributes tree itself,
+  keyed by the same file and attribute name with a non-zero start block — not in
+  the extents overflow file, whose keys only ever name a data or resource fork.
+
+  A file's resource fork is reported as `com.apple.ResourceFork`, matching what
+  macOS presents, even though HFS+ stores it as a fork of the catalog record
+  rather than as an attribute. `com.apple.decmpfs` is returned like any other
+  attribute rather than filtered out, as on APFS; `extract` already drops
+  compression metadata when writing files back out, because it decompresses as
+  it reads.
+
+  Attributes of a hard link come from its target's catalog record, which is
+  where HFS+ keeps them.
+
 - **The APFS writer represents hard links** (`pkg/apfswrite`, CLI). Several
   names for one file previously became independent copies; they now share one
   inode and one copy of the content, so six names for a 512 KiB file cost

@@ -53,6 +53,12 @@ type Volume struct {
 	// (forkType, fileID) -> extent runs sorted by start block.
 	overflowExtents map[overflowKey][]overflowRun
 
+	// attributes caches the fully-walked attributes B-tree, and attrNames
+	// lists each file's attribute names in order. Both are nil until the
+	// first attribute lookup; see loadAttributes.
+	attributes map[attrKey]*attrRecord
+	attrNames  map[CatalogNodeID][]string
+
 	root       *entry
 	volumeName string
 }

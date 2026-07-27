@@ -125,6 +125,30 @@ func (v *Volume) Readlink(name string) (string, error) {
 	return target, nil
 }
 
+// Xattrs returns the extended attributes of the file at name.
+//
+// A file's resource fork is reported as com.apple.ResourceFork, which is what
+// macOS presents it as, even though HFS+ stores it as a fork of the catalog
+// record rather than in the attributes file.
+//
+// com.apple.decmpfs is returned like any other attribute rather than being
+// filtered out. A caller writing these attributes back onto a decompressed copy
+// of the file must drop it, since it would describe content the copy no longer
+// holds.
+func (v *Volume) Xattrs(name string) (map[string][]byte, error) {
+	e, err := v.entryByFSName("xattrs", name)
+	if err != nil {
+		return nil, err
+	}
+
+	attrs, err := v.xattrs(e)
+	if err != nil {
+		return nil, &fs.PathError{Op: "xattrs", Path: name, Err: err}
+	}
+
+	return attrs, nil
+}
+
 // fileInfo implements fs.FileInfo for HFS+ entries. Sys returns the
 // *HFSPlusCatalogFile for files and *HFSPlusCatalogFolder for folders.
 type fileInfo struct {
