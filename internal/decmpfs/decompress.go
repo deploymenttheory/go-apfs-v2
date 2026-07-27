@@ -1,4 +1,4 @@
-package apfs
+package decmpfs
 
 import (
 	"bytes"
@@ -10,9 +10,10 @@ import (
 	"github.com/go-compressions/lzfse"
 )
 
-// DecompressData decompresses data using the specified compression method
-// Returns the number of bytes written to uncompressedData, or an error
-func DecompressData(
+// Decompress decompresses one decmpfs chunk with the given method, writing into
+// uncompressedData and updating uncompressedDataSize to the number of bytes
+// produced.
+func Decompress(
 	compressedData []byte,
 	compressionMethod int,
 	uncompressedData []byte,
@@ -31,13 +32,13 @@ func DecompressData(
 	}
 
 	switch compressionMethod {
-	case CompressionMethodDeflate:
+	case MethodDeflate:
 		return decompressDeflate(compressedData, uncompressedData, uncompressedDataSize)
 
-	case CompressionMethodLZVN:
+	case MethodLZVN:
 		return decompressLZVN(compressedData, uncompressedData, uncompressedDataSize)
 
-	case CompressionMethodLZFSE:
+	case MethodLZFSE:
 		return decompressLZFSE(compressedData, uncompressedData, uncompressedDataSize)
 
 	default:

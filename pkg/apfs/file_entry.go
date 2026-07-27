@@ -1,12 +1,13 @@
 package apfs
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"strings"
 	"unicode/utf16"
 	"unicode/utf8"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/decmpfs"
 )
 
 // FileEntry represents an APFS file entry (file, directory, or special file)
@@ -857,63 +858,27 @@ func (fe *FileEntry) getFileExtents() error {
 }
 
 // internalCompressionMethod maps a raw com.apple.decmpfs type to the internal
-// compression method codes used by CompressedDataHandle. The types come in
-// attribute/resource-fork pairs, the odd member of each pair storing the data
-// inline in the com.apple.decmpfs attribute and the even member storing it in
-// the com.apple.ResourceFork attribute:
-//
-//	 3 /  4  zlib
-//	 5       uncompressed, stored inline
-//	 7 /  8  LZVN
-//	 9 / 10  uncompressed ("plain")
-//	11 / 12  LZFSE
-//	13 / 14  LZBITMAP
-//
-// The attribute-versus-resource-fork distinction is handled by where the data
-// is read from, not by the method code, so each pair maps to one method.
+// compression method codes. The mapping is shared with the HFS+ reader, so it
+// lives in internal/decmpfs; this wrapper is kept because it names the
+// operation in this package's terms and is what the tests here exercise.
 func internalCompressionMethod(decmpfsType uint32) (int, error) {
-	switch decmpfsType {
-	case 3, 4:
-		return CompressionMethodDeflate, nil
-	case 5:
-		return CompressionMethodUnknown5, nil
-	case 7, 8:
-		return CompressionMethodLZVN, nil
-	case 11, 12:
-		return CompressionMethodLZFSE, nil
-	case 9, 10:
-		return 0, fmt.Errorf("decmpfs uncompressed storage (type %d) is not supported yet", decmpfsType)
-	case 13, 14:
-		return 0, fmt.Errorf("decmpfs LZBITMAP compression (type %d) is not supported yet", decmpfsType)
-	default:
-		return 0, fmt.Errorf("unsupported decmpfs compression type: %d", decmpfsType)
-	}
+	return decmpfs.MethodFor(decmpfsType)
 }
 
 // newInlineDecmpfsStream builds the decompressing stream for a com.apple.decmpfs
 // attribute that stores its compressed data inline, immediately after the
 // 16-byte header, rather than in a resource fork.
 //
-// attrValue must be the *whole* attribute value, header included.
-// CompressedDataHandle detects inline storage by finding the "fpmc" magic at
-// offset zero and skips the header itself; handing it the payload alone hides
-// that magic and sends the stream down a resource-fork branch, which misparses
-// the first bytes of the compressed data as a block-offset table. The magic is
-// therefore checked here, so passing a stripped value fails loudly instead of
-// producing plausible nonsense.
+// attrValue must be the *whole* attribute value, header included; see
+// decmpfs.CheckInline for why, and what goes wrong when it is stripped.
 func newInlineDecmpfsStream(
 	attrValue []byte,
 	uncompressedSize uint64,
 	method int,
 	fileHandle io.ReaderAt,
 ) (*DataStream, error) {
-	if len(attrValue) <= CompressedDataHeaderSize {
-		return nil, fmt.Errorf("inline decmpfs attribute is %d bytes: too short to hold a %d-byte header and any data",
-			len(attrValue), CompressedDataHeaderSize)
-	}
-	if !bytes.Equal(attrValue[:4], CompressedDataHeaderSignature[:]) {
-		return nil, fmt.Errorf("inline decmpfs data must carry its %q header: the block-offset loader identifies inline storage by that magic at offset zero",
-			string(CompressedDataHeaderSignature[:]))
+	if err := decmpfs.CheckInline(attrValue); err != nil {
+		return nil, err
 	}
 
 	compressedDataStream, err := NewDataStreamFromData(attrValue)
