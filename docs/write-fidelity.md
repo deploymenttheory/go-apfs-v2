@@ -24,7 +24,7 @@ copied through bit-for-bit.
 | | What happens | Reported as |
 |---|---|---|
 | Device nodes, FIFOs, sockets | **skipped entirely** | `specialFilesSkipped` |
-| Transparent compression, on HFS+ or with `--decompress` | the file is written out in full; no content is lost | `compressionNotPreserved` |
+| Transparent compression, with `--decompress` | the file is written out in full; no content is lost | `compressionNotPreserved` |
 | ACLs on HFS+ | dropped | `aclsDropped` |
 | BSD flags (`uchg`, `hidden`, …) | dropped | `bsdFlagsDropped` |
 | Volume role and group (`snapshot create` only) | not carried | `volumeIdentityDropped` |
@@ -76,11 +76,14 @@ decompressing, and the result is smaller. `--decompress` is worth having when
 the image is bound for something that does not understand decmpfs, since a
 reader that ignores the attribute sees an empty file rather than a large one.
 
+Both writers carry it. On HFS+ the attribute goes in the attributes file and
+`UF_COMPRESSED` in the catalog record's BSD flags, and a fork-based type's
+payload becomes a real resource fork of that record — which is where HFS+ keeps
+one anyway.
+
 `--strict --decompress` is refused at the command line: `--decompress` asks for
 compression not to be carried, and `--strict` refuses to write when anything is
 not carried, so together they fail on any compressed source by construction.
-`--decompress` with `--fs hfs+` is refused too — that writer always writes such
-files out in full, so the flag would silently do nothing.
 
 Reading those attributes at all needs `XATTR_SHOWCOMPRESSION`; without it a
 compressed file's `com.apple.decmpfs` and `com.apple.ResourceFork` do not appear

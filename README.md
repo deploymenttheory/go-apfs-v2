@@ -238,12 +238,12 @@ apfs pack original.dmg smaller.dmg --compression none
 apfs pack ./mytree out.dmg --fs apfs --decompress        # store compressed files in full
 ```
 
-Writing APFS, a source file with transparent compression (`decmpfs`) keeps it:
-the compressed bytes are copied across as they stand, so the volume holds what
-the source did and takes no more room. `--decompress` writes those files out in
-full instead, which is what you want if the image is bound for a reader that
-does not understand `decmpfs` — one that ignores the attribute sees an empty
-file rather than a large one. HFS+ always writes them out in full, and says so.
+A source file with transparent compression (`decmpfs`) keeps it, on either file
+system: the compressed bytes are copied across as they stand, so the volume
+holds what the source did and takes no more room. `--decompress` writes those
+files out in full instead, which is what you want if the image is bound for a
+reader that does not understand `decmpfs` — one that ignores the attribute sees
+an empty file rather than a large one.
 
 ### `create` — format an empty volume
 

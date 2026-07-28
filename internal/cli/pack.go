@@ -73,7 +73,7 @@ func init() {
 	packCmd.Flags().StringVar(&packFS, "fs", "hfs+", "file system when packing a directory: HFS+ or APFS (case-insensitive)")
 	packCmd.Flags().StringVar(&packSnapshot, "snapshot", "", "APFS only: also create a snapshot with this name capturing the packed volume")
 	packCmd.Flags().BoolVar(&packStrict, "strict", false, "refuse to write anything if the source contains something the volume cannot carry")
-	packCmd.Flags().BoolVar(&packDecompress, "decompress", false, "APFS only: write transparently compressed files out in full instead of carrying their compression")
+	packCmd.Flags().BoolVar(&packDecompress, "decompress", false, "write transparently compressed files out in full instead of carrying their compression")
 	packUUIDs.register(packCmd)
 }
 
@@ -135,11 +135,6 @@ func packDirectory(srcDir, dstPath string, encOpts *disk.EncodeOptions) error {
 
 	switch strings.ToLower(packFS) {
 	case "hfs+", "hfsx":
-		// HFS+ writes compressed files out in full whatever is asked, so the
-		// flag would silently do nothing. Say so rather than accept it.
-		if packDecompress {
-			return usageErrorf("--decompress applies only to --fs apfs; the HFS+ writer cannot carry transparent compression, so it always writes such files out in full")
-		}
 		return packDirectoryHFS(srcDir, dstPath, volname, encOpts)
 	case "apfs":
 		return packDirectoryAPFS(srcDir, dstPath, volname, encOpts)
@@ -158,8 +153,9 @@ func packDirectoryHFS(srcDir, dstPath, volname string, encOpts *disk.EncodeOptio
 
 	// Walk before writing, so --strict can refuse without leaving a file behind.
 	root, report, err := hfsplus.EntryTreeFromDir(srcDir, &hfsplus.WalkOptions{
-		Xattrs: true,
-		Warn:   fidelityWarner(),
+		Xattrs:     true,
+		Decompress: packDecompress,
+		Warn:       fidelityWarner(),
 	})
 	if err != nil {
 		return fmt.Errorf("unable to read %s: %w", srcDir, err)

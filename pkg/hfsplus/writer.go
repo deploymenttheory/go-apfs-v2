@@ -164,6 +164,9 @@ func CreateImage(w io.WriterAt, sizeBytes int64, volumeName string, root *Entry,
 	if root == nil {
 		root = &Entry{}
 	}
+	if err := validateTree(root); err != nil {
+		return err
+	}
 	defaultTime := o.FixedTime
 	if defaultTime.IsZero() {
 		defaultTime = DefaultTime
@@ -611,9 +614,10 @@ func (b *builder) normalRecord(n *fileNode) btRecord {
 	key := encodeCatalogKey(n.parent, n.name)
 	ht := b.nodeTime(n)
 	bsd := BSDInfo{
-		OwnerID:  n.entry.UID,
-		GroupID:  n.entry.GID,
-		FileMode: hfsFileMode(n),
+		OwnerID:    n.entry.UID,
+		GroupID:    n.entry.GID,
+		FileMode:   hfsFileMode(n),
+		OwnerFlags: compressedFlag(n),
 	}
 
 	if n.isDir {
@@ -699,6 +703,23 @@ func (b *builder) normalRecord(n *fileNode) btRecord {
 func attrFlag(n *fileNode) CatalogFlags {
 	if len(n.attrs) > 0 {
 		return HFSHasAttributesMask
+	}
+	return 0
+}
+
+// compressedFlag is UF_COMPRESSED when the node's content is held by a
+// com.apple.decmpfs attribute rather than by its data fork.
+//
+// Like attrFlag it reads the node's own attributes rather than its Entry, which
+// is what makes hard links come out right: buildHardLinks moves the attributes
+// to the indirect node and clears them on every visible name, so the flag
+// follows the content. A link record claiming compression while holding no
+// attribute would be a file whose mode and contents disagree.
+func compressedFlag(n *fileNode) uint8 {
+	for _, a := range n.attrs {
+		if a.name == decmpfsAttrName {
+			return ufCompressed
+		}
 	}
 	return 0
 }
