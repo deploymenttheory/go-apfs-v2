@@ -59,6 +59,11 @@ func hfsSampleTree() (*hfsplus.Entry, []byte) {
 		{Name: "run.sh", Mode: 0o755, Data: []byte("#!/bin/sh\necho hi\n")},
 		{Name: "link", Mode: os.ModeSymlink | 0o755, Data: []byte("hello.txt")},
 		{Name: "café", Mode: 0o644, Data: []byte("unicode name\n")},
+		// Precomposed names, which HFS+ stores decomposed. Written as given
+		// they produce a name macOS cannot find, so every acceptance run now
+		// puts one in front of the kernel.
+		{Name: "ünïcødé.txt", Mode: 0o644, Data: []byte("accented\n")},
+		{Name: "日本語.txt", Mode: 0o644, Data: []byte("japanese\n")},
 		{Name: "empty.txt", Mode: 0o644, Data: nil},
 		{Name: "sub", Mode: os.ModeDir | 0o755, Children: []*hfsplus.Entry{
 			{Name: "nested.txt", Mode: 0o644, Data: []byte("nested\n")},
@@ -211,6 +216,15 @@ func TestWriteMountsViaHdiutil(t *testing.T) {
 			if !bytes.Contains(list, []byte(want)) {
 				t.Errorf("attribute listing %q is missing %s", list, want)
 			}
+		}
+	}
+
+	// Precomposed names must resolve through the kernel. Before names were
+	// normalized on write these were stored in a form macOS does not look for,
+	// so the file existed on disk and could not be opened.
+	for _, name := range []string{"ünïcødé.txt", "日本語.txt", "café"} {
+		if _, err := os.Stat(filepath.Join(mnt, name)); err != nil {
+			t.Errorf("macOS cannot resolve %q: %v", name, err)
 		}
 	}
 

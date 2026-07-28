@@ -321,8 +321,12 @@ type builder struct {
 // with children sorted by name for determinism.
 func (b *builder) flatten(rootEntry *Entry, volumeName string) *fileNode {
 	root := &fileNode{
-		entry:  rootEntry,
-		name:   volumeName,
+		entry: rootEntry,
+		// HFS+ stores names decomposed. Normalizing here rather than at each
+		// use means the catalog records, the thread records and the key
+		// ordering all agree, and a reader looking for the decomposed form
+		// finds what it expects.
+		name:   normalizeName(volumeName),
 		cnid:   HFSRootFolderID,
 		parent: HFSRootParentID,
 		isDir:  true,
@@ -338,11 +342,13 @@ func (b *builder) flatten(rootEntry *Entry, volumeName string) *fileNode {
 
 func (b *builder) addChildren(parent *fileNode, children []*Entry) {
 	sorted := append([]*Entry(nil), children...)
-	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Name < sorted[j].Name })
+	sort.Slice(sorted, func(i, j int) bool {
+		return normalizeName(sorted[i].Name) < normalizeName(sorted[j].Name)
+	})
 	for _, ce := range sorted {
 		n := &fileNode{
 			entry:  ce,
-			name:   ce.Name,
+			name:   normalizeName(ce.Name),
 			cnid:   b.nextCNID,
 			parent: parent.cnid,
 		}

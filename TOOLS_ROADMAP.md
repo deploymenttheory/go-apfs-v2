@@ -17,10 +17,6 @@ what is planned or under consideration, roughly in priority order.
 
 ## Near term
 
-- **Name normalization on write** — HFS+ stores names decomposed, and the
-  writer stores them as given. A name containing a precomposed character such
-  as `ü` is therefore written in a form macOS will not find, on both HFSX and
-  `H+`. Fixing it means normalizing on write and on lookup.
 
 
 ## Medium term
