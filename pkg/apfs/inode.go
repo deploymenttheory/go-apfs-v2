@@ -8,6 +8,23 @@ import (
 	"github.com/deploymenttheory/go-apfs-v2/internal/common"
 )
 
+// Reserved inode numbers. All inode numbers below MinUserInoNum are reserved.
+const (
+	InvalidInoNum uint64 = 0 // INVALID_INO_NUM
+	RootDirParent uint64 = 1 // ROOT_DIR_PARENT, the root directory's parent
+	RootDirInoNum uint64 = 2 // ROOT_DIR_INO_NUM
+	PrivDirInoNum uint64 = 3 // PRIV_DIR_INO_NUM, the private directory
+	MinUserInoNum uint64 = 16
+)
+
+// UnifiedIDSpaceMark (UNIFIED_ID_SPACE_MARK) divides the inode-number space the
+// two members of a volume group share: the data volume numbers below it, the
+// system volume at or above it, so a number identifies a file across the pair.
+//
+// The reserved numbers above are not shifted by it. The spec says they are, but
+// fsck_apfs rejects a volume written that way; see inoBaseFor in pkg/apfswrite.
+const UnifiedIDSpaceMark uint64 = 0x0800000000000000
+
 // Inode represents an APFS inode (file or directory metadata)
 type Inode struct {
 	// The identifier

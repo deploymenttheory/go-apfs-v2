@@ -81,13 +81,20 @@ const (
 // Object map flags.
 const omapManuallyManaged = 0x00000001
 
-// Inode numbers for special inodes.
+// Inode numbers for special inodes. These are the same on every volume,
+// including the system volume of a volume group; only the user inode numbers
+// from minUserInoNum up move into the group's upper half. See inoBaseFor.
 const (
 	rootDirParent = 1
 	rootDirInoNum = 2
 	privDirInoNum = 3
 	minUserInoNum = 16
 )
+
+// unifiedIDSpaceMark (UNIFIED_ID_SPACE_MARK) divides the single inode-number
+// space a volume group shares between its two members: the data volume numbers
+// below it, the system volume at or above it.
+const unifiedIDSpaceMark = 0x0800000000000000
 
 // File-system tree record types (APFS_TYPE_*).
 const (
