@@ -75,6 +75,25 @@ func seededBytes(n int, seed int64) []byte {
 	return b
 }
 
+// mountPointFrom extracts the mount point from hdiutil attach output.
+//
+// The columns are tab-separated and the mount point is the last of them, which
+// is what makes splitting on whitespace wrong: a volume name may contain
+// spaces, and macOS produces one whenever the name is already taken — attaching
+// a second volume called Keep mounts it at "/Volumes/Keep 1". Splitting on
+// spaces then yields "/Volumes/Keep", an entirely different volume that happens
+// to still be mounted, and the test reads the wrong file.
+func mountPointFrom(out []byte) string {
+	for _, line := range strings.Split(string(out), "\n") {
+		fields := strings.Split(line, "\t")
+		candidate := strings.TrimSpace(fields[len(fields)-1])
+		if strings.HasPrefix(candidate, "/Volumes/") {
+			return candidate
+		}
+	}
+	return ""
+}
+
 // attachAndMount attaches a raw image read-only and mounts it, returning the
 // mount point and the device to detach.
 func attachAndMount(t *testing.T, imgPath string) (mountPoint, dev string) {
@@ -85,13 +104,7 @@ func attachAndMount(t *testing.T, imgPath string) (mountPoint, dev string) {
 		t.Fatalf("hdiutil attach: %v\n%s", err, out)
 	}
 	dev = devRe.FindString(string(out))
-	for _, field := range strings.Fields(string(out)) {
-		if strings.HasPrefix(field, "/Volumes/") {
-			mountPoint = field
-			break
-		}
-	}
-	if mountPoint == "" {
+	if mountPoint = mountPointFrom(out); mountPoint == "" {
 		exec.Command("hdiutil", "detach", dev).Run()
 		t.Fatalf("the image did not mount:\n%s", out)
 	}

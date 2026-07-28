@@ -24,7 +24,7 @@ copied through bit-for-bit.
 | | What happens | Reported as |
 |---|---|---|
 | Device nodes, FIFOs, sockets | **skipped entirely** | `specialFilesSkipped` |
-| `com.apple.decmpfs` when packing a host tree | dropped: the walker cannot see it yet (see below) | `xattrsDropped` |
+| Transparent compression, on HFS+ or with `--decompress` | the file is written out in full; no content is lost | `compressionNotPreserved` |
 | ACLs on HFS+ | dropped | `aclsDropped` |
 | BSD flags (`uchg`, `hidden`, …) | dropped | `bsdFlagsDropped` |
 | Volume role and group (`snapshot create` only) | not carried | `volumeIdentityDropped` |
@@ -69,11 +69,35 @@ flag and reports the file as **0 bytes and empty**. Only `apfsck` — *"Inode: i
 not compressed but has decmpfs xattr"* — and a real mount catch it, which is why
 both gate this behaviour in CI.
 
-Note what this does and does not change for `pack`. A compressed file's
-attributes are invisible to an ordinary `listxattr`: reading them needs
-`XATTR_SHOWCOMPRESSION`, which the directory walker does not yet pass. So
-packing a host tree still stores those files decompressed. The writer is ready
-for them; the walker is the remaining half.
+`pack` carries compression by default when writing APFS, and `--decompress`
+asks for the files in full instead. Preservation is the default because the
+compressed bytes are what the source held: copying them is cheaper than
+decompressing, and the result is smaller. `--decompress` is worth having when
+the image is bound for something that does not understand decmpfs, since a
+reader that ignores the attribute sees an empty file rather than a large one.
+
+`--strict --decompress` is refused at the command line: `--decompress` asks for
+compression not to be carried, and `--strict` refuses to write when anything is
+not carried, so together they fail on any compressed source by construction.
+`--decompress` with `--fs hfs+` is refused too — that writer always writes such
+files out in full, so the flag would silently do nothing.
+
+Reading those attributes at all needs `XATTR_SHOWCOMPRESSION`; without it a
+compressed file's `com.apple.decmpfs` and `com.apple.ResourceFork` do not appear
+in a listing and `getxattr` answers "attribute not found".
+`golang.org/x/sys/unix` hardcodes the options argument to zero, so the darwin
+walk goes through the syscall directly and falls back to the wrappers if that
+ever stops working — degrading to "compression not preserved", which the report
+already knows how to describe, rather than breaking `pack`.
+
+Those two attributes are kept or dropped as one thing. Carried separately they
+contradict each other: the fork alone is compressed bytes sitting beside a
+decompressed data fork, and the header alone describes content that is not
+there. When they are kept, the data fork is not read at all — the host would
+hand back a decompressed second copy of the same bytes, and the writer refuses
+an entry whose data fork is not empty. `UF_COMPRESSED` is likewise left out of
+the BSD-flags count, since `compressionNotPreserved` is the accurate report
+either way.
 
 One checker limitation is worth recording, because it looks like a bug in the
 image rather than in the tool. macOS compresses system files with decmpfs type 8

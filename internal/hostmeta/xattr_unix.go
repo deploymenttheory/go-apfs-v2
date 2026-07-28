@@ -20,23 +20,15 @@ const XattrsSupported = true
 // golang.org/x/sys/unix has all of them, is pure Go, and works with cgo
 // disabled.
 //
+// On macOS the attributes holding a compressed file's content are included; see
+// listXattrNames in xattr_darwin.go, which is the only reason this is split by
+// platform at all.
+//
 // A file with no attributes returns an empty map, not an error. So does a file
 // system that does not support attributes: that is an absence of data, not a
 // failure to read it.
 func ListXattrs(path string) (map[string][]byte, error) {
-	size, err := unix.Llistxattr(path, nil)
-	if err != nil {
-		if isUnsupported(err) {
-			return map[string][]byte{}, nil
-		}
-		return nil, err
-	}
-	if size == 0 {
-		return map[string][]byte{}, nil
-	}
-
-	buf := make([]byte, size)
-	size, err = unix.Llistxattr(path, buf)
+	names, err := listXattrNames(path)
 	if err != nil {
 		if isUnsupported(err) {
 			return map[string][]byte{}, nil
@@ -44,11 +36,8 @@ func ListXattrs(path string) (map[string][]byte, error) {
 		return nil, err
 	}
 
-	attrs := make(map[string][]byte)
-	for name := range strings.SplitSeq(string(buf[:size]), "\x00") {
-		if name == "" {
-			continue
-		}
+	attrs := make(map[string][]byte, len(names))
+	for _, name := range names {
 		value, err := getXattr(path, name)
 		if err != nil {
 			// An attribute that vanished between listing and reading, or that
@@ -60,20 +49,15 @@ func ListXattrs(path string) (map[string][]byte, error) {
 	return attrs, nil
 }
 
-func getXattr(path, name string) ([]byte, error) {
-	size, err := unix.Lgetxattr(path, name, nil)
-	if err != nil {
-		return nil, err
+// splitNames turns a NUL-separated listxattr buffer into names.
+func splitNames(buf []byte) []string {
+	var names []string
+	for name := range strings.SplitSeq(string(buf), "\x00") {
+		if name != "" {
+			names = append(names, name)
+		}
 	}
-	if size == 0 {
-		return []byte{}, nil
-	}
-	buf := make([]byte, size)
-	size, err = unix.Lgetxattr(path, name, buf)
-	if err != nil {
-		return nil, err
-	}
-	return buf[:size], nil
+	return names
 }
 
 // isUnsupported reports whether err means "this file system has no extended

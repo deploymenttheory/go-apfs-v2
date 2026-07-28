@@ -32,6 +32,15 @@ type Options struct {
 	// carried. A nil Keep drops all of them.
 	Keep func(name string, value []byte) bool
 
+	// Compression says the writer can store a transparently compressed file as
+	// it stands, by carrying the attributes its content lives in. When it
+	// cannot — or when the caller asked for the file in full — the attributes
+	// are dropped, the content is read decompressed, and the file is reported
+	// under fidelity.Compression.
+	//
+	// It requires Xattrs: the compressed content is an attribute.
+	Compression bool
+
 	// HardLinks says the writer can represent several names for one file. When
 	// it cannot, a second name is reported as collapsed into a copy, which is
 	// what the volume will actually contain.
@@ -149,8 +158,10 @@ func (w *walker[E]) readDir(dir, rel string) ([]E, error) {
 			node.UID, node.GID = st.Uid(), st.Gid()
 		}
 
-		node.Xattrs = w.collectXattrs(full, childRel)
+		var compressionCarried bool
+		node.Xattrs, compressionCarried = w.collectXattrs(full, childRel)
 		node.LinkGroup = w.noteLinks(childRel, info)
+		w.noteCompression(childRel, info, compressionCarried)
 		w.noteBSDFlags(childRel, info)
 
 		var children []E
@@ -165,6 +176,11 @@ func (w *walker[E]) readDir(dir, rel string) ([]E, error) {
 			if children, err = w.readDir(full, childRel); err != nil {
 				return nil, err
 			}
+		case compressionCarried:
+			// The content is in the attributes already. Reading the file would
+			// hand back a decompressed copy of the same bytes, and writing both
+			// is precisely what a compressed file must not have — the writers
+			// refuse an entry whose data fork is not empty.
 		default:
 			if node.Data, err = os.ReadFile(full); err != nil {
 				return nil, err
@@ -196,16 +212,46 @@ func describeSpecial(mode os.FileMode) string {
 // writer can keep and reporting the rest as dropped. Resource forks and ACLs
 // are reported under their own kinds: losing file content is a different
 // statement to losing metadata.
-func (w *walker[E]) collectXattrs(full, rel string) map[string][]byte {
+//
+// It also reports whether the entry's compression is being carried, which
+// decides two things for the caller: the data fork must not be read (the
+// content is in the attributes, and reading the file would yield a second,
+// decompressed copy of it), and UF_COMPRESSED must not be counted as a lost
+// BSD flag.
+func (w *walker[E]) collectXattrs(full, rel string) (kept map[string][]byte, compressed bool) {
 	if !w.opts.Xattrs {
-		return nil
+		return nil, false
 	}
 	attrs, err := hostmeta.ListXattrs(full)
 	if err != nil || len(attrs) == 0 {
-		return nil
+		return nil, false
 	}
 
-	var kept map[string][]byte
+	// A compressed file's content lives in com.apple.decmpfs and, for the
+	// fork-based types, com.apple.ResourceFork. The two are one thing and have
+	// to be decided together: keeping the fork alone would write the compressed
+	// bytes beside a decompressed data fork, and keeping the header alone would
+	// describe content that is not there.
+	decmpfs, isCompressed := attrs[hostmeta.DecmpfsName]
+	if isCompressed {
+		fork, hasFork := attrs[hostmeta.ResourceForkName]
+		compressed = w.opts.Compression &&
+			w.opts.Keep != nil &&
+			w.opts.Keep(hostmeta.DecmpfsName, decmpfs) &&
+			(!hasFork || w.opts.Keep(hostmeta.ResourceForkName, fork))
+
+		delete(attrs, hostmeta.DecmpfsName)
+		delete(attrs, hostmeta.ResourceForkName)
+		if compressed {
+			kept = map[string][]byte{hostmeta.DecmpfsName: decmpfs}
+			if hasFork {
+				kept[hostmeta.ResourceForkName] = fork
+			}
+		}
+		// Not carrying it is reported by noteCompression, which owns that fact
+		// whether or not attributes were read at all.
+	}
+
 	for name, value := range attrs {
 		if w.opts.Keep != nil && w.opts.Keep(name, value) {
 			if kept == nil {
@@ -223,12 +269,35 @@ func (w *walker[E]) collectXattrs(full, rel string) map[string][]byte {
 			w.warn(rel, fidelity.Xattr, name)
 		}
 	}
-	return kept
+	return kept, compressed
+}
+
+// noteCompression reports a compressed file that is being written out in full.
+//
+// It keys on the host's UF_COMPRESSED rather than on the attributes, so it
+// still speaks when attributes are not being read at all — which is exactly
+// when nothing else would notice.
+func (w *walker[E]) noteCompression(rel string, info os.FileInfo, carried bool) {
+	if carried {
+		return
+	}
+	if flags, ok := hostmeta.Flags(info); ok && flags&hostmeta.UFCompressed != 0 {
+		w.warn(rel, fidelity.Compression, hostmeta.DecmpfsName)
+	}
 }
 
 // noteBSDFlags records BSD flags, which no writer here carries.
+//
+// UF_COMPRESSED is masked off because noteCompression owns it entirely: when
+// the compression is carried it is the one flag that survives, and when it is
+// not, the file is written out in full and fidelity.Compression already says
+// so. Counting the same fact twice under two names helps nobody.
 func (w *walker[E]) noteBSDFlags(rel string, info os.FileInfo) {
-	if flags, ok := hostmeta.Flags(info); ok && flags != 0 {
+	flags, ok := hostmeta.Flags(info)
+	if !ok {
+		return
+	}
+	if flags &^= hostmeta.UFCompressed; flags != 0 {
 		w.warn(rel, fidelity.BSDFlags, fmt.Sprintf("st_flags=%#x", flags))
 	}
 }

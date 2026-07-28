@@ -30,8 +30,9 @@ func packDirectoryAPFS(srcDir, dstPath, volname string, encOpts *disk.EncodeOpti
 
 	// Walk before writing, so --strict can refuse without leaving a file behind.
 	root, report, err := apfswrite.EntryTreeFromDir(srcDir, &apfswrite.WalkOptions{
-		Xattrs: true,
-		Warn:   fidelityWarner(),
+		Xattrs:     true,
+		Decompress: packDecompress,
+		Warn:       fidelityWarner(),
 	})
 	if err != nil {
 		return fmt.Errorf("unable to read %s: %w", srcDir, err)

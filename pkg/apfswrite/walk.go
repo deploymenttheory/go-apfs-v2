@@ -17,6 +17,19 @@ type WalkOptions struct {
 	// report says nothing about attributes rather than saying there were none.
 	Xattrs bool
 
+	// Decompress writes a transparently compressed file out in full instead of
+	// carrying its compression across. The default is to carry it: the
+	// compressed bytes are what the source held, copying them is cheaper than
+	// decompressing, and the result takes less room.
+	//
+	// It is worth asking for when the image is destined for something that does
+	// not understand decmpfs, since a reader that ignores the attribute sees an
+	// empty file rather than a large one.
+	//
+	// Compression can only be carried when Xattrs is set, because that is where
+	// a compressed file keeps its content.
+	Decompress bool
+
 	// Warn, when non-nil, is called once for each thing the walk cannot carry
 	// across, as it is found. The library never writes to stderr itself —
 	// deciding whether a warning is worth showing, and how many, belongs to the
@@ -34,13 +47,19 @@ type WalkOptions struct {
 //
 // Extended attributes are carried, whatever their size: small values live
 // inside their record and larger ones, along with any resource fork, get a data
-// stream of their own. com.apple.decmpfs is the exception — it declares content
-// this writer does not produce — and is reported as dropped. Several names for
-// one file are written as hard links rather than as copies.
+// stream of their own. A transparently compressed file is carried compressed,
+// unless WalkOptions.Decompress asks for it in full. Several names for one file
+// are written as hard links rather than as copies.
 func EntryTreeFromDir(srcDir string, opts *WalkOptions) (*Entry, *fidelity.Report, error) {
 	var o hostwalk.Options
 	if opts != nil {
-		o = hostwalk.Options{Xattrs: opts.Xattrs, Warn: opts.Warn, Keep: CanWriteXattr, HardLinks: true}
+		o = hostwalk.Options{
+			Xattrs:      opts.Xattrs,
+			Compression: !opts.Decompress,
+			Warn:        opts.Warn,
+			Keep:        CanWriteXattr,
+			HardLinks:   true,
+		}
 	}
 
 	root, report, err := hostwalk.Walk(srcDir, &o, newEntry)

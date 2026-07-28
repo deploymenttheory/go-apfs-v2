@@ -44,6 +44,10 @@ type WalkOptions struct {
 func EntryTreeFromDir(srcDir string, opts *WalkOptions) (*Entry, *fidelity.Report, error) {
 	var o hostwalk.Options
 	if opts != nil {
+		// Compression is left off: this writer cannot yet store a file's
+		// content as decmpfs attributes, so a compressed source file is
+		// written out in full and reported under fidelity.Compression. The
+		// APFS writer carries it.
 		o = hostwalk.Options{Xattrs: opts.Xattrs, Warn: opts.Warn, Keep: CanWriteXattr, HardLinks: true}
 	}
 

@@ -40,6 +40,12 @@ const (
 	// VolumeIdentity is a volume's role or volume-group membership, lost when
 	// rebuilding a volume rather than a directory. Volume-to-volume writes only.
 	VolumeIdentity
+	// Compression is transparent compression that could not be carried, so the
+	// file was written out in full instead. Its own kind rather than a Xattr or
+	// a ResourceFork, because no content was lost — the file reads back
+	// identically, it just takes more room. Saying "content was dropped" would
+	// be untrue.
+	Compression
 )
 
 // kindInfo carries a kind's stable JSON key and the phrasing the command line
@@ -48,21 +54,30 @@ type kindInfo struct {
 	key  string
 	noun string // singular, for "N <noun>(s) ..."
 	note string // the summary line, given a count
+	// lost is the per-entry phrasing, when "<noun> not carried across" would
+	// say the wrong thing. Empty means that default is right.
+	lost string
 }
 
 // The note reads after "N <noun>(s) ", so it must make sense for any N.
 var kinds = map[Kind]kindInfo{
-	SpecialFile:    {"specialFilesSkipped", "special file", "skipped: device nodes, FIFOs and sockets cannot be represented"},
-	Xattr:          {"xattrsDropped", "extended attribute", "not written"},
-	ResourceFork:   {"resourceForksDropped", "resource fork", "not written; that is file content, not metadata"},
-	ACL:            {"aclsDropped", "access control list", "not written"},
-	HardLink:       {"hardLinksCollapsed", "extra hard link", "written as an independent copy rather than a link"},
-	BSDFlags:       {"bsdFlagsDropped", "entry with BSD flags", "written without them (uchg, hidden and the rest)"},
-	VolumeIdentity: {"volumeIdentityDropped", "volume identity field", "not carried: role and volume-group membership"},
+	SpecialFile:    {key: "specialFilesSkipped", noun: "special file", note: "skipped: device nodes, FIFOs and sockets cannot be represented"},
+	Xattr:          {key: "xattrsDropped", noun: "extended attribute", note: "not written"},
+	ResourceFork:   {key: "resourceForksDropped", noun: "resource fork", note: "not written; that is file content, not metadata"},
+	ACL:            {key: "aclsDropped", noun: "access control list", note: "not written"},
+	HardLink:       {key: "hardLinksCollapsed", noun: "extra hard link", note: "written as an independent copy rather than a link"},
+	BSDFlags:       {key: "bsdFlagsDropped", noun: "entry with BSD flags", note: "written without them (uchg, hidden and the rest)"},
+	VolumeIdentity: {key: "volumeIdentityDropped", noun: "volume identity field", note: "not carried: role and volume-group membership"},
+	Compression: {
+		key:  "compressionNotPreserved",
+		noun: "compressed file",
+		note: "written out in full: the content is intact, but takes more room",
+		lost: "compression not carried across; the file itself is written out in full",
+	},
 }
 
 // allKinds is every kind in declaration order, so output ordering is stable.
-var allKinds = []Kind{SpecialFile, Xattr, ResourceFork, ACL, HardLink, BSDFlags, VolumeIdentity}
+var allKinds = []Kind{SpecialFile, Xattr, ResourceFork, ACL, HardLink, BSDFlags, VolumeIdentity, Compression}
 
 // String returns the kind's singular noun.
 func (k Kind) String() string {
@@ -78,6 +93,19 @@ func (k Kind) Key() string {
 		return info.key
 	}
 	return "unknown"
+}
+
+// Lost returns the phrasing for a single entry. It reads as the predicate of
+// "<path>: ...", so it says what happened to that one entry.
+func (k Kind) Lost() string {
+	info, ok := kinds[k]
+	if !ok {
+		return "not carried across"
+	}
+	if info.lost != "" {
+		return info.lost
+	}
+	return info.noun + " not carried across"
 }
 
 // Note returns the kind's summary phrasing, without a count.
