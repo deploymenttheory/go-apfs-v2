@@ -107,9 +107,15 @@ const (
 	sIFSOCK = 0xC000
 )
 
-// ufCompressed is the UF_COMPRESSED chflags bit (decmpfs transparent
-// compression) as stored in BSDInfo.OwnerFlags.
-const ufCompressed = 0x20
+// chflags(2) bits as stored in BSDInfo.OwnerFlags.
+const (
+	// ufImmutable is UF_IMMUTABLE. macOS sets it on hard-link records and on
+	// the private metadata directory, which exist to be followed rather than
+	// changed.
+	ufImmutable = 0x02
+	// ufCompressed is UF_COMPRESSED: decmpfs transparent compression.
+	ufCompressed = 0x20
+)
 
 // CatalogNodeID identifies a file or folder in the catalog.
 type CatalogNodeID uint32

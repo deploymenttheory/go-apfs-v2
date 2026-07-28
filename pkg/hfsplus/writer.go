@@ -117,6 +117,16 @@ type fileNode struct {
 	linkRef   uint32
 	isINode   bool
 	linkCount uint32
+
+	// The names for one indirect node form a doubly-linked chain, which is
+	// what tells macOS these are modern hard links rather than the pre-Leopard
+	// form. On a link record prevLink and nextLink are the neighbouring names'
+	// catalog ids, stored where an ordinary record keeps its owner and group;
+	// on the indirect node firstLink is the head of that chain, stored in the
+	// record's reserved1 field. Zero terminates.
+	prevLink  uint32
+	nextLink  uint32
+	firstLink uint32
 }
 
 // attrWrite is one extended attribute to be written.
@@ -314,6 +324,10 @@ type builder struct {
 	root      *fileNode
 	allNodes  []*fileNode // every node including root
 	fileNodes []*fileNode // files and symlinks (have data forks)
+
+	// privateDirTime is the creation date of the private metadata directory,
+	// which every hard-link record must repeat; see normalRecord.
+	privateDirTime hfsTime
 
 	fileCount   uint32
 	folderCount uint32 // excludes the root folder
@@ -689,9 +703,30 @@ func (b *builder) normalRecord(n *fileNode) btRecord {
 		file.UserInfo.FileType = HardLinkFileType
 		file.UserInfo.FileCreator = HFSPlusCreator
 		file.BSDInfo.Special = n.linkRef
+		file.Flags |= HFSHasLinkChainMask
+
+		// A link record's owner and group fields are not an owner and a group:
+		// they carry the neighbouring names in the chain. The real ownership
+		// lives on the indirect node, which is where a reader resolving the
+		// link ends up.
+		file.BSDInfo.OwnerID = n.prevLink
+		file.BSDInfo.GroupID = n.nextLink
+
+		// Every link record shares the private directory's creation date.
+		// fsck_hfs checks this exactly -- "Hard Link catalog entry N has bad
+		// time X (should be Y)" -- because it is how a real hard link is told
+		// from a file that merely carries the 'hlnk' type.
+		file.CreateDate = b.privateDirTime
+
+		// macOS writes these as immutable, read-only stubs: the content is not
+		// theirs to change, and a reader must follow the link to reach it.
+		file.BSDInfo.OwnerFlags = ufImmutable
+		file.BSDInfo.FileMode = sIFREG | 0o444
 	case n.isINode:
 		// The indirect node holds the content, and counts the names.
 		file.BSDInfo.Special = n.linkCount
+		file.Flags |= HFSHasLinkChainMask
+		file.Reserved1 = n.firstLink
 	}
 	return btRecord{key: key, payload: marshalBE(&file)}
 }

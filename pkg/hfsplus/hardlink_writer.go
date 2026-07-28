@@ -97,6 +97,20 @@ func (b *builder) buildHardLinks() {
 			n.rsrcLen, n.rsrcBlocks = 0, 0
 			n.attrs = nil
 		}
+
+		// Thread the names into a doubly-linked chain and point the indirect
+		// node at its head. Without this fsck_hfs reports "found N pre-Leopard
+		// file inodes" and calls the volume corrupt, and macOS reads every
+		// linked name as an empty file.
+		for i, n := range group {
+			if i > 0 {
+				n.prevLink = uint32(group[i-1].cnid)
+			}
+			if i < len(group)-1 {
+				n.nextLink = uint32(group[i+1].cnid)
+			}
+		}
+		inode.firstLink = uint32(group[0].cnid)
 	}
 
 	// Every name still counts as a file, and the indirect nodes are extra, so
@@ -114,6 +128,7 @@ func (b *builder) newPrivateDir() *fileNode {
 		isDir:  true,
 	}
 	b.nextCNID++
+	b.privateDirTime = b.nodeTime(dir)
 	b.root.children = append(b.root.children, dir)
 	b.allNodes = append(b.allNodes, dir)
 	return dir
