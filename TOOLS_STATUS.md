@@ -18,7 +18,7 @@ Legend: ✅ implemented · 🟡 partial · ⬜ not yet
 | FileVault / encryption unlock | ✅¹⁰ | — |
 | `io/fs.FS` adapter | ✅ | ✅ |
 | Create empty volume | ✅ | ✅ |
-| Case-insensitive volumes (write) | — | ✅⁹ |
+| Case-insensitive volumes (write) | ✅ | 🟡⁹ |
 | Populate a volume with files | ✅ | ✅ |
 | Reproducible output (`SOURCE_DATE_EPOCH`, fixed UUIDs) | ✅ | ✅ |
 | Volume roles and volume groups (read + write) | ✅² | — |
@@ -68,9 +68,21 @@ data held in the file's resource fork in 64 KiB chunks. A compressed file's
 size is taken from its decmpfs header, since its data fork is empty.
 
 ⁹ `H+` version 4 with the case-folding catalog compare, alongside the
-case-sensitive HFSX default. The fold table was derived by observing macOS
-(`scripts/derive-casefold.sh`) rather than transcribed, because HFS+ froze its
-fold around Unicode 3.2 and current data disagrees.
+case-sensitive HFSX default, through `hfsplus.CreateOptions.CaseInsensitive`.
+The fold table was derived by observing macOS (`scripts/derive-casefold.sh`)
+rather than transcribed, because HFS+ froze its fold around Unicode 3.2 and
+current data disagrees.
+
+Two known limitations, both found by auditing the claims in this table rather
+than by a bug report. **A case-insensitive volume carrying hard links is
+ordered wrongly**: macOS sorts the private metadata directory (whose name
+begins with four NULs) after every other name in the root, which matches
+neither comparing those NULs as U+0000 nor ignoring them, so `fsck_hfs` reports
+"b-tree key for HFS+ Private Data directory is out of order" and the links do
+not resolve. Until that is understood, the CLI cannot offer case-insensitive
+HFS+ volumes, so **`create --case-sensitive` is accepted and ignored on
+`--fs hfs+`**, which always produces the case-sensitive HFSX default. APFS
+honours the flag.
 
 ⁸ Several names for one file share a single copy of the content, through an
 indirect node in the volume's private metadata directory, as macOS does it. The
@@ -95,8 +107,8 @@ The APFS writer lives in `pkg/apfswrite` (pure Go, MIT).
 
 | Feature | Status |
 | --- | :---: |
-| DMG read: zlib, bzip2, ADC, LZFSE, LZMA chunks | ✅ |
-| GPT and Apple Partition Map location | ✅ |
+| DMG read: zlib, bzip2, ADC, LZFSE, LZMA chunks | ✅¹² |
+| GPT and Apple Partition Map location | ✅¹¹ |
 | Raw images, containers without a partition map (content sniffing) | ✅ |
 | DMG write / lossless repack | ✅ |
 | Decompressed-chunk LRU cache | ✅ |
@@ -125,3 +137,11 @@ The APFS writer lives in `pkg/apfswrite` (pure Go, MIT).
 | `fsck_apfs` on created APFS | macOS in CI |
 | `apfsck` (pinned version) on created APFS | Linux in CI |
 | Byte-for-byte extraction vs `hdiutil` mount | macOS in CI |
+
+¹¹ Both schemes, in a DMG or in a raw whole-disk image. A DMG carrying an Apple
+Partition Map is located through its blkx partition names; a raw image has the
+map itself parsed at block 1.
+
+¹² Each codec has a fixture of the same volume compressed that way, and they are
+checked against each other rather than against a recorded hash, so a decoder
+that is wrong but self-consistent shows up.

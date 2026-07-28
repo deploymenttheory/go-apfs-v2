@@ -53,7 +53,12 @@ func OpenWithOffset(filename string) (reader io.ReaderAt, offset int64, closer i
 		return file, partOffset, file, nil
 	}
 
-	// 4. Fall back to a bare container at offset 0
+	// 4. Apple Partition Map raw image
+	if partOffset, err := findAPFSPartitionInAPM(file); err == nil {
+		return file, partOffset, file, nil
+	}
+
+	// 5. Fall back to a bare container at offset 0
 	return file, 0, file, nil
 }
 
@@ -95,4 +100,70 @@ func findAPFSPartitionInGPT(r io.ReaderAt) (int64, error) {
 	}
 
 	return 0, fmt.Errorf("no APFS partition found in GPT")
+}
+
+// Apple Partition Map constants. The map lives in the blocks after the driver
+// descriptor record at block 0, one entry per block, each describing itself and
+// how many entries the map holds.
+const (
+	apmSignature   = 0x504d // 'PM'
+	apmBlockSize   = 512
+	apmMaxEntries  = 256 // a sanity bound; real maps hold a handful
+	apmTypeOffset  = 48
+	apmTypeMaxSize = 32
+)
+
+// apmPartitionTypes are the partition types worth opening, in preference order.
+var apmPartitionTypes = []string{"Apple_APFS", "Apple_HFSX", "Apple_HFS"}
+
+// findAPFSPartitionInAPM reads an Apple Partition Map at block 1 of the image
+// and returns the byte offset of the first file-system partition.
+//
+// A DMG carrying an APM is located by its blkx partition names instead, which
+// is why this went missing: only a raw whole-disk image reaches here, and there
+// was no fixture for one. hdiutil produces exactly that with
+// `create -layout SPUD -type UDIF`, whose output has no koly trailer at all.
+func findAPFSPartitionInAPM(r io.ReaderAt) (int64, error) {
+	entry := make([]byte, apmBlockSize)
+	if _, err := r.ReadAt(entry, apmBlockSize); err != nil {
+		return 0, fmt.Errorf("unable to read the Apple Partition Map: %w", err)
+	}
+	if binary.BigEndian.Uint16(entry) != apmSignature {
+		return 0, fmt.Errorf("no Apple Partition Map at block 1")
+	}
+
+	count := binary.BigEndian.Uint32(entry[4:])
+	if count == 0 || count > apmMaxEntries {
+		return 0, fmt.Errorf("Apple Partition Map claims %d entries", count)
+	}
+
+	// Read every entry once, then choose by type in preference order rather
+	// than by position: the file system is not always the first partition.
+	types := make([]string, 0, count)
+	starts := make([]int64, 0, count)
+	for i := range int64(count) {
+		if i > 0 {
+			if _, err := r.ReadAt(entry, (i+1)*apmBlockSize); err != nil {
+				break
+			}
+		}
+		if binary.BigEndian.Uint16(entry) != apmSignature {
+			break
+		}
+		raw := entry[apmTypeOffset : apmTypeOffset+apmTypeMaxSize]
+		if end := bytes.IndexByte(raw, 0); end >= 0 {
+			raw = raw[:end]
+		}
+		types = append(types, string(raw))
+		starts = append(starts, int64(binary.BigEndian.Uint32(entry[8:])))
+	}
+
+	for _, want := range apmPartitionTypes {
+		for i, got := range types {
+			if got == want {
+				return starts[i] * apmBlockSize, nil
+			}
+		}
+	}
+	return 0, fmt.Errorf("no APFS or HFS+ partition found in the Apple Partition Map")
 }

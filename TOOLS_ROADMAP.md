@@ -17,6 +17,13 @@ what is planned or under consideration, roughly in priority order.
 
 ## Near term
 
+- **Case-insensitive HFS+ with hard links.** The private metadata directory
+  sorts differently from anything this writer produces: on a volume macOS
+  wrote, it comes after every other name in the root, which is neither the
+  order given by comparing its four leading NULs as U+0000 nor the order given
+  by ignoring them. Until the rule is known, `create --case-sensitive` cannot
+  be honoured on `--fs hfs+`. See `TOOLS_STATUS.md` note 9.
+
 
 
 ## Medium term

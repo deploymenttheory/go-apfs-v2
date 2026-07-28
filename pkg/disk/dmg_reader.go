@@ -657,7 +657,12 @@ func (r *DMGReader) decompressChunk(chunk *DMGChunk) ([]byte, error) {
 			return nil, err
 		}
 
-		return DecompressADC(compressed), nil
+		decompressed, err := DecompressADC(compressed, int(chunk.DiskLength))
+		if err != nil {
+			return nil, fmt.Errorf("ADC decompression failed: %w", err)
+		}
+
+		return decompressed, nil
 
 	case chunkTypeComment, chunkTypeLastBlock:
 		return []byte{}, nil
