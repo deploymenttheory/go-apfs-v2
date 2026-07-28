@@ -12,8 +12,9 @@ what is planned or under consideration, roughly in priority order.
   `hdiutil` and `apfsck`.
 - **Multi-volume containers and volume groups** — `CreateOptions.Volumes`
   writes several volumes per container, and `create --volume-group` writes a
-  complete system/data pair. Validated against `apfsck`'s volume-group checks,
-  which a lone system volume could never exercise.
+  complete system/data pair, with snapshots on any volume. Validated against
+  `apfsck`'s volume-group checks, which a lone system volume could never
+  exercise.
 - **APFS snapshots** — `apfs snapshot {create,list,revert,verify}` and the
   `--snapshot` flag on `create`/`pack`. Spec-compliant snapshots recognized by
   macOS (`diskutil apfs listSnapshots`); revert marks `revert_to_xid` for

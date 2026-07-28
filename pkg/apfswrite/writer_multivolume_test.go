@@ -152,3 +152,70 @@ func TestSingleVolumeSpecMatchesScalars(t *testing.T) {
 		}
 	}
 }
+
+// TestSnapshotsAcrossVolumes checks snapshots belong to the volume that asked
+// for them, and that their transaction ids come from one container-wide
+// sequence rather than each volume starting again at one.
+//
+// A transaction id is the container's, not a volume's: two volumes' snapshots
+// are two points in the same history. Numbering them per volume would give two
+// snapshots the same id, and the live state -- one transaction past the newest
+// of them -- would then be ambiguous.
+func TestSnapshotsAcrossVolumes(t *testing.T) {
+	snaps := func(names ...string) []apfswrite.SnapshotSpec {
+		out := make([]apfswrite.SnapshotSpec, len(names))
+		for i, n := range names {
+			out[i] = apfswrite.SnapshotSpec{Name: n}
+		}
+		return out
+	}
+
+	container := openContainer(t, multiVolumeSize(2), &apfswrite.CreateOptions{
+		Volumes: []apfswrite.VolumeSpec{
+			{Name: "Vol1", Snapshots: snaps("v1snapA", "v1snapB"), Root: &apfswrite.Entry{
+				Children: []*apfswrite.Entry{{Name: "file1.txt", Data: []byte("volume 1\n")}},
+			}},
+			{Name: "Vol2", Snapshots: snaps("v2snapA"), Root: &apfswrite.Entry{
+				Children: []*apfswrite.Entry{{Name: "file2.txt", Data: []byte("volume 2\n")}},
+			}},
+		},
+	})
+
+	volumes, err := container.Volumes()
+	if err != nil {
+		t.Fatalf("Volumes: %v", err)
+	}
+
+	want := [][]string{{"v1snapA", "v1snapB"}, {"v2snapA"}}
+	for i, vol := range volumes {
+		count, err := vol.NumberOfSnapshots()
+		if err != nil {
+			t.Fatalf("volume %d: NumberOfSnapshots: %v", i, err)
+		}
+		if count != len(want[i]) {
+			t.Errorf("volume %d holds %d snapshots, want %d", i, count, len(want[i]))
+			continue
+		}
+		for j, wantName := range want[i] {
+			snap, err := vol.Snapshot(j)
+			if err != nil {
+				t.Fatalf("volume %d: Snapshot(%d): %v", i, j, err)
+			}
+			name, err := snap.UTF8Name()
+			if err != nil {
+				t.Fatalf("volume %d: Snapshot(%d).UTF8Name: %v", i, j, err)
+			}
+			if name != wantName {
+				t.Errorf("volume %d snapshot %d is named %q, want %q", i, j, name, wantName)
+			}
+		}
+
+		// Snapshots must not disturb the live contents of either volume.
+		own := fmt.Sprintf("file%d.txt", i+1)
+		if data, err := vol.ReadFile(own); err != nil {
+			t.Errorf("volume %d: reading %s: %v", i, own, err)
+		} else if got, want := string(data), fmt.Sprintf("volume %d\n", i+1); got != want {
+			t.Errorf("volume %d: %s = %q, want %q", i, own, got, want)
+		}
+	}
+}
