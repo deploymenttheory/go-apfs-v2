@@ -12,7 +12,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"syscall"
 	"testing"
 	"time"
 
@@ -222,22 +221,17 @@ func TestWriteMountsViaHdiutil(t *testing.T) {
 	names := []string{"link-a.txt", "link-b.txt", "link-c.txt"}
 	var inode uint64
 	for _, name := range names {
-		info, err := os.Stat(filepath.Join(mnt, name))
-		if err != nil {
-			t.Errorf("stat %s: %v", name, err)
-			continue
-		}
-		st, ok := info.Sys().(*syscall.Stat_t)
+		ino, nlink, ok := linkIdentity(t, filepath.Join(mnt, name))
 		if !ok {
-			t.Skip("no stat details on this platform")
+			t.Skip("this platform exposes no inode identity")
 		}
-		if st.Nlink != uint16(len(names)) {
-			t.Errorf("%s: link count = %d, want %d", name, st.Nlink, len(names))
+		if nlink != uint64(len(names)) {
+			t.Errorf("%s: link count = %d, want %d", name, nlink, len(names))
 		}
 		if inode == 0 {
-			inode = st.Ino
-		} else if st.Ino != inode {
-			t.Errorf("%s: inode %d differs from %d; the names are copies, not links", name, st.Ino, inode)
+			inode = ino
+		} else if ino != inode {
+			t.Errorf("%s: inode %d differs from %d; the names are copies, not links", name, ino, inode)
 		}
 		content, err := os.ReadFile(filepath.Join(mnt, name))
 		if err != nil || string(content) != "shared content\n" {
