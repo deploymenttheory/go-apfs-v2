@@ -70,11 +70,27 @@ func TestCreateContainerRoleRoundTrip(t *testing.T) {
 func TestCreateContainerVolumeGroupRoundTrip(t *testing.T) {
 	groupID := [16]byte{0xde, 0xad, 0xbe, 0xef, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c}
 
-	vol := openVolume(t, &apfswrite.CreateOptions{
-		VolumeName:    "GROUP",
-		Role:          apfs.VolumeRoleSystem,
-		VolumeGroupID: groupID,
+	// A group is a system/data pair, so both halves are written; the system
+	// one is the volume examined below.
+	img := &memImage{}
+	err := apfswrite.CreateContainer(img, 1024*1024*1024, &apfswrite.CreateOptions{
+		Volumes: []apfswrite.VolumeSpec{
+			{Name: "GROUP", Role: apfs.VolumeRoleSystem, VolumeGroupID: groupID},
+			{Name: "GROUPDATA", Role: apfs.VolumeRoleData, VolumeGroupID: groupID},
+		},
 	})
+	if err != nil {
+		t.Fatalf("CreateContainer: %v", err)
+	}
+	container, err := apfs.Open(img, &apfs.OpenOptions{})
+	if err != nil {
+		t.Fatalf("apfs.Open: %v", err)
+	}
+	volumes, err := container.Volumes()
+	if err != nil {
+		t.Fatalf("Volumes: %v", err)
+	}
+	vol := volumes[0]
 
 	got, err := vol.VolumeGroupIdentifier()
 	if err != nil {
@@ -149,20 +165,25 @@ func TestCreateContainerRejectsInvalidRole(t *testing.T) {
 		{
 			"group member with no role",
 			apfswrite.CreateOptions{VolumeGroupID: groupID},
-			"must have the system role",
+			"must have the system or data role",
 		},
 		{
 			"group member with the wrong role",
 			apfswrite.CreateOptions{Role: apfs.VolumeRolePreboot, VolumeGroupID: groupID},
-			"must have the system role",
+			"must have the system or data role",
 		},
 		{
-			// A data volume alone in a group is what apfsck rejects outright:
-			// "Volume group: system volume is missing" is its hard-corruption
-			// path, not a warning.
+			// A group needs both halves. apfsck calls a missing system volume
+			// corruption and a missing data volume an oddity; neither is worth
+			// writing on purpose.
 			"data volume alone in a group",
 			apfswrite.CreateOptions{Role: apfs.VolumeRoleData, VolumeGroupID: groupID},
-			"must have the system role",
+			"has no system volume",
+		},
+		{
+			"system volume alone in a group",
+			apfswrite.CreateOptions{Role: apfs.VolumeRoleSystem, VolumeGroupID: groupID},
+			"has no data volume",
 		},
 	}
 

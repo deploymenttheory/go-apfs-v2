@@ -46,7 +46,7 @@ func init() {
 	createCmd.Flags().BoolVar(&createCaseSens, "case-sensitive", false, "create a case-sensitive volume")
 	createCmd.Flags().StringVar(&createSnapshot, "snapshot", "", "APFS only: also create a snapshot with this name capturing the new volume")
 	createCmd.Flags().StringVar(&createRole, "role", "", "APFS only: volume role ("+strings.Join(apfs.VolumeRoleTokens(), ", ")+")")
-	createCmd.Flags().StringVar(&createVolGroup, "volume-group", "", "APFS only: volume group UUID this volume belongs to (requires --role system)")
+	createCmd.Flags().StringVar(&createVolGroup, "volume-group", "", "APFS only: create a system/data volume group with this UUID (both halves)")
 	createUUIDs.register(createCmd)
 }
 

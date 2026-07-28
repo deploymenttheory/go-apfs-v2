@@ -259,12 +259,17 @@ operation). Both `--fs hfs+` and `--fs apfs` are supported.
 apfs create blank.dmg --fs hfs+ --volname Scratch --size 16
 apfs create blank.dmg --fs apfs --volname Data
 apfs create system.dmg --fs apfs --volname "Macintosh HD" --role system
+apfs create group.dmg  --fs apfs --volname "Macintosh HD" --volume-group "$(uuidgen)"
 ```
 
-`--role` and `--volume-group` are APFS-only. `--volume-group` requires
-`--role system`: a volume group is a system/data pair, and this writer emits one
-volume per container, so the data half cannot accompany it (multi-volume
-containers are on the roadmap).
+`--volume-group` writes a complete group: a system volume with the given name
+and a data volume called "<name> - Data", both carrying the group identifier.
+A group is a system/data pair, so one flag makes both halves and `--role` may
+not be combined with it. The container is sized for two volumes automatically,
+since APFS allows one volume per 512 MiB.
+
+`--role` and `--volume-group` are APFS-only, and cannot be combined: a group
+gives each of its halves a role already.
 
 A snapshot capturing the new volume can be created at the same time with
 `--snapshot NAME` (APFS only). This applies to `pack` too.
