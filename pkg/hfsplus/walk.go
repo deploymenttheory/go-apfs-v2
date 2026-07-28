@@ -19,6 +19,15 @@ type WalkOptions struct {
 	// HFS+ stores it as a fork, so carrying one needs this set.
 	Xattrs bool
 
+	// Decompress writes a transparently compressed file out in full instead of
+	// carrying its compression across. The default is to carry it: the
+	// compressed bytes are what the source held, copying them is cheaper than
+	// decompressing, and the result takes less room.
+	//
+	// Compression can only be carried when Xattrs is set, because that is where
+	// a compressed file keeps its content.
+	Decompress bool
+
 	// Warn, when non-nil, is called once for each thing the walk cannot carry
 	// across, as it is found. The library never writes to stderr itself —
 	// deciding whether a warning is worth showing, and how many, belongs to the
@@ -44,11 +53,13 @@ type WalkOptions struct {
 func EntryTreeFromDir(srcDir string, opts *WalkOptions) (*Entry, *fidelity.Report, error) {
 	var o hostwalk.Options
 	if opts != nil {
-		// Compression is left off: this writer cannot yet store a file's
-		// content as decmpfs attributes, so a compressed source file is
-		// written out in full and reported under fidelity.Compression. The
-		// APFS writer carries it.
-		o = hostwalk.Options{Xattrs: opts.Xattrs, Warn: opts.Warn, Keep: CanWriteXattr, HardLinks: true}
+		o = hostwalk.Options{
+			Xattrs:      opts.Xattrs,
+			Compression: !opts.Decompress,
+			Warn:        opts.Warn,
+			Keep:        CanWriteXattr,
+			HardLinks:   true,
+		}
 	}
 
 	root, report, err := hostwalk.Walk(srcDir, &o, newEntry)
@@ -65,14 +76,14 @@ func EntryTreeFromDir(srcDir string, opts *WalkOptions) (*Entry, *fidelity.Repor
 // what the writer does: an attribute accepted here and then silently discarded
 // would make the fidelity report claim a loss did not happen.
 func CanWriteXattr(name string, value []byte) bool {
-	// A compression header would declare content this writer does not produce:
-	// the file's data is written plain, so a decmpfs attribute would describe
-	// bytes that are not there. Refused, and reported as dropped.
-	if name == decmpfsAttrName {
-		return false
-	}
 	// A resource fork is carried, but not through the attributes file -- it is
 	// a fork of the catalog record, and newEntry routes it there.
+	//
+	// com.apple.decmpfs is carried too, and with it UF_COMPRESSED. Whether the
+	// file as a whole is consistent -- an empty data fork, a resource fork
+	// present exactly when the compression type calls for one -- is a property
+	// of the entry rather than of the attribute, so CreateImage checks it. See
+	// validateTree.
 	return name != "" && !strings.ContainsRune(name, 0)
 }
 

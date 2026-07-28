@@ -51,8 +51,8 @@ and `fsck_apfs` disagree (see `inoBaseFor` in `pkg/apfswrite/writer.go`).
 inline and larger ones get a data stream. `com.apple.decmpfs` is carried through
 unchanged, with `UF_COMPRESSED` set to match; a file whose parts disagree with
 the attribute is refused rather than written. `pack` preserves a source file's
-transparent compression by default, and `--decompress` writes those files out in
-full instead.
+transparent compression by default on both file systems, and `--decompress`
+writes those files out in full instead.
 
 ³ decmpfs types 3/4 (zlib), 5, 7/8 (LZVN) and 11/12 (LZFSE), stored inline in
 the attribute or in a resource fork. Types 9/10 (uncompressed) and 13/14
@@ -78,9 +78,10 @@ content's extended attributes live on the indirect node, so a reader resolving
 any name reports them.
 
 ⁷ Values of any size: a small one lives inside its attribute record and a
-larger one gets an allocation extent of its own. `com.apple.decmpfs` is refused,
-because it would declare content this writer does not produce, and is reported
-as dropped. A volume with no attributes carries no attributes file at all.
+larger one gets an allocation extent of its own. `com.apple.decmpfs` is carried
+through unchanged, with `UF_COMPRESSED` set in the catalog record's BSD flags to
+match; a file whose parts disagree with the attribute is refused rather than
+written. A volume with no attributes carries no attributes file at all.
 
 ⁶ All three attribute record shapes are read on HFS+ — a value stored inside its
 record, one given a fork of its own, and a fork whose extents spill past the

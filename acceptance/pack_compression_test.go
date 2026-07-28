@@ -11,6 +11,10 @@
 // compressed bytes sitting beside a decompressed data fork, and the header
 // alone describes content that is not there. So they are kept or dropped as one
 // thing, and the data fork is not read at all when they are kept.
+//
+// The HFS+ half lives in pack_compression_hfs_test.go, which needs a different
+// mount helper: a DMG this tool creates has no partition map, so the whole disk
+// is the volume.
 package acceptance
 
 import (
@@ -128,60 +132,6 @@ func TestPackAPFSDecompressOptsOut(t *testing.T) {
 	if sum := sha256.Sum256(data); hex.EncodeToString(sum[:]) != wantSum {
 		t.Errorf("content does not match the source")
 	}
-}
-
-// TestPackHFSPlusWritesCompressedFilesInFull is the hazard test. HFS+ cannot
-// carry decmpfs, but it can carry a resource fork — so the fork must not be
-// written on its own, which would leave compressed bytes beside the
-// decompressed content under a name that makes the file look compressed.
-func TestPackHFSPlusWritesCompressedFilesInFull(t *testing.T) {
-	src, wantSum, wantSize := compressibleTree(t)
-
-	dmg := filepath.Join(t.TempDir(), "hfs.dmg")
-	stdout, stderr, code := run(t, "pack", src, dmg, "--fs", "hfs+", "--volname", "Hfs")
-	if code != 0 {
-		t.Fatalf("pack exited %d\n%s%s", code, stdout, stderr)
-	}
-	if !strings.Contains(stderr, "compression not carried across") {
-		t.Errorf("HFS+ dropped the compression without saying so:\n%s", stderr)
-	}
-
-	data, size, compressed := packedFile(t, dmg, "big.txt")
-	if compressed {
-		t.Error("the HFS+ volume claims the file is compressed, which this writer cannot make true")
-	}
-	if size != wantSize {
-		t.Errorf("size = %d, want %d", size, wantSize)
-	}
-	if sum := sha256.Sum256(data); hex.EncodeToString(sum[:]) != wantSum {
-		t.Errorf("content does not match the source")
-	}
-
-	// The compressed payload must not have come along under its own name.
-	if attrs := packedXattrNames(t, dmg, "big.txt"); attrs["com.apple.ResourceFork"] {
-		t.Error("the compressed resource fork was written beside the decompressed content")
-	}
-}
-
-// packedXattrNames lists the extended attributes on a file inside a packed DMG.
-func packedXattrNames(t *testing.T, dmg, name string) map[string]bool {
-	t.Helper()
-	out, err := exec.Command("hdiutil", "attach", "-readonly", dmg).CombinedOutput()
-	if err != nil {
-		t.Fatalf("hdiutil attach: %v\n%s", err, out)
-	}
-	dev := devRe.FindString(string(out))
-	defer detach(t, dev)
-
-	names := map[string]bool{}
-	listed, err := readXattrNames(filepath.Join(mountPointFrom(out), name))
-	if err != nil {
-		return names
-	}
-	for _, n := range listed {
-		names[n] = true
-	}
-	return names
 }
 
 // TestPackCompressionIsCountedInJSON checks the loss is reported under its own
