@@ -470,6 +470,16 @@ func (c *Container) Volume(index int) (*Volume, error) {
 		return nil, fmt.Errorf("unable to create volume: %w", err)
 	}
 
+	// The passwords have to be in place before OpenRead, which is where an
+	// encrypted volume is unlocked: everything it reads afterwards needs the
+	// key.
+	if c.userPassword != "" {
+		volume.UserPassword = []byte(c.userPassword)
+	}
+	if c.recoveryPassword != "" {
+		volume.RecoveryPassword = []byte(c.recoveryPassword)
+	}
+
 	err = volume.OpenRead(c.Reader, offset)
 	if err != nil {
 		volume.Close()

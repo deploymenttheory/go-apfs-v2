@@ -72,7 +72,12 @@ type volumeInfo struct {
 	Name          string `json:"name"`
 	UUID          string `json:"uuid"`
 	CaseSensitive bool   `json:"caseSensitive"`
-	Locked        bool   `json:"locked"`
+	// Encrypted says the volume's contents are stored enciphered (FileVault);
+	// Locked says they could not be deciphered, because no password was given
+	// or the one given did not fit. An unlocked encrypted volume is readable
+	// and still worth naming as encrypted.
+	Encrypted bool `json:"encrypted"`
+	Locked    bool `json:"locked"`
 	// Role is the lowercase role token ("system", "data", …), omitted when the
 	// volume has no role; RoleValue is the raw apfs_role, always present so a
 	// consumer can see a value this build does not recognize. VolumeGroupID is
@@ -235,6 +240,9 @@ func collectContainerInfo(container *apfs.Container) (*containerInfo, error) { /
 		if ci, err := volume.IsCaseInsensitive(); err == nil {
 			vi.CaseSensitive = !ci
 		}
+		if volEncrypted, err := volume.IsEncrypted(); err == nil {
+			vi.Encrypted = volEncrypted
+		}
 		if volLocked, err := volume.IsLocked(); err == nil {
 			vi.Locked = volLocked
 		}
@@ -296,6 +304,9 @@ func printContainerInfo(info *containerInfo) {
 			fmt.Printf("  %-18s %d\n", "Snapshots", vi.Snapshots)
 		}
 		fmt.Printf("  %-18s %v\n", "Case-sensitive", vi.CaseSensitive)
+		if vi.Encrypted {
+			fmt.Printf("  %-18s yes\n", "Encrypted")
+		}
 		if vi.Locked {
 			fmt.Printf("  %-18s yes\n", "Locked")
 		}

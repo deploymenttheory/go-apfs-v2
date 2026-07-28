@@ -21,14 +21,44 @@ type EncryptionContext struct {
 
 // NewEncryptionContext creates a new encryption context
 func NewEncryptionContext(method uint32) (*EncryptionContext, error) {
-	// Validate that method is supported (only AES-128-XTS)
-	if method != uint32(EncryptionMethodAES128XTS) {
+	switch method {
+	case uint32(EncryptionMethodAES128XTS), uint32(EncryptionMethodAES256XTS):
+	default:
 		return nil, fmt.Errorf("unsupported encryption method: %d", method)
 	}
 
 	return &EncryptionContext{
 		Method: method,
 	}, nil
+}
+
+// NewEncryptionContextForKey builds a context from a volume master key,
+// choosing the cipher from the key's length.
+//
+// An XTS key is two keys end to end — one for the data, one for the tweak — so
+// a 32-byte master key is AES-128-XTS and a 64-byte one is AES-256-XTS. The
+// length is what says which, because the volume superblock's crypto fields
+// describe per-file keys rather than the whole-volume key FileVault uses.
+func NewEncryptionContextForKey(masterKey []byte) (*EncryptionContext, error) {
+	var method EncryptionMethod
+	switch len(masterKey) {
+	case 32:
+		method = EncryptionMethodAES128XTS
+	case 64:
+		method = EncryptionMethodAES256XTS
+	default:
+		return nil, fmt.Errorf("unexpected volume master key length %d: an XTS key is a data key and a tweak key together, so 32 or 64 bytes", len(masterKey))
+	}
+
+	context, err := NewEncryptionContext(uint32(method))
+	if err != nil {
+		return nil, err
+	}
+	half := len(masterKey) / 2
+	if err := context.SetKeys(masterKey[:half], masterKey[half:]); err != nil {
+		return nil, err
+	}
+	return context, nil
 }
 
 // SetKeys sets the de- and encryption keys
@@ -47,9 +77,12 @@ func (ec *EncryptionContext) SetKeys(key []byte, tweakKey []byte) error {
 
 	// Determine required key size based on method
 	var keyByteSize int
-	if ec.Method == uint32(EncryptionMethodAES128XTS) {
-		keyByteSize = 16 // 128 bits = 16 bytes
-	} else {
+	switch ec.Method {
+	case uint32(EncryptionMethodAES128XTS):
+		keyByteSize = 16 // 128 bits
+	case uint32(EncryptionMethodAES256XTS):
+		keyByteSize = 32 // 256 bits
+	default:
 		return fmt.Errorf("unsupported encryption method: %d", ec.Method)
 	}
 
