@@ -37,7 +37,7 @@ func (b volCtx) makeFSTree(paddr, oid uint64) error {
 	leaves := packFSTreeLeaves(recs, int(b.blocksize), 0)
 	idx := make([]fsTreeRecord, 0, len(leaves))
 	for i, leaf := range leaves {
-		leafOID := fsTreeLeafOIDBase + uint64(i)
+		leafOID := volFSTreeLeafOID(b.index, uint64(i))
 		leafPaddr := b.fsTreeLeafBase + uint64(i)
 		if err := b.writeFSTreeNode(leafPaddr, leafOID, leaf, false /* not root */, 0 /* level */, nil); err != nil {
 			return err

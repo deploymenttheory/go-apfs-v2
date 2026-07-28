@@ -176,15 +176,22 @@ func (b *builder) writeOmapFooter(info []byte, nkeys int) {
 // base xid (the format state a snapshot captures).
 func (b volCtx) omapEntries(isVol bool) []omapEntry {
 	if !isVol {
-		return []omapEntry{{firstVolOID, b.volPaddr, b.liveXID, 0}}
+		// The container's map names every volume superblock, so it is built
+		// from the container rather than from the volume it happens to be
+		// bound to.
+		entries := make([]omapEntry, 0, len(b.vols))
+		for i := range uint64(len(b.vols)) {
+			entries = append(entries, omapEntry{volOID(i), b.vol(i).volPaddr, b.liveXID, 0})
+		}
+		return entries
 	}
 	// The file-system tree root (and any leaves) are shared by the live volume and the
 	// snapshots, so they carry no OMAP_VAL_SAVED flag (that would mark them as
 	// superseded in the live volume, which is not the case here).
-	entries := []omapEntry{{firstVolFSTreeRootOID, b.fsTreeRootPaddr, formatXID, 0}}
+	entries := []omapEntry{{volFSTreeRootOID(b.index), b.fsTreeRootPaddr, formatXID, 0}}
 	if b.fsTreeTwoLevel {
 		for i := uint64(0); i < b.numFSTreeLeaves; i++ {
-			entries = append(entries, omapEntry{fsTreeLeafOIDBase + i, b.fsTreeLeafBase + i, formatXID, 0})
+			entries = append(entries, omapEntry{volFSTreeLeafOID(b.index, i), b.fsTreeLeafBase + i, formatXID, 0})
 		}
 	}
 	return entries

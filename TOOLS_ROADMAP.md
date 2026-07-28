@@ -31,9 +31,9 @@ what is planned or under consideration, roughly in priority order.
 
 - **decmpfs on write** — needs the compression machinery and the inode's
   BSD flags, not just the attribute.
-- **Multi-volume** containers on the write side. This is also what a complete
-  volume group needs: a group is a system/data pair, and with one volume per
-  container only the system half can be written today.
+- **Volume groups on the write side.** Several volumes per container are
+  written now; a group additionally needs its system and data halves validated
+  as a set.
 
 ## Under consideration
 

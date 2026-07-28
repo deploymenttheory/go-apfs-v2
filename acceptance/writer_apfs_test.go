@@ -530,3 +530,85 @@ func TestMultipleSnapshotsMountAndList(t *testing.T) {
 		t.Errorf("fsck_apfs found the volume corrupt:\n%s", fsck)
 	}
 }
+
+// multiVolumeOptions builds a container of n volumes, each holding a file that
+// names itself.
+func multiVolumeOptions(n int) *apfswrite.CreateOptions {
+	vols := make([]apfswrite.VolumeSpec, n)
+	for i := range vols {
+		vols[i] = apfswrite.VolumeSpec{
+			Name: fmt.Sprintf("Vol%d", i+1),
+			Root: &apfswrite.Entry{Children: []*apfswrite.Entry{
+				{Name: fmt.Sprintf("file%d.txt", i+1), Data: fmt.Appendf(nil, "contents of volume %d\n", i+1)},
+			}},
+		}
+	}
+	return &apfswrite.CreateOptions{Volumes: vols}
+}
+
+// multiVolumeBytes is the smallest container the format allows for n volumes:
+// one per 512 MiB. The images are sparse, so a gigabyte costs a few MiB on disk.
+func multiVolumeBytes(n int) int64 { return int64(n) * 512 * 1024 * 1024 }
+
+// TestMultipleVolumesApfsckClean is the always-on gate. Each thing that had to
+// become per-volume shows up here as its own complaint if it regresses: the
+// object-id high-water mark, the allocation bitmap, and the two-span model the
+// chunk accounting depends on.
+func TestMultipleVolumesApfsckClean(t *testing.T) {
+	if _, err := exec.LookPath("apfsck"); err != nil {
+		t.Skip("apfsck not installed; skipping (install apfsprogs)")
+	}
+
+	for _, n := range []int{2, 3} {
+		t.Run(fmt.Sprintf("%d volumes", n), func(t *testing.T) {
+			imgPath := filepath.Join(t.TempDir(), "multivol.img")
+			writeImage(t, imgPath, multiVolumeBytes(n), multiVolumeOptions(n))
+
+			out, err := exec.Command("apfsck", "-cw", imgPath).CombinedOutput()
+			t.Logf("apfsck output:\n%s", out)
+			if err != nil {
+				t.Fatalf("apfsck reported problems (exit %v)", err)
+			}
+		})
+	}
+}
+
+// TestMultipleVolumesMountSeparately is the driver's verdict: macOS must see
+// each volume as its own file system holding its own contents, not one volume
+// repeated or a container it declines.
+func TestMultipleVolumesMountSeparately(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("hdiutil is macOS-only")
+	}
+	requireTools(t, "hdiutil", "fsck_apfs")
+
+	const n = 2
+	imgPath := filepath.Join(t.TempDir(), "multivol.img")
+	writeImage(t, imgPath, multiVolumeBytes(n), multiVolumeOptions(n))
+
+	out, err := exec.Command("hdiutil", "attach", "-readonly", "-nobrowse",
+		"-imagekey", "diskimage-class=CRawDiskImage", imgPath).CombinedOutput()
+	if err != nil {
+		t.Fatalf("hdiutil attach: %v\n%s", err, out)
+	}
+	dev := devRe.FindString(string(out))
+	defer detach(t, dev)
+
+	for i := 1; i <= n; i++ {
+		mountPoint := fmt.Sprintf("/Volumes/Vol%d", i)
+		name := fmt.Sprintf("file%d.txt", i)
+		data, err := os.ReadFile(filepath.Join(mountPoint, name))
+		if err != nil {
+			t.Errorf("reading %s from volume %d: %v\nattach output:\n%s", name, i, err, out)
+			continue
+		}
+		if want := fmt.Sprintf("contents of volume %d\n", i); string(data) != want {
+			t.Errorf("volume %d: %s = %q, want %q", i, name, data, want)
+		}
+	}
+
+	fsck, _ := exec.Command("fsck_apfs", "-n", dev).CombinedOutput()
+	if strings.Contains(string(fsck), "corrupt") {
+		t.Errorf("fsck_apfs found the container corrupt:\n%s", fsck)
+	}
+}

@@ -115,12 +115,15 @@ func rangeOverlap(s, e, a, c uint64) uint64 {
 }
 
 // usedInChunk counts the allocated blocks in one chunk of a device. The
-// container's allocations form two contiguous spans: the low metadata span
-// [0, xpEnd+8) — block zero, the checkpoint areas, the container object map and
-// the volume's trees — and the high span [ipBmapBase, usedBlocksEnd) — the
-// internal-pool bitmaps and pool, then the post-pool file-system tree/extentref leaves and
-// file data. The two are separated only by the two skipped Fusion slots at
-// xpEnd+8. A chunk's used count is its overlap with those two spans.
+// container's allocations form two contiguous spans: the low metadata span —
+// block zero, the checkpoint areas, the container object map and every volume's
+// trees — and the high span [ipBmapBase, usedBlocksEnd) — the internal-pool
+// bitmaps and pool, then the post-pool leaves and file data of every volume. The
+// two are separated only by the two skipped Fusion slots. A chunk's used count
+// is its overlap with those two spans.
+//
+// Keeping it to two spans is why the volumes' fixed blocks are laid out
+// contiguously: a third span would not fit this model.
 func (b *builder) usedInChunk(dev *deviceLayout, chunkno uint64) uint32 {
 	if chunkno >= dev.usedChunksEnd {
 		return 0
@@ -132,7 +135,7 @@ func (b *builder) usedInChunk(dev *deviceLayout, chunkno uint64) uint32 {
 	start := chunkno * b.blocksPerChunk()
 	end := min(start+b.blocksPerChunk(), dev.blockCount)
 
-	lowSpanEnd := b.xpEnd + 8
+	lowSpanEnd := b.volFixedBase() + volFixedBlocks*uint64(len(b.vols))
 	used := rangeOverlap(start, end, 0, lowSpanEnd)
 	used += rangeOverlap(start, end, b.ipBmapBase, dev.usedBlocksEnd)
 	return uint32(used)
@@ -156,19 +159,24 @@ func markBits(bitmap []byte, paddr, length uint64) {
 
 // writeAllocBitmap writes the main device's allocation bitmap, one bit per
 // block, with every block the container occupies marked used.
-func (b volCtx) writeAllocBitmap() error {
+func (b *builder) writeAllocBitmap() error {
 	dev := &b.sm.dev[sdMain]
 	bmap := b.zeroedBlocks(int(dev.usedChunksEnd))
 
-	markBits(bmap, 0, 1)                                    // block zero
-	markBits(bmap, b.xpDescBase, uint64(b.xpDescBlocks))    // checkpoint descriptor area
-	markBits(bmap, b.xpDataBase, uint64(b.xpDataBlocks))    // checkpoint data area
-	markBits(bmap, b.mainOmapPaddr, 2)                      // container omap + its root
-	markBits(bmap, b.volPaddr, 6)                           // volume superblock + its trees
+	markBits(bmap, 0, 1)                                 // block zero
+	markBits(bmap, b.xpDescBase, uint64(b.xpDescBlocks)) // checkpoint descriptor area
+	markBits(bmap, b.xpDataBase, uint64(b.xpDataBlocks)) // checkpoint data area
+	markBits(bmap, b.mainOmapPaddr, 2)                   // container omap + its root
+
+	// Every volume's fixed blocks, which run contiguously.
+	markBits(bmap, b.volFixedBase(), volFixedBlocks*uint64(len(b.vols)))
+
 	markBits(bmap, b.ipBmapBase, uint64(b.sm.ipBmapBlocks)) // internal-pool bitmaps
 	markBits(bmap, b.sm.ipBase, b.sm.ipBlocks)              // internal pool
 	if b.postIPBlocks > 0 {
-		markBits(bmap, b.postIPBase, b.postIPBlocks) // file-system tree/extentref leaves + file data
+		// The volumes' post-pool regions, which are also contiguous: leaves,
+		// file data and snapshot objects for each in turn.
+		markBits(bmap, b.postIPBase, b.postIPBlocks)
 	}
 
 	return b.writeBlocks(bmap, dev.firstChunkBmap)
@@ -407,11 +415,33 @@ func (b *builder) spacemanGeometry() error {
 	return nil
 }
 
+// placePostPool lays out one volume's share of the post-pool region starting at
+// base, and returns the first block past it. Each volume's blocks are its own:
+// the volume superblock's allocation count names exactly these, so they cannot
+// be pooled across volumes.
+func (b volCtx) placePostPool(base uint64) uint64 {
+	b.fsTreeLeafBase = base
+	b.extentrefLeafBase = b.fsTreeLeafBase + b.numFSTreeLeaves
+	b.fileDataBase = b.extentrefLeafBase + b.numExtentrefLeaves
+	b.placeSnapshots(b.fileDataBase + b.fileDataBlocks)
+	b.ownedBlocks = b.numFSTreeLeaves + b.numExtentrefLeaves + b.fileDataBlocks + b.snapBlocks
+
+	blk := b.fileDataBase
+	for _, f := range b.streamFiles {
+		if f.blocks == 0 {
+			continue
+		}
+		f.dataBlock = blk
+		blk += f.blocks
+	}
+	return base + b.ownedBlocks
+}
+
 // spacemanPlacement fixes every absolute block position that depends on the
 // checkpoint layout: the ephemeral objects, the internal pool, and the post-pool
 // data region (extra file-system tree/extentref leaves and file data). It must run after the
 // checkpoint areas and fixed blocks have been laid out.
-func (b volCtx) spacemanPlacement() error {
+func (b *builder) spacemanPlacement() error {
 	main := &b.sm.dev[sdMain]
 	tier2 := &b.sm.dev[sdTier2]
 
@@ -424,27 +454,21 @@ func (b volCtx) spacemanPlacement() error {
 	// The internal pool sits just past its bitmap ring.
 	b.sm.ipBase = b.ipBmapBase + uint64(b.sm.ipBmapBlocks)
 
-	// Everything the volume owns beyond the fixed metadata is laid out
-	// contiguously right after the pool: extra file-system tree leaves, then extra
+	// Everything the volumes own beyond their fixed metadata is laid out
+	// contiguously right after the pool, one volume's region after another.
+	// Within a volume: extra file-system tree leaves, then extra
 	// extent-reference leaves, then file content, then the snapshot objects
-	// (the volume omap's snapshot tree + one snapshot volume superblock per snapshot).
-	// This region may span several chunks; the per-chunk accounting handles that.
+	// (the volume omap's snapshot tree + one snapshot volume superblock per
+	// snapshot). The region may span several chunks; the per-chunk accounting
+	// handles that.
 	b.postIPBase = b.sm.ipBase + b.sm.ipBlocks
-	b.fsTreeLeafBase = b.postIPBase
-	b.extentrefLeafBase = b.fsTreeLeafBase + b.numFSTreeLeaves
-	b.fileDataBase = b.extentrefLeafBase + b.numExtentrefLeaves
-	b.placeSnapshots(b.fileDataBase + b.fileDataBlocks)
-	b.postIPBlocks = b.numFSTreeLeaves + b.numExtentrefLeaves + b.fileDataBlocks + b.snapBlocks
-	if b.postIPBase+b.postIPBlocks > b.mainBlockCount {
-		return errFileDataTooBig
+	next := b.postIPBase
+	for i := range uint64(len(b.vols)) {
+		next = b.vol(i).placePostPool(next)
 	}
-	blk := b.fileDataBase
-	for _, f := range b.streamFiles {
-		if f.blocks == 0 {
-			continue
-		}
-		f.dataBlock = blk
-		blk += f.blocks
+	b.postIPBlocks = next - b.postIPBase
+	if next > b.mainBlockCount {
+		return errFileDataTooBig
 	}
 
 	// The allocated region runs from block zero to the end of the post-pool data.
@@ -487,7 +511,7 @@ func (b *builder) writeSpaceman(paddr, oid uint64) error {
 	if err := b.writeInternalPool(sm); err != nil {
 		return err
 	}
-	if err := b.only().writeAllocBitmap(); err != nil {
+	if err := b.writeAllocBitmap(); err != nil {
 		return err
 	}
 

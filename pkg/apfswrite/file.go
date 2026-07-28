@@ -18,13 +18,13 @@ import (
 // convenience) into a flat list of file-system tree entries with assigned oids, then
 // decides the file-system tree shape (single leaf vs a 2-level index+leaves
 // tree). Physical block numbers are assigned later, in the space manager.
-func (b volCtx) setTree(opts *CreateOptions) error {
+func (b volCtx) setTree(spec VolumeSpec) error {
 	// Build the effective root directory: Root's children plus any RootFiles.
 	var topLevel []*Entry
-	if opts.Root != nil {
-		topLevel = append(topLevel, opts.Root.Children...)
+	if spec.Root != nil {
+		topLevel = append(topLevel, spec.Root.Children...)
 	}
-	for _, f := range opts.RootFiles {
+	for _, f := range spec.RootFiles {
 		topLevel = append(topLevel, &Entry{Name: f.Name, Data: f.Data})
 	}
 	if len(topLevel) == 0 {
