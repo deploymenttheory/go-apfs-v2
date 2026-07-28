@@ -70,10 +70,14 @@ func newEntry(n hostwalk.Node, children []*Entry) *Entry {
 // It exists so a caller walking a source tree can tell in advance what will
 // survive, rather than discovering it when CreateContainer refuses the whole
 // image. Size is no longer a limit: a value too large to embed gets a stream.
-// See validateXattrs for why a compression header still cannot be written.
+//
+// com.apple.decmpfs can be carried, but only on a file the rest of which agrees
+// with it — an empty data fork, and a resource fork present exactly when the
+// compression type calls for one. That is a property of the whole entry rather
+// than of the attribute, so it cannot be decided here; CreateContainer checks
+// it. See validateXattrs.
 func CanWriteXattr(name string, value []byte) bool {
-	switch name {
-	case symlinkName, decmpfsName:
+	if name == symlinkName {
 		return false
 	}
 	return name != "" && !strings.ContainsRune(name, 0)

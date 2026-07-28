@@ -24,7 +24,7 @@ copied through bit-for-bit.
 | | What happens | Reported as |
 |---|---|---|
 | Device nodes, FIFOs, sockets | **skipped entirely** | `specialFilesSkipped` |
-| `com.apple.decmpfs` | dropped | `xattrsDropped` |
+| `com.apple.decmpfs` when packing a host tree | dropped: the walker cannot see it yet (see below) | `xattrsDropped` |
 | ACLs on HFS+ | dropped | `aclsDropped` |
 | BSD flags (`uchg`, `hidden`, …) | dropped | `bsdFlagsDropped` |
 | Volume role and group (`snapshot create` only) | not carried | `volumeIdentityDropped` |
@@ -39,7 +39,7 @@ attributes deliberately. A dropped `com.apple.quarantine` is metadata; a dropped
 resource fork is *file content*, and "ACLs were dropped" is a materially
 different statement to a forensic reader than "3 attributes were dropped".
 
-### How attributes are stored, and why decmpfs is still refused
+### How attributes are stored, and what decmpfs needs
 
 A small value lives inside its attribute record. A larger one — and **any**
 resource fork, however small — gets a data stream of its own: an object with its
@@ -55,11 +55,34 @@ stream. That record holds a reference count, and an attribute's stream cannot be
 cloned, so there is no count to keep. `apfsck` reports one as *"xattrs can't be
 cloned"*.
 
-`com.apple.decmpfs` is still refused. It declares a file's content compressed
-and requires `APFS_INOBSD_COMPRESSED` in the inode's BSD flags, with the content
-living in the resource fork rather than the data fork. This writer puts content
-in the data fork, so the attribute would describe content the file does not have
-— the same contradiction that stops `extract --xattrs` restoring it.
+`com.apple.decmpfs` is carried through as it stands — the APFS writer does not
+compress or decompress anything, it copies the attribute the source had. What it
+must add is `UF_COMPRESSED` in the inode's `bsd_flags`, and it refuses a file
+whose parts disagree: the data fork must be empty, and a resource fork must be
+present exactly when the compression type puts the payload there.
+
+That flag is the whole of the difficulty, because almost nothing notices when it
+is missing. With the attribute written and the flag clear, `fsck_apfs` reports
+the volume clean and this toolkit's own reader returns the right bytes, because
+it dispatches on the attribute rather than the flag. macOS dispatches on the
+flag and reports the file as **0 bytes and empty**. Only `apfsck` — *"Inode: is
+not compressed but has decmpfs xattr"* — and a real mount catch it, which is why
+both gate this behaviour in CI.
+
+Note what this does and does not change for `pack`. A compressed file's
+attributes are invisible to an ordinary `listxattr`: reading them needs
+`XATTR_SHOWCOMPRESSION`, which the directory walker does not yet pass. So
+packing a host tree still stores those files decompressed. The writer is ready
+for them; the walker is the remaining half.
+
+One checker limitation is worth recording, because it looks like a bug in the
+image rather than in the tool. macOS compresses system files with decmpfs type 8
+(LZVN in a resource fork) almost exclusively, and `apfsck` v0.2.1 parses every
+resource-fork type except zlib's as though it used zlib's layout. Handing it a
+file copied byte for byte from `/bin/ls` — one macOS itself reads back
+identically — produces *"Resource compressed file: block metadata is too big"*.
+Fork-based types therefore cannot be gated on `apfsck`; they are checked against
+a real mount instead.
 
 ## How losses are reported
 

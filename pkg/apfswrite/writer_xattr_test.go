@@ -169,11 +169,11 @@ func TestCreateContainerRejectsUnwritableXattrs(t *testing.T) {
 		contains string
 	}{
 		{
-			// apfsck: "is not compressed but has decmpfs xattr". A decmpfs
-			// attribute declares content this writer does not produce.
-			"a decmpfs attribute, which declares compressed content",
+			// A decmpfs attribute is carried through, but only when it and the
+			// file agree; see writer_decmpfs_test.go for the cases that hold.
+			"a decmpfs attribute with an unusable compression type",
 			map[string][]byte{"com.apple.decmpfs": []byte("fpmc____________")},
-			"stores content uncompressed",
+			"unsupported decmpfs compression type",
 		},
 		{
 			"the reserved symlink attribute",

@@ -25,6 +25,16 @@ const (
 // fsck_apfs rejects a volume written that way; see inoBaseFor in pkg/apfswrite.
 const UnifiedIDSpaceMark uint64 = 0x0800000000000000
 
+// BSD file flags (chflags(2)) as stored in an inode's bsd_flags field.
+const (
+	// BSDFlagCompressed is UF_COMPRESSED: the file's content is held by its
+	// com.apple.decmpfs attribute rather than by its data fork, which is empty.
+	//
+	// macOS dispatches on this flag, so a file carrying the attribute without
+	// it reads as empty rather than as its contents.
+	BSDFlagCompressed uint32 = 0x00000020
+)
+
 // Inode represents an APFS inode (file or directory metadata)
 type Inode struct {
 	// The identifier
@@ -59,6 +69,12 @@ type Inode struct {
 
 	// Number of (hard) links
 	NumberOfLinks uint32
+
+	// BSDFlags is the inode's chflags(2) flags (bsd_flags). Use the BSDFlag*
+	// constants. UF_COMPRESSED is the one that changes how the file is read:
+	// it says the content is held by com.apple.decmpfs rather than by the data
+	// fork.
+	BSDFlags uint32
 
 	// The name
 	Name []byte
@@ -157,7 +173,8 @@ func (i *Inode) ReadValueData(data []byte) error {
 	i.AccessTime = binary.LittleEndian.Uint64(data[40:48])          // access_time
 	i.Flags = binary.LittleEndian.Uint64(data[48:56])               // internal_flags
 	i.NumberOfLinks = binary.LittleEndian.Uint32(data[56:60])       // nchildren/nlink
-	// Skip: default_protection_class (60:64), write_generation_counter (64:68), bsd_flags (68:72)
+	// Skip: default_protection_class (60:64), write_generation_counter (64:68)
+	i.BSDFlags = binary.LittleEndian.Uint32(data[68:72])        // bsd_flags
 	i.OwnerIdentifier = binary.LittleEndian.Uint32(data[72:76]) // owner
 	i.GroupIdentifier = binary.LittleEndian.Uint32(data[76:80]) // group
 	i.FileMode = binary.LittleEndian.Uint16(data[80:82])        // mode

@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/deploymenttheory/go-apfs-v2/internal/decmpfs"
 	"github.com/deploymenttheory/go-apfs-v2/internal/hostmeta"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
 )
@@ -73,7 +74,7 @@ func (b *builder) setTree(opts *CreateOptions) error {
 			}
 
 			mtime := b.entryTime(e.ModTime)
-			xattrs, xattrFlags, err := validateXattrs(e)
+			xattrs, xattrFlags, bsdFlags, err := validateXattrs(e)
 			if err != nil {
 				return 0, err
 			}
@@ -89,6 +90,7 @@ func (b *builder) setTree(opts *CreateOptions) error {
 				mtime:      mtime,
 				xattrs:     embedded,
 				xattrFlags: xattrFlags,
+				bsdFlags:   bsdFlags,
 			}
 			nextOID++
 			b.entries = append(b.entries, be)
@@ -306,28 +308,30 @@ func sortedNames[V any](m map[string]V) []string {
 }
 
 // validateXattrs checks an entry's extended attributes can be written, and
-// returns the inode flags their presence requires.
+// returns the inode flags their presence requires: the internal_flags several
+// attributes must agree with, and the bsd_flags a compressed file needs.
 //
 // A value too large to embed is refused rather than truncated: this writer does
 // not yet store an attribute in a data stream of its own, and silently dropping
 // content is exactly the failure this project has been removing.
-func validateXattrs(e *Entry) (map[string][]byte, uint64, error) {
+func validateXattrs(e *Entry) (map[string][]byte, uint64, uint32, error) {
 	// An inode with no resource fork must say so. The flag is not optional:
 	// a checker treats its absence as a claim that a fork exists.
 	flags := uint64(inodeNoRsrcFork)
 	if len(e.Xattrs) == 0 {
-		return nil, flags, nil
+		return nil, flags, 0, nil
 	}
 
+	var bsdFlags uint32
 	for name := range e.Xattrs {
 		if name == "" {
-			return nil, 0, fmt.Errorf("apfswrite: %q has an extended attribute with an empty name", e.Name)
+			return nil, 0, 0, fmt.Errorf("apfswrite: %q has an extended attribute with an empty name", e.Name)
 		}
 		if strings.ContainsRune(name, 0) {
-			return nil, 0, fmt.Errorf("apfswrite: extended attribute name %q on %q contains a NUL", name, e.Name)
+			return nil, 0, 0, fmt.Errorf("apfswrite: extended attribute name %q on %q contains a NUL", name, e.Name)
 		}
 		if name == symlinkName {
-			return nil, 0, fmt.Errorf("apfswrite: %q sets %s, which the writer emits itself for symbolic links", e.Name, symlinkName)
+			return nil, 0, 0, fmt.Errorf("apfswrite: %q sets %s, which the writer emits itself for symbolic links", e.Name, symlinkName)
 		}
 
 		switch name {
@@ -336,19 +340,21 @@ func validateXattrs(e *Entry) (map[string][]byte, uint64, error) {
 			// against whether the attribute is actually there.
 			flags = flags&^uint64(inodeNoRsrcFork) | inodeHasRsrcFork
 		case decmpfsName:
-			// A decmpfs attribute declares the file's content compressed, and
-			// requires APFS_INOBSD_COMPRESSED in bsd_flags — which this writer
-			// does not set, because it puts content in the data fork. Writing
-			// the attribute alone would describe content the file does not
-			// have. apfsck: "is not compressed but has decmpfs xattr".
-			return nil, 0, fmt.Errorf("apfswrite: %q carries %s, which declares its content compressed; this writer stores content uncompressed in the data fork", e.Name, decmpfsName)
+			// The attribute holds the file's content, so it is carried through
+			// as it stands rather than recompressed. What the writer owes it is
+			// UF_COMPRESSED: apfsck reports "is not compressed but has decmpfs
+			// xattr" when the attribute is there without the flag.
+			if err := decmpfs.Validate(e.Xattrs[name], len(e.Data), e.Xattrs[resourceForkName]); err != nil {
+				return nil, 0, 0, fmt.Errorf("apfswrite: %q: %w", e.Name, err)
+			}
+			bsdFlags |= inoBSDCompressed
 		case securityName:
 			flags |= inodeHasSecurityEA
 		case finderInfoName:
 			flags |= inodeHasFinderInfo
 		}
 	}
-	return e.Xattrs, flags, nil
+	return e.Xattrs, flags, bsdFlags, nil
 }
 
 func validateName(name string) error {
@@ -674,9 +680,13 @@ func (b *builder) inodeValue(e *builderEntry) []byte {
 		}
 		binary.LittleEndian.PutUint32(val[56:], nlink) // nlink
 	}
-	binary.LittleEndian.PutUint32(val[72:], e.uid) // owner
-	binary.LittleEndian.PutUint32(val[76:], e.gid) // group
-	binary.LittleEndian.PutUint16(val[80:], mode)  // mode
+	// 64:68 is write_generation_counter, left zero.
+	binary.LittleEndian.PutUint32(val[68:], e.bsdFlags) // bsd_flags
+	binary.LittleEndian.PutUint32(val[72:], e.uid)      // owner
+	binary.LittleEndian.PutUint32(val[76:], e.gid)      // group
+	binary.LittleEndian.PutUint16(val[80:], mode)       // mode
+	// 82:84 is pad1; 84:92 is uncompressed_size, which is padding unless
+	// INODE_HAS_UNCOMPRESSED_SIZE is set, and this writer does not set it.
 
 	// xf_blob header.
 	xblob := sizeofInodeVal

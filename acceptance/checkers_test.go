@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfswrite"
@@ -72,4 +73,27 @@ func seededBytes(n int, seed int64) []byte {
 	b := make([]byte, n)
 	rand.New(rand.NewSource(seed)).Read(b)
 	return b
+}
+
+// attachAndMount attaches a raw image read-only and mounts it, returning the
+// mount point and the device to detach.
+func attachAndMount(t *testing.T, imgPath string) (mountPoint, dev string) {
+	t.Helper()
+	out, err := exec.Command("hdiutil", "attach",
+		"-imagekey", "diskimage-class=CRawDiskImage", "-readonly", imgPath).CombinedOutput()
+	if err != nil {
+		t.Fatalf("hdiutil attach: %v\n%s", err, out)
+	}
+	dev = devRe.FindString(string(out))
+	for _, field := range strings.Fields(string(out)) {
+		if strings.HasPrefix(field, "/Volumes/") {
+			mountPoint = field
+			break
+		}
+	}
+	if mountPoint == "" {
+		exec.Command("hdiutil", "detach", dev).Run()
+		t.Fatalf("the image did not mount:\n%s", out)
+	}
+	return mountPoint, dev
 }
