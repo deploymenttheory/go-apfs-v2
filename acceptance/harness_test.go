@@ -32,6 +32,7 @@ var (
 	fixtureRaw   string // decompressed from basic.img.gz into a temp dir
 	fixtureHFS   string // committed HFS+ fixture DMG
 	fixtureEnc   string // decompressed from encrypted.img.gz: a FileVault volume
+	fixtureAPM   string // decompressed from hfs-apm.img.gz: a whole disk with an Apple Partition Map
 	manifest     fixtureManifest
 	hfsManifest  fixtureManifest
 )
@@ -107,6 +108,14 @@ func TestMain(m *testing.M) {
 	fixtureEnc = filepath.Join(tempDir, "encrypted.img")
 	if err := gunzipFile(filepath.Join(repoRoot, "testdata", "cli", "encrypted.img.gz"), fixtureEnc); err != nil {
 		fmt.Fprintf(os.Stderr, "unable to decompress encrypted fixture: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Decompress the Apple Partition Map fixture: a whole-disk image with no
+	// koly trailer, which is the only shape that reaches the APM locator.
+	fixtureAPM = filepath.Join(tempDir, "hfs-apm.img")
+	if err := gunzipFile(filepath.Join(repoRoot, "testdata", "cli", "hfs-apm.img.gz"), fixtureAPM); err != nil {
+		fmt.Fprintf(os.Stderr, "unable to decompress the APM fixture: %v\n", err)
 		os.Exit(1)
 	}
 
