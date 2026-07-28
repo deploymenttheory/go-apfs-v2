@@ -368,6 +368,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A DMG this tool creates now mounts on macOS** (`pkg/disk`). `hdiutil attach`
+  refused every created image with "attach failed - Bad file descriptor", so a
+  built DMG could not be opened by double-click, only read back by this tool.
+
+  The image was structurally sound the whole time. The koly trailer declared
+  `ImageVariant` 1 — a *device* image, which tells DiskImages that sector 0
+  holds a partition map — while the wrapper writes a bare file system there. A
+  bare file system is variant 2, a *partition* image.
+
+  The variant is now derived from the block layout rather than hardcoded, so a
+  repack stays correct for free: repacking a partitioned image carries its map
+  through and remains a device image, while a wrapped bare image is a partition
+  image.
+
+  Nothing caught this because no test had ever mounted a *created* DMG — every
+  acceptance test reconstructs the raw file system out of the wrapper and
+  attaches that instead. One now mounts the wrapper itself, for both file
+  systems, and needs no external fixture so it runs on every macOS CI run.
+
 - **HFS+ names are normalized, so macOS can find them** (`pkg/hfsplus`). HFS+
   stores names decomposed; the writer stored them as given. A name containing a
   precomposed character such as `ü` was therefore written in a form macOS does
