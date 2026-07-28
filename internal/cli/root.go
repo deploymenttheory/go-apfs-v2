@@ -17,12 +17,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/deploymenttheory/go-apfs-v2/internal/tools"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
-
-// version must track tools.ToolsVersion in internal/tools/output.go.
-const version = "0.2.0"
 
 // globalOptions are the persistent flags shared by all commands, resolved
 // through viper so environment variables and the config file apply.
@@ -84,7 +82,7 @@ Exit codes:
   0 success        3 unrecognized image     5 unsupported on this platform
   1 error          4 authentication needed  6 partial result
   2 usage error       or failed`,
-	Version:           version,
+	Version:           tools.Version(),
 	SilenceUsage:      true,
 	SilenceErrors:     true,
 	DisableAutoGenTag: true,

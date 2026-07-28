@@ -1,0 +1,99 @@
+# Release packaging for the apfs command.
+#
+# The toolkit is pure Go and cross-compiles without cgo, so every target is
+# built from one runner rather than needing a machine per platform. That is the
+# same property the CI build matrix relies on.
+version: 2
+
+project_name: apfs
+
+before:
+  hooks:
+    - go mod download
+
+builds:
+  - id: apfs
+    main: ./cmd/apfs
+    binary: apfs
+    env:
+      # No cgo anywhere in the toolkit: the APFS and HFS+ readers, both writers
+      # and the compressors are all pure Go. Setting it explicitly keeps a
+      # cgo-enabled runner from producing binaries that will not run elsewhere.
+      - CGO_ENABLED=0
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    flags:
+      - -trimpath
+    ldflags:
+      # -s -w drop the symbol and DWARF tables, which a released binary does
+      # not need. The version is stamped so `apfs --version` names the tag it
+      # was cut from rather than a constant someone has to remember to bump.
+      # One symbol: internal/tools owns the version and the command package
+      # asks it, so there is nothing to keep in sync.
+      - -s -w
+      - -X github.com/deploymenttheory/go-apfs-v2/internal/tools.version={{ .Version }}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - id: apfs
+    ids: [apfs]
+    # A predictable name: apfs_0.3.0_darwin_arm64.tar.gz.
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - README.md
+      - LICENSE
+      - NOTICE
+      - TOOLS_STATUS.md
+
+checksum:
+  name_template: "{{ .ProjectName }}_{{ .Version }}_checksums.txt"
+  algorithm: sha256
+
+# Sign the checksum file rather than each archive: verifying the checksums
+# verifies every archive through it, and one signature is one thing to check.
+# Keyless signing binds the signature to this workflow's identity, so there is
+# no private key to hold or rotate.
+signs:
+  - cmd: cosign
+    signature: "${artifact}.sigstore.json"
+    args:
+      - sign-blob
+      - "--bundle=${signature}"
+      - "${artifact}"
+      - "--yes"
+    artifacts: checksum
+    output: true
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  # release-please writes CHANGELOG.md from the conventional commits and owns
+  # the release notes; duplicating them here would only disagree with it.
+  disable: true
+
+release:
+  # The release already exists: release-please creates it when it merges its
+  # pull request, and this run attaches the artifacts to it.
+  mode: append
+  footer: |
+    ---
+
+    Binaries are pure Go and require no runtime dependencies.
+
+    Verify a download against the signed checksum file:
+
+    ```console
+    cosign verify-blob \
+      --bundle apfs_{{ .Version }}_checksums.txt.sigstore.json \
+      --certificate-identity-regexp 'https://github.com/deploymenttheory/go-apfs-v2/.*' \
+      --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+      apfs_{{ .Version }}_checksums.txt
+
+    shasum -a 256 -c apfs_{{ .Version }}_checksums.txt --ignore-missing
+    ```
