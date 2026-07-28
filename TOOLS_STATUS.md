@@ -27,8 +27,11 @@ Legend: ✅ implemented · 🟡 partial · ⬜ not yet
 | Extended attributes (write) | ✅⁴ | ✅⁷ |
 | Hard links (write) | ✅ | ✅⁸ |
 
-¹ One snapshot per image (single static checkpoint); multiple snapshots need
-distinct xids and incremental checkpoints.
+¹ Several snapshots per image, each at its own transaction id, with the live
+volume one past the newest. macOS refuses to mount a container whose only
+checkpoint sits at a raised id with nothing before it, so a predecessor
+checkpoint is written alongside the live one describing the same objects. The
+cap is the snapshot-metadata tree, built here as a single node.
 
 ¹⁰ Unlocking a volume with a password supplied by the caller, using the keybag
 layout and key wrapping the format documents. An encrypted volume is detected

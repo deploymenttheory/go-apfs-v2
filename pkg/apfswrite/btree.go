@@ -136,7 +136,14 @@ func (b *builder) writeEmptyTree(paddr, oid uint64, subtype uint32) error {
 	} else {
 		typ |= objPhysical
 	}
-	setObjectHeader(root, int(b.blocksize), oid, typ, subtype)
+	// An ephemeral object belongs to the live checkpoint, so it is stamped with
+	// that checkpoint's transaction id. apfsck: "Ephemeral object: not part of
+	// latest transaction".
+	xid := uint64(formatXID)
+	if typ&objEphemeral != 0 {
+		xid = b.liveXID
+	}
+	setObjectHeaderXID(root, int(b.blocksize), oid, typ, subtype, xid)
 	return b.writeBlock(root, paddr)
 }
 
@@ -183,6 +190,16 @@ func (b *builder) omapEntries(isVol bool) []omapEntry {
 	return entries
 }
 
+// omapXID is the transaction id an object map and its root node carry: the
+// newest id among the mappings it holds. The volume omap names only the format
+// state a snapshot captures; the container omap names the live volume.
+func (b *builder) omapXID(isVol bool) uint64 {
+	if isVol {
+		return formatXID
+	}
+	return b.liveXID
+}
+
 // writeObjectMapRoot writes the root node of an object map. Records are fixed-size
 // (omap_key, omap_val) pairs sorted by oid; keys pack forward from the end of
 // the table of contents and values pack backward from the start of the footer.
@@ -218,7 +235,12 @@ func (b *builder) writeObjectMapRoot(paddr uint64, isVol bool) error {
 	writeLeafHeader(root, btnodeRoot|btnodeLeaf|btnodeFixedKVSize, nkeys, tocLen, usedKeys, freeLen)
 
 	b.writeOmapFooter(root[int(b.blocksize)-infoLen:], nkeys)
-	setObjectHeader(root, int(b.blocksize), paddr, objectTypeBtree|objPhysical, objectTypeOmap)
+	// A node may not be older than the newest key it holds: the container omap
+	// maps the live volume superblock at the live transaction id, so once that
+	// id is raised past the snapshots the node has to be raised with it.
+	// apfsck: "Object map: node xid is older than key xid".
+	setObjectHeaderXID(root, int(b.blocksize), paddr,
+		objectTypeBtree|objPhysical, objectTypeOmap, b.omapXID(isVol))
 	return b.writeBlock(root, paddr)
 }
 
@@ -252,6 +274,7 @@ func (b *builder) writeObjectMap(paddr uint64, isVol bool) error {
 
 	block := b.zeroedBlock()
 	marshalInto(block, omap)
-	setObjectHeader(block, int(b.blocksize), paddr, objPhysical|objectTypeOmap, objectTypeInvalid)
+	setObjectHeaderXID(block, int(b.blocksize), paddr,
+		objPhysical|objectTypeOmap, objectTypeInvalid, b.omapXID(isVol))
 	return b.writeBlock(block, paddr)
 }

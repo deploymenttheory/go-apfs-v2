@@ -26,13 +26,15 @@ type snapBuild struct {
 // after the metadata records within the snapshot-metadata tree.
 const objIDMask = 0x0fffffffffffffff
 
-// maxSnapshots caps how many snapshots one volume may carry. The writer builds a
-// single static checkpoint at one transaction id, which macOS requires to mount
-// the container (it rejects a lone higher-xid checkpoint with no predecessor).
-// A snapshot and the live volume therefore share that transaction id, so exactly
-// one snapshot is supported for now; more would need distinct transaction ids
-// and the matching incremental checkpoints.
-const maxSnapshots = 1
+// maxSnapshots caps how many snapshots one volume may carry.
+//
+// The limit is the snapshot-metadata tree, which this writer builds as a single
+// leaf: each snapshot contributes a metadata record and a name record, and the
+// pair must fit alongside the others in one node. The bound below is
+// conservative for the longest names the format allows -- setSnapshots measures
+// the records that will actually be written and refuses only if they genuinely
+// do not fit, so short names go much further than this.
+const maxSnapshots = 64
 
 // setSnapshots resolves opts.Snapshots into the builder. It validates the names,
 // assigns each snapshot a transaction id (1..N in request order), sets the live
@@ -71,9 +73,11 @@ func (b *builder) setSnapshots(opts *CreateOptions) error {
 			name: s.Name, xid: uint64(i) + 1, mtime: mtime, inum: inumBase + uint64(i),
 		})
 	}
-	// The snapshot and the live volume share the single static checkpoint's
-	// transaction id, so the live xid stays at the base xid.
-	b.liveXID = formatXID
+	// The live volume sits one transaction past the newest snapshot, which is
+	// what makes them snapshots of an earlier state rather than of the state
+	// that is live. A predecessor checkpoint at the snapshot's id is written
+	// alongside the live one; see writeCheckpoints.
+	b.liveXID = uint64(len(b.snapshots)) + 1
 	// One shared omap snapshot tree, plus a snapshot volume superblock and an
 	// extentref tree copy per snapshot.
 	b.snapBlocks = 1 + 2*uint64(len(b.snapshots))
@@ -210,11 +214,22 @@ func (b *builder) writeSnapshots() error {
 	if len(b.snapshots) == 0 {
 		return nil
 	}
-	for _, s := range b.snapshots {
-		// Each snapshot owns a copy of the extentref tree so its extent
-		// refcounts are checked against its own snapshot fsroot, independent of the
-		// live volume's tree.
-		if err := b.makeExtentrefRoot(s.extentrefPaddr, s.extentrefPaddr); err != nil {
+	for i, s := range b.snapshots {
+		// Only the oldest snapshot owns the populated extent-reference tree.
+		//
+		// On a real volume, taking a snapshot moves the populated tree to the
+		// snapshot and leaves a new empty one live; taking another moves
+		// nothing, because the extents are already owned. Giving every snapshot
+		// a populated copy counts each extent once per snapshot, which apfsck
+		// reports as "Physical extent record: is NEW but has already used
+		// blocks".
+		var err error
+		if i == 0 {
+			err = b.makeExtentrefRoot(s.extentrefPaddr, s.extentrefPaddr)
+		} else {
+			err = b.writeEmptyTree(s.extentrefPaddr, s.extentrefPaddr, objectTypeBlockrefTree)
+		}
+		if err != nil {
 			return err
 		}
 		if err := b.writeSnapshotVolumeSuperblock(s); err != nil {
@@ -229,7 +244,12 @@ func (b *builder) writeSnapshots() error {
 // referenced by the snapshot record's sblock_oid.
 func (b *builder) writeSnapshotVolumeSuperblock(s *snapBuild) error {
 	vsb := b.volumeSuperblock()
-	vsb.NumSnapshots = 0 // the state before this snapshot existed
+	// The count is the volume's state at the moment this snapshot was taken,
+	// which is how many snapshots already existed: none for the first, one for
+	// the second, and so on. apfsck compares each frozen superblock's count
+	// against the snapshots older than it -- "Volume superblock: bad snapshot
+	// count" -- so a fixed zero is only right while there is one snapshot.
+	vsb.NumSnapshots = s.xid - 1
 
 	// A snapshot's volume superblock is a partial copy: the object map, the
 	// extentref tree and the snapshot metadata tree are *not* reached through
