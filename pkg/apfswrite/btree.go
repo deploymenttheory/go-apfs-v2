@@ -174,14 +174,14 @@ func (b *builder) writeOmapFooter(info []byte, nkeys int) {
 // live superblock is the current one. The volume omap maps the file-system tree root
 // and, when the file-system tree spans two levels, every file-system tree leaf node, all at the
 // base xid (the format state a snapshot captures).
-func (b *builder) omapEntries(isVol bool) []omapEntry {
+func (b volCtx) omapEntries(isVol bool) []omapEntry {
 	if !isVol {
-		return []omapEntry{{firstVolOID, b.firstVolPaddr, b.liveXID, 0}}
+		return []omapEntry{{firstVolOID, b.volPaddr, b.liveXID, 0}}
 	}
 	// The file-system tree root (and any leaves) are shared by the live volume and the
 	// snapshots, so they carry no OMAP_VAL_SAVED flag (that would mark them as
 	// superseded in the live volume, which is not the case here).
-	entries := []omapEntry{{firstVolFSTreeRootOID, b.firstVolFSTreeRootPaddr, formatXID, 0}}
+	entries := []omapEntry{{firstVolFSTreeRootOID, b.fsTreeRootPaddr, formatXID, 0}}
 	if b.fsTreeTwoLevel {
 		for i := uint64(0); i < b.numFSTreeLeaves; i++ {
 			entries = append(entries, omapEntry{fsTreeLeafOIDBase + i, b.fsTreeLeafBase + i, formatXID, 0})
@@ -203,7 +203,7 @@ func (b *builder) omapXID(isVol bool) uint64 {
 // writeObjectMapRoot writes the root node of an object map. Records are fixed-size
 // (omap_key, omap_val) pairs sorted by oid; keys pack forward from the end of
 // the table of contents and values pack backward from the start of the footer.
-func (b *builder) writeObjectMapRoot(paddr uint64, isVol bool) error {
+func (b volCtx) writeObjectMapRoot(paddr uint64, isVol bool) error {
 	entries := b.omapEntries(isVol)
 	sort.Slice(entries, func(i, j int) bool { return entries[i].oid < entries[j].oid })
 
@@ -247,7 +247,7 @@ func (b *builder) writeObjectMapRoot(paddr uint64, isVol bool) error {
 // writeObjectMap writes an object map: the omap_phys object that points at its
 // root plus the root node itself. The container omap is manually managed; the
 // volume omap is not.
-func (b *builder) writeObjectMap(paddr uint64, isVol bool) error {
+func (b volCtx) writeObjectMap(paddr uint64, isVol bool) error {
 	omap := &omapPhys{}
 	if !isVol {
 		omap.Flags = omapManuallyManaged
@@ -265,7 +265,7 @@ func (b *builder) writeObjectMap(paddr uint64, isVol bool) error {
 
 	rootPaddr := b.mainOmapRootPaddr
 	if isVol {
-		rootPaddr = b.firstVolOmapRootPaddr
+		rootPaddr = b.omapRootPaddr
 	}
 	omap.TreeOID = rootPaddr
 	if err := b.writeObjectMapRoot(rootPaddr, isVol); err != nil {

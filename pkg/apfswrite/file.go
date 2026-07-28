@@ -18,7 +18,7 @@ import (
 // convenience) into a flat list of file-system tree entries with assigned oids, then
 // decides the file-system tree shape (single leaf vs a 2-level index+leaves
 // tree). Physical block numbers are assigned later, in the space manager.
-func (b *builder) setTree(opts *CreateOptions) error {
+func (b volCtx) setTree(opts *CreateOptions) error {
 	// Build the effective root directory: Root's children plus any RootFiles.
 	var topLevel []*Entry
 	if opts.Root != nil {
@@ -227,7 +227,7 @@ const maxExtentrefLeaves = 100
 
 // physFiles returns the stream files that own a physical extent (blocks > 0),
 // i.e. every regular file except the 0-byte ones.
-func (b *builder) physFiles() []*builderEntry {
+func (b volCtx) physFiles() []*builderEntry {
 	out := make([]*builderEntry, 0, len(b.streamFiles))
 	for _, f := range b.streamFiles {
 		if f.blocks > 0 {
@@ -251,7 +251,7 @@ const (
 // point at the sibling record describing that particular name. Each name's id
 // lives on the sibling list of the entry holding the inode, so the extra names
 // have to be matched back to it.
-func (b *builder) linkSiblingIDs() {
+func (b volCtx) linkSiblingIDs() {
 	for _, e := range b.entries {
 		holder, name := e, e.name
 		if e.primary != nil {
@@ -374,7 +374,7 @@ func validateName(name string) error {
 
 // nextObjID returns the volume's next free object id: one past the highest user
 // oid in use (APFS_MIN_USER_INO_NUM when there are no entries).
-func (b *builder) nextObjID() uint64 {
+func (b volCtx) nextObjID() uint64 {
 	next := b.firstUserIno()
 	// Streamed extended attributes take object ids from the same counter as
 	// entries, so a volume whose highest id belongs to one must still report a
@@ -402,7 +402,7 @@ func (b *builder) nextObjID() uint64 {
 // an otherwise small tree needed 8 GB.
 const fileCopyWindowBlocks = 1024
 
-func (b *builder) writeFileData() error {
+func (b volCtx) writeFileData() error {
 	var window []byte
 
 	for _, f := range b.streamFiles {
@@ -457,7 +457,7 @@ type fsTreeRecord struct {
 // private-dir records plus one dentry+inode (and, for files, dstream-id and
 // file-extent) per user entry — and returns them sorted by the file-system tree key
 // comparator.
-func (b *builder) buildFSTreeRecords() []fsTreeRecord {
+func (b volCtx) buildFSTreeRecords() []fsTreeRecord {
 	recs := make([]fsTreeRecord, 0, 4+4*len(b.entries))
 
 	// Special directory dentries live under the virtual root parent (id 1).
@@ -525,7 +525,7 @@ func (b *builder) buildFSTreeRecords() []fsTreeRecord {
 }
 
 // rootChildCount counts the direct children of the volume root (oid 2).
-func (b *builder) rootChildCount() uint32 {
+func (b volCtx) rootChildCount() uint32 {
 	n := uint32(0)
 	for _, e := range b.entries {
 		if e.parent == rootDirInoNum {
@@ -565,7 +565,7 @@ func fsTreeRecordLess(a, b fsTreeRecord) bool {
 // siblingID, when non-zero, appends the extended field naming this particular
 // name's sibling record. A checker requires every sibling link to be reachable
 // from a directory entry this way, and reports one that is not as orphaned.
-func (b *builder) dentryRecord(parent uint64, name string, childID uint64, dt uint16, siblingID uint64) fsTreeRecord {
+func (b volCtx) dentryRecord(parent uint64, name string, childID uint64, dt uint16, siblingID uint64) fsTreeRecord {
 	key, hash := b.buildHashedDrecKey(parent, name)
 
 	size := sizeofDrecVal
@@ -751,7 +751,7 @@ func (b *builder) fileExtentRecord(e *builderEntry) fsTreeRecord {
 // fsck_apfs apply on lookup, so uppercase/Unicode names hash correctly. Case
 // folding is disabled only on a case-sensitive (normalization-insensitive)
 // volume, where APFS hashes the normalized bytes without folding.
-func (b *builder) buildHashedDrecKey(parent uint64, name string) ([]byte, uint32) {
+func (b volCtx) buildHashedDrecKey(parent uint64, name string) ([]byte, uint32) {
 	nameLen := uint32(len(name) + 1)
 	key := make([]byte, sizeofDrecHashedKeyFixed+int(nameLen))
 	setKeyHeader(key, 0, parent, typeDirRec)
@@ -913,7 +913,7 @@ func extentrefRecordsPerLeaf(blocksize int) int {
 // node the tree is a single root-leaf; when they overflow it grows to two
 // physical levels: an index root plus one leaf per group of records. All nodes
 // are physical objects whose oid equals their block number.
-func (b *builder) makeExtentrefRoot(paddr, oid uint64) error {
+func (b volCtx) makeExtentrefRoot(paddr, oid uint64) error {
 	phys := b.physFiles()
 	if len(phys) == 0 {
 		return b.writeEmptyTree(paddr, oid, objectTypeBlockrefTree)

@@ -12,7 +12,7 @@ import "encoding/binary"
 // each leaf a virtual object mapped by the volume object map. Child-node
 // pointers in the index are virtual oids, which the reader and fsck resolve
 // through that object map.
-func (b *builder) makeFSTree(paddr, oid uint64) error {
+func (b volCtx) makeFSTree(paddr, oid uint64) error {
 	recs := b.buildFSTreeRecords()
 
 	longestKey, longestVal := 0, 0

@@ -18,7 +18,7 @@ const formatterID = "go-apfs (apfswrite)"
 // always in the last volume: its superblock and file-system tree root, plus one
 // id per leaf when the tree spans two levels. An id at or above this is what
 // apfsck calls an "unassigned object id".
-func (b *builder) nextContainerOID() uint64 {
+func (b volCtx) nextContainerOID() uint64 {
 	last := uint64(b.volumeCount() - 1)
 	next := volFSTreeRootOID(last) + 1
 	if b.fsTreeTwoLevel {
@@ -28,7 +28,7 @@ func (b *builder) nextContainerOID() uint64 {
 }
 
 // volumeCount is how many volumes the container holds. One, for now.
-func (b *builder) volumeCount() int { return 1 }
+func (b volCtx) volumeCount() int { return 1 }
 
 // assemble writes the whole container. By the time it runs every block position
 // and all space-manager geometry are fixed, so it works in three phases: write
@@ -45,11 +45,14 @@ func (b *builder) assemble() error {
 	if err := b.writeReaper(b.reaperPaddr, reaperOID); err != nil {
 		return err
 	}
-	if err := b.writeObjectMap(b.mainOmapPaddr, false /* container omap */); err != nil {
+	if err := b.only().writeObjectMap(b.mainOmapPaddr, false /* container omap */); err != nil {
 		return err
 	}
-	if err := b.writeVolume(b.firstVolPaddr, firstVolOID); err != nil {
-		return err
+	for i := range uint64(len(b.vols)) {
+		v := b.vol(i)
+		if err := v.writeVolume(v.volPaddr, volOID(i)); err != nil {
+			return err
+		}
 	}
 
 	// Phase 2: populate the container superblock, field by field.
@@ -59,7 +62,7 @@ func (b *builder) assemble() error {
 	sb.BlockCount = b.blockCount
 	sb.IncompatibleFeatures = nxIncompatVersion2 // APFS version 2, no Fusion
 	sb.UUID = b.mainUUID
-	sb.NextOID = b.nextContainerOID()
+	sb.NextOID = b.only().nextContainerOID()
 	sb.NextXID = b.liveXID + 1
 	b.fillCheckpointAreas(sb)
 	sb.SpacemanOID = spacemanOID
@@ -209,7 +212,7 @@ func fillMetaCrypto(wmcs *wrappedMetaCryptoState) {
 
 // volIncompatFeatures returns the volume's incompatible-feature flags, which
 // encode the case- and normalization-sensitivity of the name comparison.
-func (b *builder) volIncompatFeatures() uint64 {
+func (b volCtx) volIncompatFeatures() uint64 {
 	switch {
 	case b.normSensitive:
 		return 0
@@ -229,7 +232,7 @@ func (b *builder) volIncompatFeatures() uint64 {
 // five of an empty volume (its four tree roots plus the omap structure) plus
 // every extra file-system tree leaf, extentref leaf and file-data block in the post-pool
 // region. The root and private directories are not counted as directories.
-func (b *builder) volumeSuperblock() *apfsSuperblock {
+func (b volCtx) volumeSuperblock() *apfsSuperblock {
 	vsb := &apfsSuperblock{}
 	vsb.Magic = apfsMagic
 	vsb.Features = apfsFeatureHardlinkMapRecords
@@ -247,10 +250,10 @@ func (b *builder) volumeSuperblock() *apfsSuperblock {
 	vsb.RootTreeType = objVirtual | objectTypeBtree
 	vsb.ExtentrefTreeType = objPhysical | objectTypeBtree
 	vsb.SnapMetaTreeType = objPhysical | objectTypeBtree
-	vsb.OmapOID = b.firstVolOmapPaddr
+	vsb.OmapOID = b.omapPaddr
 	vsb.RootTreeOID = firstVolFSTreeRootOID
-	vsb.ExtentrefTreeOID = b.firstVolExtentrefRootPaddr
-	vsb.SnapMetaTreeOID = b.firstVolSnapRootPaddr
+	vsb.ExtentrefTreeOID = b.extentrefRootPaddr
+	vsb.SnapMetaTreeOID = b.snapRootPaddr
 	// Snapshots reserve an inode each past the highest user inode.
 	vsb.NextObjID = b.nextObjID() + uint64(len(b.snapshots))
 	vsb.NumFiles = b.numFiles
@@ -273,13 +276,13 @@ func (b *builder) volumeSuperblock() *apfsSuperblock {
 // extent-reference and snapshot-metadata) and its file content, then the live
 // volume superblock referencing them, then any snapshots (snapshot volume superblocks +
 // the object-map snapshot tree).
-func (b *builder) writeVolume(paddr, oid uint64) error {
+func (b volCtx) writeVolume(paddr, oid uint64) error {
 	// Write the trees and file data first; the superblock fields below only
 	// record where each landed.
-	if err := b.writeObjectMap(b.firstVolOmapPaddr, true /* volume omap */); err != nil {
+	if err := b.writeObjectMap(b.omapPaddr, true /* volume omap */); err != nil {
 		return err
 	}
-	if err := b.makeFSTree(b.firstVolFSTreeRootPaddr, firstVolFSTreeRootOID); err != nil {
+	if err := b.makeFSTree(b.fsTreeRootPaddr, firstVolFSTreeRootOID); err != nil {
 		return err
 	}
 	// The extentref tree holds one physical-extent record per file data
@@ -287,13 +290,13 @@ func (b *builder) writeVolume(paddr, oid uint64) error {
 	// snapshot's transaction, so the live tree — which has no changes since the
 	// last snapshot — is empty and each snapshot carries its own copy instead.
 	if len(b.snapshots) > 0 {
-		if err := b.writeEmptyTree(b.firstVolExtentrefRootPaddr, b.firstVolExtentrefRootPaddr, objectTypeBlockrefTree); err != nil {
+		if err := b.writeEmptyTree(b.extentrefRootPaddr, b.extentrefRootPaddr, objectTypeBlockrefTree); err != nil {
 			return err
 		}
-	} else if err := b.makeExtentrefRoot(b.firstVolExtentrefRootPaddr, b.firstVolExtentrefRootPaddr); err != nil {
+	} else if err := b.makeExtentrefRoot(b.extentrefRootPaddr, b.extentrefRootPaddr); err != nil {
 		return err
 	}
-	if err := b.writeSnapMetaTree(b.firstVolSnapRootPaddr); err != nil {
+	if err := b.writeSnapMetaTree(b.snapRootPaddr); err != nil {
 		return err
 	}
 	if err := b.writeFileData(); err != nil {
