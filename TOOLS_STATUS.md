@@ -15,7 +15,7 @@ Legend: ✅ implemented · 🟡 partial · ⬜ not yet
 | Extended attributes (read) | ✅ | ✅⁶ |
 | Snapshots (read / list) | ✅ | — |
 | Snapshots (create, revert) | ✅¹ | — |
-| FileVault / encryption unlock | ✅ | — |
+| FileVault / encryption unlock | ✅¹⁰ | — |
 | `io/fs.FS` adapter | ✅ | ✅ |
 | Create empty volume | ✅ | ✅ |
 | Case-insensitive volumes (write) | — | ✅⁹ |
@@ -29,6 +29,15 @@ Legend: ✅ implemented · 🟡 partial · ⬜ not yet
 
 ¹ One snapshot per image (single static checkpoint); multiple snapshots need
 distinct xids and incremental checkpoints.
+
+¹⁰ Unlocking a volume with a password supplied by the caller, using the keybag
+layout and key wrapping the format documents. An encrypted volume is detected
+from the volume superblock's `APFS_FS_UNENCRYPTED` flag whether or not a
+password is given, and one that cannot be unlocked is reported as locked rather
+than read as ciphertext. Both AES-128-XTS and AES-256-XTS volume keys are
+handled. The object map is not encrypted even on a FileVault volume; the
+file-system tree and file contents are. Writing an encrypted volume is not
+supported and is not planned.
 
 ² Roles read and written in full. A volume group can only be written on a
 system volume: a group is a system/data pair and the writer emits one volume

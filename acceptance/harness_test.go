@@ -31,6 +31,7 @@ var (
 	fixtureLZFSE string
 	fixtureRaw   string // decompressed from basic.img.gz into a temp dir
 	fixtureHFS   string // committed HFS+ fixture DMG
+	fixtureEnc   string // decompressed from encrypted.img.gz: a FileVault volume
 	manifest     fixtureManifest
 	hfsManifest  fixtureManifest
 )
@@ -97,6 +98,15 @@ func TestMain(m *testing.M) {
 	fixtureRaw = filepath.Join(tempDir, "basic.img")
 	if err := gunzipFile(filepath.Join(repoRoot, "testdata", "cli", "basic.img.gz"), fixtureRaw); err != nil {
 		fmt.Fprintf(os.Stderr, "unable to decompress raw fixture: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Decompress the encrypted (FileVault) fixture. It is a real volume that
+	// diskutil encrypted, so it is the only non-circular check that a supplied
+	// password actually decrypts anything.
+	fixtureEnc = filepath.Join(tempDir, "encrypted.img")
+	if err := gunzipFile(filepath.Join(repoRoot, "testdata", "cli", "encrypted.img.gz"), fixtureEnc); err != nil {
+		fmt.Fprintf(os.Stderr, "unable to decompress encrypted fixture: %v\n", err)
 		os.Exit(1)
 	}
 

@@ -23,10 +23,10 @@ type Volume struct {
 	// The snapshot metadata tree (optional)
 	SnapshotMetadataTree *SnapshotMetadataTree
 
-	// The volume's own keybag (optional, for encryption). Not yet populated:
-	// OpenRead does not read the volume keybag, so this is always nil. See
-	// Unlock for what remains to be implemented.
-	VolumeKeybag *ContainerKeybag
+	// The volume's own keybag, holding the key-encryption keys a password
+	// unwraps. Nil when the volume is not encrypted, or when its keybag could
+	// not be located or parsed — in which case the volume stays locked.
+	VolumeKeybag *VolumeKeybag
 
 	// The encryption context (optional)
 	EncryptionContext *EncryptionContext
@@ -137,23 +137,26 @@ func (v *Volume) OpenRead(reader io.ReaderAt, fileOffset int64) error {
 		fmt.Println("Reading volume object map B-tree")
 	}
 
-	// Create encryption context if volume has keybag
-	var encryptionContext *EncryptionContext
+	// Read the volume's keybag and, if a password unlocks it, build the context
+	// that decrypts everything read below. An encrypted volume that stays
+	// locked is not an error here: OpenRead's job is to report what the volume
+	// is, and IsLocked is how a caller finds out. Reading its contents is what
+	// must refuse.
+	if err := v.openEncryption(reader); err != nil {
+		return err
+	}
+	encryptionContext := v.EncryptionContext
 
-	// Note: the volume keybag is not read yet, so encryptionContext stays nil
-	// here and VolumeKeybag is never populated. The volume's keybag is located
-	// through the container keybag entry of type KeybagEntryTypeVolumeKeyExtent
-	// (nx_keylocker points at the container keybag, not the volume's), and it
-	// uses a different structure and unwrapping path from the container keybag.
-	// Completing this needs:
-	// 1. the volume keybag structure, distinct from the container keybag
-	// 2. volume-specific key unwrapping
-	// 3. wiring the result into a volume-level encryption context
-
-	// Create object map B-tree with encryption context
+	// The object map is not encrypted, even on a FileVault volume: it maps
+	// object ids to block numbers, which gives nothing away, and the driver
+	// needs it before any key is available. Only the file-system tree and file
+	// contents are enciphered. Handing the context to the object map here
+	// would decrypt plaintext into noise -- verified against a volume encrypted
+	// by diskutil, whose object-map root reads as a valid B-tree node with a
+	// correct Fletcher-64 checksum before any decryption.
 	objectMapBTree, err := NewObjectMapBTree(
 		v.IOHandle,
-		encryptionContext,
+		nil,
 		objectMap.TreeOID,
 	)
 	if err != nil {
@@ -352,18 +355,17 @@ func (v *Volume) Identifier() ([16]byte, error) {
 	return v.Superblock.VolumeIdentifier()
 }
 
-// IsLocked checks if the volume is locked (encrypted)
+// IsLocked reports whether the volume is encrypted and has not been unlocked,
+// so its contents cannot be read.
+//
+// This is the check a caller must make before reading anything: a locked
+// volume's metadata is ciphertext, and parsing it produces structural errors
+// that say nothing about the real cause.
 func (v *Volume) IsLocked() (bool, error) {
 	if v == nil {
 		return false, fmt.Errorf("invalid volume")
 	}
-
-	if v.VolumeKeybag == nil {
-		// No keybag means no encryption
-		return false, nil
-	}
-
-	return v.VolumeKeybag.IsLocked, nil
+	return v.isLocked, nil
 }
 
 // NumberOfSnapshots retrieves the number of snapshots
@@ -612,46 +614,6 @@ func (v *Volume) SetUTF16RecoveryPassword(utf16Password []uint16) error {
 	utf8Password := []byte(UTF16ToString(utf16Password))
 
 	return v.SetUTF8RecoveryPassword(utf8Password)
-}
-
-// Unlock attempts to unlock an encrypted volume using the provided passwords
-// Returns true if unlocked successfully, false if password is incorrect, error on failure
-func (v *Volume) Unlock() (bool, error) {
-	if v == nil {
-		return false, fmt.Errorf("invalid volume")
-	}
-
-	if v.Superblock == nil {
-		return false, fmt.Errorf("invalid volume - missing superblock")
-	}
-
-	// If not locked, already unlocked
-	if !v.isLocked {
-		return true, nil
-	}
-
-	// If no keybag, volume is not encrypted
-	if v.VolumeKeybag == nil {
-		v.isLocked = false
-		return true, nil
-	}
-
-	// Note: Full volume unlock requires volume keybag reading, which is complex.
-	// The volume's keybag is located via the container keybag entry of type
-	// KeybagEntryTypeVolumeKeyExtent; volume keybags use a different structure
-	// and unwrapping method than the container keybag.
-	// This would require:
-	// 1. Reading volume keybag blocks from volume superblock
-	// 2. Parsing volume keybag structure (different from container keybag)
-	// 3. Unwrapping keys using PBKDF2 and provided passwords
-	// 4. Getting volume master key from container keybag
-	// 5. Setting up encryption context
-	//
-	// For now, this returns an error indicating the feature needs full implementation
-	// The building blocks exist (PBKDF2, keybag structures, encryption context)
-	// but volume keybag reading needs to be completed in OpenRead first
-
-	return false, fmt.Errorf("volume unlock requires volume keybag reading - not yet fully implemented")
 }
 
 // FeaturesFlags retrieves the volume feature flags
