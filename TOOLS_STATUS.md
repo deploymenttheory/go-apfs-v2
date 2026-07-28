@@ -84,7 +84,7 @@ The APFS writer lives in `pkg/apfswrite` (pure Go, MIT).
 | Raw images, containers without a partition map (content sniffing) | ✅ |
 | DMG write / lossless repack | ✅ |
 | Decompressed-chunk LRU cache | ✅ |
-| hdiutil-mountable created DMG wrappers | 🟡 |
+| hdiutil-mountable created DMG wrappers | ✅ |
 
 ## CLI commands
 

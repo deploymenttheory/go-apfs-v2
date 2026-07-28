@@ -273,7 +273,7 @@ func EncodeUDIF(dst io.Writer, blocks []SourceBlock, opts *EncodeOptions) error 
 		PlistOffset:    dataForkLen, // DataForkOffset=0, plist follows the data fork
 		PlistLength:    uint64(len(plistBytes)),
 		MasterChecksum: udifChecksum(masterCRC, o.NoChecksums),
-		ImageVariant:   1,
+		ImageVariant:   imageVariantFor(blocks),
 		SectorCount:    totalSectors,
 	}
 	copy(footer.Signature[:], dmgSignature)
@@ -482,6 +482,34 @@ func encodeToFile(dstPath string, blocks []SourceBlock, opts *EncodeOptions) err
 		return fmt.Errorf("close: %w", err)
 	}
 	return nil
+}
+
+// UDIF image variants. The distinction is not cosmetic: it tells DiskImages
+// whether sector 0 is a partition map or the file system itself, and an image
+// that gets it wrong is refused with "attach failed - Bad file descriptor"
+// however sound its contents are.
+const (
+	imageVariantDevice    = 1 // a whole device, partition map included
+	imageVariantPartition = 2 // a single file system, no partition map
+)
+
+// imageVariantFor decides which variant the block layout describes.
+//
+// A device image is a whole disk: hdiutil writes one for a partitioned image,
+// where the blocks cover a protective MBR, the GPT headers and tables, the
+// partitions and the free gaps between them. A partition image is a bare file
+// system starting at sector 0, which is what this package produces when it
+// wraps one -- there is no partition map to describe.
+//
+// Deriving this from the blocks rather than taking it as an option keeps a
+// repack correct for free: repacking a partitioned image carries its map
+// through and stays a device image, while repacking a bare one stays a
+// partition image.
+func imageVariantFor(blocks []SourceBlock) uint32 {
+	if len(blocks) == 1 && blocks[0].StartSector == 0 {
+		return imageVariantPartition
+	}
+	return imageVariantDevice
 }
 
 // wholeDiskBlock describes a raw file system image as the single Apple
