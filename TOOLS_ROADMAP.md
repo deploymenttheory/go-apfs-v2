@@ -22,7 +22,6 @@ what is planned or under consideration, roughly in priority order.
   as `ü` is therefore written in a form macOS will not find, on both HFSX and
   `H+`. Fixing it means normalizing on write and on lookup.
 
-- **HFS+ `inspect` and `mount`** — these commands are APFS-only today.
 
 ## Medium term
 

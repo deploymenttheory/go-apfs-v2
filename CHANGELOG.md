@@ -9,6 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`mount` and `inspect` work on HFS+** (`internal/tools`, `internal/cli`).
+  Both were APFS-only: `mount` was built directly on `*apfs.FileEntry`, and
+  `inspect` had nothing to say about a volume with no container.
+
+  The FUSE layer is now written against `VolumeFS` — the same interface `list`,
+  `cat` and `extract` already share — so it serves whichever file system the
+  image turned out to hold. Extended attributes are served too, so `xattr` and
+  `ls -l@` work against a mount. `mount` also goes through the shared opener,
+  which means it honours `--volume`, `--offset` and the password flags exactly
+  as the other commands do, rather than reimplementing them.
+
+  That deleted about 1300 lines of APFS-specific mount code, which existed only
+  because the FUSE layer reached past the file-system abstraction.
+
+  `inspect` gained a structural walk for HFS+: the volume header, each special
+  file with its fork and extents, and each B-tree's header record — node size,
+  depth, record count and key comparison. The `block` and `fstree` modes stay
+  APFS-only, since HFS+ has no container, checkpoints or object map, and now say
+  which mode is unavailable rather than reporting the image as unreadable.
+
 - **The HFS+ writer can emit case-insensitive volumes** (`pkg/hfsplus`).
   `CreateOptions.CaseInsensitive` produces plain HFS+ (`H+`, version 4, catalog
   `keyCompareType` 0xCF) instead of the case-sensitive HFSX default, which

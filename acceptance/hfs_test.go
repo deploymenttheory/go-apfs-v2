@@ -86,3 +86,50 @@ func TestHFSExtractMatchesManifest(t *testing.T) {
 		}
 	}
 }
+
+// TestHFSInspect covers the structural walk on an HFS+ volume, which was
+// APFS-only: the command reported the image unsupported rather than showing
+// anything.
+func TestHFSInspect(t *testing.T) {
+	if hfsManifest.VolumeName == "" {
+		t.Skip("no HFS+ fixture manifest")
+	}
+	out := mustRun(t, "inspect", fixtureHFS)
+
+	for _, want := range []string{
+		"Volume Header",
+		hfsManifest.VolumeName,
+		"Special Files",
+		"Catalog",
+		"Extents overflow",
+		"Allocation",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("inspect output is missing %q:\n%s", want, out)
+		}
+	}
+
+	// The catalog's compare type distinguishes a case-insensitive volume from
+	// HFSX, and is the sort of detail inspect exists to surface.
+	if !strings.Contains(out, "compare") {
+		t.Errorf("inspect did not report the B-tree key comparison:\n%s", out)
+	}
+}
+
+// TestHFSInspectRejectsAPFSOnlyModes checks the block and fstree modes say
+// which mode is unavailable rather than reporting HFS+ as unreadable.
+func TestHFSInspectRejectsAPFSOnlyModes(t *testing.T) {
+	if hfsManifest.VolumeName == "" {
+		t.Skip("no HFS+ fixture manifest")
+	}
+	for _, mode := range [][]string{{"block", "0"}, {"fstree"}} {
+		args := append([]string{"inspect", fixtureHFS}, mode...)
+		_, stderr, code := run(t, args...)
+		if code != exitcode.Unsupported {
+			t.Errorf("inspect %v exited %s, want %s", mode, exitcode.Name(code), exitcode.Name(exitcode.Unsupported))
+		}
+		if !strings.Contains(stderr, "APFS-only") {
+			t.Errorf("inspect %v did not explain the mode is APFS-only: %s", mode, stderr)
+		}
+	}
+}

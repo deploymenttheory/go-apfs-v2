@@ -94,8 +94,8 @@ The APFS writer lives in `pkg/apfswrite` (pure Go, MIT).
 | `list` | ✅ | recursive; JSON lines |
 | `cat` | ✅ | multi-file to stdout |
 | `extract` | ✅ | metadata, verify, symlink policy, name sanitization |
-| `inspect` | ✅ | APFS only (walk / block / fstree) |
-| `mount` | ✅ | APFS only; Linux/macOS FUSE |
+| `inspect` | ✅ | structural walk for both; `block` and `fstree` are APFS only |
+| `mount` | ✅ | APFS and HFS+; Linux/macOS FUSE; serves extended attributes |
 | `pack` | ✅ | directory→HFS+ or APFS DMG (`--fs`), or lossless DMG repack |
 | `create` | ✅ | empty HFS+ or APFS volume (`--fs`) |
 
