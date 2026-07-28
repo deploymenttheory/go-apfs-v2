@@ -33,11 +33,13 @@ $ apfs extract Firefox.dmg -C ./out --verify
 | Read: info, list, cat, extract, inspect | ✅ | ✅ |
 | Mount read-only (FUSE, Linux/macOS) | ✅ | ✅ |
 | FileVault unlock (AES-128-XTS, AES-256-XTS) | ✅ | — |
-| Transparent compression (zlib / LZVN / LZFSE) | ✅ | ✅ |
+| Transparent compression: read and write | ✅ | ✅ |
 | Repack a DMG losslessly (`pack`) | ✅ | ✅ |
 | Build a DMG from a directory (`pack <dir>`) | ✅ | ✅ |
 | Create a formatted volume (`create`) | ✅ | ✅ |
+| Symlinks, hard links, extended attributes, resource forks | ✅ | ✅ |
 | APFS snapshots: create, list, revert (`snapshot`) | ✅ | — |
+| Several volumes per container, and volume groups | ✅ | — |
 | Reproducible (byte-identical) output | ✅ | ✅ |
 
 Both file systems can be written as well as read: `pack <dir>` builds a populated
@@ -191,6 +193,10 @@ apfs inspect IMAGE fstree          # interactively explore the file-system tree
 ```
 
 Debugging/forensics view of the on-disk structures. Text output only.
+
+`fstree` mode accepts `--fstree-root` and `--omap-root` to override the physical
+addresses it would otherwise resolve, which is how a container whose superblock
+no longer points at a readable tree can still be walked.
 
 ```console
 apfs inspect image.dmg
