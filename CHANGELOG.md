@@ -5,6 +5,60 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0](https://github.com/deploymenttheory/go-apfs-v2/compare/v0.1.0...v0.2.0) (2026-07-28)
+
+
+### Features
+
+* **apfs:** unlock FileVault volumes with a supplied password ([9b4fa0e](https://github.com/deploymenttheory/go-apfs-v2/commit/9b4fa0eb54701d1bfe9204008f168d3fa9225001))
+* **apfs:** unlock FileVault volumes with a supplied password ([9f2b623](https://github.com/deploymenttheory/go-apfs-v2/commit/9f2b6238750df7364fba838ea05bf2e910f13498))
+* **apfswrite:** carry decmpfs compression through unchanged ([41b0ce9](https://github.com/deploymenttheory/go-apfs-v2/commit/41b0ce9b80ca92214821cc174b0740a9c5598f16))
+* **apfswrite:** carry decmpfs compression through unchanged ([20fa56a](https://github.com/deploymenttheory/go-apfs-v2/commit/20fa56afdc569796c96c716c8d3006eea14360ff))
+* **apfswrite:** write a volume group as the system/data pair it is ([f4de4d1](https://github.com/deploymenttheory/go-apfs-v2/commit/f4de4d17631a1d29dec455ea1bd1ec2a51c1c358))
+* **apfswrite:** write a volume group as the system/data pair it is ([ab161f3](https://github.com/deploymenttheory/go-apfs-v2/commit/ab161f3c1f16308ca6d743cffb6277f91ed3211d))
+* **apfswrite:** write containers holding several volumes ([a21e9d1](https://github.com/deploymenttheory/go-apfs-v2/commit/a21e9d142f2c2c841b23934a2cc7bfd75bf7cc54))
+* **apfswrite:** write containers holding several volumes ([2f1fef0](https://github.com/deploymenttheory/go-apfs-v2/commit/2f1fef0069605d469cb90f33617378cf7a119e4f))
+* **apfswrite:** write several snapshots per volume ([8efce8d](https://github.com/deploymenttheory/go-apfs-v2/commit/8efce8df3f5e0fd696a9ada410bb4845011f9573))
+* **apfswrite:** write several snapshots per volume ([182138f](https://github.com/deploymenttheory/go-apfs-v2/commit/182138fadc61916554f5ef81d928896820109366))
+* carry resource forks in the HFS+ writer ([d96961b](https://github.com/deploymenttheory/go-apfs-v2/commit/d96961bb1e8c8072e1606773dcd662f5b38a1776))
+* emit case-insensitive HFS+ volumes ([e70d8ea](https://github.com/deploymenttheory/go-apfs-v2/commit/e70d8ead51f0a66d9a8521be5cf97e684add4671))
+* **hfsplus:** carry decmpfs compression through unchanged ([f62656c](https://github.com/deploymenttheory/go-apfs-v2/commit/f62656c246cfdfab9b80d22bbe5cbea077253fe1))
+* **hfsplus:** carry decmpfs compression through unchanged ([5ab1c66](https://github.com/deploymenttheory/go-apfs-v2/commit/5ab1c66beeef9f3ebaaad278362645af7bad470b))
+* **hfsplus:** carry resource forks ([d2b7cca](https://github.com/deploymenttheory/go-apfs-v2/commit/d2b7ccacf00cbb0605d3676a33baded542dc66e5))
+* **hfsplus:** emit case-insensitive volumes ([c095f6c](https://github.com/deploymenttheory/go-apfs-v2/commit/c095f6c2a53bb20d1eeab9b82fa3ad344caef9bb))
+* **hfsplus:** read extended attributes ([bc53ba9](https://github.com/deploymenttheory/go-apfs-v2/commit/bc53ba94c1d90629c5904d410a271e7df12461cc))
+* **hfsplus:** read transparently-compressed files ([9eb2fdd](https://github.com/deploymenttheory/go-apfs-v2/commit/9eb2fdd75e42ad6fbd31db940b46ca37f3e83fb8))
+* **hfsplus:** represent hard links ([1898792](https://github.com/deploymenttheory/go-apfs-v2/commit/1898792c31dd94bba9172531b83a87b8c5e42496))
+* **hfsplus:** write the attributes file ([f17be7b](https://github.com/deploymenttheory/go-apfs-v2/commit/f17be7b59047f0f73ca53928139b41a57086cf20))
+* **pack:** preserve transparent compression when writing APFS ([1f1cee0](https://github.com/deploymenttheory/go-apfs-v2/commit/1f1cee0cb897ac9a188d1124b6557c5a01be2c36))
+* **pack:** preserve transparent compression when writing APFS ([479ad9f](https://github.com/deploymenttheory/go-apfs-v2/commit/479ad9fa2946a350e89b32736cbfb0a3a79043d5))
+* read extended attributes on HFS+ ([df7bbf7](https://github.com/deploymenttheory/go-apfs-v2/commit/df7bbf7c0ffe7bdfd0caa90560ef8fed66982519))
+* read transparently-compressed files on HFS+, and repair fixture generation ([a73981f](https://github.com/deploymenttheory/go-apfs-v2/commit/a73981fcb96efa192a6fa12194ddabd684471ecb))
+* represent hard links in the HFS+ writer ([7994803](https://github.com/deploymenttheory/go-apfs-v2/commit/7994803b31fcf44482aeaa7d675d66c30d3bf025))
+* support HFS+ in mount and inspect ([fcf252c](https://github.com/deploymenttheory/go-apfs-v2/commit/fcf252c16f8b6c1e74163e2176efbf5814ccda90))
+* support HFS+ in mount and inspect ([622cfae](https://github.com/deploymenttheory/go-apfs-v2/commit/622cfae34a629698d594bd45479be89e0b5d3966))
+* write the HFS+ attributes file ([b03ce1b](https://github.com/deploymenttheory/go-apfs-v2/commit/b03ce1b19c906b60bec52302a857b131090b1fbd))
+
+
+### Bug Fixes
+
+* **acceptance:** compile the hard-link assertions on every platform ([b65a59f](https://github.com/deploymenttheory/go-apfs-v2/commit/b65a59fe213f4f1249deba4c4d9f5acab6542bb5))
+* **acceptance:** compile the hard-link assertions on every platform ([aed4ca2](https://github.com/deploymenttheory/go-apfs-v2/commit/aed4ca2cbfa8f8c72dea41a4012ff035064341c9))
+* **apfswrite:** number a grouped system volume's inodes above the mark ([195235d](https://github.com/deploymenttheory/go-apfs-v2/commit/195235da401a5a8f962f25526073c4a500219c4c))
+* **apfswrite:** number a grouped system volume's inodes above the mark ([ca4ed47](https://github.com/deploymenttheory/go-apfs-v2/commit/ca4ed477db5b1375a13caa146e63a2a497976be6))
+* **apfswrite:** write only 4096-byte blocks ([2480a2d](https://github.com/deploymenttheory/go-apfs-v2/commit/2480a2da387b90b150a76ea64ad7786fa10ec784))
+* compile the hard-link assertions on every platform ([2e9e2aa](https://github.com/deploymenttheory/go-apfs-v2/commit/2e9e2aad2457d44cff585b21d0e337ee57437176))
+* correct the HFS+ capability docs and restrict the APFS writer to 4096-byte blocks ([a4aff56](https://github.com/deploymenttheory/go-apfs-v2/commit/a4aff5639a103727265755491ae39c19aa91e738))
+* declare a wrapped bare image as a partition image, so created DMGs mount ([fa2d4d5](https://github.com/deploymenttheory/go-apfs-v2/commit/fa2d4d5712096cf3515184493b0c82a8d3ef2883))
+* **disk:** declare a wrapped bare image as a partition image ([364458e](https://github.com/deploymenttheory/go-apfs-v2/commit/364458e7008c99f1bd81db895cfbcd812c2317a7))
+* **disk:** make the ADC and Apple Partition Map claims true ([132d21d](https://github.com/deploymenttheory/go-apfs-v2/commit/132d21d16043fc264f60780f9803a412c6f828fe))
+* **disk:** make the ADC and Apple Partition Map claims true ([a6ea40d](https://github.com/deploymenttheory/go-apfs-v2/commit/a6ea40d9c6d95340403a6e566df3846ae2cfbc73))
+* **hfsplus:** normalize names so macOS can find them ([ea5d45e](https://github.com/deploymenttheory/go-apfs-v2/commit/ea5d45e32378f01a39f34fd7a0ab60dc11c29bf8))
+* **hfsplus:** write the hard-link chain macOS requires ([a0e0dc1](https://github.com/deploymenttheory/go-apfs-v2/commit/a0e0dc1473b685899913d286e473f02659075374))
+* **hfsplus:** write the hard-link chain macOS requires ([7517161](https://github.com/deploymenttheory/go-apfs-v2/commit/751716110230ec77f4b63773417d118d0eba3d80))
+* normalize HFS+ names so macOS can find them ([50455c6](https://github.com/deploymenttheory/go-apfs-v2/commit/50455c60d2ee694a904d9a43e76a995994dc3454))
+* update NOTICE file to correct software attribution order ([790234b](https://github.com/deploymenttheory/go-apfs-v2/commit/790234b76ea9edc337f0d3dbc12a4ac9a4c7e107))
+
 ## [Unreleased]
 
 ### Added
