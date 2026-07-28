@@ -1,0 +1,47 @@
+# Builds and attaches the release binaries when release-please tags a release.
+#
+# release-please owns the version, the changelog and the GitHub release itself;
+# this only builds the artifacts and appends them. Splitting it that way means a
+# failure here leaves the release intact rather than half-made, and it can be
+# re-run without re-tagging.
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  goreleaser:
+    name: 📦 Build and sign release archives
+    runs-on: ubuntu-latest
+    permissions:
+      # Attaching the archives to the release.
+      contents: write
+      # Keyless signing: cosign exchanges this token for a short-lived
+      # certificate naming this workflow, so the signature says which workflow
+      # in which repository produced the artifact.
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # goreleaser derives the version from the tag, which needs the tags
+          # and the history behind them.
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - uses: sigstore/cosign-installer@v3
+
+      - name: Run goreleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

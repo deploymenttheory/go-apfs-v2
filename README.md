@@ -63,6 +63,23 @@ file extension.
 
 ## Install
 
+Signed archives for macOS, Linux and Windows on `amd64` and `arm64` are attached
+to each [release](https://github.com/deploymenttheory/go-apfs-v2/releases). The
+checksum file is signed with [cosign](https://github.com/sigstore/cosign)
+keylessly, so verifying it needs no key of ours:
+
+```console
+cosign verify-blob \
+  --bundle apfs_<version>_checksums.txt.sigstore.json \
+  --certificate-identity-regexp 'https://github.com/deploymenttheory/go-apfs-v2/.*' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  apfs_<version>_checksums.txt
+
+shasum -a 256 -c apfs_<version>_checksums.txt --ignore-missing
+```
+
+Or build it yourself:
+
 ```console
 go install github.com/deploymenttheory/go-apfs-v2/cmd/apfs@latest
 
