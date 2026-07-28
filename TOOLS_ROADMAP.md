@@ -13,7 +13,8 @@ what is planned or under consideration, roughly in priority order.
 - **APFS snapshots** — `apfs snapshot {create,list,revert,verify}` and the
   `--snapshot` flag on `create`/`pack`. Spec-compliant snapshots recognized by
   macOS (`diskutil apfs listSnapshots`); revert marks `revert_to_xid` for
-  roll-back on next mount. One snapshot per image today.
+  roll-back on next mount. Several snapshots per image, each at its own
+  transaction id.
 
 ## Near term
 
@@ -30,9 +31,6 @@ what is planned or under consideration, roughly in priority order.
 
 - **decmpfs on write** — needs the compression machinery and the inode's
   BSD flags, not just the attribute.
-- **Multiple APFS snapshots per image** — needs distinct transaction ids and
-  incremental checkpoints (the writer currently emits a single static
-  checkpoint, so one snapshot shares the live volume's xid).
 - **Multi-volume** containers on the write side. This is also what a complete
   volume group needs: a group is a system/data pair, and with one volume per
   container only the system half can be written today.

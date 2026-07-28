@@ -76,13 +76,62 @@ func (b *builder) assemble() error {
 	if err := b.wipeArea(b.xpDescBase, uint64(b.xpDescBlocks)); err != nil {
 		return err
 	}
-	if err := b.writeCheckpointMap(b.xpMapPaddr); err != nil {
-		return err
-	}
-	if err := b.writeCheckpointSuperblockCopy(b.xpSuperPaddr, block); err != nil {
+	if err := b.writeCheckpoints(sb, block); err != nil {
 		return err
 	}
 	return b.writeBlock(block, nxBlockNum)
+}
+
+// liveCheckpointIndex is the descriptor-area index of the live checkpoint's
+// mapping block. Without snapshots the live checkpoint is the only one and sits
+// at the start; with them it follows the predecessor.
+func (b *builder) liveCheckpointIndex() uint64 {
+	if b.liveXID == formatXID {
+		return 0
+	}
+	return 2
+}
+
+// writeCheckpoints fills the descriptor area.
+//
+// The live checkpoint is always written. When the live state is at a raised
+// transaction id -- which is what having snapshots means -- a predecessor is
+// written before it at the id the newest snapshot holds, so the container has a
+// history rather than appearing to begin mid-stream.
+//
+// The predecessor describes the same ephemeral objects as the live checkpoint.
+// Nothing in the data area is per-checkpoint here: the container is written once
+// and never mutated, so the state the predecessor names is the state that is
+// actually there.
+func (b *builder) writeCheckpoints(sb *nxSuperblock, live []byte) error {
+	if b.liveCheckpointIndex() > 0 {
+		// The predecessor is the same superblock naming itself rather than the
+		// checkpoint that follows, at one transaction lower. It is built from
+		// the struct rather than patched into the marshalled bytes, so no field
+		// offsets are hardcoded here.
+		prevXID := b.liveXID - 1
+		prevSB := *sb
+		prevSB.XpDescIndex = 0
+		prevSB.XpDescNext = 2
+		prevSB.NextXID = prevXID + 1
+
+		prev := b.zeroedBlock()
+		marshalInto(prev, &prevSB)
+		setObjectHeaderXID(prev, int(b.blocksize), oidNXSuperblock,
+			objEphemeral|objectTypeNXSuperblock, objectTypeInvalid, prevXID)
+
+		if err := b.writeCheckpointMapXID(b.xpDescBase, prevXID); err != nil {
+			return err
+		}
+		if err := b.writeCheckpointSuperblockCopy(b.xpDescBase+1, prev); err != nil {
+			return err
+		}
+	}
+
+	if err := b.writeCheckpointMap(b.xpMapPaddr); err != nil {
+		return err
+	}
+	return b.writeCheckpointSuperblockCopy(b.xpSuperPaddr, live)
 }
 
 // wipeArea zeroes blocks blocks starting at start.
@@ -96,15 +145,21 @@ func (b *builder) wipeArea(start, blocks uint64) error {
 	return nil
 }
 
-// fillCheckpointAreas records the checkpoint areas in the superblock. The one
-// checkpoint occupies the first two descriptor blocks (the mapping block and
-// this superblock copy) and totalBlockCount data blocks (the ephemeral objects).
+// fillCheckpointAreas records the checkpoint areas in the superblock.
+//
+// Each checkpoint occupies two descriptor blocks -- a mapping block and a
+// superblock copy -- and the whole data area holds the ephemeral objects, which
+// every checkpoint shares. When the volume carries snapshots the live state sits
+// at a higher transaction id than the newest snapshot, and macOS refuses to
+// mount a container whose only checkpoint is at a raised id with nothing before
+// it. So a predecessor checkpoint is written ahead of the live one, describing
+// the same objects at the snapshot's id; see writeCheckpoints.
 func (b *builder) fillCheckpointAreas(sb *nxSuperblock) {
 	sb.XpDescBase = b.xpDescBase
 	sb.XpDescBlocks = b.xpDescBlocks
 	sb.XpDescLen = 2
-	sb.XpDescNext = 2
-	sb.XpDescIndex = 0
+	sb.XpDescNext = uint32(b.liveCheckpointIndex()) + 2
+	sb.XpDescIndex = uint32(b.liveCheckpointIndex())
 
 	sb.XpDataBase = b.xpDataBase
 	sb.XpDataBlocks = b.xpDataBlocks
@@ -256,6 +311,10 @@ func (b *builder) writeVolume(paddr, oid uint64) error {
 // writeCheckpointMap writes the checkpoint's mapping block, which records where
 // each ephemeral object of this checkpoint lives on disk.
 func (b *builder) writeCheckpointMap(paddr uint64) error {
+	return b.writeCheckpointMapXID(paddr, b.liveXID)
+}
+
+func (b *builder) writeCheckpointMapXID(paddr, xid uint64) error {
 	block := b.zeroedBlock()
 
 	off := sizeofObjPhys
@@ -280,9 +339,9 @@ func (b *builder) writeCheckpointMap(paddr uint64) error {
 
 	binary.LittleEndian.PutUint32(block[off+4:], uint32(idx)) // cpm_count
 
-	// The checkpoint map belongs to this checkpoint, so it carries the same xid
-	// as the checkpoint superblock (the live xid).
-	setObjectHeaderXID(block, int(b.blocksize), paddr, objPhysical|objectTypeCheckpointMap, objectTypeInvalid, b.liveXID)
+	// The checkpoint map belongs to its checkpoint, so it carries that
+	// checkpoint's xid rather than always the live one.
+	setObjectHeaderXID(block, int(b.blocksize), paddr, objPhysical|objectTypeCheckpointMap, objectTypeInvalid, xid)
 	return b.writeBlock(block, paddr)
 }
 
@@ -304,6 +363,6 @@ func (b *builder) writeReaper(paddr, oid uint64) error {
 
 	block := b.zeroedBlock()
 	marshalInto(block, reaper)
-	setObjectHeader(block, int(b.blocksize), oid, objEphemeral|objectTypeNXReaper, objectTypeInvalid)
+	setObjectHeaderXID(block, int(b.blocksize), oid, objEphemeral|objectTypeNXReaper, objectTypeInvalid, b.liveXID)
 	return b.writeBlock(block, paddr)
 }

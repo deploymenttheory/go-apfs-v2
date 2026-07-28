@@ -650,8 +650,8 @@ func (b *builder) layoutFixedBlocks() {
 	b.xpDataBase = b.xpDescBase + uint64(b.xpDescBlocks)
 	b.xpEnd = b.xpDataBase + uint64(b.xpDataBlocks)
 
-	b.xpMapPaddr = b.xpDescBase
-	b.xpSuperPaddr = b.xpDescBase + 1
+	b.xpMapPaddr = b.xpDescBase + b.liveCheckpointIndex()
+	b.xpSuperPaddr = b.xpMapPaddr + 1
 	b.mainOmapPaddr = b.xpEnd
 	b.mainOmapRootPaddr = b.xpEnd + 1
 	b.firstVolPaddr = b.xpEnd + 2

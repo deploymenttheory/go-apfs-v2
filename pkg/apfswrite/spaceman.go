@@ -491,6 +491,6 @@ func (b *builder) writeSpaceman(paddr, oid uint64) error {
 		return err
 	}
 
-	setObjectHeader(sm, int(size), oid, objEphemeral|objectTypeSpaceman, objectTypeInvalid)
+	setObjectHeaderXID(sm, int(size), oid, objEphemeral|objectTypeSpaceman, objectTypeInvalid, b.liveXID)
 	return b.writeBlocks(sm, paddr)
 }

@@ -443,3 +443,90 @@ func TestCreateContainerMultiChunkFsckClean(t *testing.T) {
 		t.Errorf("fsck_apfs did not report the container clean")
 	}
 }
+
+// multiSnapshotOptions builds a populated volume carrying n snapshots.
+func multiSnapshotOptions(n int) *apfswrite.CreateOptions {
+	snaps := make([]apfswrite.SnapshotSpec, n)
+	for i := range snaps {
+		snaps[i] = apfswrite.SnapshotSpec{Name: fmt.Sprintf("snap%d", i+1)}
+	}
+	return &apfswrite.CreateOptions{
+		VolumeName: "MultiSnap",
+		Snapshots:  snaps,
+		Root: &apfswrite.Entry{Children: []*apfswrite.Entry{
+			{Name: "f.txt", Data: []byte("multi-snapshot content\n")},
+		}},
+	}
+}
+
+// TestMultipleSnapshotsApfsckClean is the always-on gate for more than one
+// snapshot. Each of the three things that had to change shows up here as a
+// distinct apfsck complaint if it regresses: the object map's node transaction
+// id, the ephemeral objects' transaction id, and which snapshot owns the
+// populated extent-reference tree.
+func TestMultipleSnapshotsApfsckClean(t *testing.T) {
+	if _, err := exec.LookPath("apfsck"); err != nil {
+		t.Skip("apfsck not installed; skipping (install apfsprogs)")
+	}
+
+	for _, n := range []int{2, 3, 5} {
+		t.Run(fmt.Sprintf("%d snapshots", n), func(t *testing.T) {
+			imgPath := filepath.Join(t.TempDir(), "snaps.img")
+			writeImage(t, imgPath, 64*1024*1024, multiSnapshotOptions(n))
+
+			out, err := exec.Command("apfsck", "-cw", imgPath).CombinedOutput()
+			t.Logf("apfsck output:\n%s", out)
+			if err != nil {
+				t.Fatalf("apfsck reported problems (exit %v)", err)
+			}
+		})
+	}
+}
+
+// TestMultipleSnapshotsMountAndList is the driver's verdict. Raising the live
+// transaction id past the snapshots is exactly the change macOS refuses when
+// the container has no earlier checkpoint, so mounting is the test that
+// matters; diskutil then has to agree about how many snapshots there are and
+// what they are called.
+func TestMultipleSnapshotsMountAndList(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("hdiutil and diskutil are macOS-only")
+	}
+	requireTools(t, "hdiutil", "diskutil", "fsck_apfs")
+
+	const n = 3
+	imgPath := filepath.Join(t.TempDir(), "snaps.img")
+	writeImage(t, imgPath, 64*1024*1024, multiSnapshotOptions(n))
+
+	// An APFS container surfaces as a synthesized disk of its own, separate
+	// from the physical store hdiutil attached, so the volume to ask about is
+	// not simply the attached device plus a slice.
+	attach, err := exec.Command("hdiutil", "attach", "-readonly", "-nobrowse",
+		"-imagekey", "diskimage-class=CRawDiskImage", imgPath).CombinedOutput()
+	if err != nil {
+		t.Fatalf("hdiutil attach: %v\n%s", err, attach)
+	}
+	dev := devRe.FindString(string(attach))
+	defer detach(t, dev)
+
+	volume := regexp.MustCompile(`/dev/disk\d+s\d+`).FindString(string(attach))
+	if volume == "" {
+		t.Fatalf("no APFS volume device in the attach output:\n%s", attach)
+	}
+
+	out, err := exec.Command("diskutil", "apfs", "listSnapshots", volume).CombinedOutput()
+	if err != nil {
+		t.Fatalf("diskutil listSnapshots: %v\n%s", err, out)
+	}
+	t.Logf("diskutil output:\n%s", out)
+	for i := 1; i <= n; i++ {
+		if !strings.Contains(string(out), fmt.Sprintf("snap%d", i)) {
+			t.Errorf("diskutil does not list snap%d", i)
+		}
+	}
+
+	fsck, _ := exec.Command("fsck_apfs", "-n", dev).CombinedOutput()
+	if strings.Contains(string(fsck), "corrupt") {
+		t.Errorf("fsck_apfs found the volume corrupt:\n%s", fsck)
+	}
+}
