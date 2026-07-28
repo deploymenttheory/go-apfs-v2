@@ -26,7 +26,7 @@ copied through bit-for-bit.
 | Device nodes, FIFOs, sockets | **skipped entirely** | `specialFilesSkipped` |
 | Transparent compression, with `--decompress` | the file is written out in full; no content is lost | `compressionNotPreserved` |
 | ACLs on HFS+ | dropped | `aclsDropped` |
-| BSD flags (`uchg`, `hidden`, …) | dropped | `bsdFlagsDropped` |
+| BSD flags (`uchg`, `hidden`, …), except `UF_COMPRESSED` | dropped | `bsdFlagsDropped` |
 | Volume role and group (`snapshot create` only) | not carried | `volumeIdentityDropped` |
 
 Creation, change and access times are also lost: all four inode timestamps are
@@ -117,16 +117,15 @@ As they are found, one note per occurrence on stderr, capped at ten per
 category so a tree with an attribute on every file cannot bury the summary:
 
 ```
-Note: sub/b.txt: resource fork not carried across (com.apple.ResourceFork)
 Note: pipe: special file not carried across (named pipe (FIFO))
+Note: sub/b.txt: entry with BSD flags not carried across (st_flags=0x8000)
 ```
 
 Then a summary after the write:
 
 ```
 Note: 1 special file skipped: device nodes, FIFOs and sockets cannot be represented
-Note: 6 extended attributes not written
-Note: 1 resource fork not written; that is file content, not metadata
+Note: 1 entry with BSD flags written without them (uchg, hidden and the rest)
 ```
 
 `--quiet` suppresses the summary but **not** the individual notes: a lossy write

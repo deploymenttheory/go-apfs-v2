@@ -15,6 +15,7 @@ Legend: ✅ implemented · 🟡 partial · ⬜ not yet
 | Extended attributes (read) | ✅ | ✅⁶ |
 | Snapshots (read / list) | ✅ | — |
 | Snapshots (create, revert) | ✅¹ | — |
+| Several volumes per container | ✅² | — |
 | FileVault / encryption unlock | ✅¹⁰ | — |
 | `io/fs.FS` adapter | ✅ | ✅ |
 | Create empty volume | ✅ | ✅ |
@@ -22,6 +23,7 @@ Legend: ✅ implemented · 🟡 partial · ⬜ not yet
 | Populate a volume with files | ✅ | ✅ |
 | Reproducible output (`SOURCE_DATE_EPOCH`, fixed UUIDs) | ✅ | ✅ |
 | Volume roles and volume groups (read + write) | ✅² | — |
+| Transparent compression (write) | ✅⁴ | ✅⁷ |
 | Write-fidelity reporting (`--strict`) | ✅ | ✅ |
 | Resource forks (write) | ✅⁴ | ✅ |
 | Extended attributes (write) | ✅⁴ | ✅⁷ |
