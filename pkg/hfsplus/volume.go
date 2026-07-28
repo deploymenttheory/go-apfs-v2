@@ -359,7 +359,10 @@ func (v *Volume) lookup(name string) (*entry, error) {
 		if !current.isDir {
 			return nil, fmt.Errorf("%q is not a directory", current.name)
 		}
-		next := findChild(current, part, v.caseSensitive)
+		// Stored names are decomposed, so a caller passing a precomposed one --
+		// which is what a Go string literal or a path from most systems holds --
+		// would not match without this.
+		next := findChild(current, normalizeName(part), v.caseSensitive)
 		if next == nil {
 			return nil, fmt.Errorf("no such file or directory: %q", part)
 		}

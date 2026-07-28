@@ -73,11 +73,23 @@ func TestWriteReadRoundTrip(t *testing.T) {
 	}
 
 	// fstest.TestFS validates the fs.FS contract and directory walking.
+	//
+	// "café" is spelled decomposed here because that is what the volume holds:
+	// HFS+ stores names decomposed and a listing reports what is on disk, as
+	// macOS does. Looking the file up by either spelling works -- the check
+	// below does exactly that -- but TestFS compares listings by exact string.
 	if err := fstest.TestFS(v,
-		"hello.txt", "big.bin", "run.sh", "link", "café", "empty.txt",
+		"hello.txt", "big.bin", "run.sh", "link", normalizeName("café"), "empty.txt",
 		"sub/nested.txt", "sub/deep/leaf.txt",
 	); err != nil {
 		t.Errorf("fstest.TestFS: %v", err)
+	}
+
+	// A precomposed name resolves even though the volume stores it decomposed,
+	// which is the whole point: a caller's string literal or a path handed over
+	// by another system is normally precomposed.
+	if _, err := fs.ReadFile(v, "café"); err != nil {
+		t.Errorf("looking up a precomposed name: %v", err)
 	}
 
 	// Content checks.

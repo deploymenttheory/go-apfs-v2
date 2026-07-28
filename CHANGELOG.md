@@ -368,6 +368,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **HFS+ names are normalized, so macOS can find them** (`pkg/hfsplus`). HFS+
+  stores names decomposed; the writer stored them as given. A name containing a
+  precomposed character such as `ü` was therefore written in a form macOS does
+  not look for — the file was on the volume, listed by `ls`, and could not be
+  opened by name. It affected HFSX and `H+` alike.
+
+  Names are now decomposed on write, and a lookup normalizes its query, so
+  either spelling resolves. A listing reports what is on disk, as macOS does,
+  which means `ReadDir` returns the decomposed form.
+
+  The decomposition is NFD with an exclusion list, derived by observing macOS
+  (`scripts/derive-normalization.sh`): of the 12665 decomposing BMP code points,
+  523 are stored intact and the rest match NFD exactly, with none differing in
+  any other way. The exclusions are the CJK compatibility ideographs at `U+F900`+
+  and part of `U+2000`–`U+2FFF`, which HFS+ leaves alone deliberately, plus a
+  few whose decompositions postdate the behaviour Apple froze — the same reason
+  `U+1E9E` folds to itself.
+
 - **decmpfs type 5 is no longer decoded as sparse and answered with zeros.**
   It was mapped to a "compression method" that filled the caller's buffer with
   zeros, and documented as "uncompressed, stored inline". Both are wrong: per
