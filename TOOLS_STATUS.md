@@ -24,7 +24,7 @@ Legend: ✅ implemented · 🟡 partial · ⬜ not yet
 | Write-fidelity reporting (`--strict`) | ✅ | ✅ |
 | Resource forks (write) | ✅⁴ | ✅ |
 | Extended attributes (write) | ✅⁴ | ✅⁷ |
-| Hard links (write) | ✅ | ⬜ |
+| Hard links (write) | ✅ | ✅⁸ |
 
 ¹ One snapshot per image (single static checkpoint); multiple snapshots need
 distinct xids and incremental checkpoints.
@@ -50,6 +50,11 @@ needs macOS plus `afsctool`. One real one is committed: `compressed.txt` in
 covered. Both storage shapes are read: data held inline in the attribute, and
 data held in the file's resource fork in 64 KiB chunks. A compressed file's
 size is taken from its decmpfs header, since its data fork is empty.
+
+⁸ Several names for one file share a single copy of the content, through an
+indirect node in the volume's private metadata directory, as macOS does it. The
+content's extended attributes live on the indirect node, so a reader resolving
+any name reports them.
 
 ⁷ Values of any size: a small one lives inside its attribute record and a
 larger one gets an allocation extent of its own. `com.apple.decmpfs` is refused,

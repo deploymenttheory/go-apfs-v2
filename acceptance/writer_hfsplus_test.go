@@ -11,6 +11,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -49,6 +51,11 @@ func hfsSampleTree() (*hfsplus.Entry, []byte) {
 			"com.example.small": []byte("value42"),
 			"com.example.big":   bytes.Repeat([]byte("big attribute value. "), 400),
 		}},
+		// Three names for one file, so fsck_hfs judges the private metadata
+		// directory and the indirect node on every run.
+		{Name: "link-a.txt", Mode: 0o644, Data: []byte("shared content\n"), LinkGroup: 1},
+		{Name: "link-b.txt", Mode: 0o644, Data: []byte("shared content\n"), LinkGroup: 1},
+		{Name: "link-c.txt", Mode: 0o644, Data: []byte("shared content\n"), LinkGroup: 1},
 		{Name: "big.bin", Mode: 0o644, Data: big},
 		{Name: "run.sh", Mode: 0o755, Data: []byte("#!/bin/sh\necho hi\n")},
 		{Name: "link", Mode: os.ModeSymlink | 0o755, Data: []byte("hello.txt")},
@@ -205,6 +212,47 @@ func TestWriteMountsViaHdiutil(t *testing.T) {
 			if !bytes.Contains(list, []byte(want)) {
 				t.Errorf("attribute listing %q is missing %s", list, want)
 			}
+		}
+	}
+
+	// Hard links, judged by the kernel rather than by fsck. This is the check
+	// that matters: fsck_hfs will accept a private directory and an indirect
+	// node that macOS then declines to resolve, so what proves the links work
+	// is macOS reporting one inode with three names.
+	names := []string{"link-a.txt", "link-b.txt", "link-c.txt"}
+	var inode uint64
+	for _, name := range names {
+		info, err := os.Stat(filepath.Join(mnt, name))
+		if err != nil {
+			t.Errorf("stat %s: %v", name, err)
+			continue
+		}
+		st, ok := info.Sys().(*syscall.Stat_t)
+		if !ok {
+			t.Skip("no stat details on this platform")
+		}
+		if st.Nlink != uint16(len(names)) {
+			t.Errorf("%s: link count = %d, want %d", name, st.Nlink, len(names))
+		}
+		if inode == 0 {
+			inode = st.Ino
+		} else if st.Ino != inode {
+			t.Errorf("%s: inode %d differs from %d; the names are copies, not links", name, st.Ino, inode)
+		}
+		content, err := os.ReadFile(filepath.Join(mnt, name))
+		if err != nil || string(content) != "shared content\n" {
+			t.Errorf("%s = %q, %v", name, content, err)
+		}
+	}
+
+	// The private metadata directory must not be visible in a listing.
+	dirents, err := os.ReadDir(mnt)
+	if err != nil {
+		t.Fatalf("reading the mount point: %v", err)
+	}
+	for _, d := range dirents {
+		if strings.Contains(d.Name(), "HFS+ Private Data") {
+			t.Errorf("the private metadata directory is visible as %q", d.Name())
 		}
 	}
 }

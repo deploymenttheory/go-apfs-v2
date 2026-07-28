@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The HFS+ writer represents hard links** (`pkg/hfsplus`, CLI). Several names
+  for one file became independent copies; they now share one copy of the
+  content, so `hardLinksCollapsed` is zero where it counted every extra name.
+
+  HFS+ does this indirectly: the content lives in an `iNodeNNNN` file inside a
+  private directory at the volume root, and each visible name is a catalog
+  record carrying the `hlnk` type, the `hfs+` creator and that node's catalog id.
+  The shape follows a volume macOS created rather than the prose — the private
+  directory is invisible and name-locked with a mode carrying no permission
+  bits, and the indirect node holds the file's extended attributes as well as
+  its content, which is where a reader resolving a link expects to find them.
+
+  Verified through the kernel rather than only the checker: macOS mounts the
+  image and reports one inode with three names and a link count of three, and
+  the private directory does not appear in a listing.
+
 - **The HFS+ writer carries extended attributes** (`pkg/hfsplus`, CLI). It
   emitted no attributes file at all, so every attribute was dropped. Packing the
   committed HFS+ fixture now reports **every fidelity counter at zero**, and

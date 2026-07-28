@@ -425,11 +425,24 @@ func TestPackCarriesHardLinks(t *testing.T) {
 		}
 	})
 
-	t.Run("hfs+ reports them collapsed", func(t *testing.T) {
+	t.Run("hfs+ writes them as links too", func(t *testing.T) {
 		out := filepath.Join(t.TempDir(), "packed.dmg")
 		report, _ := packJSON(t, dir, out, "--fs", "hfs+", "--volname", "LINKS", "-o", "json")
-		if got := intField(t, report, "hardLinksCollapsed"); got != 2 {
-			t.Errorf("hardLinksCollapsed = %d, want 2 (three names, one inode)", got)
+		if got := intField(t, report, "hardLinksCollapsed"); got != 0 {
+			t.Errorf("hardLinksCollapsed = %d, want 0 now that HFS+ represents links", got)
+		}
+
+		dest := t.TempDir()
+		mustRun(t, "extract", out, "-C", dest, "-q")
+		for _, name := range []string{"original.txt", "link-a.txt", "link-b.txt"} {
+			got, err := os.ReadFile(filepath.Join(dest, name))
+			if err != nil {
+				t.Errorf("reading %s: %v", name, err)
+				continue
+			}
+			if string(got) != "shared content\n" {
+				t.Errorf("%s = %q", name, got)
+			}
 		}
 	})
 }
