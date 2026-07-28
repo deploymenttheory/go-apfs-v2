@@ -18,17 +18,14 @@ const formatterID = "go-apfs (apfswrite)"
 // always in the last volume: its superblock and file-system tree root, plus one
 // id per leaf when the tree spans two levels. An id at or above this is what
 // apfsck calls an "unassigned object id".
-func (b volCtx) nextContainerOID() uint64 {
-	last := uint64(b.volumeCount() - 1)
-	next := volFSTreeRootOID(last) + 1
-	if b.fsTreeTwoLevel {
-		next = volFSTreeLeafOID(last, b.numFSTreeLeaves-1) + 1
+func (b *builder) nextContainerOID() uint64 {
+	last := b.vol(uint64(len(b.vols) - 1))
+	next := volFSTreeRootOID(last.index) + 1
+	if last.fsTreeTwoLevel {
+		next = volFSTreeLeafOID(last.index, last.numFSTreeLeaves-1) + 1
 	}
 	return next
 }
-
-// volumeCount is how many volumes the container holds. One, for now.
-func (b volCtx) volumeCount() int { return 1 }
 
 // assemble writes the whole container. By the time it runs every block position
 // and all space-manager geometry are fixed, so it works in three phases: write
@@ -62,14 +59,16 @@ func (b *builder) assemble() error {
 	sb.BlockCount = b.blockCount
 	sb.IncompatibleFeatures = nxIncompatVersion2 // APFS version 2, no Fusion
 	sb.UUID = b.mainUUID
-	sb.NextOID = b.only().nextContainerOID()
+	sb.NextOID = b.nextContainerOID()
 	sb.NextXID = b.liveXID + 1
 	b.fillCheckpointAreas(sb)
 	sb.SpacemanOID = spacemanOID
 	sb.OmapOID = b.mainOmapPaddr
 	sb.ReaperOID = reaperOID
 	sb.MaxFileSystems = maxVolumes(b.blockCount * uint64(b.blocksize))
-	sb.FsOID[0] = firstVolOID
+	for i := range uint64(len(b.vols)) {
+		sb.FsOID[i] = volOID(i)
+	}
 	b.fillEphemeralInfo(&sb.EphemeralInfo[0])
 
 	// The container superblock (and its checkpoint copy) is the latest
@@ -245,13 +244,14 @@ func (b volCtx) volumeSuperblock() *apfsSuperblock {
 	vsb.IncompatibleFeatures = b.volIncompatFeatures()
 	// The snapshot volume superblocks are superblocks, not fs-allocated blocks,
 	// so they are excluded from the allocation count.
-	vsb.FsAllocCount = 5 + b.postIPBlocks - uint64(len(b.snapshots))
+	vsb.FsAllocCount = 5 + b.ownedBlocks - uint64(len(b.snapshots))
 	fillMetaCrypto(&vsb.MetaCrypto)
 	vsb.RootTreeType = objVirtual | objectTypeBtree
 	vsb.ExtentrefTreeType = objPhysical | objectTypeBtree
 	vsb.SnapMetaTreeType = objPhysical | objectTypeBtree
+	vsb.FsIndex = uint32(b.index)
 	vsb.OmapOID = b.omapPaddr
-	vsb.RootTreeOID = firstVolFSTreeRootOID
+	vsb.RootTreeOID = volFSTreeRootOID(b.index)
 	vsb.ExtentrefTreeOID = b.extentrefRootPaddr
 	vsb.SnapMetaTreeOID = b.snapRootPaddr
 	// Snapshots reserve an inode each past the highest user inode.
@@ -282,7 +282,7 @@ func (b volCtx) writeVolume(paddr, oid uint64) error {
 	if err := b.writeObjectMap(b.omapPaddr, true /* volume omap */); err != nil {
 		return err
 	}
-	if err := b.makeFSTree(b.fsTreeRootPaddr, firstVolFSTreeRootOID); err != nil {
+	if err := b.makeFSTree(b.fsTreeRootPaddr, volFSTreeRootOID(b.index)); err != nil {
 		return err
 	}
 	// The extentref tree holds one physical-extent record per file data

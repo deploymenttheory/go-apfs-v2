@@ -83,6 +83,18 @@ type CreateOptions struct {
 	// constants. Zero means no role, which is what a plain data image wants.
 	Role uint16
 
+	// Volumes describes the container's volumes when there is more than one.
+	//
+	// Leaving it empty builds a single volume from the scalar fields above,
+	// which is what every existing caller does and produces the same bytes as
+	// before. Setting both it and any of those scalars is an error rather than
+	// a precedence rule: silently preferring one is how an image gets written
+	// that is not the one asked for.
+	//
+	// The container must be large enough for them: APFS allows one volume per
+	// 512 MiB, so n volumes need more than (n-1) x 512 MiB.
+	Volumes []VolumeSpec
+
 	// VolumeGroupID identifies the volume group this volume belongs to
 	// (apfs_volume_group_id) — the system/data pairing macOS has used since
 	// Catalina. The zero value means the volume belongs to no group.
@@ -96,6 +108,30 @@ type CreateOptions struct {
 	// a grouped system volume numbers its inodes from UNIFIED_ID_SPACE_MARK
 	// upward rather than from MIN_USER_INO_NUM. See inoBaseFor.
 	VolumeGroupID [16]byte
+}
+
+// VolumeSpec describes one volume of a multi-volume container. The fields
+// mirror the single-volume options on CreateOptions.
+type VolumeSpec struct {
+	// Name is the volume label. Empty means "untitled".
+	Name string
+	// UUID is the volume UUID. The zero value derives a deterministic one from
+	// the volume's position, so a container is reproducible without the caller
+	// supplying UUIDs.
+	UUID [16]byte
+	// Role is the volume's role (apfs_role); see CreateOptions.Role.
+	Role uint16
+	// VolumeGroupID is the volume group this volume belongs to; see
+	// CreateOptions.VolumeGroupID.
+	VolumeGroupID [16]byte
+	// CaseSensitive selects a case-sensitive volume.
+	CaseSensitive bool
+	// Root is the directory tree to write into this volume.
+	Root *Entry
+	// RootFiles are regular files to create in this volume's root directory.
+	RootFiles []RootFile
+	// Snapshots are the snapshots to create on this volume.
+	Snapshots []SnapshotSpec
 }
 
 // SnapshotSpec describes one APFS snapshot to create at build time.
@@ -304,40 +340,7 @@ func CreateContainer(w io.WriterAt, sizeBytes int64, opts *CreateOptions) error 
 		b.mainUUID = defaultContainerUUID
 	}
 
-	// The container's single volume. Everything the caller asked for about a
-	// volume rather than about the container lands here.
-	v := &volBuild{index: 0}
-	b.vols = []*volBuild{v}
-
-	v.label = opts.VolumeName
-	if v.label == "" {
-		v.label = "untitled"
-	}
-	if len(v.label)+1 > volnameLen {
-		return fmt.Errorf("apfswrite: volume label too long")
-	}
-
-	v.volUUID = opts.VolumeUUID
-	if v.volUUID == ([16]byte{}) {
-		v.volUUID = defaultVolumeUUID
-	}
-
-	v.role = opts.Role
-	v.volumeGroupID = opts.VolumeGroupID
-	if err := validateRole(v.role, v.volumeGroupID); err != nil {
-		return err
-	}
-	v.inoBase = inoBaseFor(v.role, v.volumeGroupID)
-
-	// A normalization-insensitive, case-insensitive volume is the default; the
-	// public API exposes only the CaseSensitive toggle.
-	v.caseSensitive = opts.CaseSensitive
-	v.normSensitive = false
-
-	// The volume bound to its container, for the volume-scoped work below.
-	vc := volCtx{b, v}
-
-	// Resolve the timestamp before the tree and the snapshots, both of which
+	// Resolve the timestamp before the trees and the snapshots, both of which
 	// stamp it into records.
 	fixed := opts.FixedTime
 	if fixed.IsZero() {
@@ -346,14 +349,11 @@ func CreateContainer(w io.WriterAt, sizeBytes int64, opts *CreateOptions) error 
 	b.timestamp = uint64(fixed.UnixNano())
 	b.clampTime = opts.ClampModTimes
 
-	// Resolve the user directory tree (nested dirs + regular files of any size)
-	// so its space requirements can size the image when the caller passes 0.
-	if err := vc.setTree(opts); err != nil {
+	specs, err := volumeSpecs(opts)
+	if err != nil {
 		return err
 	}
-
-	// Resolve the requested snapshots (xids, live xid, block count).
-	if err := vc.setSnapshots(opts); err != nil {
+	if err := b.setVolumes(specs); err != nil {
 		return err
 	}
 
@@ -364,10 +364,23 @@ func CreateContainer(w io.WriterAt, sizeBytes int64, opts *CreateOptions) error 
 		// file-system tree leaves, extentref leaves, file data, snapshot objects) plus the
 		// fixed metadata, block-aligned, with headroom for the pool and
 		// checkpoint areas.
-		payload := vc.numFSTreeLeaves + vc.numExtentrefLeaves + vc.fileDataBlocks + vc.snapBlocks
+		var payload uint64
+		for i := range uint64(len(b.vols)) {
+			v := b.vol(i)
+			payload += v.numFSTreeLeaves + v.numExtentrefLeaves + v.fileDataBlocks + v.snapBlocks
+		}
 		needBlocks := payload + payload/8 + 2048
 		sizeBytes = max(int64(needBlocks)*int64(b.blocksize), minBytes)
 	}
+	// APFS allows one volume per 512 MiB of container, capped at 100, and
+	// records that limit in the superblock. A container too small for the
+	// volumes asked for would be rejected on mount, so it is refused here with
+	// the size it would need.
+	if allowed := maxVolumes(uint64(sizeBytes)); uint32(len(b.vols)) > allowed {
+		return fmt.Errorf("apfswrite: %d volumes need a container of at least %d MiB; %d MiB allows %d",
+			len(b.vols), uint64(len(b.vols))*512, uint64(sizeBytes)/(1024*1024), allowed)
+	}
+
 	b.mainBlockCount = uint64(sizeBytes) / uint64(b.blocksize)
 	b.blockCount = b.mainBlockCount
 	if b.mainBlockCount*uint64(b.blocksize) < minBytes {
@@ -383,8 +396,8 @@ func CreateContainer(w io.WriterAt, sizeBytes int64, opts *CreateOptions) error 
 		return err
 	}
 	b.sizeCheckpointAreas()
-	vc.layoutFixedBlocks()
-	if err := vc.spacemanPlacement(); err != nil {
+	b.layoutFixedBlocks()
+	if err := b.spacemanPlacement(); err != nil {
 		return err
 	}
 	if err := b.assemble(); err != nil {
@@ -549,6 +562,11 @@ type volBuild struct {
 	// Snapshots. Each captures the built state (snapshot == live). The snapshot
 	// objects (a per-snapshot snapshot volume superblock + snap_meta_ext, and one shared
 	// object-map snapshot tree) live at the end of the post-internal-pool region.
+	// ownedBlocks is how many post-pool blocks this volume owns. The volume
+	// superblock's allocation count is derived from it, so it is per volume
+	// rather than the container's total.
+	ownedBlocks uint64
+
 	snapshots        []*snapBuild
 	snapBase         uint64 // first block of the snapshot object region
 	snapBlocks       uint64 // total blocks in the snapshot object region
@@ -575,6 +593,107 @@ func (b *builder) only() volCtx { return b.vol(0) }
 // a fixed value rather than the wall clock so that identical input produces
 // identical bytes: a container built twice is byte-for-byte the same.
 var DefaultTime = time.Date(2024, time.January, 1, 0, 0, 0, 0, time.UTC)
+
+// volumeSpecs turns CreateOptions into the list of volumes to build.
+//
+// The scalar single-volume fields and the Volumes list are alternatives, not
+// layers: setting both is refused rather than resolved by precedence, because
+// silently preferring one writes a container the caller did not ask for.
+func volumeSpecs(opts *CreateOptions) ([]VolumeSpec, error) {
+	scalarsUsed := opts.VolumeName != "" || opts.VolumeUUID != ([16]byte{}) ||
+		opts.Role != 0 || opts.VolumeGroupID != ([16]byte{}) || opts.CaseSensitive ||
+		opts.Root != nil || len(opts.RootFiles) > 0 || len(opts.Snapshots) > 0
+
+	if len(opts.Volumes) == 0 {
+		return []VolumeSpec{{
+			Name:          opts.VolumeName,
+			UUID:          opts.VolumeUUID,
+			Role:          opts.Role,
+			VolumeGroupID: opts.VolumeGroupID,
+			CaseSensitive: opts.CaseSensitive,
+			Root:          opts.Root,
+			RootFiles:     opts.RootFiles,
+			Snapshots:     opts.Snapshots,
+		}}, nil
+	}
+	if scalarsUsed {
+		return nil, fmt.Errorf("apfswrite: Volumes is set alongside the single-volume fields; use one or the other")
+	}
+	return opts.Volumes, nil
+}
+
+// setVolumes resolves every volume: its parameters, its tree and its snapshots.
+// Transaction ids are handed out from one container-wide counter, so the live
+// xid ends up past every snapshot on every volume.
+func (b *builder) setVolumes(specs []VolumeSpec) error {
+	b.vols = make([]*volBuild, len(specs))
+	for i := range specs {
+		b.vols[i] = &volBuild{index: uint64(i)}
+	}
+
+	nextXID := uint64(formatXID)
+	for i, spec := range specs {
+		v := b.vol(uint64(i))
+
+		v.label = spec.Name
+		if v.label == "" {
+			v.label = "untitled"
+		}
+		if len(v.label)+1 > volnameLen {
+			return fmt.Errorf("apfswrite: volume %d: label too long", i)
+		}
+
+		v.volUUID = spec.UUID
+		if v.volUUID == ([16]byte{}) {
+			v.volUUID = defaultVolumeUUIDFor(uint64(i))
+		}
+
+		v.role = spec.Role
+		v.volumeGroupID = spec.VolumeGroupID
+		if err := validateRole(v.role, v.volumeGroupID); err != nil {
+			return err
+		}
+		v.inoBase = inoBaseFor(v.role, v.volumeGroupID)
+
+		// A normalization-insensitive, case-insensitive volume is the default;
+		// the public API exposes only the CaseSensitive toggle.
+		v.caseSensitive = spec.CaseSensitive
+		v.normSensitive = false
+
+		if err := v.setTree(spec); err != nil {
+			return err
+		}
+		next, err := v.setSnapshots(spec, nextXID)
+		if err != nil {
+			return err
+		}
+		nextXID = next
+	}
+
+	// The live state is one transaction past the newest snapshot anywhere in
+	// the container. With no snapshots at all it stays at the format id, which
+	// keeps the single-state layout.
+	b.liveXID = nextXID
+	if b.liveXID == formatXID {
+		return nil
+	}
+	return nil
+}
+
+// defaultVolumeUUIDFor derives a deterministic UUID for a volume that was not
+// given one, so a multi-volume container is reproducible without the caller
+// supplying identifiers. The first volume keeps the historical value, which is
+// what makes a single-volume container byte-identical to one written before
+// there could be several.
+func defaultVolumeUUIDFor(index uint64) [16]byte {
+	u := defaultVolumeUUID
+	if index == 0 {
+		return u
+	}
+	// Vary the last byte, which the historical value leaves at zero.
+	u[15] = byte(index)
+	return u
+}
 
 // validateRole rejects role and volume-group combinations that produce an image
 // a checker will reject, so the caller gets an error rather than a container
@@ -679,13 +798,6 @@ func volOID(vol uint64) uint64                 { return firstVolOIDBase + vol*vo
 func volFSTreeRootOID(vol uint64) uint64       { return volOID(vol) + 1 }
 func volFSTreeLeafOID(vol, leaf uint64) uint64 { return volOID(vol) + 2 + leaf }
 
-// The first volume's ids, which is all this writer emits today.
-const (
-	firstVolOID           = firstVolOIDBase     // 1028
-	firstVolFSTreeRootOID = firstVolOIDBase + 1 // 1029
-	fsTreeLeafOIDBase     = firstVolOIDBase + 2 // 1030
-)
-
 // Checkpoint-area floors. fsck_apfs rejects a container whose checkpoint areas
 // are smaller than eight blocks each, so both areas are reserved at no less than
 // that even when the single static checkpoint uses fewer.
@@ -711,7 +823,7 @@ func (b *builder) sizeCheckpointAreas() {
 // follow the data area in a fixed order, and the internal-pool bitmap begins ten
 // blocks past the data area (two of which — the Fusion middle-tree and
 // write-back-cache slots — are intentionally left unused).
-func (b volCtx) layoutFixedBlocks() {
+func (b *builder) layoutFixedBlocks() {
 	b.xpDescBase = nxBlockNum + 1
 	b.xpDataBase = b.xpDescBase + uint64(b.xpDescBlocks)
 	b.xpEnd = b.xpDataBase + uint64(b.xpDataBlocks)
@@ -720,13 +832,37 @@ func (b volCtx) layoutFixedBlocks() {
 	b.xpSuperPaddr = b.xpMapPaddr + 1
 	b.mainOmapPaddr = b.xpEnd
 	b.mainOmapRootPaddr = b.xpEnd + 1
-	b.volPaddr = b.xpEnd + 2
-	b.omapPaddr = b.xpEnd + 3
-	b.omapRootPaddr = b.xpEnd + 4
-	b.fsTreeRootPaddr = b.xpEnd + 5
-	b.extentrefRootPaddr = b.xpEnd + 6
-	b.snapRootPaddr = b.xpEnd + 7
-	b.ipBmapBase = b.xpEnd + 10 // +8 and +9 are the unused Fusion slots
+
+	// The volumes' fixed blocks run contiguously from here, so adding one
+	// extends the run rather than opening a third span. That matters because
+	// the space manager accounts allocated blocks as two spans -- the metadata
+	// at the front and the pool behind it -- and a third would not fit that
+	// model.
+	for i := range uint64(len(b.vols)) {
+		b.vol(i).layoutVolumeBlocks()
+	}
+	// +0 and +1 past the volumes are the unused Fusion slots.
+	b.ipBmapBase = b.volFixedBase() + volFixedBlocks*uint64(len(b.vols)) + 2
+}
+
+// volFixedBase is the first block of the volumes' fixed metadata, just past the
+// container's own object map.
+func (b *builder) volFixedBase() uint64 { return b.xpEnd + 2 }
+
+// volFixedBlocks is how many fixed blocks each volume takes: its superblock,
+// its object map and that map's root, its file-system tree root, its
+// extent-reference tree root and its snapshot-metadata tree root.
+const volFixedBlocks = 6
+
+// layoutVolumeBlocks places one volume's fixed blocks within the run.
+func (b volCtx) layoutVolumeBlocks() {
+	base := b.volFixedBase() + volFixedBlocks*b.index
+	b.volPaddr = base
+	b.omapPaddr = base + 1
+	b.omapRootPaddr = base + 2
+	b.fsTreeRootPaddr = base + 3
+	b.extentrefRootPaddr = base + 4
+	b.snapRootPaddr = base + 5
 }
 
 // writeBlocks writes count blocks of data starting at block number paddr.

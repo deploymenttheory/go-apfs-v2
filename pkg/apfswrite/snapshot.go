@@ -36,52 +36,49 @@ const objIDMask = 0x0fffffffffffffff
 // do not fit, so short names go much further than this.
 const maxSnapshots = 64
 
-// setSnapshots resolves opts.Snapshots into the builder. It validates the names,
-// assigns each snapshot a transaction id (1..N in request order), sets the live
-// xid one past the last snapshot, and counts the snapshot object blocks. With no
-// snapshots the live xid stays at formatXID, preserving the single-state layout.
-func (b volCtx) setSnapshots(opts *CreateOptions) error {
-	b.liveXID = formatXID
-	if len(opts.Snapshots) == 0 {
-		return nil
+// setSnapshots resolves one volume's snapshots. It validates the names, assigns
+// each a transaction id starting at firstXID, and counts the snapshot object
+// blocks. It returns the next free transaction id.
+//
+// Transaction ids belong to the container, not to a volume: two volumes'
+// snapshots are two points in the container's history, so they are numbered
+// from a single counter rather than each starting at one.
+func (b volCtx) setSnapshots(spec VolumeSpec, firstXID uint64) (uint64, error) {
+	if len(spec.Snapshots) == 0 {
+		return firstXID, nil
 	}
-	if len(opts.Snapshots) > maxSnapshots {
-		return fmt.Errorf("apfswrite: %d snapshots requested; at most %d are supported", len(opts.Snapshots), maxSnapshots)
+	if len(spec.Snapshots) > maxSnapshots {
+		return 0, fmt.Errorf("apfswrite: %d snapshots requested; at most %d are supported", len(spec.Snapshots), maxSnapshots)
 	}
 	// Each snapshot copies the extentref tree; only the single-leaf shape
 	// is supported for now, which covers volumes up to a few thousand extents.
 	if b.extentrefTwoLevel {
-		return fmt.Errorf("apfswrite: snapshots are not yet supported for volumes with a 2-level extentref tree")
+		return 0, fmt.Errorf("apfswrite: snapshots are not yet supported for volumes with a 2-level extentref tree")
 	}
 	// Each snapshot is associated with a distinct inode number reserved past the
 	// highest user inode; fsck_apfs rejects a zero inum.
 	inumBase := b.nextObjID()
-	seen := make(map[string]bool, len(opts.Snapshots))
-	for i, s := range opts.Snapshots {
+	seen := make(map[string]bool, len(spec.Snapshots))
+	for i, s := range spec.Snapshots {
 		if s.Name == "" {
-			return fmt.Errorf("apfswrite: snapshot %d has an empty name", i)
+			return 0, fmt.Errorf("apfswrite: snapshot %d has an empty name", i)
 		}
 		if strings.ContainsRune(s.Name, 0) {
-			return fmt.Errorf("apfswrite: snapshot name %q contains a NUL", s.Name)
+			return 0, fmt.Errorf("apfswrite: snapshot name %q contains a NUL", s.Name)
 		}
 		if seen[s.Name] {
-			return fmt.Errorf("apfswrite: duplicate snapshot name %q", s.Name)
+			return 0, fmt.Errorf("apfswrite: duplicate snapshot name %q", s.Name)
 		}
 		seen[s.Name] = true
 		mtime := b.entryTime(s.ModTime)
 		b.snapshots = append(b.snapshots, &snapBuild{
-			name: s.Name, xid: uint64(i) + 1, mtime: mtime, inum: inumBase + uint64(i),
+			name: s.Name, xid: firstXID + uint64(i), mtime: mtime, inum: inumBase + uint64(i),
 		})
 	}
-	// The live volume sits one transaction past the newest snapshot, which is
-	// what makes them snapshots of an earlier state rather than of the state
-	// that is live. A predecessor checkpoint at the snapshot's id is written
-	// alongside the live one; see writeCheckpoints.
-	b.liveXID = uint64(len(b.snapshots)) + 1
 	// One shared omap snapshot tree, plus a snapshot volume superblock and an
 	// extentref tree copy per snapshot.
 	b.snapBlocks = 1 + 2*uint64(len(b.snapshots))
-	return nil
+	return firstXID + uint64(len(b.snapshots)), nil
 }
 
 // placeSnapshots assigns block numbers to the snapshot objects starting at base:

@@ -42,9 +42,9 @@ handled. The object map is not encrypted even on a FileVault volume; the
 file-system tree and file contents are. Writing an encrypted volume is not
 supported and is not planned.
 
-² Roles read and written in full. A volume group can only be written on a
-system volume: a group is a system/data pair and the writer emits one volume
-per container, so the resulting group has no data half. A grouped system
+² Roles read and written in full. Several volumes per container are written
+through `CreateOptions.Volumes`, one per 512 MiB as the format allows. A volume
+group still needs both halves declared together, which is the remaining step. A grouped system
 volume numbers its inodes from `UNIFIED_ID_SPACE_MARK` upward, which is the
 obligation `APFS_FEATURE_VOLGRP_SYSTEM_INO_SPACE` takes on; the reserved
 numbers below `MIN_USER_INO_NUM` stay where they are, which is where the spec
