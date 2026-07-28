@@ -612,3 +612,68 @@ func TestMultipleVolumesMountSeparately(t *testing.T) {
 		t.Errorf("fsck_apfs found the container corrupt:\n%s", fsck)
 	}
 }
+
+// TestSnapshotsAcrossVolumesRecognized is the driver's verdict on the last
+// piece of multi-volume support: each volume's snapshots must be its own, and
+// their transaction ids must form one sequence across the container.
+func TestSnapshotsAcrossVolumesRecognized(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("hdiutil and diskutil are macOS-only")
+	}
+	requireTools(t, "hdiutil", "diskutil", "fsck_apfs")
+
+	imgPath := filepath.Join(t.TempDir(), "volsnaps.img")
+	writeImage(t, imgPath, multiVolumeBytes(2), &apfswrite.CreateOptions{
+		Volumes: []apfswrite.VolumeSpec{
+			{Name: "SnapVol1", Root: &apfswrite.Entry{Children: []*apfswrite.Entry{
+				{Name: "file1.txt", Data: []byte("volume 1\n")},
+			}}, Snapshots: []apfswrite.SnapshotSpec{{Name: "v1snapA"}, {Name: "v1snapB"}}},
+			{Name: "SnapVol2", Root: &apfswrite.Entry{Children: []*apfswrite.Entry{
+				{Name: "file2.txt", Data: []byte("volume 2\n")},
+			}}, Snapshots: []apfswrite.SnapshotSpec{{Name: "v2snapA"}}},
+		},
+	})
+
+	out, err := exec.Command("hdiutil", "attach", "-readonly", "-nobrowse",
+		"-imagekey", "diskimage-class=CRawDiskImage", imgPath).CombinedOutput()
+	if err != nil {
+		t.Fatalf("hdiutil attach: %v\n%s", err, out)
+	}
+	dev := devRe.FindString(string(out))
+	defer detach(t, dev)
+
+	volumes := regexp.MustCompile(`/dev/disk\d+s\d+`).FindAllString(string(out), -1)
+	if len(volumes) != 2 {
+		t.Fatalf("attached %d volume devices, want 2:\n%s", len(volumes), out)
+	}
+
+	// Each volume's own snapshots, and none of the other's.
+	want := [][]string{{"v1snapA", "v1snapB"}, {"v2snapA"}}
+	for i, volume := range volumes {
+		listing, err := exec.Command("diskutil", "apfs", "listSnapshots", volume).CombinedOutput()
+		if err != nil {
+			t.Fatalf("diskutil listSnapshots %s: %v\n%s", volume, err, listing)
+		}
+		t.Logf("%s:\n%s", volume, listing)
+		for _, name := range want[i] {
+			if !strings.Contains(string(listing), name) {
+				t.Errorf("%s does not list %s", volume, name)
+			}
+		}
+		for j, other := range want {
+			if j == i {
+				continue
+			}
+			for _, name := range other {
+				if strings.Contains(string(listing), name) {
+					t.Errorf("%s lists %s, which belongs to another volume", volume, name)
+				}
+			}
+		}
+	}
+
+	fsck, _ := exec.Command("fsck_apfs", "-n", dev).CombinedOutput()
+	if strings.Contains(string(fsck), "corrupt") {
+		t.Errorf("fsck_apfs found the container corrupt:\n%s", fsck)
+	}
+}

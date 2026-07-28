@@ -27,8 +27,10 @@ Legend: ✅ implemented · 🟡 partial · ⬜ not yet
 | Extended attributes (write) | ✅⁴ | ✅⁷ |
 | Hard links (write) | ✅ | ✅⁸ |
 
-¹ Several snapshots per image, each at its own transaction id, with the live
-volume one past the newest. macOS refuses to mount a container whose only
+¹ Several snapshots per volume and per container, each at its own transaction
+id, with the live state one past the newest. Transaction ids come from a single
+container-wide sequence, since two volumes' snapshots are two points in the same
+history. The live state is one past the newest. macOS refuses to mount a container whose only
 checkpoint sits at a raised id with nothing before it, so a predecessor
 checkpoint is written alongside the live one describing the same objects. The
 cap is the snapshot-metadata tree, built here as a single node.
