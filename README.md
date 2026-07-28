@@ -31,7 +31,7 @@ $ apfs extract Firefox.dmg -C ./out --verify
 | Capability | APFS | HFS+ / HFSX |
 | --- | :---: | :---: |
 | Read: info, list, cat, extract, inspect | ✅ | ✅ |
-| Mount read-only (FUSE, Linux/macOS) | ✅ | — |
+| Mount read-only (FUSE, Linux/macOS) | ✅ | ✅ |
 | FileVault (AES-128-XTS) unlock | ✅ | — |
 | Transparent compression (zlib / LZVN / LZFSE) | ✅ | ✅ |
 | Repack a DMG losslessly (`pack`) | ✅ | ✅ |

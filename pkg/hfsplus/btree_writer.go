@@ -347,15 +347,15 @@ func chunkRecords(nodeSize int, recs []btRecord) [][]btRecord {
 // nodes (bit set == in use), MSB-first.
 func packHeaderNode(nodeSize int, t builtTree, keyCompareType BTHeaderKeyCompareType, attributes uint32, maxKeyLength uint16, totalNodes, usedNodes uint32) []byte {
 	hdr := BTHeaderRec{
-		TreeDepth:      t.treeDepth,
-		RootNode:       t.rootNode,
-		LeafRecords:    t.leafRecords,
-		FirstLeafNode:  t.firstLeafNode,
-		LastLeafNode:   t.lastLeafNode,
-		NodeSize:       uint16(nodeSize),
-		MaxKeyLength:   maxKeyLength,
-		TotalNodes:     totalNodes,
-		FreeNodes:      totalNodes - usedNodes,
+		TreeDepth:     t.treeDepth,
+		RootNode:      t.rootNode,
+		LeafRecords:   t.leafRecords,
+		FirstLeafNode: t.firstLeafNode,
+		LastLeafNode:  t.lastLeafNode,
+		NodeSize:      uint16(nodeSize),
+		MaxKeyLength:  maxKeyLength,
+		TotalNodes:    totalNodes,
+		FreeNodes:     totalNodes - usedNodes,
 		// A B-tree file's clump size is its own size. fsck_hfs rejects anything
 		// else on a pure HFS+ volume ("Invalid file clump size"), though it
 		// does not check this on HFSX.

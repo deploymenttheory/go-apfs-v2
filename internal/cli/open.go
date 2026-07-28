@@ -49,6 +49,28 @@ func sniffFileSystem(reader io.ReaderAt) string {
 	return ""
 }
 
+// detectFileSystem reports which file system an image holds: "apfs",
+// "hfsplus" or "". It opens and closes the image, so callers that go on to
+// read it pay for the open twice -- which is worth it for commands that must
+// dispatch before they know what they are looking at.
+func detectFileSystem(imagePath string) (string, error) {
+	reader, sniffedOffset, closer, err := disk.OpenWithOffset(imagePath)
+	if err != nil {
+		return "", withCode(ExitBadImage, fmt.Errorf("unable to open image: %w", err))
+	}
+	defer closer.Close()
+
+	offset := opts.Offset
+	if offset == 0 {
+		offset = sniffedOffset
+	}
+	base := io.ReaderAt(reader)
+	if offset != 0 {
+		base = io.NewSectionReader(reader, offset, math.MaxInt64-offset)
+	}
+	return sniffFileSystem(base), nil
+}
+
 // openFileSystem opens an image and returns the selected volume as a
 // file system, dispatching on the detected file system type (APFS or HFS+).
 func openFileSystem(imagePath string) (volumeFS, io.Closer, error) {

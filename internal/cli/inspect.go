@@ -2,6 +2,7 @@
 package cli
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -15,20 +16,23 @@ var (
 
 var inspectCmd = &cobra.Command{
 	Use:   "inspect IMAGE [block N | fstree]",
-	Short: "Low-level structural inspection of a container",
-	Long: `Walk the on-disk structures of an APFS container for debugging and
-forensics. Text output only.
+	Short: "Low-level structural inspection of a volume",
+	Long: `Walk the on-disk structures of an APFS container or HFS+ volume for
+debugging and forensics. Text output only. The file system is detected
+automatically.
 
 Modes:
-  inspect IMAGE            structural walk: superblock, checkpoints, object
-                           maps, volumes (the default)
+  inspect IMAGE            structural walk (the default). For APFS: superblock,
+                           checkpoints, object maps, volumes. For HFS+: volume
+                           header, special files and their B-tree headers.
   inspect IMAGE block N    decode one block by physical address (N accepts
-                           decimal or 0x hex)
+                           decimal or 0x hex). APFS only.
   inspect IMAGE fstree     interactively explore the file-system tree
-                           (tree roots are resolved automatically)
+                           (tree roots are resolved automatically). APFS only.
 
 Examples:
   apfs inspect image.dmg
+  apfs inspect hfs.dmg
   apfs inspect image.dmg block 0
   apfs inspect image.dmg block 0x1b0c1
   apfs inspect image.dmg fstree`,
@@ -48,6 +52,22 @@ func runInspect(cmd *cobra.Command, args []string) error {
 
 	if opts.Output == "json" {
 		return usageErrorf("inspect produces text output only")
+	}
+
+	kind, err := detectFileSystem(imagePath)
+	if err != nil {
+		return err
+	}
+
+	// HFS+ has no container, checkpoints or object map, so the block and
+	// fstree modes have nothing to decode. Say which mode is missing rather
+	// than reporting the file system as unsupported outright.
+	if kind == "hfsplus" {
+		if len(args) > 1 {
+			return withCode(ExitUnsupported,
+				fmt.Errorf("inspect %s is APFS-only; HFS+ supports the structural walk (apfs inspect %s)", args[1], imagePath))
+		}
+		return runInspectHFSPlus(imagePath, opts.Verbose)
 	}
 
 	if len(args) == 1 {

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"strconv"
 	"syscall"
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/tools"
@@ -14,15 +13,19 @@ import (
 
 var mountCmd = &cobra.Command{
 	Use:   "mount IMAGE MOUNTPOINT",
-	Short: "Mount an APFS image read-only via FUSE (Linux and macOS)",
-	Long: `Mount an APFS image read-only using FUSE. Available on Linux and
-macOS (requires macFUSE); on other platforms this command exits with code 5.
+	Short: "Mount an image read-only via FUSE (Linux and macOS)",
+	Long: `Mount an APFS or HFS+ image read-only using FUSE. Available on Linux
+and macOS (requires macFUSE); on other platforms this command exits with code 5.
+
+The file system is detected automatically. Extended attributes are served for
+volumes that carry them, so xattr and ls -l@ work against the mount.
 
 Press Ctrl+C to unmount.
 
 Examples:
-  apfs mount image.dmg /mnt/apfs
-  apfs mount -v 1 image.dmg /mnt/apfs`,
+  apfs mount image.dmg /mnt/image
+  apfs mount -v 1 image.dmg /mnt/image
+  apfs mount -p secret encrypted.dmg /mnt/image`,
 	Args: exactArgs(2, "IMAGE MOUNTPOINT"),
 	RunE: runMount,
 }
@@ -37,49 +40,16 @@ func runMount(cmd *cobra.Command, args []string) error {
 		return usageErrorf("mount point is not a directory")
 	}
 
-	mountHandle := tools.NewMountHandle()
-
-	if opts.Verbose {
-		mountHandle.NotifyStream = os.Stderr
-	}
-
-	volumeIndex := 0
-	if opts.Volume != "" {
-		index, err := strconv.Atoi(opts.Volume)
-		if err != nil {
-			return usageErrorf("mount selects volumes by index: %v", err)
-		}
-		volumeIndex = index
-	}
-
-	if opts.Offset != 0 {
-		mountHandle.VolumeOffset = opts.Offset
-	}
-	if opts.Password != "" {
-		if err := mountHandle.SetPassword(opts.Password); err != nil {
-			return err
-		}
-	}
-	if opts.RecoveryPassword != "" {
-		if err := mountHandle.SetRecoveryPassword(opts.RecoveryPassword); err != nil {
-			return err
-		}
-	}
-
-	if err := mountHandle.Open(imagePath); err != nil {
-		return withCode(ExitBadImage, fmt.Errorf("unable to open container: %w", err))
-	}
-	defer mountHandle.Close()
-
-	numVolumes, err := mountHandle.NumberOfVolumes()
+	// The opener list, cat and extract already share, so mount honours
+	// --volume, --offset and the password flags identically -- and works for
+	// every file system this tool reads rather than only APFS.
+	volume, closer, err := openFileSystem(imagePath)
 	if err != nil {
-		return fmt.Errorf("unable to get number of volumes: %w", err)
+		return err
 	}
-	if volumeIndex < 0 || volumeIndex >= numVolumes {
-		return usageErrorf("invalid volume index: %d (available: 0-%d)", volumeIndex, numVolumes-1)
-	}
+	defer closer.Close()
 
-	server, err := tools.MountAPFS(mountHandle, volumeIndex, mountPoint, opts.Verbose)
+	server, err := tools.MountVolumeFS(volume, "apfs", mountPoint, opts.Verbose)
 	if err != nil {
 		return withCode(ExitUnsupported, fmt.Errorf("unable to mount file system: %w", err))
 	}
@@ -96,7 +66,7 @@ func runMount(cmd *cobra.Command, args []string) error {
 		fmt.Fprintln(os.Stderr, "\nUnmounting...")
 	}
 
-	if err := tools.UnmountAPFS(server); err != nil {
+	if err := server.Unmount(); err != nil {
 		return fmt.Errorf("error during unmount: %w", err)
 	}
 
