@@ -36,14 +36,81 @@ func groupedTree() *apfswrite.Entry {
 	}}
 }
 
+// groupedVolume returns the system half of a complete volume group. A group is
+// a system/data pair, so both halves are written even when only one is being
+// examined.
 func groupedVolume(t *testing.T) *apfs.Volume {
 	t.Helper()
-	return openVolume(t, &apfswrite.CreateOptions{
-		VolumeName:    "GROUP",
-		Role:          apfs.VolumeRoleSystem,
-		VolumeGroupID: testGroupID,
-		Root:          groupedTree(),
+	return groupedPair(t)[0]
+}
+
+// groupedPair writes a system/data group and returns both volumes in order.
+func groupedPair(t *testing.T) []*apfs.Volume {
+	t.Helper()
+	img := &memImage{}
+	err := apfswrite.CreateContainer(img, 1024*1024*1024, &apfswrite.CreateOptions{
+		Volumes: []apfswrite.VolumeSpec{
+			{Name: "GROUP", Role: apfs.VolumeRoleSystem, VolumeGroupID: testGroupID, Root: groupedTree()},
+			{Name: "GROUPDATA", Role: apfs.VolumeRoleData, VolumeGroupID: testGroupID, Root: groupedTree()},
+		},
 	})
+	if err != nil {
+		t.Fatalf("CreateContainer: %v", err)
+	}
+	container, err := apfs.Open(img, &apfs.OpenOptions{})
+	if err != nil {
+		t.Fatalf("apfs.Open: %v", err)
+	}
+	volumes, err := container.Volumes()
+	if err != nil {
+		t.Fatalf("Volumes: %v", err)
+	}
+	if len(volumes) != 2 {
+		t.Fatalf("container holds %d volumes, want 2", len(volumes))
+	}
+	return volumes
+}
+
+// TestVolumeGroupHalvesUseOppositeInodeSpaces is what the single-volume tests
+// could only assert one side of: the two halves share one inode-number space,
+// divided at UNIFIED_ID_SPACE_MARK, so a number identifies a file across the
+// pair. Until a group could have both halves this was untestable.
+func TestVolumeGroupHalvesUseOppositeInodeSpaces(t *testing.T) {
+	volumes := groupedPair(t)
+
+	for i, tc := range []struct {
+		name  string
+		above bool
+	}{
+		{"system", true},
+		{"data", false},
+	} {
+		root, err := volumes[i].RootDirectory()
+		if err != nil {
+			t.Fatalf("%s: RootDirectory: %v", tc.name, err)
+		}
+		n, err := root.NumberOfSubFileEntries()
+		if err != nil {
+			t.Fatalf("%s: NumberOfSubFileEntries: %v", tc.name, err)
+		}
+		for j := range n {
+			child, err := root.SubFileEntryByIndex(j)
+			if err != nil {
+				t.Fatalf("%s: SubFileEntryByIndex(%d): %v", tc.name, j, err)
+			}
+			id, err := child.Identifier()
+			if err != nil {
+				t.Fatalf("%s: Identifier: %v", tc.name, err)
+			}
+			if above := id >= apfs.UnifiedIDSpaceMark; above != tc.above {
+				childName, _ := child.UTF8Name()
+				t.Errorf("%s half: %s has inode %#x, which is %s the mark; want %s",
+					tc.name, childName, id,
+					map[bool]string{true: "above", false: "below"}[above],
+					map[bool]string{true: "above", false: "below"}[tc.above])
+			}
+		}
+	}
 }
 
 // TestSystemVolumeInGroupNumbersUserInodesAboveMark is the bug: every inode the

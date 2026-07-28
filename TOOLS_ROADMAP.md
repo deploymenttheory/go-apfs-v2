@@ -10,6 +10,10 @@ what is planned or under consideration, roughly in priority order.
   volume (files of any size, symlinks, nested directories) and `create --fs
   apfs` formats an empty one, in pure Go. Validated against `fsck_apfs`,
   `hdiutil` and `apfsck`.
+- **Multi-volume containers and volume groups** — `CreateOptions.Volumes`
+  writes several volumes per container, and `create --volume-group` writes a
+  complete system/data pair. Validated against `apfsck`'s volume-group checks,
+  which a lone system volume could never exercise.
 - **APFS snapshots** — `apfs snapshot {create,list,revert,verify}` and the
   `--snapshot` flag on `create`/`pack`. Spec-compliant snapshots recognized by
   macOS (`diskutil apfs listSnapshots`); revert marks `revert_to_xid` for
@@ -31,9 +35,6 @@ what is planned or under consideration, roughly in priority order.
 
 - **decmpfs on write** — needs the compression machinery and the inode's
   BSD flags, not just the attribute.
-- **Volume groups on the write side.** Several volumes per container are
-  written now; a group additionally needs its system and data halves validated
-  as a set.
 
 ## Under consideration
 

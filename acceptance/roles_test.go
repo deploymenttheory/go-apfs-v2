@@ -87,19 +87,39 @@ func TestCreateWithRoleRoundTrip(t *testing.T) {
 }
 
 // TestCreateVolumeGroup checks the group identifier round-trips and is reported.
+// TestCreateVolumeGroup checks --volume-group produces a complete group. A
+// group is a system/data pair, so one flag makes both halves: asking for only
+// one would be asking for a group that is not one, and the writer refuses it.
 func TestCreateVolumeGroup(t *testing.T) {
 	const groupID = "11111111-2222-3333-4444-555555555555"
 	image := filepath.Join(t.TempDir(), "group.dmg")
 	mustRun(t, "create", image, "--fs", "apfs", "--volname", "Macintosh HD",
-		"--role", "system", "--volume-group", groupID, "-q")
+		"--volume-group", groupID, "-q")
 
-	got := infoRoleJSON(t, image)
-	if got.Role != "system" {
-		t.Errorf("role = %q, want system", got.Role)
+	var info roleInfoJSON
+	if err := json.Unmarshal([]byte(mustRun(t, "info", image, "-o", "json")), &info); err != nil {
+		t.Fatalf("parsing info JSON: %v", err)
 	}
-	if got.VolumeGroupID != groupID {
-		t.Errorf("volume group id = %q, want %q", got.VolumeGroupID, groupID)
+	if len(info.Volumes) != 2 {
+		t.Fatalf("volume count = %d, want 2: a group is a system/data pair", len(info.Volumes))
 	}
+
+	for i, want := range []struct{ role, name string }{
+		{"system", "Macintosh HD"},
+		{"data", "Macintosh HD - Data"},
+	} {
+		got := info.Volumes[i]
+		if got.Role != want.role {
+			t.Errorf("volume %d role = %q, want %q", i, got.Role, want.role)
+		}
+		if got.Name != want.name {
+			t.Errorf("volume %d name = %q, want %q", i, got.Name, want.name)
+		}
+		if got.VolumeGroupID != groupID {
+			t.Errorf("volume %d group id = %q, want %q", i, got.VolumeGroupID, groupID)
+		}
+	}
+
 	if out := mustRun(t, "info", image); !strings.Contains(out, "Volume group") {
 		t.Errorf("text output does not report the volume group:\n%s", out)
 	}
@@ -119,9 +139,7 @@ func TestRoleFlagsRejected(t *testing.T) {
 		// A volume group is a system/data pair and only one volume per
 		// container can be written, so the data half cannot stand alone:
 		// apfsck's "system volume is missing" is its hard-corruption path.
-		{"group without the system role", []string{"create", out, "--fs", "apfs", "--role", "data",
-			"--volume-group", "11111111-2222-3333-4444-555555555555", "-q"}},
-		{"group with no role at all", []string{"create", out, "--fs", "apfs",
+		{"group combined with a role", []string{"create", out, "--fs", "apfs", "--role", "data",
 			"--volume-group", "11111111-2222-3333-4444-555555555555", "-q"}},
 		{"malformed group uuid", []string{"create", out, "--fs", "apfs", "--role", "system",
 			"--volume-group", "not-a-uuid", "-q"}},

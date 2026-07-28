@@ -21,23 +21,31 @@ import (
 
 // groupedImageSize is comfortably above the minimum the macOS raw-disk driver
 // will attach; the same 32 MiB the other checker tests use.
-const groupedImageSize = 32 * 1024 * 1024
+// Two volumes, and APFS allows one per 512 MiB. The image is sparse, so this
+// costs a few MiB on disk rather than a gigabyte.
+const groupedImageSize = 2 * 512 * 1024 * 1024
 
 // writeGroupedImage formats a populated system volume carrying a group
 // identifier, which is what obliges it to number inodes in the group's upper
 // half.
 func writeGroupedImage(t *testing.T, path string) {
 	t.Helper()
-	writeImage(t, path, groupedImageSize, &apfswrite.CreateOptions{
-		VolumeName:    "GroupVol",
-		Role:          apfs.VolumeRoleSystem,
-		VolumeGroupID: [16]byte{0xde, 0xad, 0xbe, 0xef, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12},
-		Root: &apfswrite.Entry{Children: []*apfswrite.Entry{
+	groupID := [16]byte{0xde, 0xad, 0xbe, 0xef, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}
+	tree := func() *apfswrite.Entry {
+		return &apfswrite.Entry{Children: []*apfswrite.Entry{
 			{Name: "hello.txt", Data: []byte("hello\n")},
 			{Name: "dir", Mode: fs.ModeDir, Children: []*apfswrite.Entry{
 				{Name: "nested.txt", Data: []byte("nested\n")},
 			}},
-		}},
+		}}
+	}
+	// A group is a system/data pair. The system half is the one examined; the
+	// data half has to exist for the group to be well formed at all.
+	writeImage(t, path, groupedImageSize, &apfswrite.CreateOptions{
+		Volumes: []apfswrite.VolumeSpec{
+			{Name: "GroupVol", Role: apfs.VolumeRoleSystem, VolumeGroupID: groupID, Root: tree()},
+			{Name: "GroupData", Role: apfs.VolumeRoleData, VolumeGroupID: groupID, Root: tree()},
+		},
 	})
 }
 
@@ -89,20 +97,10 @@ func TestGroupedVolumeFsckClean(t *testing.T) {
 	}
 }
 
-// apfsckNoDataVolume is the one complaint a grouped image written by this
-// writer is expected to draw: a group is a system/data pair and only one volume
-// per container can be written, so the data half is necessarily absent. apfsck
-// calls it an oddity rather than corruption but still exits non-zero for it.
-// Multi-volume containers are what remove it.
-const apfsckNoDataVolume = "Volume group with no data"
-
-// TestGroupedVolumeApfsckClean is the Linux-side counterpart, and the only one
-// of these that runs on every push. Anything apfsck says beyond the missing
-// data volume is a failure.
-//
-// Its volume-group checks mostly need both halves present, so this is a
-// backstop rather than the test that decided the layout — that was
-// TestGroupedVolumeFsckClean, and it is macOS-only.
+// TestGroupedVolumeApfsckClean is the always-on gate, and it now has teeth it
+// did not before: a lone system volume drew "Volume group with no data" and had
+// to be tolerated, which meant apfsck's group checks never actually ran. With
+// both halves present they do, and must pass outright.
 func TestGroupedVolumeApfsckClean(t *testing.T) {
 	if _, err := exec.LookPath("apfsck"); err != nil {
 		t.Skip("apfsck not installed; skipping (install apfsprogs)")
@@ -113,20 +111,8 @@ func TestGroupedVolumeApfsckClean(t *testing.T) {
 
 	out, err := exec.Command("apfsck", "-cw", imgPath).CombinedOutput()
 	t.Logf("apfsck output:\n%s", out)
-
-	var unexpected []string
-	for _, line := range strings.Split(string(out), "\n") {
-		if strings.TrimSpace(line) == "" || strings.Contains(line, apfsckNoDataVolume) {
-			continue
-		}
-		unexpected = append(unexpected, line)
-	}
-	if len(unexpected) > 0 {
-		t.Fatalf("apfsck reported problems beyond the absent data volume (exit %v):\n%s",
-			err, strings.Join(unexpected, "\n"))
-	}
-	if !strings.Contains(string(out), apfsckNoDataVolume) && err != nil {
-		t.Fatalf("apfsck failed with no explanation (exit %v)", err)
+	if err != nil {
+		t.Fatalf("apfsck reported problems (exit %v)", err)
 	}
 }
 
@@ -154,6 +140,10 @@ func TestGroupedVolumeMountsWithShiftedInodes(t *testing.T) {
 	mountPoint := mountPointFrom(out)
 	if mountPoint == "" {
 		t.Fatalf("the grouped volume did not mount:\n%s", out)
+	}
+	// Both halves mount; the system one carries the tree examined here.
+	if !strings.Contains(mountPoint, "GroupVol") {
+		t.Fatalf("mounted %q, want the system half:\n%s", mountPoint, out)
 	}
 
 	// The root keeps the ordinary reserved number.

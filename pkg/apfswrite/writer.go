@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
@@ -670,6 +671,10 @@ func (b *builder) setVolumes(specs []VolumeSpec) error {
 		nextXID = next
 	}
 
+	if err := b.validateGroups(); err != nil {
+		return err
+	}
+
 	// The live state is one transaction past the newest snapshot anywhere in
 	// the container. With no snapshots at all it stays at the format id, which
 	// keeps the single-state layout.
@@ -702,12 +707,8 @@ func defaultVolumeUUIDFor(index uint64) [16]byte {
 // A volume's role is a single value, never a combination: every checker matches
 // apfs_role against the defined values exactly.
 //
-// A volume group is a system/data pair, and this writer emits one volume per
-// container, so a complete group cannot be represented yet (multi-volume
-// containers are a roadmap item). The system volume is the half that stands
-// alone: apfsck treats a group whose data volume is absent as an oddity rather
-// than corruption, but a group whose *system* volume is absent is a hard error.
-// So a grouped volume must be the system one.
+// A volume group is a system/data pair, so a grouped volume must be one half or
+// the other; validateGroups then checks the halves add up across the container.
 func validateRole(role uint16, groupID [16]byte) error {
 	if !apfs.IsValidVolumeRole(role) {
 		return fmt.Errorf("apfswrite: invalid volume role %#04x: a volume has exactly one role, and roles are not combined", role)
@@ -715,10 +716,57 @@ func validateRole(role uint16, groupID [16]byte) error {
 	if groupID == ([16]byte{}) {
 		return nil
 	}
-	if role != apfs.VolumeRoleSystem {
-		return fmt.Errorf("apfswrite: a volume in a volume group must have the system role, not %q: "+
-			"a group is a system/data pair, and this writer emits a single volume per container, "+
-			"so the data half cannot be written alongside it", apfs.VolumeRoleString(role))
+	if role != apfs.VolumeRoleSystem && role != apfs.VolumeRoleData {
+		return fmt.Errorf("apfswrite: a volume in a volume group must have the system or data role, not %q: "+
+			"a group is a system/data pair", apfs.VolumeRoleString(role))
+	}
+	return nil
+}
+
+// validateGroups checks each volume group across the whole container: a group
+// is one system volume and one data volume, no more and no fewer.
+//
+// This is a property of the set rather than of any one volume, so it cannot be
+// checked while each is being resolved. apfsck treats a group whose data half
+// is missing as an oddity and one whose system half is missing as corruption,
+// and neither is worth writing deliberately.
+func (b *builder) validateGroups() error {
+	type members struct{ system, data []string }
+	groups := map[[16]byte]*members{}
+	var order [][16]byte
+
+	for _, v := range b.vols {
+		if v.volumeGroupID == ([16]byte{}) {
+			continue
+		}
+		m := groups[v.volumeGroupID]
+		if m == nil {
+			m = &members{}
+			groups[v.volumeGroupID] = m
+			order = append(order, v.volumeGroupID)
+		}
+		switch v.role {
+		case apfs.VolumeRoleSystem:
+			m.system = append(m.system, v.label)
+		case apfs.VolumeRoleData:
+			m.data = append(m.data, v.label)
+		}
+	}
+
+	for _, id := range order {
+		m := groups[id]
+		switch {
+		case len(m.system) == 0:
+			return fmt.Errorf("apfswrite: volume group %x has no system volume; a group is a system/data pair", id)
+		case len(m.data) == 0:
+			return fmt.Errorf("apfswrite: volume group %x has no data volume; a group is a system/data pair", id)
+		case len(m.system) > 1:
+			return fmt.Errorf("apfswrite: volume group %x has %d system volumes (%s); a group has exactly one",
+				id, len(m.system), strings.Join(m.system, ", "))
+		case len(m.data) > 1:
+			return fmt.Errorf("apfswrite: volume group %x has %d data volumes (%s); a group has exactly one",
+				id, len(m.data), strings.Join(m.data, ", "))
+		}
 	}
 	return nil
 }
