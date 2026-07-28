@@ -44,9 +44,9 @@ $ apfs extract Firefox.dmg -C ./out --verify
 
 Both file systems can be written as well as read: `pack <dir>` builds a populated
 volume (files, symlinks, nested directories) and `create` formats an empty one.
-The APFS writer is a pure-Go, MIT-licensed package (`pkg/apfswrite`); created
-containers are validated against Apple's `fsck_apfs`/`hdiutil` and Linux
-`apfsck`.
+Created containers are validated against Apple's `fsck_apfs` and `hdiutil` and
+against Linux `apfsck` — tools that did not write them, which is the only way to
+know the output is right.
 
 Every write command is **reproducible**: run it twice on the same input and you
 get two byte-identical images. That makes an image content-addressable, makes
@@ -89,9 +89,9 @@ cd go-apfs-v2
 go build -o apfs ./cmd/apfs
 ```
 
-The binary is MIT-licensed and includes the full read and write feature set
-(APFS and HFS+). No cgo is required; the toolkit is pure Go and cross-compiles
-to Linux, macOS and Windows on `amd64` and `arm64`.
+One static binary with the full read and write feature set for both file
+systems. No cgo, so it cross-compiles to Linux, macOS and Windows on `amd64`
+and `arm64` and needs nothing installed alongside it.
 
 ## Command reference
 
@@ -397,8 +397,8 @@ pipelines stay clean.
 
 ## Using it as a library
 
-The read side is exposed as MIT-licensed packages. Volumes implement
-`io/fs.FS`, so they plug into any code that consumes a file system:
+Volumes implement `io/fs.FS`, so they plug into any code that consumes a file
+system:
 
 ```go
 import (
