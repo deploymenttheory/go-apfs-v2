@@ -12,16 +12,23 @@ import (
 const formatterID = "go-apfs (apfswrite)"
 
 // nextContainerOID returns nx_next_oid: one past the highest virtual object id
-// the container assigns. The fixed container objects occupy ids up to
-// mainFreeQueueOID; a two-level file-system tree additionally consumes one virtual id per
-// leaf starting at fsTreeLeafOIDBase, which then becomes the high-water mark.
+// the container assigns.
+//
+// The container's own objects sit below the volumes, so the high-water mark is
+// always in the last volume: its superblock and file-system tree root, plus one
+// id per leaf when the tree spans two levels. An id at or above this is what
+// apfsck calls an "unassigned object id".
 func (b *builder) nextContainerOID() uint64 {
-	next := uint64(mainFreeQueueOID + 1)
+	last := uint64(b.volumeCount() - 1)
+	next := volFSTreeRootOID(last) + 1
 	if b.fsTreeTwoLevel {
-		next = fsTreeLeafOIDBase + b.numFSTreeLeaves
+		next = volFSTreeLeafOID(last, b.numFSTreeLeaves-1) + 1
 	}
 	return next
 }
+
+// volumeCount is how many volumes the container holds. One, for now.
+func (b *builder) volumeCount() int { return 1 }
 
 // assemble writes the whole container. By the time it runs every block position
 // and all space-manager geometry are fixed, so it works in three phases: write

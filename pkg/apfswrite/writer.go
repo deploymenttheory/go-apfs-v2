@@ -605,19 +605,36 @@ func (b *builder) entryTime(t time.Time) uint64 {
 	return ns
 }
 
-// fsTreeLeafOIDBase is the first virtual object id handed to extra file-system tree leaf
-// nodes (2-level file-system tree). It sits just past the named reserved object ids and
-// below the container's NextOID reservation.
-const fsTreeLeafOIDBase = mainFreeQueueOID + 1 // 1030
-
-// Fixed object ids, assigned just past the format's reserved-oid range.
+// Object ids, assigned just past the format's reserved-oid range.
+//
+// The container's own objects come first and the volumes follow, each volume
+// taking a fixed stride so a second one can be added without disturbing the
+// first. The free queues used to sit between a volume's own ids, which left no
+// room to grow: a volume's file-system tree leaves are numbered from its base,
+// so the next volume would have had to start after them.
 const (
-	spacemanOID           = oidReservedCount          // 1024
-	reaperOID             = spacemanOID + 1           // 1025
-	firstVolOID           = reaperOID + 1             // 1026
-	firstVolFSTreeRootOID = firstVolOID + 1           // 1027
-	ipFreeQueueOID        = firstVolFSTreeRootOID + 1 // 1028
-	mainFreeQueueOID      = ipFreeQueueOID + 1        // 1029
+	spacemanOID      = oidReservedCount     // 1024
+	reaperOID        = spacemanOID + 1      // 1025
+	ipFreeQueueOID   = reaperOID + 1        // 1026
+	mainFreeQueueOID = ipFreeQueueOID + 1   // 1027
+	firstVolOIDBase  = mainFreeQueueOID + 1 // 1028
+)
+
+// volOIDStride is how many object ids each volume reserves: its superblock, its
+// file-system tree root, and one per leaf a 2-level tree may hold.
+const volOIDStride = 2 + maxFSTreeLeaves
+
+// volOID returns a volume's superblock object id, volFSTreeRootOID its
+// file-system tree root, and volFSTreeLeafOID the id of one of its leaves.
+func volOID(vol uint64) uint64                 { return firstVolOIDBase + vol*volOIDStride }
+func volFSTreeRootOID(vol uint64) uint64       { return volOID(vol) + 1 }
+func volFSTreeLeafOID(vol, leaf uint64) uint64 { return volOID(vol) + 2 + leaf }
+
+// The first volume's ids, which is all this writer emits today.
+const (
+	firstVolOID           = firstVolOIDBase     // 1028
+	firstVolFSTreeRootOID = firstVolOIDBase + 1 // 1029
+	fsTreeLeafOIDBase     = firstVolOIDBase + 2 // 1030
 )
 
 // Checkpoint-area floors. fsck_apfs rejects a container whose checkpoint areas
