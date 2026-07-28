@@ -89,9 +89,20 @@ func TestGroupedVolumeFsckClean(t *testing.T) {
 	}
 }
 
+// apfsckNoDataVolume is the one complaint a grouped image written by this
+// writer is expected to draw: a group is a system/data pair and only one volume
+// per container can be written, so the data half is necessarily absent. apfsck
+// calls it an oddity rather than corruption but still exits non-zero for it.
+// Multi-volume containers are what remove it.
+const apfsckNoDataVolume = "Volume group with no data"
+
 // TestGroupedVolumeApfsckClean is the Linux-side counterpart, and the only one
-// of these that runs on every push: apfsck checks the volume-group rules that
-// fsck_apfs does not spell out.
+// of these that runs on every push. Anything apfsck says beyond the missing
+// data volume is a failure.
+//
+// Its volume-group checks mostly need both halves present, so this is a
+// backstop rather than the test that decided the layout — that was
+// TestGroupedVolumeFsckClean, and it is macOS-only.
 func TestGroupedVolumeApfsckClean(t *testing.T) {
 	if _, err := exec.LookPath("apfsck"); err != nil {
 		t.Skip("apfsck not installed; skipping (install apfsprogs)")
@@ -102,8 +113,20 @@ func TestGroupedVolumeApfsckClean(t *testing.T) {
 
 	out, err := exec.Command("apfsck", "-cw", imgPath).CombinedOutput()
 	t.Logf("apfsck output:\n%s", out)
-	if err != nil {
-		t.Fatalf("apfsck reported problems (exit %v)", err)
+
+	var unexpected []string
+	for _, line := range strings.Split(string(out), "\n") {
+		if strings.TrimSpace(line) == "" || strings.Contains(line, apfsckNoDataVolume) {
+			continue
+		}
+		unexpected = append(unexpected, line)
+	}
+	if len(unexpected) > 0 {
+		t.Fatalf("apfsck reported problems beyond the absent data volume (exit %v):\n%s",
+			err, strings.Join(unexpected, "\n"))
+	}
+	if !strings.Contains(string(out), apfsckNoDataVolume) && err != nil {
+		t.Fatalf("apfsck failed with no explanation (exit %v)", err)
 	}
 }
 
