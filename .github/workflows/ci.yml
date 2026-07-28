@@ -17,8 +17,8 @@ jobs:
         goos: [linux, darwin, windows]
         goarch: [amd64, arm64]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - name: Build (MIT)
@@ -36,8 +36,8 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - name: Vet
@@ -64,7 +64,7 @@ jobs:
         run: go test -v ./acceptance/
       - name: Cache acceptance images
         id: dmg-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .acceptance-cache
           key: acceptance-firefox-150.0-zed-0.196.5
