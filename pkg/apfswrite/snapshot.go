@@ -40,7 +40,7 @@ const maxSnapshots = 64
 // assigns each snapshot a transaction id (1..N in request order), sets the live
 // xid one past the last snapshot, and counts the snapshot object blocks. With no
 // snapshots the live xid stays at formatXID, preserving the single-state layout.
-func (b *builder) setSnapshots(opts *CreateOptions) error {
+func (b volCtx) setSnapshots(opts *CreateOptions) error {
 	b.liveXID = formatXID
 	if len(opts.Snapshots) == 0 {
 		return nil
@@ -86,7 +86,7 @@ func (b *builder) setSnapshots(opts *CreateOptions) error {
 
 // placeSnapshots assigns block numbers to the snapshot objects starting at base:
 // the volume omap's snapshot tree first, then one snapshot volume superblock per snapshot.
-func (b *builder) placeSnapshots(base uint64) {
+func (b volCtx) placeSnapshots(base uint64) {
 	if len(b.snapshots) == 0 {
 		return
 	}
@@ -109,7 +109,7 @@ func (b *builder) extentRefcount() uint32 {
 // writeSnapMetaTree writes the volume's snapshot-metadata tree: an empty
 // root-leaf when there are no snapshots, otherwise a root-leaf holding a
 // j_snap_metadata + j_snap_name record pair per snapshot.
-func (b *builder) writeSnapMetaTree(paddr uint64) error {
+func (b volCtx) writeSnapMetaTree(paddr uint64) error {
 	if len(b.snapshots) == 0 {
 		return b.writeEmptyTree(paddr, paddr, objectTypeSnapMetaTree)
 	}
@@ -119,7 +119,7 @@ func (b *builder) writeSnapMetaTree(paddr uint64) error {
 // snapMetaRecords builds the (key, value) records for the snapshot-metadata
 // tree: per snapshot a j_snap_metadata record (keyed by xid) and a j_snap_name
 // record (keyed by name), sorted by the tree's key order.
-func (b *builder) snapMetaRecords() []fsTreeRecord {
+func (b volCtx) snapMetaRecords() []fsTreeRecord {
 	recs := make([]fsTreeRecord, 0, 2*len(b.snapshots))
 	for _, s := range b.snapshots {
 		name := append([]byte(s.name), 0) // NUL-terminated
@@ -210,7 +210,7 @@ func (b *builder) writeSnapMetaNode(paddr uint64, recs []fsTreeRecord) error {
 
 // writeSnapshots writes each snapshot's snapshot's volume superblock and the volume
 // omap's snapshot tree.
-func (b *builder) writeSnapshots() error {
+func (b volCtx) writeSnapshots() error {
 	if len(b.snapshots) == 0 {
 		return nil
 	}
@@ -242,7 +242,7 @@ func (b *builder) writeSnapshots() error {
 // writeSnapshotVolumeSuperblock writes a snapshot's volume superblock: a
 // physical copy of the volume superblock as it stood at the snapshot's xid,
 // referenced by the snapshot record's sblock_oid.
-func (b *builder) writeSnapshotVolumeSuperblock(s *snapBuild) error {
+func (b volCtx) writeSnapshotVolumeSuperblock(s *snapBuild) error {
 	vsb := b.volumeSuperblock()
 	// The count is the volume's state at the moment this snapshot was taken,
 	// which is how many snapshots already existed: none for the first, one for
@@ -279,7 +279,7 @@ func (b *builder) writeSnapshotVolumeSuperblock(s *snapBuild) error {
 // writeOmapSnapshotTree writes the volume omap's snapshot tree: a physical,
 // fixed-layout root-leaf keyed by snapshot xid, each value an omap_snapshot_t
 // (flags, pad, oid — all zero for a plain snapshot).
-func (b *builder) writeOmapSnapshotTree(paddr uint64) error {
+func (b volCtx) writeOmapSnapshotTree(paddr uint64) error {
 	const keySz, valSz = 8, sizeofOmapSnapshot
 	block := b.zeroedBlock()
 	headLen := sizeofBtreeNodePhys

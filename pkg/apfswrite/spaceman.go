@@ -156,7 +156,7 @@ func markBits(bitmap []byte, paddr, length uint64) {
 
 // writeAllocBitmap writes the main device's allocation bitmap, one bit per
 // block, with every block the container occupies marked used.
-func (b *builder) writeAllocBitmap() error {
+func (b volCtx) writeAllocBitmap() error {
 	dev := &b.sm.dev[sdMain]
 	bmap := b.zeroedBlocks(int(dev.usedChunksEnd))
 
@@ -164,7 +164,7 @@ func (b *builder) writeAllocBitmap() error {
 	markBits(bmap, b.xpDescBase, uint64(b.xpDescBlocks))    // checkpoint descriptor area
 	markBits(bmap, b.xpDataBase, uint64(b.xpDataBlocks))    // checkpoint data area
 	markBits(bmap, b.mainOmapPaddr, 2)                      // container omap + its root
-	markBits(bmap, b.firstVolPaddr, 6)                      // volume superblock + its trees
+	markBits(bmap, b.volPaddr, 6)                           // volume superblock + its trees
 	markBits(bmap, b.ipBmapBase, uint64(b.sm.ipBmapBlocks)) // internal-pool bitmaps
 	markBits(bmap, b.sm.ipBase, b.sm.ipBlocks)              // internal pool
 	if b.postIPBlocks > 0 {
@@ -411,7 +411,7 @@ func (b *builder) spacemanGeometry() error {
 // checkpoint layout: the ephemeral objects, the internal pool, and the post-pool
 // data region (extra file-system tree/extentref leaves and file data). It must run after the
 // checkpoint areas and fixed blocks have been laid out.
-func (b *builder) spacemanPlacement() error {
+func (b volCtx) spacemanPlacement() error {
 	main := &b.sm.dev[sdMain]
 	tier2 := &b.sm.dev[sdTier2]
 
@@ -487,7 +487,7 @@ func (b *builder) writeSpaceman(paddr, oid uint64) error {
 	if err := b.writeInternalPool(sm); err != nil {
 		return err
 	}
-	if err := b.writeAllocBitmap(); err != nil {
+	if err := b.only().writeAllocBitmap(); err != nil {
 		return err
 	}
 

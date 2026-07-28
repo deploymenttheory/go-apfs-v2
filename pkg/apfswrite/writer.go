@@ -299,34 +299,43 @@ func CreateContainer(w io.WriterAt, sizeBytes int64, opts *CreateOptions) error 
 			b.blocksize, nxDefaultBlockSize)
 	}
 
-	b.label = opts.VolumeName
-	if b.label == "" {
-		b.label = "untitled"
-	}
-	if len(b.label)+1 > volnameLen {
-		return fmt.Errorf("apfswrite: volume label too long")
-	}
-
 	b.mainUUID = opts.ContainerUUID
 	if b.mainUUID == ([16]byte{}) {
 		b.mainUUID = defaultContainerUUID
 	}
-	b.volUUID = opts.VolumeUUID
-	if b.volUUID == ([16]byte{}) {
-		b.volUUID = defaultVolumeUUID
+
+	// The container's single volume. Everything the caller asked for about a
+	// volume rather than about the container lands here.
+	v := &volBuild{index: 0}
+	b.vols = []*volBuild{v}
+
+	v.label = opts.VolumeName
+	if v.label == "" {
+		v.label = "untitled"
+	}
+	if len(v.label)+1 > volnameLen {
+		return fmt.Errorf("apfswrite: volume label too long")
 	}
 
-	b.role = opts.Role
-	b.volumeGroupID = opts.VolumeGroupID
-	if err := validateRole(b.role, b.volumeGroupID); err != nil {
+	v.volUUID = opts.VolumeUUID
+	if v.volUUID == ([16]byte{}) {
+		v.volUUID = defaultVolumeUUID
+	}
+
+	v.role = opts.Role
+	v.volumeGroupID = opts.VolumeGroupID
+	if err := validateRole(v.role, v.volumeGroupID); err != nil {
 		return err
 	}
-	b.inoBase = inoBaseFor(b.role, b.volumeGroupID)
+	v.inoBase = inoBaseFor(v.role, v.volumeGroupID)
 
 	// A normalization-insensitive, case-insensitive volume is the default; the
 	// public API exposes only the CaseSensitive toggle.
-	b.caseSensitive = opts.CaseSensitive
-	b.normSensitive = false
+	v.caseSensitive = opts.CaseSensitive
+	v.normSensitive = false
+
+	// The volume bound to its container, for the volume-scoped work below.
+	vc := volCtx{b, v}
 
 	// Resolve the timestamp before the tree and the snapshots, both of which
 	// stamp it into records.
@@ -339,12 +348,12 @@ func CreateContainer(w io.WriterAt, sizeBytes int64, opts *CreateOptions) error 
 
 	// Resolve the user directory tree (nested dirs + regular files of any size)
 	// so its space requirements can size the image when the caller passes 0.
-	if err := b.setTree(opts); err != nil {
+	if err := vc.setTree(opts); err != nil {
 		return err
 	}
 
 	// Resolve the requested snapshots (xids, live xid, block count).
-	if err := b.setSnapshots(opts); err != nil {
+	if err := vc.setSnapshots(opts); err != nil {
 		return err
 	}
 
@@ -355,7 +364,7 @@ func CreateContainer(w io.WriterAt, sizeBytes int64, opts *CreateOptions) error 
 		// file-system tree leaves, extentref leaves, file data, snapshot objects) plus the
 		// fixed metadata, block-aligned, with headroom for the pool and
 		// checkpoint areas.
-		payload := b.numFSTreeLeaves + b.numExtentrefLeaves + b.fileDataBlocks + b.snapBlocks
+		payload := vc.numFSTreeLeaves + vc.numExtentrefLeaves + vc.fileDataBlocks + vc.snapBlocks
 		needBlocks := payload + payload/8 + 2048
 		sizeBytes = max(int64(needBlocks)*int64(b.blocksize), minBytes)
 	}
@@ -374,8 +383,8 @@ func CreateContainer(w io.WriterAt, sizeBytes int64, opts *CreateOptions) error 
 		return err
 	}
 	b.sizeCheckpointAreas()
-	b.layoutFixedBlocks()
-	if err := b.spacemanPlacement(); err != nil {
+	vc.layoutFixedBlocks()
+	if err := vc.spacemanPlacement(); err != nil {
 		return err
 	}
 	if err := b.assemble(); err != nil {
@@ -427,14 +436,7 @@ type builder struct {
 	blocksize      uint32
 	blockCount     uint64
 	mainBlockCount uint64
-	label          string
 	mainUUID       [16]byte
-	volUUID        [16]byte
-	role           uint16   // apfs_role
-	volumeGroupID  [16]byte // apfs_volume_group_id
-	inoBase        uint64   // added to the user inode numbers; see inoBaseFor
-	caseSensitive  bool
-	normSensitive  bool
 
 	// Checkpoint areas, sized and positioned for this container.
 	xpDescBase   uint64
@@ -444,17 +446,11 @@ type builder struct {
 	xpEnd        uint64
 
 	// Fixed block numbers derived from the checkpoint areas.
-	xpMapPaddr                 uint64
-	xpSuperPaddr               uint64
-	mainOmapPaddr              uint64
-	mainOmapRootPaddr          uint64
-	firstVolPaddr              uint64
-	firstVolOmapPaddr          uint64
-	firstVolOmapRootPaddr      uint64
-	firstVolFSTreeRootPaddr    uint64
-	firstVolExtentrefRootPaddr uint64
-	firstVolSnapRootPaddr      uint64
-	ipBmapBase                 uint64
+	xpMapPaddr        uint64
+	xpSuperPaddr      uint64
+	mainOmapPaddr     uint64
+	mainOmapRootPaddr uint64
+	ipBmapBase        uint64
 
 	// Ephemeral objects (eph_info).
 	reaperPaddr        uint64
@@ -467,6 +463,58 @@ type builder struct {
 
 	// Space-manager geometry, populated by spacemanGeometry/spacemanPlacement.
 	sm spacemanLayout
+
+	// vols are the container's volumes, in the order their object ids and
+	// FsOID slots are assigned.
+	vols []*volBuild
+
+	// Post-internal-pool allocation region. All blocks the volumes own beyond
+	// the fixed metadata are laid out contiguously starting at postIPBase.
+	postIPBase   uint64
+	postIPBlocks uint64
+
+	// liveXID is the container's live transaction id, one past the newest
+	// snapshot on any volume. Transaction ids are the container's, not a
+	// volume's.
+	liveXID uint64
+
+	// timestamp is the resolved CreateOptions.FixedTime in nanoseconds since
+	// 1970 UTC. It is written to every clock-derived on-disk field and is the
+	// default for entries and snapshots that carry no time of their own.
+	timestamp uint64
+	// clampTime carries CreateOptions.ClampModTimes into entryTime.
+	clampTime bool
+}
+
+// volBuild is everything that belongs to one volume rather than to the
+// container: what the caller asked for, the tree it resolved to, and every
+// block position derived from it.
+//
+// It is separate from builder so a container can hold more than one. The fields
+// were deliberately removed from builder rather than left in place: with volCtx
+// promoting both, a leftover would still compile and would silently shadow the
+// volume's own copy.
+type volBuild struct {
+	// Parameters.
+	label         string
+	volUUID       [16]byte
+	role          uint16   // apfs_role
+	volumeGroupID [16]byte // apfs_volume_group_id
+	inoBase       uint64   // added to the user inode numbers; see inoBaseFor
+	caseSensitive bool
+	normSensitive bool
+
+	// index is the volume's position in the container, which fixes its object
+	// ids and its slot in the superblock's FsOID table.
+	index uint64
+
+	// Fixed block numbers for this volume's own objects.
+	volPaddr           uint64
+	omapPaddr          uint64
+	omapRootPaddr      uint64
+	fsTreeRootPaddr    uint64
+	extentrefRootPaddr uint64
+	snapRootPaddr      uint64
 
 	// The user directory tree, flattened into file-system tree entries in oid order,
 	// plus the subset that are regular files with a data extent.
@@ -490,13 +538,6 @@ type builder struct {
 	numExtentrefLeaves uint64 // leaf nodes when the extentref tree is a 2-level tree
 	extentrefTwoLevel  bool   // true when the extentref tree needs an index root + leaves
 
-	// Post-internal-pool allocation region. All blocks the volume owns beyond
-	// the fixed metadata are laid out contiguously starting at postIPBase, in
-	// order: extra file-system tree leaf nodes, extra extent-reference leaf nodes, then
-	// file data. This region may span several space-manager chunks.
-	postIPBase   uint64
-	postIPBlocks uint64
-
 	// Physical-block bases within the post-internal-pool region. fsTreeLeafBase is
 	// the first extra file-system tree leaf; extentrefLeafBase the first extra extentref leaf;
 	// fileDataBase the first block of file content.
@@ -509,18 +550,26 @@ type builder struct {
 	// objects (a per-snapshot snapshot volume superblock + snap_meta_ext, and one shared
 	// object-map snapshot tree) live at the end of the post-internal-pool region.
 	snapshots        []*snapBuild
-	liveXID          uint64 // the live volume's transaction id (> snapshot xids)
 	snapBase         uint64 // first block of the snapshot object region
 	snapBlocks       uint64 // total blocks in the snapshot object region
 	volSnapTreePaddr uint64 // the volume omap's snapshot tree (0 when no snapshots)
 
-	// timestamp is the resolved CreateOptions.FixedTime in nanoseconds since
-	// 1970 UTC. It is written to every clock-derived on-disk field and is the
-	// default for entries and snapshots that carry no time of their own.
-	timestamp uint64
-	// clampTime carries CreateOptions.ClampModTimes into entryTime.
-	clampTime bool
 }
+
+// volCtx is a builder together with one of its volumes. Volume-scoped methods
+// take it as their receiver, and field promotion means their bodies read the
+// same whether a name belongs to the container or to the volume.
+type volCtx struct {
+	*builder
+	*volBuild
+}
+
+// vol returns the container's i'th volume bound to the builder.
+func (b *builder) vol(i uint64) volCtx { return volCtx{b, b.vols[i]} }
+
+// only returns the container's single volume. It marks the places that still
+// assume one volume, so they are easy to find when there can be several.
+func (b *builder) only() volCtx { return b.vol(0) }
 
 // DefaultTime is the timestamp used when CreateOptions.FixedTime is unset. It is
 // a fixed value rather than the wall clock so that identical input produces
@@ -589,7 +638,7 @@ func inoBaseFor(role uint16, groupID [16]byte) uint64 {
 
 // firstUserIno is the lowest inode number this volume assigns to an entry:
 // MIN_USER_INO_NUM in the volume's own half of the inode-number space.
-func (b *builder) firstUserIno() uint64 { return b.inoBase + minUserInoNum }
+func (b volCtx) firstUserIno() uint64 { return b.inoBase + minUserInoNum }
 
 // entryTime resolves an entry's on-disk timestamp. A zero time means the
 // builder's fixed default; otherwise the entry's own time is used, clamped down
@@ -662,7 +711,7 @@ func (b *builder) sizeCheckpointAreas() {
 // follow the data area in a fixed order, and the internal-pool bitmap begins ten
 // blocks past the data area (two of which — the Fusion middle-tree and
 // write-back-cache slots — are intentionally left unused).
-func (b *builder) layoutFixedBlocks() {
+func (b volCtx) layoutFixedBlocks() {
 	b.xpDescBase = nxBlockNum + 1
 	b.xpDataBase = b.xpDescBase + uint64(b.xpDescBlocks)
 	b.xpEnd = b.xpDataBase + uint64(b.xpDataBlocks)
@@ -671,12 +720,12 @@ func (b *builder) layoutFixedBlocks() {
 	b.xpSuperPaddr = b.xpMapPaddr + 1
 	b.mainOmapPaddr = b.xpEnd
 	b.mainOmapRootPaddr = b.xpEnd + 1
-	b.firstVolPaddr = b.xpEnd + 2
-	b.firstVolOmapPaddr = b.xpEnd + 3
-	b.firstVolOmapRootPaddr = b.xpEnd + 4
-	b.firstVolFSTreeRootPaddr = b.xpEnd + 5
-	b.firstVolExtentrefRootPaddr = b.xpEnd + 6
-	b.firstVolSnapRootPaddr = b.xpEnd + 7
+	b.volPaddr = b.xpEnd + 2
+	b.omapPaddr = b.xpEnd + 3
+	b.omapRootPaddr = b.xpEnd + 4
+	b.fsTreeRootPaddr = b.xpEnd + 5
+	b.extentrefRootPaddr = b.xpEnd + 6
+	b.snapRootPaddr = b.xpEnd + 7
 	b.ipBmapBase = b.xpEnd + 10 // +8 and +9 are the unused Fusion slots
 }
 
