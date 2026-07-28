@@ -232,6 +232,10 @@ type builderEntry struct {
 	// xattrFlags are the inode internal_flags the attributes require. Several
 	// flags must agree exactly with whether a particular attribute is present.
 	xattrFlags uint64
+	// bsdFlags are the chflags(2) flags for the inode's bsd_flags field.
+	// UF_COMPRESSED is the one that matters here, and like xattrFlags it has to
+	// agree with the attribute it describes.
+	bsdFlags uint32
 
 	// Regular files with content (non-empty streams).
 	data        []byte

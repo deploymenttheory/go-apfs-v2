@@ -310,6 +310,21 @@ func (fe *FileEntry) NumberOfLinks() (uint32, error) {
 	return fe.Inode.NumberOfLinks, nil
 }
 
+// BSDFlags retrieves the inode's chflags(2) flags. Test it against the
+// BSDFlag* constants; BSDFlagCompressed is the one that says the content lives
+// in com.apple.decmpfs rather than the data fork.
+func (fe *FileEntry) BSDFlags() (uint32, error) {
+	if fe == nil {
+		return 0, fmt.Errorf("invalid file entry")
+	}
+
+	if fe.Inode == nil {
+		return 0, fmt.Errorf("invalid inode")
+	}
+
+	return fe.Inode.BSDFlags, nil
+}
+
 // UTF8NameSize retrieves the size of the UTF-8 encoded name
 func (fe *FileEntry) UTF8NameSize() (int, error) {
 	if fe == nil {

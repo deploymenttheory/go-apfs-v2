@@ -24,6 +24,15 @@ import (
 // It is unrelated to any file system's block size.
 const BlockSize = 65536
 
+// The two extended attributes a compressed file is made of: the header (and,
+// for the odd types, the payload) in AttributeName, and the chunked payload for
+// the even types in ResourceForkName. They are named here so the readers and
+// writers of both file systems agree on the spelling.
+const (
+	AttributeName    = "com.apple.decmpfs"
+	ResourceForkName = "com.apple.ResourceFork"
+)
+
 // Internal compression method codes. These are this package's own vocabulary,
 // not the decmpfs type numbers stored on disk; MethodFor translates. Several
 // on-disk types share one method, because whether the data sits inline or in a
@@ -114,4 +123,60 @@ func CheckInline(attrValue []byte) error {
 			string(HeaderSignature[:]))
 	}
 	return nil
+}
+
+// StoresDataInResourceFork reports whether an on-disk decmpfs type keeps its
+// payload in com.apple.ResourceFork rather than in the attribute itself.
+//
+// The types come in pairs, the odd member storing inline and the even member
+// storing in the fork; see MethodFor.
+func StoresDataInResourceFork(decmpfsType uint32) bool {
+	return decmpfsType%2 == 0
+}
+
+// Validate checks that a com.apple.decmpfs attribute and the file carrying it
+// agree, so a writer refuses an inconsistent file rather than producing one a
+// checker will reject or a reader will silently misread.
+//
+// dataForkSize is the length of the file's data fork and resourceFork the
+// com.apple.ResourceFork attribute value, nil when the file has none.
+func Validate(attrValue []byte, dataForkSize int, resourceFork []byte) error {
+	header, err := ParseHeader(attrValue)
+	if err != nil {
+		return err
+	}
+	if header == nil {
+		return fmt.Errorf("decmpfs attribute does not begin with the %q header", string(HeaderSignature[:]))
+	}
+	if _, err := MethodFor(header.CompressionMethod); err != nil {
+		return err
+	}
+
+	// The content of a compressed file lives in the attribute or the resource
+	// fork; the data fork is empty by definition. Bytes there would be a second,
+	// contradictory copy, and readers dispatch on the attribute, so they would
+	// be the copy nobody reads.
+	if dataForkSize != 0 {
+		return fmt.Errorf("a decmpfs-compressed file has an empty data fork, but this one has %d bytes of data",
+			dataForkSize)
+	}
+
+	if StoresDataInResourceFork(header.CompressionMethod) {
+		if len(resourceFork) == 0 {
+			return fmt.Errorf("decmpfs type %d keeps its data in %s, which is absent",
+				header.CompressionMethod, ResourceForkName)
+		}
+		// The attribute is the header alone: the payload is in the fork.
+		if len(attrValue) != HeaderSize {
+			return fmt.Errorf("decmpfs type %d keeps its data in %s, but the attribute carries %d bytes beyond its %d-byte header",
+				header.CompressionMethod, ResourceForkName, len(attrValue)-HeaderSize, HeaderSize)
+		}
+		return nil
+	}
+
+	if len(resourceFork) != 0 {
+		return fmt.Errorf("decmpfs type %d stores its data inline, but the file also has a %s",
+			header.CompressionMethod, ResourceForkName)
+	}
+	return CheckInline(attrValue)
 }

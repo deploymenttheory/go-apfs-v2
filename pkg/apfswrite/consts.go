@@ -138,6 +138,20 @@ const (
 	// required the moment they can be written as a data stream.
 	inodeHasRsrcFork = 0x00004000 //nolint:unused // needed for stream-based resource forks
 	inodeNoRsrcFork  = 0x00008000
+
+	// inodeHasUncompressedSize says the uncompressed_size field carries the
+	// decompressed length of a compressed file. Without it that field is
+	// padding, and Apple's implementation ignored it entirely before macOS
+	// 10.15.
+	inodeHasUncompressedSize = 0x00040000
+)
+
+// BSD file flags (chflags(2)), stored in j_inode_val's bsd_flags.
+const (
+	// inoBSDCompressed is UF_COMPRESSED: the file's content is held by
+	// com.apple.decmpfs rather than by its data fork. It must agree with the
+	// presence of that attribute.
+	inoBSDCompressed = 0x00000020
 )
 
 // Extended field types for inodes.

@@ -39,9 +39,11 @@ numbers below `MIN_USER_INO_NUM` stay where they are, which is where the spec
 and `fsck_apfs` disagree (see `inoBaseFor` in `pkg/apfswrite/writer.go`).
 
 ⁴ Attributes of any size, including resource forks: small values are stored
-inline and larger ones get a data stream. `com.apple.decmpfs` is refused,
-because it declares content this writer does not produce, and is reported as
-dropped.
+inline and larger ones get a data stream. `com.apple.decmpfs` is carried through
+unchanged, with `UF_COMPRESSED` set to match; a file whose parts disagree with
+the attribute is refused rather than written. Packing a host tree still stores
+compressed files decompressed, because reading their attributes needs
+`XATTR_SHOWCOMPRESSION` and the directory walker does not yet pass it.
 
 ³ decmpfs types 3/4 (zlib), 5, 7/8 (LZVN) and 11/12 (LZFSE), stored inline in
 the attribute or in a resource fork. Types 9/10 (uncompressed) and 13/14
