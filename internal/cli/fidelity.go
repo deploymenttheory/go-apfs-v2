@@ -23,7 +23,7 @@ func fidelityWarner() func(string, fidelity.Kind, string) {
 		shown[kind]++
 		switch {
 		case shown[kind] <= fidelity.ExampleLimit:
-			fmt.Fprintf(os.Stderr, "Note: %s: %s not carried across (%s)\n", path, kind, detail)
+			fmt.Fprintf(os.Stderr, "Note: %s: %s (%s)\n", path, kind.Lost(), detail)
 		case shown[kind] == fidelity.ExampleLimit+1:
 			fmt.Fprintf(os.Stderr, "Note: further %s notices suppressed; see the summary\n", kind)
 		}

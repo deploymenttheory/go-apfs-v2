@@ -124,3 +124,35 @@ func TestKindMetadataIsComplete(t *testing.T) {
 		t.Errorf("allKinds has %d entries, the metadata table %d; they must agree", len(allKinds), len(kinds))
 	}
 }
+
+// TestLostPhrasingReadsAsAPredicate guards the per-entry line, which is printed
+// as "<path>: <Lost()> (<detail>)". Compression is the kind that breaks the
+// default phrasing: "compressed file not carried across" says the file was
+// dropped, when in fact only its compression was and the content is all there.
+func TestLostPhrasingReadsAsAPredicate(t *testing.T) {
+	for _, k := range allKinds {
+		if k.Lost() == "not carried across" {
+			t.Errorf("kind %q has no per-entry phrasing", k)
+		}
+	}
+
+	if got, want := Compression.Lost(), "compression not carried across; the file itself is written out in full"; got != want {
+		t.Errorf("Compression.Lost() = %q, want %q", got, want)
+	}
+	// The default still applies to the kinds it suits.
+	if got, want := Xattr.Lost(), "extended attribute not carried across"; got != want {
+		t.Errorf("Xattr.Lost() = %q, want %q", got, want)
+	}
+}
+
+// TestCompressionIsNotAContentLoss records why Compression is its own kind
+// rather than a Xattr or a ResourceFork: nothing was lost, so a report saying
+// content was dropped would be untrue.
+func TestCompressionIsNotAContentLoss(t *testing.T) {
+	if Compression == Xattr || Compression == ResourceFork {
+		t.Fatal("Compression must be distinct from the kinds that mean content was lost")
+	}
+	if got := Compression.Key(); got != "compressionNotPreserved" {
+		t.Errorf("JSON key = %q, want compressionNotPreserved", got)
+	}
+}

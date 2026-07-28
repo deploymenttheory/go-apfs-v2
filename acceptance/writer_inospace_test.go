@@ -151,13 +151,7 @@ func TestGroupedVolumeMountsWithShiftedInodes(t *testing.T) {
 	dev := devRe.FindString(string(out))
 	defer detach(t, dev)
 
-	var mountPoint string
-	for _, field := range strings.Fields(string(out)) {
-		if strings.HasPrefix(field, "/Volumes/") {
-			mountPoint = field
-			break
-		}
-	}
+	mountPoint := mountPointFrom(out)
 	if mountPoint == "" {
 		t.Fatalf("the grouped volume did not mount:\n%s", out)
 	}

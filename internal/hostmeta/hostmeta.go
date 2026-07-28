@@ -27,6 +27,16 @@ func IsACLName(name string) bool {
 	return name == SecurityName || name == PosixACLAccessName
 }
 
+// UFCompressed is the UF_COMPRESSED bit of a file's BSD flags: the content is
+// held by DecmpfsName rather than by the data fork. macOS decides whether a
+// file is compressed by this flag, not by the attribute, so a file with one and
+// not the other reads as empty.
+//
+// It is defined here rather than taken from a platform package because it is
+// wanted on every platform: the flags themselves only exist on macOS, but the
+// code that decides what to do about them is shared.
+const UFCompressed uint32 = 0x00000020
+
 // LinkIdentity identifies the inode behind a directory entry, so two names for
 // one file can be recognized as such. ok is false on platforms that do not
 // expose it, in which case hard links are indistinguishable from copies.
