@@ -18,6 +18,7 @@ Legend: ✅ implemented · 🟡 partial · ⬜ not yet
 | FileVault / encryption unlock | ✅ | — |
 | `io/fs.FS` adapter | ✅ | ✅ |
 | Create empty volume | ✅ | ✅ |
+| Case-insensitive volumes (write) | — | ✅⁹ |
 | Populate a volume with files | ✅ | ✅ |
 | Reproducible output (`SOURCE_DATE_EPOCH`, fixed UUIDs) | ✅ | ✅ |
 | Volume roles and volume groups (read + write) | ✅² | — |
@@ -50,6 +51,11 @@ needs macOS plus `afsctool`. One real one is committed: `compressed.txt` in
 covered. Both storage shapes are read: data held inline in the attribute, and
 data held in the file's resource fork in 64 KiB chunks. A compressed file's
 size is taken from its decmpfs header, since its data fork is empty.
+
+⁹ `H+` version 4 with the case-folding catalog compare, alongside the
+case-sensitive HFSX default. The fold table was derived by observing macOS
+(`scripts/derive-casefold.sh`) rather than transcribed, because HFS+ froze its
+fold around Unicode 3.2 and current data disagrees.
 
 ⁸ Several names for one file share a single copy of the content, through an
 indirect node in the volume's private metadata directory, as macOS does it. The

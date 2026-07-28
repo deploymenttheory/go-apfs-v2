@@ -9,6 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The HFS+ writer can emit case-insensitive volumes** (`pkg/hfsplus`).
+  `CreateOptions.CaseInsensitive` produces plain HFS+ (`H+`, version 4, catalog
+  `keyCompareType` 0xCF) instead of the case-sensitive HFSX default, which
+  matches what `hdiutil create -fs HFS+` produces.
+
+  The fold table this needs was **derived by observing macOS**
+  (`scripts/derive-casefold.sh`) rather than transcribed: a case-insensitive
+  volume is created, one file per BMP code point is written to it, and the
+  catalog B-tree's leaf order — which is fold order — is read back. The derived
+  table is then required to reproduce that observed order exactly before it is
+  written out.
+
+  That mattered. HFS+ froze its fold around Unicode 3.2, so a table built from
+  current Unicode data is wrong in 38 places: modern data maps the Georgian
+  block `U+10A0`–`U+10C5` to Nuskhuri at `U+2D00`+, while HFS+ maps it to
+  Mkhedruli at `U+10D0`+, so every Georgian name would sort and resolve
+  incorrectly. `U+1E9E`, added in Unicode 5.1, is another — it folds to itself
+  here rather than to `ß`.
+
 - **The HFS+ writer represents hard links** (`pkg/hfsplus`, CLI). Several names
   for one file became independent copies; they now share one copy of the
   content, so `hardLinksCollapsed` is zero where it counted every extra name.

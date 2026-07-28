@@ -1,21 +1,17 @@
 // HFS+ / HFSX volume writer: serialises an in-memory directory tree into a
 // raw, mountable HFSX volume image (bytes).
 //
-// It produces a case-sensitive HFSX volume (signature "HX", version 5, catalog
-// keyCompareType 0xBC / kHFSBinaryCompare), unjournaled. Binary key comparison
-// means catalog ordering is a plain lexicographic compare of the big-endian
-// UTF-16 name code units, so no Unicode case-folding table is needed.
+// By default it produces a case-sensitive HFSX volume (signature "HX",
+// version 5, catalog keyCompareType 0xBC / kHFSBinaryCompare), unjournaled,
+// where catalog ordering is a plain lexicographic compare of the big-endian
+// UTF-16 name code units. CreateOptions.CaseInsensitive instead produces plain
+// HFS+ ("H+", version 4, keyCompareType 0xCF), whose catalog is ordered
+// through the fold table in casefold_table.go.
 //
 // Files carry their data fork, their resource fork and their extended
 // attributes; the attributes file is emitted only when something needs it, so a
 // volume with no attributes is byte-identical to one this writer produced
 // before it could emit one.
-//
-// Extension point for a future case-insensitive "H+" v4 writer: switch the
-// signature/version and set keyCompareType to 0xCF (kHFSCaseFolding); the
-// catalog key comparison would then need Apple's FastUnicodeCompare fold
-// table in place of compareCatalogKeys' binary compare. Everything else
-// (layout, B-tree packing, forks, bitmap) is unchanged.
 //
 // All multi-byte on-disk fields are big-endian. Reuses the on-disk structs
 // from types.go for serialisation.
@@ -74,6 +70,12 @@ type CreateOptions struct {
 	// FixedTime, while earlier times are preserved. It has no effect on entries
 	// that supply no ModTime.
 	ClampModTimes bool
+	// CaseInsensitive selects a case-insensitive HFS+ volume (signature "H+",
+	// version 4, catalog keyCompareType 0xCF) instead of the case-sensitive
+	// HFSX default. Names then compare through the fold table in
+	// casefold_table.go, which is what macOS itself does.
+	CaseInsensitive bool
+
 	// VolumeUUID pins the volume's identifier. Only its first eight bytes reach
 	// disk, because the HFS+ volume identifier is the 64-bit pair
 	// FinderInfo[6]/FinderInfo[7]. The zero value derives a stable identifier
@@ -169,11 +171,12 @@ func CreateImage(w io.WriterAt, sizeBytes int64, volumeName string, root *Entry,
 
 	// 1. Flatten the tree, assign CNIDs, count files/folders.
 	b := &builder{
-		blockSize:   blockSize,
-		defaultTime: defaultTime,
-		clampTime:   o.ClampModTimes,
-		volumeUUID:  o.VolumeUUID,
-		nextCNID:    HFSFirstUserCatalogNodeID,
+		caseInsensitive: o.CaseInsensitive,
+		blockSize:       blockSize,
+		defaultTime:     defaultTime,
+		clampTime:       o.ClampModTimes,
+		volumeUUID:      o.VolumeUUID,
+		nextCNID:        HFSFirstUserCatalogNodeID,
 	}
 	rootNode := b.flatten(root, volumeName)
 
@@ -185,7 +188,11 @@ func CreateImage(w io.WriterAt, sizeBytes int64, volumeName string, root *Entry,
 	// records will eventually carry -- only the record count and sizes matter,
 	// and those are already fixed -- so counting now and rebuilding later with
 	// real extents cannot change the answer. Step 5 asserts exactly that.
-	tree0 := buildBTree(blockSize, b.catalogRecords(rootNode), HFSBinaryCompare, 0x00000006, 516, 0)
+	keyCompare := HFSBinaryCompare
+	if o.CaseInsensitive {
+		keyCompare = HFSCaseFolding
+	}
+	tree0 := buildBTree(blockSize, b.catalogRecords(rootNode), keyCompare, 0x00000006, 516, 0)
 	catalogBlks := tree0.totalNodes
 
 	var attrBlks uint32
@@ -203,7 +210,7 @@ func CreateImage(w io.WriterAt, sizeBytes int64, volumeName string, root *Entry,
 	b.assignData(&lay)
 
 	// 5. Build the final catalog and (empty) extents-overflow B-trees.
-	catTree := buildBTree(blockSize, b.catalogRecords(rootNode), HFSBinaryCompare, 0x00000006, 516, 0)
+	catTree := buildBTree(blockSize, b.catalogRecords(rootNode), keyCompare, 0x00000006, 516, 0)
 	if catTree.totalNodes != catalogBlks {
 		// Should never happen: node count is independent of fork values.
 		return fmt.Errorf("hfsplus: catalog node count changed (%d -> %d)", catalogBlks, catTree.totalNodes)
@@ -294,11 +301,12 @@ func CreateImageFromDir(w io.WriterAt, sizeBytes int64, volumeName, srcDir strin
 
 // builder holds writer state across the layout/build passes.
 type builder struct {
-	blockSize   int
-	defaultTime time.Time
-	clampTime   bool
-	volumeUUID  [16]byte
-	nextCNID    CatalogNodeID
+	caseInsensitive bool
+	blockSize       int
+	defaultTime     time.Time
+	clampTime       bool
+	volumeUUID      [16]byte
+	nextCNID        CatalogNodeID
 
 	root      *fileNode
 	allNodes  []*fileNode // every node including root
@@ -571,7 +579,11 @@ func (b *builder) catalogRecords(_ *fileNode) []btRecord {
 	for _, n := range b.allNodes {
 		recs = append(recs, b.normalRecord(n), b.threadRecord(n))
 	}
-	sort.Slice(recs, func(i, j int) bool { return compareCatalogKeys(recs[i].key, recs[j].key) < 0 })
+	cmp := compareCatalogKeys
+	if b.caseInsensitive {
+		cmp = compareCatalogKeysFolded
+	}
+	sort.Slice(recs, func(i, j int) bool { return cmp(recs[i].key, recs[j].key) < 0 })
 	return recs
 }
 
@@ -745,9 +757,16 @@ func (b *builder) volumeHeader(volumeName string, lay *layout, _, _ builtTree) V
 	usedBlocks := b.countUsedBlocks(lay)
 	now := toHFSTime(b.defaultTime)
 
+	sigWord, version := HFSXSigWord, HFSXVersion
+	if b.caseInsensitive {
+		// A case-insensitive volume is plain HFS+, not HFSX: the signature and
+		// version differ, and the catalog's compare type carries the rest.
+		sigWord, version = HFSPlusSigWord, HFSPlusVersion
+	}
+
 	vh := VolumeHeader{
-		Signature:        HFSXSigWord,
-		Version:          HFSXVersion,
+		Signature:        sigWord,
+		Version:          version,
 		Attributes:       0x80000100, // kHFSVolumeUnmountedMask + top bit, as newfs writes
 		JournalInfoBlock: 0,
 		CreateDate:       now,
@@ -794,9 +813,10 @@ func (b *builder) volumeHeader(volumeName string, lay *layout, _, _ builtTree) V
 	vh.AllocationFile.Extents[0] = ExtentDescriptor{StartBlock: lay.bitmapStart, BlockCount: lay.bitmapBlocks}
 
 	// Extents overflow file (empty tree, one header node).
+	// Each B-tree file's clump size is its own size; see packHeaderNode.
 	vh.ExtentsFile = ForkData{
 		LogicalSize: uint64(lay.extentBlocks) * uint64(b.blockSize),
-		ClumpSize:   65536,
+		ClumpSize:   uint32(lay.extentBlocks) * uint32(b.blockSize),
 		TotalBlocks: lay.extentBlocks,
 	}
 	vh.ExtentsFile.Extents[0] = ExtentDescriptor{StartBlock: lay.extentsStart, BlockCount: lay.extentBlocks}
@@ -804,7 +824,7 @@ func (b *builder) volumeHeader(volumeName string, lay *layout, _, _ builtTree) V
 	// Catalog file.
 	vh.CatalogFile = ForkData{
 		LogicalSize: uint64(lay.catalogBlks) * uint64(b.blockSize),
-		ClumpSize:   65536,
+		ClumpSize:   uint32(lay.catalogBlks) * uint32(b.blockSize),
 		TotalBlocks: lay.catalogBlks,
 	}
 	vh.CatalogFile.Extents[0] = ExtentDescriptor{StartBlock: lay.catalogStart, BlockCount: lay.catalogBlks}
@@ -815,7 +835,7 @@ func (b *builder) volumeHeader(volumeName string, lay *layout, _, _ builtTree) V
 	if lay.attrBlks > 0 {
 		vh.AttributesFile = ForkData{
 			LogicalSize: uint64(lay.attrBlks) * uint64(b.blockSize),
-			ClumpSize:   65536,
+			ClumpSize:   uint32(lay.attrBlks) * uint32(b.blockSize),
 			TotalBlocks: lay.attrBlks,
 		}
 		vh.AttributesFile.Extents[0] = ExtentDescriptor{StartBlock: lay.attrStart, BlockCount: lay.attrBlks}

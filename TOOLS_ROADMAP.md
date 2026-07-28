@@ -17,9 +17,11 @@ what is planned or under consideration, roughly in priority order.
 
 ## Near term
 
-- **Case-insensitive HFS+ (`H+` v4)** — the writer currently emits
-  case-sensitive HFSX (`HX`). Case-insensitive volumes need the Unicode
-  case-folding comparison for catalog key ordering.
+- **Name normalization on write** — HFS+ stores names decomposed, and the
+  writer stores them as given. A name containing a precomposed character such
+  as `ü` is therefore written in a form macOS will not find, on both HFSX and
+  `H+`. Fixing it means normalizing on write and on lookup.
+
 - **HFS+ `inspect` and `mount`** — these commands are APFS-only today.
 
 ## Medium term
