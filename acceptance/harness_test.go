@@ -46,6 +46,20 @@ type manifestFile struct {
 	SHA256 string `json:"sha256"`
 	Mode   string `json:"mode"`
 	Target string `json:"target"`
+
+	// Compressed marks a file stored with transparent compression; the size
+	// and hash above are of its decompressed content.
+	Compressed bool `json:"compressed"`
+
+	// Xattrs records the extended attributes macOS reported, by name. It is
+	// not exhaustive -- macOS hides com.apple.decmpfs and the resource fork of
+	// a compressed file from a normal listing -- so assert containment.
+	Xattrs map[string]manifestXattr `json:"xattrs"`
+}
+
+type manifestXattr struct {
+	Size   int    `json:"size"`
+	SHA256 string `json:"sha256"`
 }
 
 func TestMain(m *testing.M) {

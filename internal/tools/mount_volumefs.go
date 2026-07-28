@@ -224,6 +224,14 @@ func (n *volumeNode) Listxattr(ctx context.Context, dest []byte) (uint32, syscal
 // volumeHandle is one open file. Reads go through io.ReaderAt when the volume
 // offers it, which both readers do; the fallback exists so a VolumeFS that
 // only supports sequential reads still works.
+//
+// The mutex is not an optimisation detail. FUSE issues reads for one file
+// handle in parallel, and neither reader is safe for that: a file entry funnels
+// every read through a single data stream that carries its own current offset,
+// and the decompressing reader saves and restores that offset around each read.
+// Concurrent reads therefore interleave and return the wrong bytes -- visible
+// only on a file large enough for the kernel to split into several reads, which
+// is why a real mount caught it and the unit tests did not.
 type volumeHandle struct {
 	vol  VolumeFS
 	path string
@@ -239,6 +247,9 @@ var (
 )
 
 func (h *volumeHandle) Read(ctx context.Context, dest []byte, off int64) (fuse.ReadResult, syscall.Errno) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
 	if readerAt, ok := h.file.(io.ReaderAt); ok {
 		n, err := readerAt.ReadAt(dest, off)
 		if err != nil && err != io.EOF {
@@ -247,8 +258,6 @@ func (h *volumeHandle) Read(ctx context.Context, dest []byte, off int64) (fuse.R
 		return fuse.ReadResultData(dest[:n]), 0
 	}
 
-	h.mu.Lock()
-	defer h.mu.Unlock()
 	if h.fallback == nil {
 		data, err := h.vol.ReadFile(h.path)
 		if err != nil {
