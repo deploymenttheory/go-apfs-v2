@@ -416,7 +416,11 @@ func (v *Volume) Snapshot(index int) (*Snapshot, error) {
 	return snapshot, nil
 }
 
-// RootDirectory retrieves the root directory file entry
+// RootDirectory retrieves the root directory file entry.
+//
+// The root is ROOT_DIR_INO_NUM on every volume, including the system volume of
+// a volume group: only the user inode numbers move into the group's upper half.
+// See apfswrite.inoBaseFor for how that was established.
 func (v *Volume) RootDirectory() (*FileEntry, error) {
 	if v == nil {
 		return nil, fmt.Errorf("invalid volume")
@@ -426,9 +430,7 @@ func (v *Volume) RootDirectory() (*FileEntry, error) {
 		return nil, fmt.Errorf("invalid volume - missing file system B-tree")
 	}
 
-	// Root directory inode is always 2 in APFS
-	// (Inode 1 is the private directory and may not exist)
-	return v.FileEntryByIdentifier(2)
+	return v.FileEntryByIdentifier(RootDirInoNum)
 }
 
 // FileEntryByIdentifier retrieves a file entry by inode number
@@ -484,11 +486,12 @@ func (v *Volume) FileEntryByPath(path string) (*FileEntry, error) {
 		return v.RootDirectory()
 	}
 
-	// Use FileSystemBTree.InodeByUTF8Path to traverse the path
-	// This starts from the root (identifier 2, not 1 which is private-dir)
+	// Use FileSystemBTree.InodeByUTF8Path to traverse the path, starting from
+	// the root directory rather than ROOT_DIR_PARENT, which is the virtual
+	// parent the two special dentries hang off.
 	inode, directoryEntryRecord, err := v.FileSystemBTree.InodeByUTF8Path(
 		v.Reader,
-		2, // Start from root directory (identifier 2)
+		RootDirInoNum,
 		path,
 		0, // transaction identifier
 	)

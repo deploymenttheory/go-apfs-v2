@@ -31,7 +31,7 @@ func (b *builder) setTree(opts *CreateOptions) error {
 	}
 
 	// Deterministic order: sort siblings by name at every level.
-	nextOID := uint64(minUserInoNum)
+	nextOID := b.firstUserIno()
 	// The first name seen for a link group holds the inode; later ones become
 	// extra names for it. The walk is deterministic, so "first" is stable.
 	linkGroups := map[uint64]*builderEntry{}
@@ -369,7 +369,7 @@ func validateName(name string) error {
 // nextObjID returns the volume's next free object id: one past the highest user
 // oid in use (APFS_MIN_USER_INO_NUM when there are no entries).
 func (b *builder) nextObjID() uint64 {
-	next := uint64(minUserInoNum)
+	next := b.firstUserIno()
 	// Streamed extended attributes take object ids from the same counter as
 	// entries, so a volume whose highest id belongs to one must still report a
 	// next id past it.

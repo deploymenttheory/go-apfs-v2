@@ -91,6 +91,10 @@ type CreateOptions struct {
 	// APFS_FEATURE_VOLGRP_SYSTEM_INO_SPACE feature flag, which is what actually
 	// declares membership. The resulting group is incomplete — it has no data
 	// volume — because this writer emits one volume per container.
+	//
+	// That flag makes the group's two members share one inode-number space, so
+	// a grouped system volume numbers its inodes from UNIFIED_ID_SPACE_MARK
+	// upward rather than from MIN_USER_INO_NUM. See inoBaseFor.
 	VolumeGroupID [16]byte
 }
 
@@ -313,6 +317,7 @@ func CreateContainer(w io.WriterAt, sizeBytes int64, opts *CreateOptions) error 
 	if err := validateRole(b.role, b.volumeGroupID); err != nil {
 		return err
 	}
+	b.inoBase = inoBaseFor(b.role, b.volumeGroupID)
 
 	// A normalization-insensitive, case-insensitive volume is the default; the
 	// public API exposes only the CaseSensitive toggle.
@@ -423,6 +428,7 @@ type builder struct {
 	volUUID        [16]byte
 	role           uint16   // apfs_role
 	volumeGroupID  [16]byte // apfs_volume_group_id
+	inoBase        uint64   // added to the user inode numbers; see inoBaseFor
 	caseSensitive  bool
 	normSensitive  bool
 
@@ -544,6 +550,42 @@ func validateRole(role uint16, groupID [16]byte) error {
 	}
 	return nil
 }
+
+// inoBaseFor returns the amount added to the user inode numbers this volume
+// allocates.
+//
+// A volume group shares one inode-number space across its two members, which is
+// what APFS_FEATURE_VOLGRP_SYSTEM_INO_SPACE declares. The space is divided at
+// UNIFIED_ID_SPACE_MARK: the data volume numbers below it, the system volume at
+// or above it, so an inode number identifies a file across the pair. The flag
+// is set on both members, so it alone does not say which half a volume is; the
+// role does, and only the system volume shifts.
+//
+// The reserved numbers below MIN_USER_INO_NUM do not shift, which is where the
+// spec and Apple's own tools disagree. The spec (Inode Numbers) says the system
+// volume "reserves each of the inode numbers listed above but with
+// UNIFIED_ID_SPACE_MARK added to them", giving 0x0800000000000002 for its root
+// directory. fsck_apfs rejects exactly that: writing the root at the shifted
+// number makes it count the root and private directories as ordinary ones
+// ("apfs_num_directories is not valid (expected 3, actual 1)"), and shifting
+// ROOT_DIR_PARENT alongside it produces "orphan directory record" for both
+// special dentries. Its reserved-inode test is plainly oid < MIN_USER_INO_NUM
+// against the unshifted numbers.
+//
+// So the reserved numbers stay put and the user inodes move. That is the only
+// arrangement both fsck_apfs and the macOS driver accept: a volume written this
+// way is fsck-clean and mounts, with the root reported as 2 and the user inodes
+// as 0x0800000000000010 upward.
+func inoBaseFor(role uint16, groupID [16]byte) uint64 {
+	if groupID != ([16]byte{}) && role == apfs.VolumeRoleSystem {
+		return unifiedIDSpaceMark
+	}
+	return 0
+}
+
+// firstUserIno is the lowest inode number this volume assigns to an entry:
+// MIN_USER_INO_NUM in the volume's own half of the inode-number space.
+func (b *builder) firstUserIno() uint64 { return b.inoBase + minUserInoNum }
 
 // entryTime resolves an entry's on-disk timestamp. A zero time means the
 // builder's fixed default; otherwise the entry's own time is used, clamped down
