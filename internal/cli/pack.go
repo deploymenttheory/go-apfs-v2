@@ -44,6 +44,10 @@ different compressors produce different container bytes — but the raw
 file system image round-trips bit-for-bit and the result mounts under both this
 tool and macOS.
 
+Chunks are compressed with --compression: lzfse (default, Apple's modern codec),
+lzma (smallest output, slowest), zlib, or none. Every codec falls back to raw
+storage for any chunk it cannot shrink.
+
 Fidelity: packing a directory is lossy. The new volume carries regular files,
 directories and symbolic links with their mode, owner, group and modification
 time. It does not carry extended attributes (including resource forks and
@@ -67,7 +71,7 @@ Examples:
 }
 
 func init() {
-	packCmd.Flags().StringVar(&packCompression, "compression", "zlib", "chunk compression: zlib or none")
+	packCmd.Flags().StringVar(&packCompression, "compression", "lzfse", "chunk compression: lzfse, lzma, zlib or none")
 	packCmd.Flags().UintVar(&packChunkKiB, "chunk-size", 1024, "chunk size in KiB (must be a multiple of 512 bytes)")
 	packCmd.Flags().StringVar(&packVolumeName, "volname", "", "volume name when packing a directory (default: directory name)")
 	packCmd.Flags().StringVar(&packFS, "fs", "hfs+", "file system when packing a directory: HFS+ or APFS (case-insensitive)")
@@ -100,12 +104,16 @@ func runPack(cmd *cobra.Command, args []string) error {
 func packEncodeOptions() (*disk.EncodeOptions, error) {
 	encOpts := &disk.EncodeOptions{}
 	switch packCompression {
+	case "lzfse":
+		encOpts.Compression = disk.CompressionLZFSE
+	case "lzma":
+		encOpts.Compression = disk.CompressionLZMA
 	case "zlib":
 		encOpts.Compression = disk.CompressionZlib
 	case "none":
 		encOpts.Compression = disk.CompressionNone
 	default:
-		return nil, usageErrorf("invalid --compression %q: must be zlib or none", packCompression)
+		return nil, usageErrorf("invalid --compression %q: must be lzfse, lzma, zlib or none", packCompression)
 	}
 	if packChunkKiB == 0 || (packChunkKiB*1024)%512 != 0 {
 		return nil, usageErrorf("invalid --chunk-size %d KiB: must be a positive multiple of 512 bytes", packChunkKiB)
