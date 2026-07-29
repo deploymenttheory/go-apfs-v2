@@ -24,18 +24,31 @@ import (
 	"hash/crc32"
 	"io"
 	"os"
+
+	"github.com/go-compressions/lzfse"
+	"github.com/ulikunitz/xz/lzma"
 )
 
 // Compression selects the chunk compressor used by the encoder.
 type Compression int
 
 const (
-	// CompressionZlib compresses each non-zero chunk with zlib, falling back
-	// to raw storage when compression does not shrink the chunk. This is the
-	// default and is understood by both this package's reader and hdiutil.
+	// CompressionZlib compresses each non-zero chunk with zlib (UDZO chunk
+	// type), falling back to raw storage when compression does not shrink the
+	// chunk. It is the library default and is understood by both this package's
+	// reader and hdiutil.
 	CompressionZlib Compression = iota
 	// CompressionNone stores every non-zero chunk raw (uncompressed).
 	CompressionNone
+	// CompressionLZFSE compresses each non-zero chunk with LZFSE (ULFO chunk
+	// type), Apple's modern DMG codec. It gives a better ratio than zlib at
+	// higher speed and is what hdiutil produces by default on recent macOS.
+	// Like the others it falls back to raw storage for a chunk it cannot shrink.
+	CompressionLZFSE
+	// CompressionLZMA compresses each non-zero chunk with LZMA (ULMO chunk
+	// type), the raw LZMA1 "alone" stream both this package's reader and hdiutil
+	// accept. It gives the best ratio of the set at the cost of speed.
+	CompressionLZMA
 )
 
 // EncodeOptions controls how EncodeUDIF/RepackDMG produce a DMG.
@@ -327,17 +340,9 @@ func encodeBlock(dfw *dataForkWriter, index int, blk *SourceBlock, secCount uint
 
 		blockCRC.Write(raw)
 
-		payload := raw
-		typ := uint32(chunkTypeUncompressed)
-		if o.Compression == CompressionZlib {
-			compressed, err := zlibCompress(raw, o.ZlibLevel)
-			if err != nil {
-				return nil, 0, err
-			}
-			if len(compressed) < len(raw) {
-				payload = compressed
-				typ = chunkTypeCompressZLIB
-			}
+		payload, typ, err := compressChunk(raw, o)
+		if err != nil {
+			return nil, 0, err
 		}
 
 		coff := dfw.n
@@ -408,6 +413,69 @@ func writeZeros(h io.Writer, n int) {
 		h.Write(zeroScratch[:c])
 		n -= c
 	}
+}
+
+// compressChunk compresses raw with the configured compressor and returns the
+// bytes to store plus the chunk type to record. When the compressor does not
+// shrink the chunk — or when it is CompressionNone — the raw bytes are stored
+// with type chunkTypeUncompressed, so a chunk is never grown by "compressing"
+// it and the reader can always round-trip the result. The fallback is per
+// chunk, so a mostly-compressible image still stores its few incompressible
+// chunks raw.
+func compressChunk(raw []byte, o *EncodeOptions) ([]byte, uint32, error) {
+	var (
+		compressed []byte
+		typ        uint32
+		err        error
+	)
+	switch o.Compression {
+	case CompressionNone:
+		return raw, chunkTypeUncompressed, nil
+	case CompressionZlib:
+		compressed, err = zlibCompress(raw, o.ZlibLevel)
+		typ = chunkTypeCompressZLIB
+	case CompressionLZFSE:
+		compressed, err = lzfseCompress(raw)
+		typ = chunkTypeCompressLZFSE
+	case CompressionLZMA:
+		compressed, err = lzmaCompress(raw)
+		typ = chunkTypeCompressLZMA
+	default:
+		return nil, 0, fmt.Errorf("unknown compression %d", o.Compression)
+	}
+	if err != nil {
+		return nil, 0, err
+	}
+	if len(compressed) < len(raw) {
+		return compressed, typ, nil
+	}
+	return raw, chunkTypeUncompressed, nil
+}
+
+// lzfseCompress returns the LZFSE-compressed form of data, the payload of a
+// ULFO (0x80000007) chunk.
+func lzfseCompress(data []byte) ([]byte, error) {
+	return lzfse.Compress(data)
+}
+
+// lzmaCompress returns the LZMA1 "alone" stream for data, the payload of a
+// ULMO (0x80000008) chunk. It is the non-XZ form dmg_reader.go decodes with
+// lzma.NewReader, which is what hdiutil emits and reads for ULMO. The encoder
+// takes no timestamps, so identical input yields identical output.
+func lzmaCompress(data []byte) ([]byte, error) {
+	var buf bytes.Buffer
+	zw, err := lzma.NewWriter(&buf)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := zw.Write(data); err != nil {
+		zw.Close()
+		return nil, err
+	}
+	if err := zw.Close(); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }
 
 // zlibCompress returns the zlib-compressed form of data.

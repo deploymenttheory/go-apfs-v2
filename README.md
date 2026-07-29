@@ -238,7 +238,7 @@ apfs mount image.dmg /mnt/apfs
 ### `pack` — build a DMG from a directory, or repack a DMG
 
 ```
-apfs pack SOURCE OUT.dmg [--fs hfs+|apfs] [--volname NAME] [--compression zlib|none] [--chunk-size KiB]
+apfs pack SOURCE OUT.dmg [--fs hfs+|apfs] [--volname NAME] [--compression lzfse|lzma|zlib|none] [--chunk-size KiB]
                          [--strict] [--decompress]
 ```
 
@@ -256,10 +256,18 @@ Two modes, chosen by what `SOURCE` is:
 ```console
 apfs pack ./mytree out.dmg --volname "My Data"          # directory -> HFS+ DMG
 apfs pack ./mytree out.dmg --fs apfs --volname "My Data" # directory -> APFS DMG
-apfs pack original.dmg repacked.dmg                     # repack a DMG
-apfs pack original.dmg smaller.dmg --compression none
+apfs pack original.dmg repacked.dmg                     # repack a DMG (LZFSE)
+apfs pack original.dmg smaller.dmg --compression lzma   # smallest output
+apfs pack original.dmg fast.dmg --compression none      # no compression
 apfs pack ./mytree out.dmg --fs apfs --decompress        # store compressed files in full
 ```
+
+The DMG chunk compressor is chosen with `--compression`: `lzfse` (default —
+Apple's modern codec, the best speed/ratio balance and what recent `hdiutil`
+produces), `lzma` (ULMO — the smallest output, at the cost of speed), `zlib`
+(UDZO — the widely-compatible classic) or `none`. Each codec stores any chunk it
+cannot shrink raw, so the choice never grows an incompressible image. All four
+are reproducible: the same input and codec give byte-identical output.
 
 A source file with transparent compression (`decmpfs`) keeps it, on either file
 system: the compressed bytes are copied across as they stand, so the volume

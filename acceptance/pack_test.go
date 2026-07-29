@@ -55,18 +55,44 @@ func TestPackRoundTripFixtures(t *testing.T) {
 	}
 }
 
-// TestPackCompressionModes checks both --compression zlib (default) and none
-// preserve the raw image; only the container bytes differ.
+// TestPackCompressionModes checks every --compression codec (lzfse, lzma, zlib,
+// none) preserves the raw image; only the container bytes differ. Each codec is
+// re-read through this tool's own reader, so a codec whose encoder and decoder
+// disagreed would fail here.
 func TestPackCompressionModes(t *testing.T) {
 	srcSum, _ := rawSHA256(t, fixtureDMG)
 
-	for _, mode := range []string{"zlib", "none"} {
+	for _, mode := range []string{"lzfse", "lzma", "zlib", "none"} {
 		t.Run(mode, func(t *testing.T) {
 			out := filepath.Join(t.TempDir(), "repacked.dmg")
 			mustRun(t, "pack", fixtureDMG, out, "--compression", mode)
 			gotSum, _ := rawSHA256(t, out)
 			if gotSum != srcSum {
 				t.Errorf("--compression %s did not preserve the raw image", mode)
+			}
+		})
+	}
+}
+
+// TestPackCompressionReproducible checks each codec is deterministic: packing
+// the same input twice with the same codec gives byte-identical DMGs.
+func TestPackCompressionReproducible(t *testing.T) {
+	for _, mode := range []string{"lzfse", "lzma", "zlib", "none"} {
+		t.Run(mode, func(t *testing.T) {
+			a := filepath.Join(t.TempDir(), "a.dmg")
+			b := filepath.Join(t.TempDir(), "b.dmg")
+			mustRun(t, "pack", fixtureDMG, a, "--compression", mode)
+			mustRun(t, "pack", fixtureDMG, b, "--compression", mode)
+			sumA, err := fileSHA256(a)
+			if err != nil {
+				t.Fatalf("hash %s: %v", a, err)
+			}
+			sumB, err := fileSHA256(b)
+			if err != nil {
+				t.Fatalf("hash %s: %v", b, err)
+			}
+			if sumA != sumB {
+				t.Errorf("--compression %s is not reproducible: two packs differ", mode)
 			}
 		})
 	}
