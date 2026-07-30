@@ -3,11 +3,9 @@
 [![Release](https://img.shields.io/github/v/release/deploymenttheory/go-apfs-v2)](https://github.com/deploymenttheory/go-apfs-v2/releases)
 [![CI](https://github.com/deploymenttheory/go-apfs-v2/actions/workflows/ci.yml/badge.svg)](https://github.com/deploymenttheory/go-apfs-v2/actions/workflows/ci.yml)
 [![Go Reference](https://pkg.go.dev/badge/github.com/deploymenttheory/go-apfs-v2.svg)](https://pkg.go.dev/github.com/deploymenttheory/go-apfs-v2)
-[![Go Report Card](https://goreportcard.com/badge/github.com/deploymenttheory/go-apfs-v2)](https://goreportcard.com/report/github.com/deploymenttheory/go-apfs-v2)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/deploymenttheory/go-apfs-v2)](https://go.dev/)
 [![License](https://img.shields.io/github/license/deploymenttheory/go-apfs-v2)](LICENSE)
 ![Status: GA](https://img.shields.io/badge/status-GA-3FB950)
-[![Discord](https://img.shields.io/badge/Discord-Join%20Us-7289da?logo=discord&logoColor=white)](https://discord.gg/Uq8zG6g7WE)
 
 A cross-platform, self-contained **pure-Go toolkit for Apple disk images**. It
 reads **APFS** and **HFS+** file systems directly from `.dmg` files, raw images
