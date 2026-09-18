@@ -38,6 +38,20 @@ type Entry struct {
 	Data     []byte   // file content, or symlink target bytes
 	Children []*Entry // directory children (writer sorts them)
 
+	// Open supplies a regular file's content lazily. It is the alternative to
+	// Data for content too large to hold in memory; setting both is an error.
+	//
+	// The writer calls it once, while the image is written, closes what it
+	// returns, and never retains more than one copy buffer, so a tree of any
+	// size costs a fixed amount of memory for content. A file of Size zero is
+	// never opened. A symlink's target stays in Data.
+	Open func() (io.ReadCloser, error)
+
+	// Size is the length of the content Open yields. The volume is laid out
+	// before any content is read, so it is fixed here rather than discovered:
+	// content of any other length fails the write.
+	Size int64
+
 	// ResourceFork is the file's resource fork, empty when it has none. On
 	// HFS+ this is a fork of the catalog record rather than an extended
 	// attribute, even though macOS presents it as com.apple.ResourceFork.
@@ -53,6 +67,14 @@ type Entry struct {
 	// content; zero means the entry has only one name. The value itself is
 	// arbitrary and does not reach the disk.
 	LinkGroup uint64
+}
+
+// dataLen is the length of the entry's data fork, wherever its bytes come from.
+func (e *Entry) dataLen() int {
+	if e.Open != nil {
+		return int(e.Size)
+	}
+	return len(e.Data)
 }
 
 // CreateOptions tunes image creation. The zero value is valid.
@@ -373,14 +395,14 @@ func (b *builder) addChildren(parent *fileNode, children []*Entry) {
 		switch {
 		case ce.Mode&os.ModeSymlink != 0:
 			n.isSymlink = true
-			n.dataLen = len(ce.Data)
+			n.dataLen = ce.dataLen()
 			b.fileCount++
 			b.fileNodes = append(b.fileNodes, n)
 		case ce.Mode.IsDir():
 			n.isDir = true
 			b.folderCount++
 		default:
-			n.dataLen = len(ce.Data)
+			n.dataLen = ce.dataLen()
 			b.fileCount++
 			b.fileNodes = append(b.fileNodes, n)
 		}
@@ -542,10 +564,18 @@ func (b *builder) assignData(lay *layout) {
 
 // writeFileData copies every file's bytes into the image at its data extent.
 func (b *builder) writeFileData(w io.WriterAt) error {
+	var buf []byte
 	for _, f := range b.fileNodes {
 		if f.dataLen > 0 {
 			off := int64(f.dataStart) * int64(b.blockSize)
-			if _, err := w.WriteAt(f.entry.Data, off); err != nil {
+			if f.entry.Open != nil {
+				if buf == nil {
+					buf = make([]byte, contentBufferSize)
+				}
+				if err := copyContent(w, off, f.entry, buf); err != nil {
+					return fmt.Errorf("hfsplus: writing %s: %w", f.name, err)
+				}
+			} else if _, err := w.WriteAt(f.entry.Data, off); err != nil {
 				return fmt.Errorf("hfsplus: writing %s: %w", f.name, err)
 			}
 		}
@@ -566,6 +596,41 @@ func (b *builder) writeFileData(w io.WriterAt) error {
 				return fmt.Errorf("hfsplus: writing attribute %s of %s: %w", a.name, n.name, err)
 			}
 		}
+	}
+	return nil
+}
+
+// contentBufferSize is the most lazily supplied content held at once.
+const contentBufferSize = 1 << 20
+
+// copyContent streams an entry's lazily supplied content into its extent.
+//
+// The extent was sized from Entry.Size before anything was read, so content of
+// any other length is an error rather than something to accommodate: a shorter
+// file would leave the fork describing bytes that are not there, and a longer
+// one would run into the blocks of the file after it. Nothing past Size is ever
+// written, whatever the source goes on to yield.
+func copyContent(w io.WriterAt, off int64, e *Entry, buf []byte) (err error) {
+	r, err := e.Open()
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if cerr := r.Close(); err == nil {
+			err = cerr
+		}
+	}()
+
+	n, err := io.CopyBuffer(io.NewOffsetWriter(w, off), io.LimitReader(r, e.Size), buf)
+	if err != nil {
+		return err
+	}
+	if n != e.Size {
+		return fmt.Errorf("content ended after %d bytes, short of the %d its Size declares", n, e.Size)
+	}
+	var extra [1]byte
+	if m, _ := io.ReadFull(r, extra[:]); m > 0 {
+		return fmt.Errorf("content continues past the %d bytes its Size declares", e.Size)
 	}
 	return nil
 }
