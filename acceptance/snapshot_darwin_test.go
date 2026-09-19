@@ -35,12 +35,8 @@ func fsckRaw(t *testing.T, rawPath string) string {
 			t.Skipf("%s not available", tool)
 		}
 	}
-	out, err := exec.Command("hdiutil", "attach", "-nomount", "-imagekey", "diskimage-class=CRawDiskImage", rawPath).CombinedOutput()
-	if err != nil {
-		t.Fatalf("hdiutil attach: %v\n%s", err, out)
-	}
-	dev := strings.Fields(string(out))[0]
-	defer exec.Command("hdiutil", "detach", dev).Run()
+	dev := attachRaw(t, rawPath)
+	defer detach(t, dev)
 
 	fo, _ := exec.Command("fsck_apfs", "-n", dev).CombinedOutput()
 	return string(fo)
