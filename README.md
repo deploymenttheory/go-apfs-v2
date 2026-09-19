@@ -70,6 +70,13 @@ file extension.
 
 ## Install
 
+Library callers handling uploaded UDIF images can use `disk.OpenDMGWithLimits`
+to bound metadata, compressed and decoded chunks, and logical image extents.
+Zero limits select 16 MiB of metadata, 64 MiB per chunk and a 1 TiB logical image.
+`disk.OpenDMG` uses these defaults. Invalid ranges and inconsistent decoded sizes
+return errors. These limits apply to the UDIF reader; they are not a process
+memory limit or a guarantee about filesystem parsers layered on top of it.
+
 Signed archives for macOS, Linux and Windows on `amd64` and `arm64` are attached
 to each [release](https://github.com/deploymenttheory/go-apfs-v2/releases). The
 checksum file is signed with [cosign](https://github.com/sigstore/cosign)

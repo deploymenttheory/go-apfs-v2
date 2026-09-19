@@ -87,13 +87,13 @@ func buildHFSImage(t *testing.T) ([]byte, []byte) {
 	return w.b, big
 }
 
-// firstField returns the first whitespace-separated field of s, which for an
-// hdiutil attach response is the device node.
-func firstField(s string) string {
-	for _, line := range bytes.Fields([]byte(s)) {
-		return string(line)
+// firstField returns the attached device node, ignoring hdiutil warnings.
+func firstField(s string) string { return devRe.FindString(s) }
+
+func TestAttachOutputWarning(t *testing.T) {
+	if got := firstField("hdiutil: WARNING: deprecated\n/dev/disk42\tApple_HFS\t/Volumes/Test\n"); got != "/dev/disk42" {
+		t.Fatalf("device = %q", got)
 	}
-	return ""
 }
 
 // TestWriteFsckClean writes an image, attaches it as a raw device and runs
