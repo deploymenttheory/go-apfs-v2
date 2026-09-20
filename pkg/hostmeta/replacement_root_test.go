@@ -106,7 +106,15 @@ func TestRootReplacementContainmentAndRenamedRoot(t *testing.T) {
 	if err := os.Mkdir(dir, 0700); err != nil {
 		t.Fatal(err)
 	}
-	root, err := os.OpenRoot(dir)
+	// Open the movable directory relative to a parent root. On Windows,
+	// os.OpenRoot(path) holds a handle without delete sharing; OpenRoot on an
+	// existing Root uses delete sharing and permits this rename test.
+	parentRoot, err := os.OpenRoot(filepath.Dir(dir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer parentRoot.Close()
+	root, err := parentRoot.OpenRoot(filepath.Base(dir))
 	if err != nil {
 		t.Fatal(err)
 	}
