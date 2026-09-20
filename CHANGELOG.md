@@ -5,6 +5,19 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0](https://github.com/deploymenttheory/go-apfs-v2/compare/v0.3.1...v0.4.0) (2026-09-20)
+
+
+### Features
+
+* **hostmeta:** expose shared metadata and staged replacement API ([886ea3a](https://github.com/deploymenttheory/go-apfs-v2/commit/886ea3a10f61d92d47c729e4965436315bbf1313))
+* **hostmeta:** expose shared metadata and staged replacement API ([fc28db4](https://github.com/deploymenttheory/go-apfs-v2/commit/fc28db4fb6a6290a884c72f20dcef259bbce4336))
+
+
+### Bug Fixes
+
+* **hostmeta:** validate source handles before restoring security ([022d800](https://github.com/deploymenttheory/go-apfs-v2/commit/022d800565d6ee604f93629bde333c746d6140d5))
+
 ## [0.3.1](https://github.com/deploymenttheory/go-apfs-v2/compare/v0.3.0...v0.3.1) (2026-09-19)
 
 
