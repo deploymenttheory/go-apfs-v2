@@ -49,3 +49,34 @@ an external tool or signing service. Tests run on Linux, macOS and Windows in
 the existing CI matrix. Darwin tests compare ACL text, xattr values, ownership,
 BSD flags and creation time on the host; Windows tests compare streams and
 security descriptors.
+# Root-relative replacements
+
+`PrepareReplacementAt(source, root, parent)` stages a replacement beneath an
+already-open `*os.Root`. `RootReplacement.File` is writable and its `Path` is
+relative to that root. Write/truncate the complete output, call
+`RestoreMetadata`, sync and close the file, then use `root.Rename` to commit.
+Always call `Close` to discard staging. Keep the caller-owned source open through
+metadata restoration and the root open through cleanup. The API never commits
+or closes those caller-owned objects and is not safe for concurrent method calls.
+
+Darwin clones relative to the opened staging directory and uses the held
+directory's `/dev/fd/N` name with the supported `Setattrlist` wrapper to clear
+inherited ACLs. Linux creates through the root and copies metadata by descriptor.
+Windows reopens existing handles with `ReOpenFile`, then copies bounded EAs and
+alternate data streams through `BackupRead`/`BackupWrite`; it never reopens the
+source by its pathname or restores backup hard-link/object-identity records.
+Owner, group, DACL, creation time and ordinary Windows attributes are preserved.
+The root API rejects compressed, encrypted, sparse and reparse Windows files and
+bounds combined stream/EA names and data to 8 MiB. Darwin's existing clone,
+protected/compressed-file limitations remain. SACLs are outside the contract.
+
+The existing path API remains available. Both APIs run the same platform metadata
+tests. Root-specific tests cover containment, a moved root with an old-path decoy,
+hard-link detachment, failed restoration, cleanup and close after commit.
+Concurrent source/staging-tree mutation and crash durability are not promised;
+callers own source/destination identity checks and commit decisions.
+
+Windows protocol references: [BackupRead](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-backupread),
+[BackupWrite](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-backupwrite),
+[WIN32_STREAM_ID](https://learn.microsoft.com/en-us/windows/win32/api/winbase/ns-winbase-win32_stream_id)
+and [ReOpenFile](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-reopenfile).

@@ -5,6 +5,14 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Added
+
+- Root-relative staged replacement through `hostmeta.PrepareReplacementAt`,
+  preserving supported metadata using opened roots and handles. Tests cover both
+  preparation APIs, containment, renamed roots, Windows streams and cleanup.
+
 ## [0.4.0](https://github.com/deploymenttheory/go-apfs-v2/compare/v0.3.1...v0.4.0) (2026-09-20)
 
 
