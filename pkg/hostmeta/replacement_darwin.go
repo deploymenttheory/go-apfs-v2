@@ -23,13 +23,7 @@ func prepareReplacement(source *os.File, path string, info os.FileInfo) (*os.Fil
 	// clear its ACL before cloning so the source ACL is reproduced exactly.
 	// This is kauth_filesec with KAUTH_FILESEC_NOACL (sys/kauth.h), preceded by
 	// an attrreference_t (sys/attr.h). Setattrlist is a libSystem wrapper.
-	acl := make([]byte, 52)
-	binary.LittleEndian.PutUint32(acl, 8)
-	binary.LittleEndian.PutUint32(acl[4:], 44)
-	binary.LittleEndian.PutUint32(acl[8:], 0x012cc16d)
-	binary.LittleEndian.PutUint32(acl[44:], 0xffffffff)
-	list := unix.Attrlist{Bitmapcount: 5, Commonattr: unix.ATTR_CMN_EXTENDED_SECURITY}
-	if err := unix.Setattrlist(filepath.Dir(path), &list, acl, unix.FSOPT_NOFOLLOW); err != nil {
+	if err := clearReplacementACL(filepath.Dir(path)); err != nil {
 		return nil, err
 	}
 	if err := unix.Fclonefileat(int(source.Fd()), unix.AT_FDCWD, path, cloneACL); err != nil {
@@ -41,6 +35,16 @@ func prepareReplacement(source *os.File, path string, info os.FileInfo) (*os.Fil
 		return nil, err
 	}
 	return os.OpenFile(path, os.O_RDWR, 0)
+}
+
+func clearReplacementACL(path string) error {
+	acl := make([]byte, 52)
+	binary.LittleEndian.PutUint32(acl, 8)
+	binary.LittleEndian.PutUint32(acl[4:], 44)
+	binary.LittleEndian.PutUint32(acl[8:], 0x012cc16d)
+	binary.LittleEndian.PutUint32(acl[44:], 0xffffffff)
+	list := unix.Attrlist{Bitmapcount: 5, Commonattr: unix.ATTR_CMN_EXTENDED_SECURITY}
+	return unix.Setattrlist(path, &list, acl, unix.FSOPT_NOFOLLOW)
 }
 
 func restoreReplacementMetadata(_ *os.File, target *os.File, info os.FileInfo) error {
