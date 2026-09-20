@@ -382,12 +382,13 @@ func (b *builder) flatten(rootEntry *Entry, volumeName string) *fileNode {
 func (b *builder) addChildren(parent *fileNode, children []*Entry) {
 	sorted := append([]*Entry(nil), children...)
 	sort.Slice(sorted, func(i, j int) bool {
-		return normalizeName(sorted[i].Name) < normalizeName(sorted[j].Name)
+		return normalizeName(catalogName(sorted[i].Name)) < normalizeName(catalogName(sorted[j].Name))
 	})
 	for _, ce := range sorted {
 		n := &fileNode{
-			entry:  ce,
-			name:   normalizeName(ce.Name),
+			entry: ce,
+			// Entry.Name is a POSIX name, stored the way HFS+ spells it.
+			name:   normalizeName(catalogName(ce.Name)),
 			cnid:   b.nextCNID,
 			parent: parent.cnid,
 		}

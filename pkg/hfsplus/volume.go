@@ -340,7 +340,7 @@ func (v *Volume) hideMetadataEntries() {
 // rootChildNamed finds a direct child of the root folder by exact name.
 func (v *Volume) rootChildNamed(name string) *entry {
 	for _, child := range v.root.children {
-		if child.name == name {
+		if child.name == catalogName(name) || child.name == name {
 			return child
 		}
 	}
@@ -357,12 +357,16 @@ func (v *Volume) lookup(name string) (*entry, error) {
 
 	for _, part := range strings.Split(name, "/") {
 		if !current.isDir {
-			return nil, fmt.Errorf("%q is not a directory", current.name)
+			return nil, fmt.Errorf("%q is not a directory", posixName(current.name))
 		}
 		// Stored names are decomposed, so a caller passing a precomposed one --
 		// which is what a Go string literal or a path from most systems holds --
 		// would not match without this.
-		next := findChild(current, normalizeName(part), v.caseSensitive)
+		next := findChild(current, normalizeName(catalogName(part)), v.caseSensitive)
+		if next == nil && part != catalogName(part) {
+			// A volume written by something that stored the colon verbatim.
+			next = findChild(current, normalizeName(part), v.caseSensitive)
+		}
 		if next == nil {
 			return nil, fmt.Errorf("no such file or directory: %q", part)
 		}

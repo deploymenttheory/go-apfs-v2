@@ -69,7 +69,7 @@ func (v *Volume) ReadDir(name string) ([]fs.DirEntry, error) {
 
 	entries := make([]fs.DirEntry, 0, len(e.children))
 	for _, child := range e.children {
-		entries = append(entries, dirEntry{info: v.newFileInfo(child.name, child)})
+		entries = append(entries, dirEntry{info: v.newFileInfo(posixName(child.name), child)})
 	}
 
 	return entries, nil
