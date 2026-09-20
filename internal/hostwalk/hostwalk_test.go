@@ -7,8 +7,8 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/deploymenttheory/go-apfs-v2/internal/hostmeta"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/fidelity"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
 )
 
 // testEntry is a minimal stand-in for the writers' Entry types, so the walk can

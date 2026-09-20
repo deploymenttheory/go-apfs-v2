@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/deploymenttheory/go-apfs-v2/internal/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
 )
 
 // TestRequiredScratchBytes covers the arithmetic without needing a full disk.

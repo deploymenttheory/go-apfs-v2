@@ -3,9 +3,9 @@ package hfsplus
 import (
 	"strings"
 
-	"github.com/deploymenttheory/go-apfs-v2/internal/hostmeta"
 	"github.com/deploymenttheory/go-apfs-v2/internal/hostwalk"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/fidelity"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
 )
 
 // WalkOptions tunes EntryTreeFromDir.

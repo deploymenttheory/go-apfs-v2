@@ -12,7 +12,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/deploymenttheory/go-apfs-v2/internal/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfswrite"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/disk"
