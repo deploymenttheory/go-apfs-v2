@@ -72,7 +72,7 @@ func TestDecompressedChunkCannotExceedDeclaration(t *testing.T) {
 	if _, err := f.Write(encoded.Bytes()); err != nil {
 		t.Fatal(err)
 	}
-	r := &DMGReader{file: f}
+	r := &DMGReader{reader: f}
 	if _, err := r.decompressChunk(&DMGChunk{Type: chunkTypeCompressZLIB, DiskLength: 512, CompressedLength: uint64(encoded.Len())}); err == nil {
 		t.Fatal("decompression bomb accepted")
 	}

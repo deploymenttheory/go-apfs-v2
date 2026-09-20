@@ -136,14 +136,23 @@ func (b *blockReader) ReadAt(p []byte, off int64) (int, error) {
 			continue
 		}
 
+		// Overlay the intersection of [start, end) and [off, off+n).
+		from := max(off, start)
+		to := min(off+int64(n), end)
+
+		// A raw extent is copied straight from the source, so reconstruction
+		// never holds a chunk whose size it did not choose.
+		if chunk.Type == chunkTypeUncompressed {
+			if _, err := b.reader.reader.ReadAt(p[from-off:to-off], int64(chunk.CompressedOffset)+from-start); err != nil {
+				return 0, fmt.Errorf("blockReader: chunk %d (type 0x%x): %w", i, chunk.Type, err)
+			}
+			continue
+		}
+
 		decompressed, err := b.chunkData(i)
 		if err != nil {
 			return 0, fmt.Errorf("blockReader: chunk %d (type 0x%x): %w", i, chunk.Type, err)
 		}
-
-		// Overlay the intersection of [start, end) and [off, off+n).
-		from := max(off, start)
-		to := min(off+int64(n), end)
 		copy(p[from-off:to-off], decompressed[from-start:to-start])
 	}
 
@@ -178,9 +187,8 @@ func reconstructBlocks(dmgPath string) ([]SourceBlock, uint64, io.Closer, error)
 		return nil, 0, nil, err
 	}
 
-	// decompressChunk only touches r.file and the chunk fields, so a minimal
-	// reader is sufficient to reuse the reader's decompression logic.
-	r := &DMGReader{file: f}
+	// Reconstruction shares the chunk codecs with the filesystem reader.
+	r := &DMGReader{reader: f}
 
 	blocks := make([]SourceBlock, 0, len(blkx))
 	var totalSectors uint64
