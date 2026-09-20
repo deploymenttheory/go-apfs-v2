@@ -106,9 +106,7 @@ func TestRootReplacementContainmentAndRenamedRoot(t *testing.T) {
 	if err := os.Mkdir(dir, 0700); err != nil {
 		t.Fatal(err)
 	}
-	// Open the movable directory relative to a parent root. On Windows,
-	// os.OpenRoot(path) holds a handle without delete sharing; OpenRoot on an
-	// existing Root uses delete sharing and permits this rename test.
+	// Open relative to a parent so every operation uses the same root APIs.
 	parentRoot, err := os.OpenRoot(filepath.Dir(dir))
 	if err != nil {
 		t.Fatal(err)
@@ -146,10 +144,17 @@ func TestRootReplacementContainmentAndRenamedRoot(t *testing.T) {
 	// the opened directory; source.Name and root.Name are not authority to reopen.
 	moved := dir + "-moved"
 	if err := parentRoot.Rename(filepath.Base(dir), filepath.Base(moved)); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Mkdir(dir, 0700); err != nil {
-		t.Fatal(err)
+		// Windows disallows moving this open directory, including with
+		// delete-sharing handles. Go's TestRootRenameAfterOpen excludes it
+		// for the same reason. Still exercise containment and staging here.
+		if runtime.GOOS != "windows" || !errors.Is(err, os.ErrPermission) {
+			t.Fatal(err)
+		}
+		moved = dir
+	} else {
+		if err := os.Mkdir(dir, 0700); err != nil {
+			t.Fatal(err)
+		}
 	}
 	r, err := PrepareReplacementAt(source, root, ".")
 	if err != nil {
@@ -159,9 +164,11 @@ func TestRootReplacementContainmentAndRenamedRoot(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(moved, r.Path)); err != nil {
 		t.Fatal(err)
 	}
-	entries, err := os.ReadDir(dir)
-	if err != nil || len(entries) != 0 {
-		t.Fatalf("decoy touched: %v %v", entries, err)
+	if moved != dir {
+		entries, err := os.ReadDir(dir)
+		if err != nil || len(entries) != 0 {
+			t.Fatalf("decoy touched: %v %v", entries, err)
+		}
 	}
 	if err := r.Close(); err != nil {
 		t.Fatal(err)
