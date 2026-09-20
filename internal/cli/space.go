@@ -6,7 +6,7 @@ import (
 	"io/fs"
 	"path/filepath"
 
-	"github.com/deploymenttheory/go-apfs-v2/internal/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
 )
 
 // spaceHeadroom is the fraction added to an estimate before checking it, to

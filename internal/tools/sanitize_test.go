@@ -11,7 +11,7 @@ func TestSanitizePathWindows(t *testing.T) {
 		{"normal.txt", "normal.txt", false},
 		{"dir/sub/file", "dir/sub/file", false},
 		{"ünïcødé/файл.txt", "ünïcødé/файл.txt", false}, // valid on NTFS
-		{" ", "%20", true},                              // single space (Firefox's Applications link)
+		{" ", "%20", true}, // single space (Firefox's Applications link)
 		{"trailing ", "trailing%20", true},
 		{"trailing.", "trailing%2E", true},
 		{"a<b>c:d", "a%3Cb%3Ec%3Ad", true},

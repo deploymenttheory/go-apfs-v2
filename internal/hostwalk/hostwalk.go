@@ -15,8 +15,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/deploymenttheory/go-apfs-v2/internal/hostmeta"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/fidelity"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
 )
 
 // Options tunes a walk.

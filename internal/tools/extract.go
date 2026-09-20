@@ -17,8 +17,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/deploymenttheory/go-apfs-v2/internal/hostmeta"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
 	"github.com/schollz/progressbar/v3"
 )
 

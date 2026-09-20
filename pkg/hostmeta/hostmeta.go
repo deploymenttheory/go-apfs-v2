@@ -1,9 +1,10 @@
-// Package hostmeta reads the file metadata the Go standard library does not
-// expose: extended attributes, hard-link identity and BSD flags.
+// Package hostmeta handles host filesystem metadata shared by image tools and
+// other consumers: extended attributes, hard-link identity and BSD flags.
 //
 // The writers need these to report what a directory-to-volume write cannot
-// carry across. Every function degrades to "nothing here" on a platform that
-// has no such concept, so callers need no build tags of their own.
+// carry across. ListXattrs/SetXattrs report best-effort extraction fidelity.
+// PrepareReplacement instead requires preservation of its supported metadata
+// and returns an error before the caller commits an unsupported replacement.
 package hostmeta
 
 import "os"

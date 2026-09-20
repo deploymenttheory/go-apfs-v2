@@ -10,8 +10,8 @@ import (
 	"strings"
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/decmpfs"
-	"github.com/deploymenttheory/go-apfs-v2/internal/hostmeta"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
 )
 
 // setTree resolves the caller's directory tree (Root plus the RootFiles
