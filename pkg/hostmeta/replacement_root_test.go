@@ -145,7 +145,7 @@ func TestRootReplacementContainmentAndRenamedRoot(t *testing.T) {
 	// Move the root and plant a decoy at its old pathname. All staging must use
 	// the opened directory; source.Name and root.Name are not authority to reopen.
 	moved := dir + "-moved"
-	if err := os.Rename(dir, moved); err != nil {
+	if err := parentRoot.Rename(filepath.Base(dir), filepath.Base(moved)); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Mkdir(dir, 0700); err != nil {
