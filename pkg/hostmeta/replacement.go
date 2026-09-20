@@ -59,6 +59,13 @@ func PrepareReplacement(source *os.File, parent string) (*Replacement, error) {
 // written. On failure the caller must discard the replacement without renaming
 // it over the source. It does not sync or close either file.
 func (r *Replacement) RestoreMetadata() error {
+	current, err := r.source.Stat()
+	if err != nil {
+		return err
+	}
+	if !os.SameFile(r.info, current) {
+		return fmt.Errorf("replacement source changed")
+	}
 	return restoreReplacementMetadata(r.source, r.File, r.info)
 }
 

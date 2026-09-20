@@ -25,7 +25,7 @@ func TestReplacementWindowsStreamsAndSecurity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handle, err := windows.CreateFile(path, windows.WRITE_DAC, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, nil, windows.OPEN_EXISTING, 0, 0)
+	handle, err := windows.CreateFile(path, windows.READ_CONTROL|windows.WRITE_DAC, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, nil, windows.OPEN_EXISTING, 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
