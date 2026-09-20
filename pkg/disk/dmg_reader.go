@@ -597,7 +597,15 @@ func (r *DMGReader) decompressChunk(chunk *DMGChunk) ([]byte, error) {
 	if chunk.Type == chunkTypeZeroFill || chunk.Type == chunkTypeIgnored {
 		return make([]byte, chunk.DiskLength), nil
 	}
-	compressed := io.NewSectionReader(r.reader, int64(chunk.CompressedOffset), int64(chunk.CompressedLength))
+	// A decoder reads its input in small pieces, so the compressed extent is
+	// read once rather than once per piece: streaming it from the source costs
+	// a read for every window the codec asks for. ChunkBytes bounds this, and
+	// extents that need no decoding never reach here.
+	input := make([]byte, chunk.CompressedLength)
+	if _, err := r.reader.ReadAt(input, int64(chunk.CompressedOffset)); err != nil {
+		return nil, err
+	}
+	compressed := bytes.NewReader(input)
 	var stream io.Reader = compressed
 	switch chunk.Type {
 	case chunkTypeUncompressed:
@@ -611,12 +619,8 @@ func (r *DMGReader) decompressChunk(chunk *DMGChunk) ([]byte, error) {
 	case chunkTypeCompressBZ2:
 		stream = bzip2.NewReader(compressed)
 	case chunkTypeCompressLZMA:
-		var magic [6]byte
-		if _, err := compressed.ReadAt(magic[:], 0); err != nil {
-			return nil, err
-		}
 		var err error
-		if bytes.Equal(magic[:], xzMagic) {
+		if bytes.HasPrefix(input, xzMagic) {
 			stream, err = xz.NewReader(compressed)
 		} else {
 			stream, err = lzma.NewReader(compressed)
@@ -625,11 +629,8 @@ func (r *DMGReader) decompressChunk(chunk *DMGChunk) ([]byte, error) {
 			return nil, err
 		}
 	case chunkTypeCompressADC, chunkTypeCompressLZFSE:
-		input, err := io.ReadAll(compressed)
-		if err != nil {
-			return nil, err
-		}
 		var output []byte
+		var err error
 		if chunk.Type == chunkTypeCompressADC {
 			output, err = DecompressADC(input, int(chunk.DiskLength))
 		} else {
