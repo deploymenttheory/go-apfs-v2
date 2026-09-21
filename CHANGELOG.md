@@ -21,6 +21,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   preserving supported metadata using opened roots and handles. Tests cover both
   preparation APIs, containment, renamed roots, Windows streams and cleanup.
 
+## [0.8.0](https://github.com/deploymenttheory/go-apfs-v2/compare/v0.7.0...v0.8.0) (2026-09-21)
+
+
+### Features
+
+* **hostmeta:** record mapped-read access through held descriptors ([bc2854f](https://github.com/deploymenttheory/go-apfs-v2/commit/bc2854fca7fd32d0033b8bb684f5f94ad0d5525d))
+* **hostmeta:** record mapped-read access through held descriptors ([5889b2c](https://github.com/deploymenttheory/go-apfs-v2/commit/5889b2c96bf06df42ddb5775b31435716daf3313))
+
 ## [0.7.0](https://github.com/deploymenttheory/go-apfs-v2/compare/v0.6.1...v0.7.0) (2026-09-21)
 
 
