@@ -65,6 +65,9 @@ jobs:
           CGO_ENABLED: "0"
         # Everything except the acceptance suite, which runs separately below.
         run: go test ./pkg/... ./internal/...
+      - name: Name hash first-use race regression (Linux)
+        if: runner.os == 'Linux'
+        run: go test -race -count=1 ./pkg/apfs -run '^TestNameHashConcurrentFirstUse$'
       - name: Acceptance tests (committed fixtures)
         env:
           CGO_ENABLED: "0"

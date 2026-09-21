@@ -9,16 +9,12 @@ import (
 	"golang.org/x/text/unicode/norm"
 )
 
-// CRC32 table for name hash calculation
-var crc32CTable [256]uint32
-var crc32CTableReady bool
+// Build the table during package initialization. Hashing only reads it, so
+// concurrent first calls through either UTF entry point cannot race.
+var crc32CTable = makeCRC32CTable()
 
-// initCRC32CTable initializes the CRC-32 table
-func initCRC32CTable() {
-	if crc32CTableReady {
-		return
-	}
-
+func makeCRC32CTable() [256]uint32 {
+	var table [256]uint32
 	// APFS hashes names with CRC-32C (Castagnoli), polynomial 0x82f63b78.
 	const polynomial uint32 = 0x82f63b78
 
@@ -33,13 +29,14 @@ func initCRC32CTable() {
 			}
 		}
 
-		crc32CTable[tableIndex] = checksum
+		table[tableIndex] = checksum
 	}
 
-	crc32CTableReady = true
+	return table
 }
 
-// CalculateNameHash calculates the APFS name hash from a UTF-8 string
+// CalculateNameHash calculates the APFS name hash from a UTF-8 string.
+// It is safe for concurrent use, including the first call.
 //
 // Note: This implementation uses Go's unicode.ToLower() and norm.NFD for case folding
 // and normalization. The C library has special case mappings for certain Unicode
@@ -48,9 +45,6 @@ func initCRC32CTable() {
 // compatible results. If exact hash matching is required for edge cases, additional
 // special case mapping tables from the C implementation may need to be added.
 func CalculateNameHash(utf8String []byte, useCaseFolding bool) uint32 {
-	// Initialize CRC32 table if not already done
-	initCRC32CTable()
-
 	var calculatedChecksum uint32 = common.Uint32Mask
 	utf8Index := 0
 
@@ -106,14 +100,12 @@ func CalculateNameHash(utf8String []byte, useCaseFolding bool) uint32 {
 	return calculatedChecksum & 0x003fffff
 }
 
-// CalculateNameHashFromUTF16 calculates the APFS name hash from a UTF-16 string
+// CalculateNameHashFromUTF16 calculates the APFS name hash from a UTF-16 string.
+// It is safe for concurrent use, including the first call.
 //
 // Note: This implementation uses Go's unicode.ToLower() and norm.NFD for case folding
 // and normalization. See CalculateNameHash for details about special case handling.
 func CalculateNameHashFromUTF16(utf16String []uint16, useCaseFolding bool) uint32 {
-	// Initialize CRC32 table if not already done
-	initCRC32CTable()
-
 	var calculatedChecksum uint32 = common.Uint32Mask
 
 	// Decode UTF-16 to runes
