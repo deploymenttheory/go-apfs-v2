@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"runtime"
 )
 
 // ErrUnsupportedDirectoryStat identifies directory metadata outside the supported
@@ -30,6 +31,10 @@ func CopyDirectoryStat(source, target *os.File) error {
 	if source == nil || target == nil {
 		return os.ErrInvalid
 	}
+	// Platform wrappers consume raw handle values; keep their owning Files alive
+	// until every descriptor-based operation has returned.
+	defer runtime.KeepAlive(source)
+	defer runtime.KeepAlive(target)
 	from, err := source.Stat()
 	if err != nil {
 		return err

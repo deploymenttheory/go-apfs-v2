@@ -100,6 +100,8 @@ replaces or commits a directory. Names may move without redirecting the operatio
 - Windows copies read-only, hidden, system, archive and not-content-indexed
   attributes plus access/modification times. It leaves creation time, security
   descriptors and streams unchanged. Other directory attributes are rejected.
+  The supported x/sys `NtCreateFile` wrapper opens an empty name relative to the
+  held target with explicit directory semantics; it never resolves `File.Name`.
 
 This is a stat operation, not Apple's full `COPYFILE_SECURITY`: that operation
 also combines explicit source ACL entries with inherited destination entries.
