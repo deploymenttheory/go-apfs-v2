@@ -480,3 +480,8 @@ The design and on-disk handling draw on
 [blacktop/go-apfs](https://github.com/blacktop/go-apfs),
 [apfsprogs](https://github.com/linux-apfs/apfsprogs) and Apple's
 *Apple File System Reference*. See `NOTICE` for details and licenses.
+
+## Related Projects
+
+- [go-macos-codesign](https://github.com/deploymenttheory/go-macos-codesign) — Pure Go library and CLI for signing, inspecting, and verifying supported Mach-O binaries, macOS app bundles, and DMGs.
+- [go-macos-pkg](https://github.com/deploymenttheory/go-macos-pkg) — Cross-platform Go toolkit for inspecting, building, signing, notarizing, and stapling macOS installer packages.
