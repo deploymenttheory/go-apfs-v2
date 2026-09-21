@@ -20,6 +20,12 @@ func TestCopyAccessTimeInvalidFiles(t *testing.T) {
 	if err := closed.Close(); err != nil {
 		t.Fatal(err)
 	}
+	// Preserve the host's Stat error for a closed descriptor.
+	_, closedErr := closed.Stat()
+	var statErr *os.PathError
+	if !errors.As(closedErr, &statErr) {
+		t.Fatalf("closed descriptor stat: %v", closedErr)
+	}
 	link := filepath.Join(t.TempDir(), "linked")
 	if err := os.Link(source.Name(), link); err != nil {
 		t.Fatal(err)
@@ -40,8 +46,8 @@ func TestCopyAccessTimeInvalidFiles(t *testing.T) {
 		{"directory-target", source, dir, os.ErrInvalid},
 		{"same-file", source, source, os.ErrInvalid},
 		{"same-inode", source, linked, os.ErrInvalid},
-		{"closed-source", closed, target, os.ErrClosed},
-		{"closed-target", source, closed, os.ErrClosed},
+		{"closed-source", closed, target, statErr.Err},
+		{"closed-target", source, closed, statErr.Err},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			beforeSource, err := source.Stat()
