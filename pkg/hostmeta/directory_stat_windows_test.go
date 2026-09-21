@@ -12,6 +12,20 @@ func TestCopyDirectoryStatWindows(t *testing.T) {
 	source, target := directoryStatFixture(t), directoryStatFixture(t)
 	const attrs = windows.FILE_ATTRIBUTE_HIDDEN | windows.FILE_ATTRIBUTE_SYSTEM | windows.FILE_ATTRIBUTE_ARCHIVE | windows.FILE_ATTRIBUTE_NOT_CONTENT_INDEXED | windows.FILE_ATTRIBUTE_READONLY
 	for i, f := range []*os.File{source, target} {
+		stream, err := windows.UTF16PtrFromString(f.Name() + ":directory-stat")
+		if err != nil {
+			t.Fatal(err)
+		}
+		streamHandle, err := windows.CreateFile(stream, windows.GENERIC_WRITE, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, nil, windows.CREATE_ALWAYS, windows.FILE_FLAG_BACKUP_SEMANTICS, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		streamFile := os.NewFile(uintptr(streamHandle), f.Name()+":directory-stat")
+		_, err = streamFile.WriteString(f.Name())
+		_ = streamFile.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
 		p, err := windows.UTF16PtrFromString(f.Name())
 		if err != nil {
 			t.Fatal(err)
@@ -34,9 +48,6 @@ func TestCopyDirectoryStatWindows(t *testing.T) {
 			}
 		}
 		t.Cleanup(func() { _ = windows.SetFileAttributes(p, windows.FILE_ATTRIBUTE_NORMAL) })
-		if err := os.WriteFile(f.Name()+":directory-stat", []byte(f.Name()), 0600); err != nil {
-			t.Fatal(err)
-		}
 	}
 	// Protect the target's DACL so an accidental security copy is observable.
 	flags := windows.SECURITY_INFORMATION(windows.OWNER_SECURITY_INFORMATION | windows.GROUP_SECURITY_INFORMATION | windows.DACL_SECURITY_INFORMATION)

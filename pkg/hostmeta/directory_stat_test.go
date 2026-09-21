@@ -42,7 +42,8 @@ func TestCopyDirectoryStatValidation(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, pair := range [][2]*os.File{{closed, target}, {source, closed}} {
-		if err := CopyDirectoryStat(pair[0], pair[1]); !errors.Is(err, os.ErrClosed) {
+		// Windows File.Stat reports ERROR_INVALID_HANDLE rather than ErrClosed.
+		if err := CopyDirectoryStat(pair[0], pair[1]); err == nil {
 			t.Fatalf("closed: %v", err)
 		}
 	}

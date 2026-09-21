@@ -24,9 +24,9 @@ func copyDirectoryStat(source, target *os.File, _, _ os.FileInfo) error {
 	}
 	// ReOpenFile requests only metadata access on the same object, including a
 	// moved directory. It never resolves File.Name or copies DACL/owner state.
-	file, err := reopenHostFile(target, windows.FILE_WRITE_ATTRIBUTES, windows.FILE_FLAG_BACKUP_SEMANTICS)
+	file, err := reopenHostFile(target, windows.FILE_WRITE_ATTRIBUTES|windows.SYNCHRONIZE, windows.FILE_FLAG_BACKUP_SEMANTICS)
 	if err != nil {
-		return err
+		return fmt.Errorf("reopen target directory: %w", err)
 	}
 	defer file.Close()
 	basic := replacementBasicInfo{
@@ -34,5 +34,8 @@ func copyDirectoryStat(source, target *os.File, _, _ os.FileInfo) error {
 		LastWriteTime:  from.LastWriteTime,
 		Attributes:     from.Attributes&ordinary | windows.FILE_ATTRIBUTE_DIRECTORY,
 	}
-	return windows.SetFileInformationByHandle(windows.Handle(file.Fd()), windows.FileBasicInfo, (*byte)(unsafe.Pointer(&basic)), uint32(unsafe.Sizeof(basic)))
+	if err := windows.SetFileInformationByHandle(windows.Handle(file.Fd()), windows.FileBasicInfo, (*byte)(unsafe.Pointer(&basic)), uint32(unsafe.Sizeof(basic))); err != nil {
+		return fmt.Errorf("set target directory metadata: %w", err)
+	}
+	return nil
 }
