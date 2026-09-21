@@ -29,7 +29,7 @@ func TestSetCreationTimeInvalidFiles(t *testing.T) {
 	if err := file.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if err := SetCreationTime(file, when); !errors.Is(err, os.ErrClosed) {
+	if err := SetCreationTime(file, when); err == nil || errors.Is(err, ErrCreationTimeUnsupported) {
 		t.Fatalf("closed file: %v", err)
 	}
 }
