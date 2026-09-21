@@ -23,11 +23,7 @@ var (
 // ReOpenFile adds access to an already opened object without resolving its name.
 // It also gives BackupRead/Write synchronous handles and independent file offsets.
 func reopenReplacementFile(f *os.File, access uint32) (*os.File, error) {
-	return reopenHostFile(f, access, 0)
-}
-
-func reopenHostFile(f *os.File, access, flags uint32) (*os.File, error) {
-	h, _, err := reopenFile.Call(f.Fd(), uintptr(access), windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, uintptr(flags))
+	h, _, err := reopenFile.Call(f.Fd(), uintptr(access), windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, 0)
 	if windows.Handle(h) == windows.InvalidHandle {
 		return nil, err
 	}
