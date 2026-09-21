@@ -1,5 +1,15 @@
 # Shared host metadata
 
+`SetCreationTime(file, when)` updates the creation time of an open regular file
+on Darwin with nanosecond precision. It uses the held descriptor through x/sys's
+`Setattrlist` wrapper and fdescfs; replacing the original pathname does not change
+the target. Contents, access/modification times and other supported metadata remain
+unchanged. Hard-link names share the update. Nil, closed and non-regular files
+fail; other hosts return `ErrCreationTimeUnsupported` without emulating the time.
+This is an explicit caller operation; replacement APIs retain their source
+creation-time preservation contract. Call it on a private staged file before
+restoring restrictive flags, then sync and commit through the caller's writer.
+
 This package is the former `internal/hostmeta`, exposed for consumers such as
 `go-macos-codesign`. APFS/HFS+ writers, extraction, capacity checks and signing
 share the same implementation and platform definitions.
