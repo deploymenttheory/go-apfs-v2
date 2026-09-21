@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `hostmeta.RecordReadAccess` records Darwin mapped-read access through an open
+  regular-file descriptor, with bounded memory and no metadata-write permission
+  requirement. Other hosts report unsupported.
+
 - `hostmeta.SetCreationTime` updates an open regular file's Darwin creation time
   with nanosecond precision and descriptor-based targeting. Other hosts return
   an explicit unsupported error; replacement defaults remain unchanged.

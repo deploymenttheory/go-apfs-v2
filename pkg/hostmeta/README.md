@@ -1,5 +1,15 @@
 # Shared host metadata
 
+`RecordReadAccess(file)` requests native mapped-read access-time behavior for an
+open regular file on Darwin. It briefly maps one byte read-only without accessing
+the mapping, so empty files and truncation cannot cause a mapped-memory fault.
+The filesystem chooses the access time; contents, file position and other metadata
+are unchanged. Hard links share the access-time update. Read permission is enough,
+including on files whose ACL denies metadata writes. Nil, closed, non-regular,
+write-only and event-only descriptors are rejected. Other hosts return
+`ErrReadAccessUnsupported`; no timestamp-write emulation is performed. This is an
+explicit operation and does not change replacement API defaults.
+
 `SetCreationTime(file, when)` updates the creation time of an open regular file
 on Darwin with nanosecond precision. It uses the held descriptor through x/sys's
 `Setattrlist` wrapper and fdescfs; replacing the original pathname does not change
