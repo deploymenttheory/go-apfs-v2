@@ -13,6 +13,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   preserving supported metadata using opened roots and handles. Tests cover both
   preparation APIs, containment, renamed roots, Windows streams and cleanup.
 
+## [0.6.0](https://github.com/deploymenttheory/go-apfs-v2/compare/v0.5.0...v0.6.0) (2026-09-21)
+
+
+### Features
+
+* **hostmeta:** copy stat metadata between held directories ([b77926e](https://github.com/deploymenttheory/go-apfs-v2/commit/b77926ec2b33b178084015f94b5f1e1043401026))
+* **hostmeta:** copy stat metadata between held directories ([a281961](https://github.com/deploymenttheory/go-apfs-v2/commit/a281961ddd55a8d7ebf21f98b3e5cbc15ba0dad0))
+
+
+### Bug Fixes
+
+* **hostmeta:** keep directory handles alive through metadata updates ([59f1572](https://github.com/deploymenttheory/go-apfs-v2/commit/59f15729c46ed2cce75c866174f7cb9f81814a34))
+* **hostmeta:** reopen held Windows directories with explicit directory semantics ([4a03cc8](https://github.com/deploymenttheory/go-apfs-v2/commit/4a03cc8eff72b9bd3a5a9393fd1e6451f4ab8c04))
+* **hostmeta:** request synchronous directory access on Windows ([0d9b0e7](https://github.com/deploymenttheory/go-apfs-v2/commit/0d9b0e7e73a885635e827a29e204b4109e3a983a))
+
 ## [0.5.0](https://github.com/deploymenttheory/go-apfs-v2/compare/v0.4.0...v0.5.0) (2026-09-20)
 
 
