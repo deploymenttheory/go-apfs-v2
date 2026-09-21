@@ -13,6 +13,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   preserving supported metadata using opened roots and handles. Tests cover both
   preparation APIs, containment, renamed roots, Windows streams and cleanup.
 
+## [0.6.1](https://github.com/deploymenttheory/go-apfs-v2/compare/v0.6.0...v0.6.1) (2026-09-21)
+
+
+### Bug Fixes
+
+* initialize APFS name hash table before concurrent use ([1989afe](https://github.com/deploymenttheory/go-apfs-v2/commit/1989afea6a0de3cbfe99930f20ec24b420666db9))
+* initialize APFS name hash table before concurrent use ([0820e44](https://github.com/deploymenttheory/go-apfs-v2/commit/0820e44cd0e095bf51932359bc42431e495a357a))
+
 ## [0.6.0](https://github.com/deploymenttheory/go-apfs-v2/compare/v0.5.0...v0.6.0) (2026-09-21)
 
 
