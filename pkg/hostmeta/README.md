@@ -1,5 +1,18 @@
 # Shared host metadata
 
+`CopyAccessTime(source, target)` copies a regular file's current Darwin access time
+into a distinct open regular file with nanosecond precision. It uses held
+descriptors through x/sys's `Setattrlist` wrapper and fdescfs, so moved names or
+old-path decoys cannot redirect the update. Source metadata, contents and file
+positions are unchanged. Only target access time is explicitly set; its metadata
+change time may advance. Other timestamps, ownership, mode, ACLs and xattrs remain
+unchanged. Target hard links share the update. Nil, closed, non-regular and
+same-inode pairs fail; other hosts return `ErrAccessTimeUnsupported` without
+mutation. The caller needs metadata-write permission on the target and must keep
+both descriptors open without concurrent metadata changes. Use this after a
+source read to update a privately staged clone without repeating allocation.
+Replacement APIs do not implicitly copy access times.
+
 `RecordReadAccess(file)` requests native mapped-read access-time behavior for an
 open regular file on Darwin. It briefly maps one byte read-only without accessing
 the mapping, so empty files and truncation cannot cause a mapped-memory fault.

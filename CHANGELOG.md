@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `hostmeta.CopyAccessTime` copies Darwin nanosecond access time between held
+  regular-file descriptors without recording a read or changing other target
+  metadata apart from change time. Other hosts report unsupported.
+
 - `hostmeta.RecordReadAccess` records Darwin mapped-read access through an open
   regular-file descriptor, with bounded memory and no metadata-write permission
   requirement. Other hosts report unsupported.
