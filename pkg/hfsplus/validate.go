@@ -55,6 +55,10 @@ func validateEntry(e *Entry, path string) error {
 		}
 	}
 
+	if err := validateContent(e, path); err != nil {
+		return err
+	}
+
 	attr, compressed := e.Xattrs[decmpfs.AttributeName]
 	if !compressed {
 		return nil
@@ -63,11 +67,36 @@ func validateEntry(e *Entry, path string) error {
 	// types the resource fork alongside it. HFS+ keeps that fork on the
 	// catalog record rather than in the attributes file, so it is passed from
 	// there.
-	if err := decmpfs.Validate(attr, len(e.Data), e.ResourceFork); err != nil {
+	if err := decmpfs.Validate(attr, e.dataLen(), e.ResourceFork); err != nil {
 		return fmt.Errorf("hfsplus: %q: %w", path, err)
 	}
 	if e.Mode.IsDir() || e.Mode&os.ModeSymlink != 0 {
 		return fmt.Errorf("hfsplus: %q carries %s but is not a regular file", path, decmpfs.AttributeName)
+	}
+	return nil
+}
+
+// validateContent refuses an entry whose content is described two ways, or in a
+// way the layout cannot rely on.
+//
+// Everything about where a file lands is decided from its length before a byte
+// of it is read, so a lazily supplied file has to say how long it is, and an
+// entry that names both sources has no single answer.
+func validateContent(e *Entry, path string) error {
+	if e.Open == nil {
+		if e.Size != 0 {
+			return fmt.Errorf("hfsplus: %q sets Size without Open; an entry holding its content in Data takes its length from there", path)
+		}
+		return nil
+	}
+	if len(e.Data) > 0 {
+		return fmt.Errorf("hfsplus: %q supplies its content through both Data and Open", path)
+	}
+	if e.Mode.IsDir() || e.Mode&os.ModeSymlink != 0 {
+		return fmt.Errorf("hfsplus: %q supplies content through Open but is not a regular file", path)
+	}
+	if e.Size < 0 || int64(int(e.Size)) != e.Size {
+		return fmt.Errorf("hfsplus: %q declares a Size of %d, which no data fork can have", path, e.Size)
 	}
 	return nil
 }
