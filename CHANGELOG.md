@@ -25,6 +25,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   preserving supported metadata using opened roots and handles. Tests cover both
   preparation APIs, containment, renamed roots, Windows streams and cleanup.
 
+## [0.10.0](https://github.com/deploymenttheory/go-apfs-v2/compare/v0.9.0...v0.10.0) (2026-09-25)
+
+
+### Features
+
+* Add streaming image I/O and fix HFS+ catalog names ([452098a](https://github.com/deploymenttheory/go-apfs-v2/commit/452098a3605fb72ecbb27f4466b98d3ba5fe731d))
+* **disk:** support caller-owned DMG readers ([d4d78b8](https://github.com/deploymenttheory/go-apfs-v2/commit/d4d78b8011a6195b9c063ada17782e828819c03a))
+* **hfsplus:** stream file content from the caller ([9aee72f](https://github.com/deploymenttheory/go-apfs-v2/commit/9aee72f83b56fad8a7ee979f79467bf4be94523f))
+
+
+### Bug Fixes
+
+* **disk:** read a compressed chunk once, not per decoder window ([7e4c835](https://github.com/deploymenttheory/go-apfs-v2/commit/7e4c835e5a43d9d7d29bb4e97aff9b658c7f1185))
+* **hfsplus:** address catalog names holding a slash ([0093e30](https://github.com/deploymenttheory/go-apfs-v2/commit/0093e30ccca3e646f51969d187675e69e08e0c21))
+
 ## [0.9.0](https://github.com/deploymenttheory/go-apfs-v2/compare/v0.8.0...v0.9.0) (2026-09-22)
 
 
