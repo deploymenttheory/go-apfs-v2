@@ -281,7 +281,10 @@ Apple's modern codec, the best speed/ratio balance and what recent `hdiutil`
 produces), `lzma` (ULMO — the smallest output, at the cost of speed), `zlib`
 (UDZO — the widely-compatible classic) or `none`. Each codec stores any chunk it
 cannot shrink raw, so the choice never grows an incompressible image. All four
-are reproducible: the same input and codec give byte-identical output.
+are reproducible: the same input and codec give byte-identical output. LZFSE
+and LZVN are implemented in this repository (`pkg/compression/lzfse`, a port
+of Apple's reference code) and write the same bytes as macOS's own encoder;
+on macOS, CI runs `hdiutil verify` on DMGs written with every codec.
 
 A source file with transparent compression (`decmpfs`) keeps it, on either file
 system: the compressed bytes are copied across as they stand, so the volume

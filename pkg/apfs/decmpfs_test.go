@@ -8,11 +8,11 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/go-compressions/lzfse"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/compression/lzfse"
 )
 
 // decmpfs fixtures are synthesized here rather than committed, because
-// go-compressions/lzfse can compress as well as decompress. That keeps these
+// pkg/compression/lzfse can compress as well as decompress. That keeps these
 // tests runnable on every platform, with no macOS and no afsctool needed.
 //
 // Synthesis carries most of the coverage, because producing a real

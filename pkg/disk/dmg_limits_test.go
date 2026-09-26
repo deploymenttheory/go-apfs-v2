@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/go-compressions/lzfse"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/compression/lzfse"
 )
 
 func TestDMGLimits(t *testing.T) {
