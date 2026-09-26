@@ -200,6 +200,9 @@ func (b volCtx) setTree(spec VolumeSpec) error {
 		if b.numFSTreeLeaves > maxFSTreeLeaves {
 			return fmt.Errorf("apfswrite: file-system tree needs %d leaf nodes; only a 2-level tree up to %d leaves is supported", b.numFSTreeLeaves, maxFSTreeLeaves)
 		}
+		if need := fsTreeIndexBytes(leaves); need > int(b.blocksize) {
+			return fmt.Errorf("apfswrite: file-system tree index for %d leaf nodes needs %d bytes; only a 2-level tree whose index fits one %d-byte node is supported", len(leaves), need, b.blocksize)
+		}
 	}
 
 	// Decide the extentref tree shape. One physical-extent record per file
@@ -215,6 +218,18 @@ func (b volCtx) setTree(spec VolumeSpec) error {
 		}
 	}
 	return nil
+}
+
+// fsTreeIndexBytes returns the size of the index root over leaves: one record
+// per leaf, keyed by the leaf's first key, valued by its 8-byte oid, plus the
+// root's header, table of contents and btree_info footer. Keys are variable
+// length, so long file names shrink how many leaves one index node can hold.
+func fsTreeIndexBytes(leaves [][]fsTreeRecord) int {
+	n := sizeofBtreeNodePhys + tocBytesFor(len(leaves)) + sizeofBtreeInfo
+	for _, leaf := range leaves {
+		n += len(leaf[0].key) + 8
+	}
+	return n
 }
 
 // maxFSTreeLeaves caps the 2-level file-system tree: L leaves need L index records in one
