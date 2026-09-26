@@ -50,11 +50,6 @@ func (b volCtx) setSnapshots(spec VolumeSpec, firstXID uint64) (uint64, error) {
 	if len(spec.Snapshots) > maxSnapshots {
 		return 0, fmt.Errorf("apfswrite: %d snapshots requested; at most %d are supported", len(spec.Snapshots), maxSnapshots)
 	}
-	// Each snapshot copies the extentref tree; only the single-leaf shape
-	// is supported for now, which covers volumes up to a few thousand extents.
-	if b.extentrefTwoLevel {
-		return 0, fmt.Errorf("apfswrite: snapshots are not yet supported for volumes with a 2-level extentref tree")
-	}
 	// Each snapshot is associated with a distinct inode number reserved past the
 	// highest user inode; fsck_apfs rejects a zero inum.
 	inumBase := b.nextObjID()

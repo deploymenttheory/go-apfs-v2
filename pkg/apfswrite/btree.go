@@ -5,6 +5,7 @@ package apfswrite
 
 import (
 	"encoding/binary"
+	"fmt"
 	"sort"
 )
 
@@ -158,22 +159,22 @@ type omapEntry struct {
 }
 
 // writeOmapFooter fills the bt_info footer of an object-map root node.
-func (b *builder) writeOmapFooter(info []byte, nkeys int) {
-	binary.LittleEndian.PutUint32(info[0:], btreePhysical)  // bt_flags
-	binary.LittleEndian.PutUint32(info[4:], b.blocksize)    // bt_node_size
-	binary.LittleEndian.PutUint32(info[8:], sizeofOmapKey)  // bt_key_size
-	binary.LittleEndian.PutUint32(info[12:], sizeofOmapVal) // bt_val_size
-	binary.LittleEndian.PutUint32(info[16:], sizeofOmapKey) // bt_longest_key
-	binary.LittleEndian.PutUint32(info[20:], sizeofOmapVal) // bt_longest_val
-	binary.LittleEndian.PutUint64(info[24:], uint64(nkeys)) // bt_key_count
-	binary.LittleEndian.PutUint64(info[32:], 1)             // bt_node_count
+func (b *builder) writeOmapFooter(info []byte, nkeys, nodeCount int) {
+	binary.LittleEndian.PutUint32(info[0:], btreePhysical)      // bt_flags
+	binary.LittleEndian.PutUint32(info[4:], b.blocksize)        // bt_node_size
+	binary.LittleEndian.PutUint32(info[8:], sizeofOmapKey)      // bt_key_size
+	binary.LittleEndian.PutUint32(info[12:], sizeofOmapVal)     // bt_val_size
+	binary.LittleEndian.PutUint32(info[16:], sizeofOmapKey)     // bt_longest_key
+	binary.LittleEndian.PutUint32(info[20:], sizeofOmapVal)     // bt_longest_val
+	binary.LittleEndian.PutUint64(info[24:], uint64(nkeys))     // bt_key_count
+	binary.LittleEndian.PutUint64(info[32:], uint64(nodeCount)) // bt_node_count
 }
 
 // omapEntries returns the mappings an object map must hold. The container omap
 // maps only the volume superblock's virtual oid — at the live xid, since the
-// live superblock is the current one. The volume omap maps the file-system tree root
-// and, when the file-system tree spans two levels, every file-system tree leaf node, all at the
-// base xid (the format state a snapshot captures).
+// live superblock is the current one. The volume omap maps the file-system tree
+// root and every other node of that tree, all at the base xid (the format state
+// a snapshot captures).
 func (b volCtx) omapEntries(isVol bool) []omapEntry {
 	if !isVol {
 		// The container's map names every volume superblock, so it is built
@@ -185,14 +186,12 @@ func (b volCtx) omapEntries(isVol bool) []omapEntry {
 		}
 		return entries
 	}
-	// The file-system tree root (and any leaves) are shared by the live volume and the
+	// The file-system tree's nodes are shared by the live volume and the
 	// snapshots, so they carry no OMAP_VAL_SAVED flag (that would mark them as
 	// superseded in the live volume, which is not the case here).
 	entries := []omapEntry{{volFSTreeRootOID(b.index), b.fsTreeRootPaddr, formatXID, 0}}
-	if b.fsTreeTwoLevel {
-		for i := uint64(0); i < b.numFSTreeLeaves; i++ {
-			entries = append(entries, omapEntry{volFSTreeLeafOID(b.index, i), b.fsTreeLeafBase + i, formatXID, 0})
-		}
+	for j := range b.fsTreeNodes {
+		entries = append(entries, omapEntry{b.fsTreeNodeOID(j), b.fsTreeNodeBase + j, formatXID, 0})
 	}
 	return entries
 }
@@ -207,48 +206,25 @@ func (b *builder) omapXID(isVol bool) uint64 {
 	return b.liveXID
 }
 
-// writeObjectMapRoot writes the root node of an object map. Records are fixed-size
-// (omap_key, omap_val) pairs sorted by oid; keys pack forward from the end of
-// the table of contents and values pack backward from the start of the footer.
+// writeObjectMapRoot writes the tree of an object map: its root at paddr and,
+// for the volume's map, any other nodes in the volume's object-map region.
+// Records are fixed-size (omap_key, omap_val) pairs sorted by oid.
 func (b volCtx) writeObjectMapRoot(paddr uint64, isVol bool) error {
 	entries := b.omapEntries(isVol)
 	sort.Slice(entries, func(i, j int) bool { return entries[i].oid < entries[j].oid })
 
-	root := b.zeroedBlock()
-	infoLen := sizeofBtreeInfo
-	nkeys := len(entries)
-
-	tocLen := b.tocAreaBytes(objectTypeOmap)
-	keyArea := sizeofBtreeNodePhys + tocLen
-	valAreaEnd := int(b.blocksize) - infoLen
-
-	for i, e := range entries {
-		toc := sizeofBtreeNodePhys + i*sizeofKvoff
-		keyOff := keyArea + i*sizeofOmapKey
-		valOff := valAreaEnd - (i+1)*sizeofOmapVal
-		binary.LittleEndian.PutUint16(root[toc:], uint16(keyOff-keyArea))
-		binary.LittleEndian.PutUint16(root[toc+2:], uint16(valAreaEnd-valOff))
-
-		binary.LittleEndian.PutUint64(root[keyOff:], e.oid)         // ok_oid
-		binary.LittleEndian.PutUint64(root[keyOff+8:], e.xid)       // ok_xid
-		binary.LittleEndian.PutUint32(root[valOff:], e.flags)       // ov_flags
-		binary.LittleEndian.PutUint32(root[valOff+4:], b.blocksize) // ov_size
-		binary.LittleEndian.PutUint64(root[valOff+8:], e.paddr)     // ov_paddr
+	nodePaddr := func(j uint64) uint64 { return b.omapNodeBase + j }
+	if !isVol {
+		// The container's map names at most one volume per 512 MiB, capped at
+		// 100, which one node always holds.
+		if n := b.omapNodeCount(len(entries)); n != 1 {
+			return fmt.Errorf("apfswrite: container object map needs %d nodes; only one is supported", n)
+		}
+		nodePaddr = nil
+	} else if n := uint64(b.omapNodeCount(len(entries)) - 1); n != b.omapNodes {
+		return fmt.Errorf("apfswrite: volume object map packed into %d non-root nodes, planned for %d", n, b.omapNodes)
 	}
-
-	usedKeys := nkeys * sizeofOmapKey
-	usedVals := nkeys * sizeofOmapVal
-	freeLen := int(b.blocksize) - sizeofBtreeNodePhys - tocLen - usedKeys - usedVals - infoLen
-	writeLeafHeader(root, btnodeRoot|btnodeLeaf|btnodeFixedKVSize, nkeys, tocLen, usedKeys, freeLen)
-
-	b.writeOmapFooter(root[int(b.blocksize)-infoLen:], nkeys)
-	// A node may not be older than the newest key it holds: the container omap
-	// maps the live volume superblock at the live transaction id, so once that
-	// id is raised past the snapshots the node has to be raised with it.
-	// apfsck: "Object map: node xid is older than key xid".
-	setObjectHeaderXID(root, int(b.blocksize), paddr,
-		objectTypeBtree|objPhysical, objectTypeOmap, b.omapXID(isVol))
-	return b.writeBlock(root, paddr)
+	return b.writeOmapTree(paddr, nodePaddr, entries, b.omapXID(isVol))
 }
 
 // writeObjectMap writes an object map: the omap_phys object that points at its

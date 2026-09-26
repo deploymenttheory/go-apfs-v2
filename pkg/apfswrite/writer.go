@@ -361,14 +361,14 @@ func CreateContainer(w io.WriterAt, sizeBytes int64, opts *CreateOptions) error 
 	// The container has a floor of 512 KiB.
 	const minBytes = 512 * 1024
 	if sizeBytes == 0 {
-		// Size the image to comfortably hold the post-pool payload (extra
-		// file-system tree leaves, extentref leaves, file data, snapshot objects) plus the
+		// Size the image to comfortably hold the post-pool payload (the trees'
+		// non-root nodes, file data, snapshot objects) plus the
 		// fixed metadata, block-aligned, with headroom for the pool and
 		// checkpoint areas.
 		var payload uint64
 		for i := range uint64(len(b.vols)) {
 			v := b.vol(i)
-			payload += v.numFSTreeLeaves + v.numExtentrefLeaves + v.fileDataBlocks + v.snapBlocks
+			payload += v.fsTreeNodes + v.extentrefNodes + v.omapNodes + v.fileDataBlocks + v.snapBlocks
 		}
 		needBlocks := payload + payload/8 + 2048
 		sizeBytes = max(int64(needBlocks)*int64(b.blocksize), minBytes)
@@ -544,19 +544,24 @@ type volBuild struct {
 	numDirs      uint64 // directories (user, excludes root and private-dir)
 	numSymlinks  uint64 // symbolic links (user)
 
-	// file-system tree shape, decided in setTree from the record sizes.
-	numFSTreeLeaves uint64 // extra leaf nodes when the file-system tree is a 2-level tree
-	fsTreeTwoLevel  bool   // true when the file-system tree needs an index root + leaves
+	// Tree shapes, decided in setTree from the record sizes: how many nodes
+	// each tree has besides its root, which keeps its fixed block. The volume
+	// object map holds the file-system tree root and all of that tree's other
+	// nodes, so its size follows from fsTreeNodes.
+	fsTreeNodes    uint64
+	extentrefNodes uint64
+	omapNodes      uint64
 
-	// Extent-reference B-tree shape, decided in setTree from the extent count.
-	numExtentrefLeaves uint64 // leaf nodes when the extentref tree is a 2-level tree
-	extentrefTwoLevel  bool   // true when the extentref tree needs an index root + leaves
+	// fsTreeOverflowOID is the first virtual oid for file-system tree nodes
+	// beyond the ones the volume's oid stride reserves (see fsTreeNodeOID).
+	fsTreeOverflowOID uint64
 
-	// Physical-block bases within the post-internal-pool region. fsTreeLeafBase is
-	// the first extra file-system tree leaf; extentrefLeafBase the first extra extentref leaf;
-	// fileDataBase the first block of file content.
-	fsTreeLeafBase    uint64
-	extentrefLeafBase uint64
+	// Physical-block bases within the post-internal-pool region: the first
+	// non-root node of the file-system tree, of the extentref tree and of the
+	// object map, then the first block of file content.
+	fsTreeNodeBase    uint64
+	extentrefNodeBase uint64
+	omapNodeBase      uint64
 	fileDataBase      uint64
 	fileDataBlocks    uint64
 
@@ -673,6 +678,17 @@ func (b *builder) setVolumes(specs []VolumeSpec) error {
 
 	if err := b.validateGroups(); err != nil {
 		return err
+	}
+
+	// File-system tree nodes past each volume's reserved oids are numbered
+	// after every volume's reservation, volume by volume.
+	overflow := volOID(uint64(len(b.vols)))
+	for i := range uint64(len(b.vols)) {
+		v := b.vol(i)
+		v.fsTreeOverflowOID = overflow
+		if v.fsTreeNodes > volReservedNodeOIDs {
+			overflow += v.fsTreeNodes - volReservedNodeOIDs
+		}
 	}
 
 	// The live state is one transaction past the newest snapshot anywhere in
@@ -836,15 +852,31 @@ const (
 	firstVolOIDBase  = mainFreeQueueOID + 1 // 1028
 )
 
-// volOIDStride is how many object ids each volume reserves: its superblock, its
-// file-system tree root, and one per leaf a 2-level tree may hold.
-const volOIDStride = 2 + maxFSTreeLeaves
+// volReservedNodeOIDs is how many oids each volume reserves, beside its
+// superblock and file-system tree root, for that tree's other nodes.
+//
+// The reservation predates trees of more than two levels, when a volume's tree
+// could have at most this many leaves. It is kept so a container whose trees
+// fit it is laid out exactly as before; nodes beyond it take oids from past
+// every volume's reservation (fsTreeOverflowOID).
+const volReservedNodeOIDs = 64
 
-// volOID returns a volume's superblock object id, volFSTreeRootOID its
-// file-system tree root, and volFSTreeLeafOID the id of one of its leaves.
-func volOID(vol uint64) uint64                 { return firstVolOIDBase + vol*volOIDStride }
-func volFSTreeRootOID(vol uint64) uint64       { return volOID(vol) + 1 }
-func volFSTreeLeafOID(vol, leaf uint64) uint64 { return volOID(vol) + 2 + leaf }
+// volOIDStride is how many object ids each volume reserves.
+const volOIDStride = 2 + volReservedNodeOIDs
+
+// volOID returns a volume's superblock object id and volFSTreeRootOID its
+// file-system tree root.
+func volOID(vol uint64) uint64           { return firstVolOIDBase + vol*volOIDStride }
+func volFSTreeRootOID(vol uint64) uint64 { return volOID(vol) + 1 }
+
+// fsTreeNodeOID returns the virtual oid of the volume's j'th non-root
+// file-system tree node.
+func (b volCtx) fsTreeNodeOID(j uint64) uint64 {
+	if j < volReservedNodeOIDs {
+		return volOID(b.index) + 2 + j
+	}
+	return b.fsTreeOverflowOID + j - volReservedNodeOIDs
+}
 
 // Checkpoint-area floors. fsck_apfs rejects a container whose checkpoint areas
 // are smaller than eight blocks each, so both areas are reserved at no less than

@@ -15,14 +15,15 @@ const formatterID = "go-apfs (apfswrite)"
 // the container assigns.
 //
 // The container's own objects sit below the volumes, so the high-water mark is
-// always in the last volume: its superblock and file-system tree root, plus one
-// id per leaf when the tree spans two levels. An id at or above this is what
-// apfsck calls an "unassigned object id".
+// the last volume's file-system tree root or, past it, the highest-numbered
+// node of any volume's file-system tree. An id at or above this is what apfsck
+// calls an "unassigned object id".
 func (b *builder) nextContainerOID() uint64 {
-	last := b.vol(uint64(len(b.vols) - 1))
-	next := volFSTreeRootOID(last.index) + 1
-	if last.fsTreeTwoLevel {
-		next = volFSTreeLeafOID(last.index, last.numFSTreeLeaves-1) + 1
+	next := volFSTreeRootOID(uint64(len(b.vols)-1)) + 1
+	for i := range uint64(len(b.vols)) {
+		if v := b.vol(i); v.fsTreeNodes > 0 {
+			next = max(next, v.fsTreeNodeOID(v.fsTreeNodes-1)+1)
+		}
 	}
 	return next
 }

@@ -16,8 +16,8 @@ import (
 
 // setTree resolves the caller's directory tree (Root plus the RootFiles
 // convenience) into a flat list of file-system tree entries with assigned oids, then
-// decides the file-system tree shape (single leaf vs a 2-level index+leaves
-// tree). Physical block numbers are assigned later, in the space manager.
+// decides the shapes of the volume's trees: how many nodes each needs beside
+// its root. Physical block numbers are assigned later, in the space manager.
 func (b volCtx) setTree(spec VolumeSpec) error {
 	// Build the effective root directory: Root's children plus any RootFiles.
 	var topLevel []*Entry
@@ -187,58 +187,35 @@ func (b volCtx) setTree(spec VolumeSpec) error {
 		b.fileDataBlocks += f.blocks
 	}
 
-	// Decide the file-system tree shape from the record sizes. Block numbers are not yet
-	// known but do not affect record sizes, so the packing decided here matches
-	// the one recomputed at write time.
-	recs := b.buildFSTreeRecords()
-	leaves := packFSTreeLeaves(recs, int(b.blocksize), sizeofBtreeInfo)
-	if len(leaves) > 1 {
-		b.fsTreeTwoLevel = true
-		// Repack leaves without the root footer (only the index root carries it).
-		leaves = packFSTreeLeaves(recs, int(b.blocksize), 0)
-		b.numFSTreeLeaves = uint64(len(leaves))
-		if b.numFSTreeLeaves > maxFSTreeLeaves {
-			return fmt.Errorf("apfswrite: file-system tree needs %d leaf nodes; only a 2-level tree up to %d leaves is supported", b.numFSTreeLeaves, maxFSTreeLeaves)
+	// Decide the trees' shapes from their record sizes. Block numbers are not
+	// yet known but do not affect record sizes, so the shapes decided here match
+	// the trees written later.
+	fsLevels, err := varTreeLevels(b.buildFSTreeRecords(), int(b.blocksize))
+	if err != nil {
+		return err
+	}
+	b.fsTreeNodes = uint64(treeNodeCount(fsLevels) - 1)
+
+	// One physical-extent record per file that owns a physical extent (empty
+	// files own none). The records are all the same size, so blank ones stand
+	// in for them here.
+	if n := len(b.physFiles()); n > 0 {
+		blank := make([]fsTreeRecord, n)
+		for i := range blank {
+			blank[i] = fsTreeRecord{key: make([]byte, sizeofPhysExtKey), val: make([]byte, sizeofPhysExtVal)}
 		}
-		if need := fsTreeIndexBytes(leaves); need > int(b.blocksize) {
-			return fmt.Errorf("apfswrite: file-system tree index for %d leaf nodes needs %d bytes; only a 2-level tree whose index fits one %d-byte node is supported", len(leaves), need, b.blocksize)
+		levels, err := varTreeLevels(blank, int(b.blocksize))
+		if err != nil {
+			return err
 		}
+		b.extentrefNodes = uint64(treeNodeCount(levels) - 1)
 	}
 
-	// Decide the extentref tree shape. One physical-extent record per file
-	// that owns a physical extent (empty files own none). When they overflow a
-	// single leaf the tree grows to two physical levels (an index root plus
-	// leaves), the same way the file-system tree grows.
-	nExtents := len(b.physFiles())
-	if perLeaf := extentrefRecordsPerLeaf(int(b.blocksize)); nExtents > perLeaf {
-		b.extentrefTwoLevel = true
-		b.numExtentrefLeaves = uint64(divRoundUp(uint64(nExtents), uint64(perLeaf)))
-		if b.numExtentrefLeaves > maxExtentrefLeaves {
-			return fmt.Errorf("apfswrite: extentref tree needs %d leaf nodes; only a 2-level tree up to %d leaves is supported", b.numExtentrefLeaves, maxExtentrefLeaves)
-		}
-	}
+	// The volume object map holds the file-system tree root and every other
+	// node of that tree.
+	b.omapNodes = uint64(b.omapNodeCount(1+int(b.fsTreeNodes)) - 1)
 	return nil
 }
-
-// fsTreeIndexBytes returns the size of the index root over leaves: one record
-// per leaf, keyed by the leaf's first key, valued by its 8-byte oid, plus the
-// root's header, table of contents and btree_info footer. Keys are variable
-// length, so long file names shrink how many leaves one index node can hold.
-func fsTreeIndexBytes(leaves [][]fsTreeRecord) int {
-	n := sizeofBtreeNodePhys + tocBytesFor(len(leaves)) + sizeofBtreeInfo
-	for _, leaf := range leaves {
-		n += len(leaf[0].key) + 8
-	}
-	return n
-}
-
-// maxFSTreeLeaves caps the 2-level file-system tree: L leaves need L index records in one
-// root node and L omap entries in one omap leaf; both fit comfortably here.
-const maxFSTreeLeaves = 64
-
-// maxExtentrefLeaves caps the 2-level extentref tree: its L index records
-// must fit in the single index root node.
-const maxExtentrefLeaves = 100
 
 // physFiles returns the stream files that own a physical extent (blocks > 0),
 // i.e. every regular file except the 0-byte ones.
@@ -906,28 +883,17 @@ func roundUpInt(x, y int) int {
 	return ((x + y - 1) / y) * y
 }
 
-// extentrefRecordsPerLeaf returns how many physical-extent records fit in one
-// plain (non-root) blockref leaf of blocksize bytes.
-func extentrefRecordsPerLeaf(blocksize int) int {
-	n := 0
-	for {
-		used := sizeofBtreeNodePhys + tocBytesFor(n+1) + (n+1)*(sizeofPhysExtKey+sizeofPhysExtVal)
-		if used > blocksize {
-			break
-		}
-		n++
-	}
-	return n
-}
-
 // makeExtentrefRoot builds the volume's extent-reference (blockref) tree. Each
 // file that owns a physical extent contributes one record: key (phys_block,
 // EXTENT), value j_phys_ext_val (len_and_kind = KIND_NEW|blocks, owning_obj_id
 // = file oid, refcnt = 1). Records sort by physical block address, which our
-// contiguous layout already produces in stream-file order. When they fit in one
-// node the tree is a single root-leaf; when they overflow it grows to two
-// physical levels: an index root plus one leaf per group of records. All nodes
-// are physical objects whose oid equals their block number.
+// contiguous layout already produces in stream-file order. The tree grows as
+// tall as it needs (see tree.go); its root is at paddr and its other nodes in
+// the volume's extentref region. All nodes are physical objects whose oid is
+// their block number.
+//
+// Only one populated extentref tree is written per volume -- the live one, or
+// with snapshots the oldest snapshot's -- so the region serves whichever it is.
 func (b volCtx) makeExtentrefRoot(paddr, oid uint64) error {
 	phys := b.physFiles()
 	if len(phys) == 0 {
@@ -938,63 +904,8 @@ func (b volCtx) makeExtentrefRoot(paddr, oid uint64) error {
 	copy(extents, phys)
 	sort.Slice(extents, func(i, j int) bool { return extents[i].dataBlock < extents[j].dataBlock })
 
-	if !b.extentrefTwoLevel {
-		return b.writeExtentrefNode(paddr, extents, true /* root */, 0 /* level */, 1 /* nodeCount */)
-	}
-
-	// Two levels: split the records into leaves, then build an index root whose
-	// records map each leaf's first key to that leaf's physical block number.
-	perLeaf := extentrefRecordsPerLeaf(int(b.blocksize))
-	idx := make([]fsTreeRecord, 0, b.numExtentrefLeaves)
-	for i := 0; i < len(extents); i += perLeaf {
-		end := i + perLeaf
-		if end > len(extents) {
-			end = len(extents)
-		}
-		leaf := extents[i:end]
-		leafPaddr := b.extentrefLeafBase + uint64(i/perLeaf)
-		if err := b.writeExtentrefNode(leafPaddr, leaf, false /* leaf */, 0 /* level */, 0); err != nil {
-			return err
-		}
-		key := make([]byte, sizeofPhysExtKey)
-		setKeyHeader(key, 0, leaf[0].dataBlock, typeExtent)
-		val := make([]byte, 8)
-		binary.LittleEndian.PutUint64(val, leafPaddr)
-		idx = append(idx, fsTreeRecord{key: key, val: val})
-	}
-	nodeCount := 1 + len(idx)
-	return b.writeExtentrefIndex(paddr, idx, len(extents), nodeCount)
-}
-
-// writeExtentrefNode writes one blockref leaf holding the given physical extents.
-// isRoot marks a single-node tree, which carries the btree_info footer.
-func (b *builder) writeExtentrefNode(paddr uint64, extents []*builderEntry, isRoot bool, level uint16, nodeCount int) error {
-	block := b.zeroedBlock()
-	headLen := sizeofBtreeNodePhys
-	infoLen := 0
-	flags := uint16(btnodeLeaf)
-	if isRoot {
-		flags |= btnodeRoot
-		infoLen = sizeofBtreeInfo
-	}
-	binary.LittleEndian.PutUint16(block[btnOffFlags:], flags)
-	binary.LittleEndian.PutUint16(block[btnOffLevel:], level)
-
-	nkeys := len(extents)
-	binary.LittleEndian.PutUint32(block[btnOffNkeys:], uint32(nkeys))
-	tocLen := tocBytesFor(nkeys)
-	putNloc(block, btnOffTableSpace, 0, uint16(tocLen))
-
-	cur := &fsTreeCursor{
-		b:          b,
-		block:      block,
-		tocOff:     headLen,
-		keyArea:    headLen + tocLen,
-		keyOff:     headLen + tocLen,
-		valAreaEnd: int(b.blocksize) - infoLen,
-		valEnd:     int(b.blocksize) - infoLen,
-	}
-	for _, f := range extents {
+	recs := make([]fsTreeRecord, len(extents))
+	for i, f := range extents {
 		key := make([]byte, sizeofPhysExtKey)
 		setKeyHeader(key, 0, f.dataBlock, typeExtent)
 		val := make([]byte, sizeofPhysExtVal)
@@ -1002,65 +913,29 @@ func (b *builder) writeExtentrefNode(paddr uint64, extents []*builderEntry, isRo
 		binary.LittleEndian.PutUint64(val[0:], lenAndKind)
 		binary.LittleEndian.PutUint64(val[8:], f.oid)               // owning_obj_id
 		binary.LittleEndian.PutUint32(val[16:], b.extentRefcount()) // refcnt
-		cur.putRecord(key, val)
+		recs[i] = fsTreeRecord{key: key, val: val}
 	}
 
-	keyLen := cur.keyOff - cur.keyArea
-	valLen := cur.valAreaEnd - cur.valEnd
-	freeLen := int(b.blocksize) - headLen - tocLen - keyLen - valLen - infoLen
-	putNloc(block, btnOffFreeSpace, uint16(keyLen), uint16(freeLen))
-	putNloc(block, btnOffKeyFreeList, btoffInvalid, 0)
-	putNloc(block, btnOffValFreeList, btoffInvalid, 0)
-
-	objType := uint32(objectTypeBtreeNode) | objPhysical
-	if isRoot {
-		objType = objectTypeBtree | objPhysical
-		b.setExtentrefInfo(block[int(b.blocksize)-infoLen:], nkeys, nodeCount)
+	levels, err := varTreeLevels(recs, int(b.blocksize))
+	if err != nil {
+		return err
 	}
-	setObjectHeader(block, int(b.blocksize), paddr, objType, objectTypeBlockrefTree)
-	return b.writeBlock(block, paddr)
-}
-
-// writeExtentrefIndex writes the blockref index root (level 1). Each record maps a
-// child leaf's first key (phys_block, EXTENT) to that leaf's physical block
-// number (an 8-byte value). Being a physical tree, child pointers are block
-// numbers resolved directly, without an object map.
-func (b *builder) writeExtentrefIndex(paddr uint64, idx []fsTreeRecord, keyCount, nodeCount int) error {
-	block := b.zeroedBlock()
-	headLen := sizeofBtreeNodePhys
-	infoLen := sizeofBtreeInfo
-
-	binary.LittleEndian.PutUint16(block[btnOffFlags:], btnodeRoot) // root, not leaf
-	binary.LittleEndian.PutUint16(block[btnOffLevel:], 1)
-	binary.LittleEndian.PutUint32(block[btnOffNkeys:], uint32(len(idx)))
-
-	tocLen := tocBytesFor(len(idx))
-	putNloc(block, btnOffTableSpace, 0, uint16(tocLen))
-
-	cur := &fsTreeCursor{
-		b:          b,
-		block:      block,
-		tocOff:     headLen,
-		keyArea:    headLen + tocLen,
-		keyOff:     headLen + tocLen,
-		valAreaEnd: int(b.blocksize) - infoLen,
-		valEnd:     int(b.blocksize) - infoLen,
+	if n := uint64(treeNodeCount(levels) - 1); n != b.extentrefNodes {
+		return fmt.Errorf("apfswrite: extentref tree packed into %d non-root nodes, planned for %d", n, b.extentrefNodes)
 	}
-	for _, r := range idx {
-		cur.putRecord(r.key, r.val)
-	}
-
-	keyLen := cur.keyOff - cur.keyArea
-	valLen := cur.valAreaEnd - cur.valEnd
-	freeLen := int(b.blocksize) - headLen - tocLen - keyLen - valLen - infoLen
-	putNloc(block, btnOffFreeSpace, uint16(keyLen), uint16(freeLen))
-	putNloc(block, btnOffKeyFreeList, btoffInvalid, 0)
-	putNloc(block, btnOffValFreeList, btoffInvalid, 0)
-
-	b.setExtentrefInfo(block[int(b.blocksize)-infoLen:], keyCount, nodeCount)
-	setObjectHeader(block, int(b.blocksize), paddr,
-		objectTypeBtree|objPhysical, objectTypeBlockrefTree)
-	return b.writeBlock(block, paddr)
+	nodePaddr := func(j uint64) uint64 { return b.extentrefNodeBase + j }
+	return b.writeVarTree(levels, varTreeSpec{
+		rootPaddr: paddr,
+		rootOID:   oid,
+		nodePaddr: nodePaddr,
+		nodeOID:   nodePaddr,
+		childPtr:  nodePaddr,
+		storage:   objPhysical,
+		subtype:   objectTypeBlockrefTree,
+		footer: func(info []byte, nodeCount int) {
+			b.setExtentrefInfo(info, len(recs), nodeCount)
+		},
+	})
 }
 
 // setExtentrefInfo sets the info footer for a populated blockref-tree root.

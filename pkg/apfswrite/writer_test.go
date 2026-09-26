@@ -20,10 +20,17 @@ type memImage struct {
 
 func (m *memImage) WriteAt(p []byte, off int64) (int, error) {
 	end := off + int64(len(p))
-	if end > int64(len(m.data)) {
-		grown := make([]byte, end)
+	if end > int64(cap(m.data)) {
+		// Grow geometrically: the writer appends block by block, and growing
+		// to exactly the new end would copy the whole image on every write.
+		// make, not append, so the pages past what is copied stay untouched:
+		// the writer sizes a container by writing its last byte, and clearing
+		// a gigabyte container's pages made them resident (5.9 GB under -race).
+		grown := make([]byte, end, max(end, 2*int64(cap(m.data))))
 		copy(grown, m.data)
 		m.data = grown
+	} else if end > int64(len(m.data)) {
+		m.data = m.data[:end]
 	}
 	copy(m.data[off:], p)
 	return len(p), nil
