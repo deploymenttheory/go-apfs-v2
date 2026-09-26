@@ -11,6 +11,7 @@ import (
 	"os"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
@@ -138,47 +139,8 @@ func TestManySmallFiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("%d files: %v", n, err)
 	}
-	nodes, err := apfswrite.CheckNodeLayouts(img.data)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// The reader looks a name up by scanning its directory, so opening every
-	// one of 50,000 files in one directory is quadratic and takes minutes.
-	// Listing the directory proves every entry is reachable through the tree;
-	// a spread of files proves their contents are.
-	container, err := apfs.Open(img, &apfs.OpenOptions{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	volumes, err := container.Volumes()
-	if err != nil {
-		t.Fatal(err)
-	}
-	entries, err := volumes[0].ReadDir(".")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(entries) != n {
-		t.Fatalf("root lists %d entries, want %d", len(entries), n)
-	}
-	for i, e := range entries {
-		if want := root.Children[i].Name; e.Name() != want {
-			t.Fatalf("entry %d is %q, want %q", i, e.Name(), want)
-		}
-	}
-	for i := 0; i < n; i += 997 {
-		want := root.Children[i]
-		got, err := fs.ReadFile(volumes[0], want.Name)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if string(got) != string(want.Data) {
-			t.Fatalf("%s holds %q, want %q", want.Name, got, want.Data)
-		}
-	}
-	t.Logf("%d B-tree nodes checked", nodes)
-	reportLimit(t, "fs-tree small files (12-byte names)", "%d files written, listed and sampled", n)
+	checkImage(t, img, root)
+	reportLimit(t, "fs-tree small files (12-byte names)", "%d files written and read back", n)
 }
 
 // TestManyLongNames writes 5,000 files with 255-byte names. Their directory
@@ -285,4 +247,73 @@ func checkImage(t *testing.T, img *memImage, root *apfswrite.Entry) {
 		t.Fatal(err)
 	}
 	t.Logf("%d B-tree nodes checked", nodes)
+}
+
+// TestLookupAcrossManyDirectories opens files round-robin across more
+// directories than the reader keeps name indexes for, so indexes are evicted
+// and rebuilt between lookups, and on a case-insensitive volume looks each one
+// up by a differently cased name as well.
+func TestLookupAcrossManyDirectories(t *testing.T) {
+	const dirs, perDir = 80, 50
+	root := &apfswrite.Entry{}
+	for d := range dirs {
+		dir := &apfswrite.Entry{Name: fmt.Sprintf("dir%03d", d), Mode: fs.ModeDir}
+		for f := range perDir {
+			dir.Children = append(dir.Children, &apfswrite.Entry{
+				Name: fmt.Sprintf("File%03d.txt", f),
+				Data: fmt.Appendf(nil, "%d/%d\n", d, f),
+			})
+		}
+		root.Children = append(root.Children, dir)
+	}
+	vol := openVolume(t, &apfswrite.CreateOptions{VolumeName: "Dirs", Root: root})
+	for f := range perDir {
+		for d := range dirs {
+			want := fmt.Sprintf("%d/%d\n", d, f)
+			for _, name := range []string{
+				fmt.Sprintf("dir%03d/File%03d.txt", d, f),
+				fmt.Sprintf("DIR%03d/file%03d.TXT", d, f),
+			} {
+				got, err := fs.ReadFile(vol, name)
+				if err != nil {
+					t.Fatalf("%s: %v", name, err)
+				}
+				if string(got) != want {
+					t.Fatalf("%s holds %q, want %q", name, got, want)
+				}
+			}
+		}
+	}
+	if _, err := fs.ReadFile(vol, "dir000/missing.txt"); err == nil {
+		t.Fatal("a missing name was found")
+	}
+
+	// A mounted volume serves lookups concurrently, so the indexes are shared
+	// state; run the lookups from several goroutines too (meaningful under
+	// -race).
+	var wg sync.WaitGroup
+	errs := make(chan error, 8)
+	for g := range 8 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := range dirs * 4 {
+				d, f := (g*7+i)%dirs, i%perDir
+				name := fmt.Sprintf("dir%03d/File%03d.txt", d, f)
+				got, err := fs.ReadFile(vol, name)
+				if err == nil && string(got) != fmt.Sprintf("%d/%d\n", d, f) {
+					err = fmt.Errorf("%s holds %q", name, got)
+				}
+				if err != nil {
+					errs <- err
+					return
+				}
+			}
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		t.Fatal(err)
+	}
 }
