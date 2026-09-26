@@ -205,6 +205,9 @@ func TestManyLongNames(t *testing.T) {
 // snapshot owns the volume's populated extentref tree, which used to have to
 // fit in one node, so snapshots were refused past 112 such files.
 func TestSnapshotOfManyFiles(t *testing.T) {
+	if testing.Short() {
+		t.Skip("writes 5,000 files")
+	}
 	const n = 5_000
 	root := flatTree(n, func(i int) string { return fmt.Sprintf("file%08d", i) })
 	img, err := build(root, snapshotNames(2))
@@ -237,6 +240,9 @@ func TestExtentrefRootLeafBoundary(t *testing.T) {
 // each have more non-root nodes than the 64 oids a volume reserves, so both
 // take oids from past every volume's reservation, and reads both back.
 func TestVolumesBeyondReservedOIDs(t *testing.T) {
+	if testing.Short() {
+		t.Skip("writes 7,000 files into a 1 GiB container")
+	}
 	roots := []*apfswrite.Entry{
 		flatTree(3_000, func(i int) string { return fmt.Sprintf("a%08d", i) }),
 		flatTree(4_000, func(i int) string { return fmt.Sprintf("b%08d", i) }),

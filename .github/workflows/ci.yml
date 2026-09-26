@@ -64,11 +64,14 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
-      # -race needs cgo, which the other test jobs turn off.
+      # -race needs cgo, which the other test jobs turn off. -short skips the
+      # scale tests (tens of thousands of files, gigabyte images): they
+      # exercise single-threaded code, and under the race detector's memory
+      # overhead they exceed the runner.
       - name: Unit tests with -race
         env:
           CGO_ENABLED: "1"
-        run: go test -race ./pkg/... ./internal/...
+        run: go test -race -short ./pkg/... ./internal/...
 
   test:
     name: Test (${{ matrix.os }})
