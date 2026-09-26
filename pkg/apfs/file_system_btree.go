@@ -262,6 +262,12 @@ func (bt *FileSystemBTree) AllRecordsForOID(
 			break
 		}
 
+		// An index node must point somewhere, and one level down.
+		if len(node.Entries) == 0 {
+			return nil, fmt.Errorf("index node at level %d has no entries", node.NodeHeader.Level)
+		}
+		parentLevel := node.NodeHeader.Level
+
 		// Find which child to descend
 		foundChild := false
 		for idx, entry := range node.Entries {
@@ -301,6 +307,12 @@ func (bt *FileSystemBTree) AllRecordsForOID(
 				return nil, err
 			}
 		}
+		if node.NodeHeader.Level+1 != parentLevel {
+			return nil, fmt.Errorf("child of a level %d node is at level %d", parentLevel, node.NodeHeader.Level)
+		}
+	}
+	if firstLeafNode == nil {
+		return nil, fmt.Errorf("no leaf node within the tree's height of %d", treeHeight)
 	}
 
 	// FAST PATH: Check if all records are in the first leaf (common case)

@@ -132,6 +132,20 @@ type forkReader struct {
 	extents   []ExtentDescriptor
 }
 
+// newForkReader returns a reader over a fork of logicalSize bytes stored in
+// extents. A fork cannot hold more bytes than its extents cover; checking
+// that also keeps a corrupt size of 2^63 or more from turning negative.
+func newForkReader(dev io.ReaderAt, blockSize int64, logicalSize uint64, extents []ExtentDescriptor) (*forkReader, error) {
+	var blocks uint64
+	for _, ext := range extents {
+		blocks += uint64(ext.BlockCount)
+	}
+	if covered := blocks * uint64(blockSize); logicalSize > covered {
+		return nil, fmt.Errorf("logical size %d exceeds the %d bytes its extents cover", logicalSize, covered)
+	}
+	return &forkReader{dev: dev, blockSize: blockSize, size: int64(logicalSize), extents: extents}, nil
+}
+
 func (fr *forkReader) Size() int64 { return fr.size }
 
 func (fr *forkReader) ReadAt(p []byte, off int64) (int, error) {

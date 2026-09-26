@@ -120,11 +120,9 @@ func New(device io.ReaderAt) (*Volume, error) {
 	// The extents overflow file's own extents always fit in the volume
 	// header, so it can be opened without overflow resolution.
 	if v.hdr.ExtentsFile.LogicalSize > 0 {
-		extFork := &forkReader{
-			dev:       v.dev,
-			blockSize: v.blockSize,
-			size:      int64(v.hdr.ExtentsFile.LogicalSize),
-			extents:   inlineExtents(v.hdr.ExtentsFile),
+		extFork, err := newForkReader(v.dev, v.blockSize, v.hdr.ExtentsFile.LogicalSize, inlineExtents(v.hdr.ExtentsFile))
+		if err != nil {
+			return nil, fmt.Errorf("extents overflow file: %w", err)
 		}
 		tree, err := openBTree(extFork)
 		if err != nil {
@@ -457,12 +455,11 @@ func (v *Volume) forkReaderFor(fileID CatalogNodeID, forkType uint8, fork ForkDa
 		}
 	}
 
-	return &forkReader{
-		dev:       v.dev,
-		blockSize: v.blockSize,
-		size:      int64(fork.LogicalSize),
-		extents:   extents,
-	}, nil
+	reader, err := newForkReader(v.dev, v.blockSize, fork.LogicalSize, extents)
+	if err != nil {
+		return nil, fmt.Errorf("file %d fork %#x: %w", fileID, forkType, err)
+	}
+	return reader, nil
 }
 
 // loadOverflowExtents walks the extents overflow B-tree once and caches

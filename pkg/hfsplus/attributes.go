@@ -234,11 +234,9 @@ func (v *Volume) attributeValue(fileID CatalogNodeID, name string) ([]byte, erro
 		return nil, fmt.Errorf("attribute %q on file %d: extents cover %d of %d blocks", name, fileID, blocks, rec.fork.TotalBlocks)
 	}
 
-	reader := &forkReader{
-		dev:       v.dev,
-		blockSize: v.blockSize,
-		size:      int64(rec.fork.LogicalSize),
-		extents:   extents,
+	reader, err := newForkReader(v.dev, v.blockSize, rec.fork.LogicalSize, extents)
+	if err != nil {
+		return nil, fmt.Errorf("attribute %q on file %d: %w", name, fileID, err)
 	}
 	value := make([]byte, rec.fork.LogicalSize)
 	if len(value) == 0 {

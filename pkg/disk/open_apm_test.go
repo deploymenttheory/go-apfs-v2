@@ -8,7 +8,7 @@ import (
 
 // apmImage builds a minimal whole-disk image carrying an Apple Partition Map:
 // a driver descriptor at block 0, then one map entry per partition.
-func apmImage(t *testing.T, entries []struct {
+func apmImage(t testing.TB, entries []struct {
 	kind  string
 	start uint32
 }) []byte {
