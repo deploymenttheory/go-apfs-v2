@@ -3,8 +3,10 @@ package disk
 import (
 	"bytes"
 	"crypto/sha256"
+	"fmt"
 	"io"
 	"math/rand"
+	"runtime"
 	"testing"
 )
 
@@ -42,21 +44,23 @@ var benchCodecs = []struct {
 	{"lzma", CompressionLZMA},
 }
 
-// BenchmarkEncodeUDIF measures DMG encoding throughput per codec. It is the
-// baseline for parallel chunk compression. Run it with -cpu 1,N: while chunks
-// are compressed sequentially the two throughputs match.
+// BenchmarkEncodeUDIF measures DMG encoding throughput per codec, with one
+// worker and with one per CPU.
 func BenchmarkEncodeUDIF(b *testing.B) {
 	img := mixedImage(64<<20, 1)
 	for _, tc := range benchCodecs {
-		b.Run(tc.name, func(b *testing.B) {
-			blocks := []SourceBlock{{Name: "disk image", Data: img}}
-			b.SetBytes(int64(len(img)))
-			for b.Loop() {
-				if err := EncodeUDIF(io.Discard, blocks, &EncodeOptions{Compression: tc.c}); err != nil {
-					b.Fatal(err)
+		for _, workers := range []int{1, runtime.GOMAXPROCS(0)} {
+			b.Run(fmt.Sprintf("%s/workers=%d", tc.name, workers), func(b *testing.B) {
+				blocks := []SourceBlock{{Name: "disk image", Data: img}}
+				b.SetBytes(int64(len(img)))
+				for b.Loop() {
+					opts := &EncodeOptions{Compression: tc.c, Workers: workers}
+					if err := EncodeUDIF(io.Discard, blocks, opts); err != nil {
+						b.Fatal(err)
+					}
 				}
-			}
-		})
+			})
+		}
 	}
 }
 
