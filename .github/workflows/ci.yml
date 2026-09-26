@@ -54,6 +54,8 @@ jobs:
     steps:
       - uses: golang/govulncheck-action@v1.1.0
         with:
+          # The default "stable" overrides go-version-file.
+          go-version-input: ""
           go-version-file: go.mod
 
   race:
