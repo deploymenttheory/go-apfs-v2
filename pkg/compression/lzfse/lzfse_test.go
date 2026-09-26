@@ -5,11 +5,63 @@ package lzfse
 
 import (
 	"bytes"
+	"encoding/binary"
 	"errors"
+	"fmt"
 	"math/rand"
 	"os"
 	"testing"
 )
+
+// A zero-sized V2 header used to leave DecodedSize spinning at the same block.
+// Every undersized header is corrupt, even when its payload would advance it.
+func TestRejectsUndersizedV2Header(t *testing.T) {
+	for header := uint32(0); header < v2FixedSize; header++ {
+		for _, payload := range []uint64{0, 1} {
+			t.Run(fmt.Sprintf("header=%d/payload=%d", header, payload), func(t *testing.T) {
+				src := make([]byte, v2FixedSize+int(payload))
+				copy(src, "bvx2")
+				binary.LittleEndian.PutUint32(src[24:], header)
+				binary.LittleEndian.PutUint64(src[8:], payload<<20)
+				if _, err := DecodedSize(src); !errors.Is(err, ErrCorrupt) {
+					t.Fatalf("DecodedSize: %v, want ErrCorrupt", err)
+				}
+				if _, err := Decompress(src); !errors.Is(err, ErrCorrupt) {
+					t.Fatalf("Decompress: %v, want ErrCorrupt", err)
+				}
+			})
+		}
+	}
+}
+
+// Even with empty payloads, each block must advance to the following block.
+// DecodedSize only scans headers; these need not contain valid codec tables.
+func TestDecodedSizeEmptyPayloadAdvances(t *testing.T) {
+	for _, tc := range []struct {
+		magic  string
+		header int
+	}{
+		{"bvx-", rawHeaderSize},
+		{"bvxn", lzvnHeaderSize},
+		{"bvx1", v1HeaderSize},
+		{"bvx2", v2FixedSize},
+	} {
+		t.Run(tc.magic, func(t *testing.T) {
+			src := make([]byte, tc.header)
+			copy(src, tc.magic)
+			if tc.magic == "bvx2" {
+				binary.LittleEndian.PutUint32(src[24:], uint32(tc.header))
+			}
+			if _, err := DecodedSize(src); !errors.Is(err, ErrTruncated) {
+				t.Fatalf("missing end marker: %v, want ErrTruncated", err)
+			}
+			src = append(src, []byte("bvx$")...)
+			if n, err := DecodedSize(src); err != nil || n != 0 {
+				t.Fatalf("DecodedSize = %d, %v, want 0, nil", n, err)
+			}
+		})
+	}
+}
 
 // TestRejectsDistanceBeforeStart decodes a stream that
 // github.com/go-compressions/lzfse wrote: a long literal run split into

@@ -100,14 +100,21 @@ func DecodedSize(src []byte) (int, error) {
 			v0 := le.Uint64(src[pos+8:])
 			v1 := le.Uint64(src[pos+16:])
 			header = uint64(le.Uint32(src[pos+24:]))
+			if header < v2FixedSize {
+				return 0, corrupt("V2 header size %d", header)
+			}
 			payload = uint64(field(v0, 20, 20)) + uint64(field(v1, 40, 20))
 		default:
 			return 0, corrupt("unknown block magic %#08x", magic)
 		}
-		if header+payload > uint64(len(src)-pos) {
+		step := header + payload
+		if step == 0 {
+			return 0, corrupt("block does not advance")
+		}
+		if step > uint64(len(src)-pos) {
 			return 0, ErrTruncated
 		}
-		pos += int(header + payload)
+		pos += int(step)
 	}
 }
 
