@@ -17,11 +17,12 @@ import (
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfswrite"
 )
 
-// The tests in this file measure the writer's capacity limits rather than
-// assume them. Each one searches for the boundary, asserts what it observes
-// today, and reports the value as a LIMIT line (test output and, under GitHub
-// Actions, the step summary). When a limit is lifted its test is updated to
-// assert the new behaviour.
+// The tests in this file began as measurements of the writer's capacity
+// limits: each searched for the file count at which the writer refused a tree
+// or wrote an unreadable one. The trees now grow to any height, so the tests
+// instead write volumes far past those old limits and read them back, and
+// report what they wrote as a LIMIT line (test output and, under GitHub
+// Actions, the step summary).
 
 var limitSummaryHeaderWritten bool
 
@@ -124,122 +125,158 @@ func readsBack(img *memImage, root *apfswrite.Entry) error {
 	return nil
 }
 
-// largestAccepted binary-searches [lo, hi] for the largest n that accepts(n)
-// reports true for. accepts(lo) must be true and accepts(hi) false.
-func largestAccepted(t *testing.T, lo, hi int, accepts func(n int) bool) int {
-	t.Helper()
-	if !accepts(lo) {
-		t.Fatalf("expected %d to be accepted", lo)
-	}
-	if accepts(hi) {
-		t.Fatalf("expected %d to be rejected; the limit may have been lifted", hi)
-	}
-	for hi-lo > 1 {
-		mid := lo + (hi-lo)/2
-		if accepts(mid) {
-			lo = mid
-		} else {
-			hi = mid
-		}
-	}
-	return lo
-}
-
-// TestLimitFSTreeFileCount measures how many small, shortly named files a
-// single flat directory can hold before the writer refuses the file-system
-// tree. This is the shape an outside review reported failing at about 850.
-func TestLimitFSTreeFileCount(t *testing.T) {
+// TestManySmallFiles writes one flat directory of 50,000 small files -- far
+// past the 850 the writer used to refuse at, when its file-system tree could
+// be no more than two levels of 64 leaves -- and reads every one back.
+func TestManySmallFiles(t *testing.T) {
 	if testing.Short() {
-		t.Skip("searches thousands of files")
+		t.Skip("writes 50,000 files")
 	}
-	name := func(i int) string { return fmt.Sprintf("file%08d", i) } // 12 bytes
-	var lastErr error
-	n := largestAccepted(t, 1, 20000, func(n int) bool {
-		_, err := build(flatTree(n, name), nil)
-		if err != nil {
-			lastErr = err
-		}
-		return err == nil
-	})
-
-	root := flatTree(n, name)
+	const n = 50_000
+	root := flatTree(n, func(i int) string { return fmt.Sprintf("file%08d", i) })
 	img, err := build(root, nil)
 	if err != nil {
-		t.Fatalf("rebuild at %d: %v", n, err)
+		t.Fatalf("%d files: %v", n, err)
 	}
-	if err := readsBack(img, root); err != nil {
-		t.Fatalf("largest accepted image (%d files) does not read back: %v", n, err)
+	nodes, err := apfswrite.CheckNodeLayouts(img.data)
+	if err != nil {
+		t.Fatal(err)
 	}
-	_, err = build(flatTree(n+1, name), nil)
-	if err == nil || !strings.Contains(err.Error(), "file-system tree needs") {
-		t.Fatalf("at %d files: err = %v, want the file-system tree leaf limit", n+1, err)
+
+	// The reader looks a name up by scanning its directory, so opening every
+	// one of 50,000 files in one directory is quadratic and takes minutes.
+	// Listing the directory proves every entry is reachable through the tree;
+	// a spread of files proves their contents are.
+	container, err := apfs.Open(img, &apfs.OpenOptions{})
+	if err != nil {
+		t.Fatal(err)
 	}
-	reportLimit(t, "fs-tree small files (12-byte names)", "%d files; %d rejected with %q", n, n+1, lastErr)
+	volumes, err := container.Volumes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	entries, err := volumes[0].ReadDir(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != n {
+		t.Fatalf("root lists %d entries, want %d", len(entries), n)
+	}
+	for i, e := range entries {
+		if want := root.Children[i].Name; e.Name() != want {
+			t.Fatalf("entry %d is %q, want %q", i, e.Name(), want)
+		}
+	}
+	for i := 0; i < n; i += 997 {
+		want := root.Children[i]
+		got, err := fs.ReadFile(volumes[0], want.Name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(got) != string(want.Data) {
+			t.Fatalf("%s holds %q, want %q", want.Name, got, want.Data)
+		}
+	}
+	t.Logf("%d B-tree nodes checked", nodes)
+	reportLimit(t, "fs-tree small files (12-byte names)", "%d files written, listed and sampled", n)
 }
 
-// TestLimitFSTreeLongNames repeats the file-count search with 255-byte names.
-// Directory-entry keys then approach 270 bytes, and the file-system tree's
-// index root holds one such key per leaf, so the root fills long before the
-// 64-leaf cap. It checks every image the writer accepts for readability: before
-// the index size was checked, 166 such files produced an image whose index root
-// had silently overrun its block and which could not be read back.
-func TestLimitFSTreeLongNames(t *testing.T) {
+// TestManyLongNames writes 5,000 files with 255-byte names. Their directory
+// entries make the file-system tree's index records long, which used to
+// overflow a two-level tree's index root at 166 files.
+func TestManyLongNames(t *testing.T) {
 	if testing.Short() {
-		t.Skip("builds hundreds of images")
+		t.Skip("writes 5,000 long-named files")
 	}
-	name := func(i int) string {
+	const n = 5_000
+	root := flatTree(n, func(i int) string {
 		prefix := fmt.Sprintf("%08d", i)
 		return prefix + strings.Repeat("n", 255-len(prefix))
+	})
+	img, err := build(root, nil)
+	if err != nil {
+		t.Fatalf("%d long-named files: %v", n, err)
 	}
-	for n := 1; n <= 5000; n++ {
-		root := flatTree(n, name)
-		img, err := build(root, nil)
-		if err != nil {
-			if !strings.Contains(err.Error(), "file-system tree index") {
-				t.Fatalf("at %d files: err = %v, want the index-root size limit", n, err)
-			}
-			reportLimit(t, "fs-tree long names (255-byte names)", "%d files; %d rejected with %q", n-1, n, err)
-			return
-		}
-		if err := readsBack(img, root); err != nil {
-			reportLimit(t, "fs-tree long names (255-byte names)", "%d files accepted but unreadable: %v", n, err)
-			t.Fatalf("writer accepted %d long-named files but produced an unreadable image: %v", n, err)
-		}
-	}
-	t.Fatalf("5000 long-named files were all accepted; the limit may have been lifted")
+	checkImage(t, img, root)
+	reportLimit(t, "fs-tree long names (255-byte names)", "%d files written and read back", n)
 }
 
-// TestLimitSnapshotNonEmptyFiles measures how many non-empty files a volume
-// can hold and still take a snapshot. Each such file owns one extentref record,
-// and snapshots are refused once those records outgrow a single leaf.
-func TestLimitSnapshotNonEmptyFiles(t *testing.T) {
-	name := func(i int) string { return fmt.Sprintf("file%08d", i) }
-	snaps := snapshotNames(1)
-	var lastErr error
-	n := largestAccepted(t, 1, 2000, func(n int) bool {
-		_, err := build(flatTree(n, name), snaps)
-		if err != nil {
-			lastErr = err
-		}
-		return err == nil
-	})
-
-	root := flatTree(n, name)
-	img, err := build(root, snaps)
+// TestSnapshotOfManyFiles snapshots a volume of 5,000 non-empty files. The
+// snapshot owns the volume's populated extentref tree, which used to have to
+// fit in one node, so snapshots were refused past 112 such files.
+func TestSnapshotOfManyFiles(t *testing.T) {
+	const n = 5_000
+	root := flatTree(n, func(i int) string { return fmt.Sprintf("file%08d", i) })
+	img, err := build(root, snapshotNames(2))
 	if err != nil {
-		t.Fatalf("rebuild at %d: %v", n, err)
+		t.Fatalf("%d files with snapshots: %v", n, err)
+	}
+	checkImage(t, img, root)
+	reportLimit(t, "snapshot non-empty files", "%d files with 2 snapshots written and read back", n)
+}
+
+// TestExtentrefRootLeafBoundary writes every file count around the point where
+// the extentref tree outgrows one root-leaf. At 111 and 112 non-empty files the
+// writer used to overrun that root, sized as though it had no footer, and
+// fsck_apfs rejected the tree ("Extent ref tree is invalid"); the reader never
+// looks at it, so only checkNodeLayouts catches this here.
+func TestExtentrefRootLeafBoundary(t *testing.T) {
+	for n := 105; n <= 120; n++ {
+		root := flatTree(n, func(i int) string { return fmt.Sprintf("file%08d", i) })
+		img, err := build(root, nil)
+		if err != nil {
+			t.Fatalf("%d files: %v", n, err)
+		}
+		if _, err := apfswrite.CheckNodeLayouts(img.data); err != nil {
+			t.Fatalf("%d files: %v", n, err)
+		}
+	}
+}
+
+// TestVolumesBeyondReservedOIDs writes two volumes whose file-system trees
+// each have more non-root nodes than the 64 oids a volume reserves, so both
+// take oids from past every volume's reservation, and reads both back.
+func TestVolumesBeyondReservedOIDs(t *testing.T) {
+	roots := []*apfswrite.Entry{
+		flatTree(3_000, func(i int) string { return fmt.Sprintf("a%08d", i) }),
+		flatTree(4_000, func(i int) string { return fmt.Sprintf("b%08d", i) }),
+	}
+	img := &memImage{}
+	err := apfswrite.CreateContainer(img, 1<<30, &apfswrite.CreateOptions{Volumes: []apfswrite.VolumeSpec{
+		{Name: "One", Root: roots[0]},
+		{Name: "Two", Root: roots[1], Snapshots: snapshotNames(1)},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := apfswrite.CheckNodeLayouts(img.data); err != nil {
+		t.Fatal(err)
+	}
+	container, err := apfs.Open(img, &apfs.OpenOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	volumes, err := container.Volumes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(volumes) != 2 {
+		t.Fatalf("%d volumes, want 2", len(volumes))
+	}
+	for i, v := range volumes {
+		walkAndAssert(t, v, collectWants(roots[i]))
+	}
+}
+
+// checkImage checks every B-tree node of img and reads its volume back.
+func checkImage(t *testing.T, img *memImage, root *apfswrite.Entry) {
+	t.Helper()
+	nodes, err := apfswrite.CheckNodeLayouts(img.data)
+	if err != nil {
+		t.Fatal(err)
 	}
 	if err := readsBack(img, root); err != nil {
-		t.Fatalf("largest accepted snapshot image (%d files) does not read back: %v", n, err)
+		t.Fatal(err)
 	}
-	if !strings.Contains(lastErr.Error(), "2-level extentref tree") {
-		t.Fatalf("rejection is %q, want the extentref snapshot limit", lastErr)
-	}
-	reportLimit(t, "snapshot non-empty files", "%d files; %d rejected with %q", n, n+1, lastErr)
-
-	// Without the snapshot the same file count is accepted, so the snapshot is
-	// what imposes this limit.
-	if _, err := build(flatTree(n+1, name), nil); err != nil {
-		t.Fatalf("%d files without a snapshot: %v", n+1, err)
-	}
+	t.Logf("%d B-tree nodes checked", nodes)
 }

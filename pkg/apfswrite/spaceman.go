@@ -420,11 +420,12 @@ func (b *builder) spacemanGeometry() error {
 // the volume superblock's allocation count names exactly these, so they cannot
 // be pooled across volumes.
 func (b volCtx) placePostPool(base uint64) uint64 {
-	b.fsTreeLeafBase = base
-	b.extentrefLeafBase = b.fsTreeLeafBase + b.numFSTreeLeaves
-	b.fileDataBase = b.extentrefLeafBase + b.numExtentrefLeaves
+	b.fsTreeNodeBase = base
+	b.extentrefNodeBase = b.fsTreeNodeBase + b.fsTreeNodes
+	b.omapNodeBase = b.extentrefNodeBase + b.extentrefNodes
+	b.fileDataBase = b.omapNodeBase + b.omapNodes
 	b.placeSnapshots(b.fileDataBase + b.fileDataBlocks)
-	b.ownedBlocks = b.numFSTreeLeaves + b.numExtentrefLeaves + b.fileDataBlocks + b.snapBlocks
+	b.ownedBlocks = b.fsTreeNodes + b.extentrefNodes + b.omapNodes + b.fileDataBlocks + b.snapBlocks
 
 	blk := b.fileDataBase
 	for _, f := range b.streamFiles {

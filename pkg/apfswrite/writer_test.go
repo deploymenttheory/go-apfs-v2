@@ -5,6 +5,7 @@ package apfswrite_test
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 
@@ -21,9 +22,9 @@ type memImage struct {
 func (m *memImage) WriteAt(p []byte, off int64) (int, error) {
 	end := off + int64(len(p))
 	if end > int64(len(m.data)) {
-		grown := make([]byte, end)
-		copy(grown, m.data)
-		m.data = grown
+		// Grow geometrically: the writer appends block by block, and growing
+		// to exactly the new end would copy the whole image on every write.
+		m.data = slices.Grow(m.data, int(end)-len(m.data))[:end]
 	}
 	copy(m.data[off:], p)
 	return len(p), nil
