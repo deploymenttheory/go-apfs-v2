@@ -3,6 +3,7 @@ package decmpfs
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"strings"
 	"testing"
 
@@ -26,6 +27,16 @@ func (m *memSource) Size() uint64 { return uint64(len(m.data)) }
 // compressiblePattern returns n bytes that compress well.
 func compressiblePattern(n int) []byte {
 	return bytes.Repeat([]byte("the quick brown fox jumps over the lazy dog "), n/44+1)[:n]
+}
+
+func TestDecompressLZFSERejectsZeroV2Header(t *testing.T) {
+	src := make([]byte, 32)
+	copy(src, "bvx2")
+	out := make([]byte, 128)
+	size := len(out)
+	if err := Decompress(src, MethodLZFSE, out, &size); !errors.Is(err, lzfse.ErrCorrupt) {
+		t.Fatalf("Decompress: %v, want ErrCorrupt", err)
+	}
 }
 
 // TestDecompressLZFSEEscape covers the leaf decompressor, including the raw
