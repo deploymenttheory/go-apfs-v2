@@ -3,6 +3,7 @@ package decmpfs
 import (
 	"bytes"
 	"compress/zlib"
+	"errors"
 	"fmt"
 	"io"
 
@@ -165,17 +166,18 @@ func decompressLZFSE(compressedData []byte, uncompressedData []byte, uncompresse
 		return fmt.Errorf("truncated LZFSE chunk: %d bytes", len(compressedData))
 	}
 
-	decompressed, err := lzfse.Decompress(compressedData)
+	if *uncompressedDataSize < 0 || *uncompressedDataSize > len(uncompressedData) {
+		return fmt.Errorf("invalid uncompressed data size: %d (buffer size %d)", *uncompressedDataSize, len(uncompressedData))
+	}
+
+	n, err := lzfse.DecompressInto(uncompressedData[:*uncompressedDataSize], compressedData)
+	if errors.Is(err, lzfse.ErrOutputFull) {
+		return fmt.Errorf("decompressed data exceeds buffer size (%d): %w", *uncompressedDataSize, err)
+	}
 	if err != nil {
 		return fmt.Errorf("unable to decompress LZFSE data: %w", err)
 	}
 
-	// Copy decompressed data to output buffer
-	if len(decompressed) > *uncompressedDataSize {
-		return fmt.Errorf("decompressed data size (%d) exceeds buffer size (%d)", len(decompressed), *uncompressedDataSize)
-	}
-
-	n := copy(uncompressedData, decompressed)
 	*uncompressedDataSize = n
 	return nil
 }

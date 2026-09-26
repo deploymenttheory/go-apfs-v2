@@ -123,6 +123,9 @@ const maxInt = int(^uint(0) >> 1)
 // Decompress decodes an LZFSE stream. Its output buffer is sized from the
 // block headers (DecodedSize), so a stream that decodes to more than it
 // declares is rejected rather than grown into.
+// It allocates the size declared by the stream's headers. Callers handling
+// untrusted input with a known output bound should use DecompressInto with
+// a buffer of that size.
 func Decompress(src []byte) ([]byte, error) {
 	size, err := DecodedSize(src)
 	if err != nil {

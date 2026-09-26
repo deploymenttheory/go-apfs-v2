@@ -29,6 +29,10 @@ func TestRejectsUndersizedV2Header(t *testing.T) {
 				if _, err := Decompress(src); !errors.Is(err, ErrCorrupt) {
 					t.Fatalf("Decompress: %v, want ErrCorrupt", err)
 				}
+				// Exercise the decoder's guard without going through DecodedSize.
+				if _, err := DecompressInto(make([]byte, 64<<10), src); !errors.Is(err, ErrCorrupt) {
+					t.Fatalf("DecompressInto: %v, want ErrCorrupt", err)
+				}
 			})
 		}
 	}
@@ -265,7 +269,7 @@ func TestTruncatedAndCorruptStreams(t *testing.T) {
 		for range 200 {
 			bad := bytes.Clone(enc)
 			bad[rng.Intn(len(bad))] ^= byte(1 + rng.Intn(255))
-			_, _ = Decompress(bad)
+			_, _ = DecompressInto(make([]byte, len(s.data)), bad)
 			_, _ = DecompressLZVN(bad, len(s.data))
 		}
 	}
