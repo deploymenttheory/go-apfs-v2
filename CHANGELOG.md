@@ -25,6 +25,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   preserving supported metadata using opened roots and handles. Tests cover both
   preparation APIs, containment, renamed roots, Windows streams and cleanup.
 
+## [0.11.2](https://github.com/deploymenttheory/go-apfs-v2/compare/v0.11.1...v0.11.2) (2026-09-26)
+
+
+### Bug Fixes
+
+* **decmpfs:** bound LZFSE decoding to the caller's buffer ([#123](https://github.com/deploymenttheory/go-apfs-v2/issues/123)) ([9c2177d](https://github.com/deploymenttheory/go-apfs-v2/commit/9c2177d08d41de08d77e92981fee0f9ae26b54ee))
+
 ## [0.11.1](https://github.com/deploymenttheory/go-apfs-v2/compare/v0.11.0...v0.11.1) (2026-09-26)
 
 
