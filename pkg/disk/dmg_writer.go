@@ -24,6 +24,8 @@ import (
 	"hash/crc32"
 	"io"
 	"os"
+	"runtime"
+	"sync"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/compression/lzfse"
 	"github.com/ulikunitz/xz"
@@ -67,6 +69,10 @@ type EncodeOptions struct {
 	// is passed via the option struct is treated as default). Accepts the
 	// standard compress/zlib levels.
 	ZlibLevel int
+	// Workers is how many chunks are compressed at once (runtime.GOMAXPROCS
+	// when 0). The output is the same for any value: chunks are compressed
+	// concurrently but written in order.
+	Workers int
 }
 
 const (
@@ -133,6 +139,13 @@ func resolveEncodeOptions(o *EncodeOptions) EncodeOptions {
 		if o.ZlibLevel != 0 {
 			out.ZlibLevel = o.ZlibLevel
 		}
+		out.Workers = o.Workers
+	}
+	if out.Workers <= 0 {
+		out.Workers = runtime.GOMAXPROCS(0)
+	}
+	if out.Compression == CompressionNone {
+		out.Workers = 1 // nothing to compute
 	}
 	return out
 }
@@ -301,62 +314,27 @@ func EncodeUDIF(dst io.Writer, blocks []SourceBlock, opts *EncodeOptions) error 
 // encodeBlock chunks a single source block, streams its compressed chunk data
 // to dfw, and returns the serialised mish block bytes plus the CRC32 of the
 // block's uncompressed data.
-// window, when non-nil, is a scratch buffer of ChunkSectors*512 bytes shared
-// across blocks, used only when the block reads lazily.
+//
+// Chunks are read, and the block CRC taken, in order on the calling goroutine.
+// With more than one worker they are compressed concurrently and written in
+// order by a single consumer, so the output does not depend on the worker
+// count. window, when non-nil, is a scratch buffer of ChunkSectors*512 bytes
+// shared across blocks, used only when the block reads lazily with one worker.
 func encodeBlock(dfw *dataForkWriter, index int, blk *SourceBlock, secCount uint64, o *EncodeOptions, window []byte) ([]byte, uint32, error) {
-	var chunks bytes.Buffer
-	chunkCount := uint32(0)
-	blockCRC := crc32.NewIEEE()
-
-	var sector uint64
-	for sector < secCount {
-		n := o.ChunkSectors
-		if remaining := secCount - sector; n > remaining {
-			n = remaining
-		}
-
-		var raw []byte
-		switch {
-		case blk.Data != nil:
-			start := sector * sectorSize
-			raw = blk.Data[start : start+n*sectorSize]
-		case blk.Reader != nil:
-			raw = window[:n*sectorSize]
-			if _, err := readFullAt(blk.Reader, raw, int64(sector*sectorSize)); err != nil {
-				return nil, 0, fmt.Errorf("read sector %d: %w", sector, err)
-			}
-		}
-		// A nil raw slice (neither Data nor Reader) is treated as all-zero.
-
-		if raw == nil || isAllZero(raw) {
-			// Feed zeros into the block CRC to keep it over the full
-			// uncompressed image, then emit a zero-fill chunk (no data).
-			writeZeros(blockCRC, int(n*sectorSize))
-			encodeChunkRecord(&chunks, chunkTypeZeroFill, sector, n, dfw.n, 0)
-			chunkCount++
-			sector += n
-			continue
-		}
-
-		blockCRC.Write(raw)
-
-		payload, typ, err := compressChunk(raw, o)
-		if err != nil {
-			return nil, 0, err
-		}
-
-		coff := dfw.n
-		if _, err := dfw.Write(payload); err != nil {
-			return nil, 0, err
-		}
-		encodeChunkRecord(&chunks, typ, sector, n, coff, uint64(len(payload)))
-		chunkCount++
-		sector += n
+	e := &blockEncoder{dfw: dfw, o: o, crc: crc32.NewIEEE()}
+	var err error
+	if o.Workers <= 1 {
+		err = e.sequential(blk, secCount, window)
+	} else {
+		err = e.parallel(blk, secCount)
+	}
+	if err != nil {
+		return nil, 0, err
 	}
 
 	// Terminator chunk: type 0xffffffff, SectorNumber = end sector, no data.
-	encodeChunkRecord(&chunks, chunkTypeLastBlock, secCount, 0, dfw.n, 0)
-	chunkCount++
+	encodeChunkRecord(&e.chunks, chunkTypeLastBlock, secCount, 0, dfw.n, 0)
+	e.chunkCount++
 
 	header := dmgBlockData{
 		Version:          1,
@@ -365,8 +343,8 @@ func encodeBlock(dfw *dataForkWriter, index int, blk *SourceBlock, secCount uint
 		DataOffset:       0,
 		BuffersNeeded:    uint32(o.ChunkSectors) + 8,
 		BlockDescriptors: uint32(index),
-		Checksum:         udifChecksum(blockCRC.Sum32(), o.NoChecksums),
-		ChunkCount:       chunkCount,
+		Checksum:         udifChecksum(e.crc.Sum32(), o.NoChecksums),
+		ChunkCount:       e.chunkCount,
 	}
 	copy(header.Signature[:], mishSignature)
 
@@ -374,9 +352,192 @@ func encodeBlock(dfw *dataForkWriter, index int, blk *SourceBlock, secCount uint
 	if err := binary.Write(&out, binary.BigEndian, &header); err != nil {
 		return nil, 0, err
 	}
-	out.Write(chunks.Bytes())
+	out.Write(e.chunks.Bytes())
 
-	return out.Bytes(), blockCRC.Sum32(), nil
+	return out.Bytes(), e.crc.Sum32(), nil
+}
+
+// blockEncoder holds one block's output: its chunk records, written to the
+// data fork in order, and the CRC32 of its uncompressed bytes.
+type blockEncoder struct {
+	dfw        *dataForkWriter
+	o          *EncodeOptions
+	crc        hash.Hash32
+	chunks     bytes.Buffer
+	chunkCount uint32
+}
+
+// chunkJob is one chunk on its way through the pipeline. raw is nil for an
+// all-zero chunk, which is recorded without data.
+type chunkJob struct {
+	sector, n uint64
+	raw       []byte
+	buf       []byte // pooled buffer backing raw, returned once written
+	done      chan struct{}
+	payload   []byte
+	typ       uint32
+	err       error
+}
+
+// chunkRaw returns the chunk of n sectors at sector: a slice of the block's
+// data, or the block's bytes read into buf. nil means all zeros.
+func chunkRaw(blk *SourceBlock, sector, n uint64, buf []byte) ([]byte, error) {
+	switch {
+	case blk.Data != nil:
+		start := sector * sectorSize
+		return blk.Data[start : start+n*sectorSize], nil
+	case blk.Reader != nil:
+		raw := buf[:n*sectorSize]
+		if _, err := readFullAt(blk.Reader, raw, int64(sector*sectorSize)); err != nil {
+			return nil, fmt.Errorf("read sector %d: %w", sector, err)
+		}
+		return raw, nil
+	}
+	return nil, nil // neither Data nor Reader: all zeros
+}
+
+// checksum folds a chunk into the block CRC and reports whether it is all
+// zeros, which is stored as a zero-fill chunk with no data.
+func (e *blockEncoder) checksum(raw []byte, n uint64) (zero bool) {
+	if raw == nil || isAllZero(raw) {
+		// Zeros still count towards the CRC of the uncompressed image.
+		writeZeros(e.crc, int(n*sectorSize))
+		return true
+	}
+	e.crc.Write(raw)
+	return false
+}
+
+// write appends a chunk to the data fork and records it.
+func (e *blockEncoder) write(sector, n uint64, zero bool, payload []byte, typ uint32) error {
+	if zero {
+		encodeChunkRecord(&e.chunks, chunkTypeZeroFill, sector, n, e.dfw.n, 0)
+	} else {
+		coff := e.dfw.n
+		if _, err := e.dfw.Write(payload); err != nil {
+			return err
+		}
+		encodeChunkRecord(&e.chunks, typ, sector, n, coff, uint64(len(payload)))
+	}
+	e.chunkCount++
+	return nil
+}
+
+// sequential encodes the block one chunk at a time.
+func (e *blockEncoder) sequential(blk *SourceBlock, secCount uint64, window []byte) error {
+	for sector := uint64(0); sector < secCount; {
+		n := min(e.o.ChunkSectors, secCount-sector)
+		raw, err := chunkRaw(blk, sector, n, window)
+		if err != nil {
+			return err
+		}
+		var payload []byte
+		var typ uint32
+		zero := e.checksum(raw, n)
+		if !zero {
+			if payload, typ, err = compressChunk(raw, e.o); err != nil {
+				return err
+			}
+		}
+		if err := e.write(sector, n, zero, payload, typ); err != nil {
+			return err
+		}
+		sector += n
+	}
+	return nil
+}
+
+// parallel encodes the block with o.Workers compressors. Reading, the block
+// CRC and writing stay in chunk order; at most two chunks per worker are in
+// flight, and a lazily read block reads into that many pooled buffers.
+func (e *blockEncoder) parallel(blk *SourceBlock, secCount uint64) error {
+	workers := e.o.Workers
+	inFlight := 2 * workers
+
+	work := make(chan *chunkJob, inFlight)
+	var wg sync.WaitGroup
+	for range workers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := range work {
+				j.payload, j.typ, j.err = compressChunk(j.raw, e.o)
+				close(j.done)
+			}
+		}()
+	}
+
+	var free chan []byte
+	if blk.Reader != nil {
+		free = make(chan []byte, inFlight)
+		for range inFlight {
+			free <- make([]byte, e.o.ChunkSectors*sectorSize)
+		}
+	}
+
+	// The consumer writes chunks in order. After an error it keeps draining,
+	// so the producer and workers never block on it, and returns the first.
+	ordered := make(chan *chunkJob, inFlight)
+	consumerErr := make(chan error, 1)
+	var failed sync.Once
+	stop := make(chan struct{})
+	go func() {
+		var first error
+		for j := range ordered {
+			<-j.done
+			if first == nil {
+				first = j.err
+				if first == nil {
+					first = e.write(j.sector, j.n, j.raw == nil, j.payload, j.typ)
+				}
+				if first != nil {
+					failed.Do(func() { close(stop) })
+				}
+			}
+			if j.buf != nil {
+				free <- j.buf
+			}
+		}
+		consumerErr <- first
+	}()
+
+	var produceErr error
+	for sector := uint64(0); sector < secCount; {
+		n := min(e.o.ChunkSectors, secCount-sector)
+		j := &chunkJob{sector: sector, n: n, done: make(chan struct{})}
+		if free != nil {
+			select {
+			case j.buf = <-free:
+			case <-stop:
+			}
+			if j.buf == nil {
+				break
+			}
+		}
+		raw, err := chunkRaw(blk, sector, n, j.buf)
+		if err != nil {
+			produceErr = err
+			if j.buf != nil {
+				free <- j.buf
+			}
+			break
+		}
+		if e.checksum(raw, n) {
+			close(j.done) // zero-fill: nothing to compress
+		} else {
+			j.raw = raw
+			work <- j
+		}
+		ordered <- j
+		sector += n
+	}
+	close(work)
+	close(ordered)
+	wg.Wait()
+	if err := <-consumerErr; err != nil {
+		return err
+	}
+	return produceErr
 }
 
 // readFullAt fills p from r at off. It exists because an io.ReaderAt is
