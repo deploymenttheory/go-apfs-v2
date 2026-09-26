@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -93,6 +94,70 @@ func TestDecompressLZFSEEscape(t *testing.T) {
 			}
 		}
 	})
+}
+
+func TestDecompressLZFSEBoundedAllocation(t *testing.T) {
+	compressed, err := lzfse.Compress(make([]byte, 1<<20))
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := make([]byte, BlockSize)
+	size := BlockSize
+	// Keep setup outside the measured interval and do not run in parallel:
+	// TotalAlloc measures allocations across this test process.
+	var before, after runtime.MemStats
+	runtime.ReadMemStats(&before)
+	err = Decompress(compressed, MethodLZFSE, out, &size)
+	runtime.ReadMemStats(&after)
+	if allocated := after.TotalAlloc - before.TotalAlloc; allocated >= 1<<20 {
+		t.Fatalf("Decompress allocated %d bytes, want less than 1 MiB", allocated)
+	}
+	if !errors.Is(err, lzfse.ErrOutputFull) {
+		t.Fatalf("Decompress: %v, want ErrOutputFull", err)
+	}
+	t.Logf("Decompress allocated %d bytes", after.TotalAlloc-before.TotalAlloc)
+}
+
+func TestDecompressLZFSEOutputSize(t *testing.T) {
+	payload := compressiblePattern(4096)
+	compressed, err := lzfse.Compress(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name string
+		size int
+	}{
+		{"negative", -1},
+		{"larger than buffer", len(payload) + 2},
+		{"empty", 0},
+		{"too small", len(payload) - 1},
+		{"exact", len(payload)},
+		{"extra room", len(payload) + 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out := bytes.Repeat([]byte{0xa5}, len(payload)+1)
+			size := tc.size
+			err := Decompress(compressed, MethodLZFSE, out, &size)
+			if tc.size < len(payload) || tc.size > len(out) {
+				if err == nil {
+					t.Fatal("Decompress succeeded with an invalid or insufficient output size")
+				}
+				if size != tc.size {
+					t.Fatalf("size changed on error: got %d, want %d", size, tc.size)
+				}
+			} else if err != nil || size != len(payload) || !bytes.Equal(out[:size], payload) {
+				t.Fatalf("round trip failed: size=%d, err=%v", size, err)
+			}
+			if tc.size >= 0 && tc.size <= len(out) {
+				for _, b := range out[tc.size:] {
+					if b != 0xa5 {
+						t.Fatal("Decompress wrote beyond the caller's output size")
+					}
+				}
+			}
+		})
+	}
 }
 
 // TestZlibResourceForkManyBlocksIsAnError guards the descriptor-table read: a
