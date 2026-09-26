@@ -346,7 +346,6 @@ func TestAcceptancePackRoundTrip(t *testing.T) {
 	}
 	srcSum := sha256.Sum256(srcRaw)
 	srcSize := len(srcRaw)
-	srcRaw = nil // release before repacking the large image
 
 	repacked := filepath.Join(t.TempDir(), "repacked.dmg")
 	mustRun(t, "pack", dmg, repacked)
@@ -360,7 +359,6 @@ func TestAcceptancePackRoundTrip(t *testing.T) {
 		t.Fatalf("raw image not preserved: src %s (%d bytes) != repacked %s (%d bytes)",
 			hex.EncodeToString(srcSum[:8]), srcSize, hex.EncodeToString(dstSum[:8]), len(dstRaw))
 	}
-	dstRaw = nil
 
 	// Content invariant: the repacked image extracts to the same files.
 	origDir := t.TempDir()

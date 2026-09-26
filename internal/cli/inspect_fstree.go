@@ -335,7 +335,7 @@ func inferTypeFromValue(valueData []byte) uint8 {
 		// Check for reasonable mode value at offset 88-90
 		mode := binary.LittleEndian.Uint16(valueData[88:90])
 		// File modes are typically in range 0-0177777 (octal)
-		if mode > 0 && mode <= 0xFFFF {
+		if mode > 0 {
 			return 0x3 // APFS_TYPE_INODE
 		}
 	}

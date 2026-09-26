@@ -75,7 +75,6 @@ func runInspectHFSPlus(imagePath string, verbose bool) error {
 func printHFSVolumeHeader(volume *hfsplus.Volume, h hfsplus.VolumeHeader) {
 	kind := "HFS+ (case-insensitive)"
 	if h.Signature == hfsplus.HFSXSigWord {
-		kind = "HFSX"
 		if volume.CaseSensitive() {
 			kind = "HFSX (case-sensitive)"
 		} else {

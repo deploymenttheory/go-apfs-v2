@@ -164,7 +164,8 @@ func collectHFSInfo(volume *hfsplus.Volume) *containerInfo {
 	header := volume.Header()
 
 	var files, dirs, symlinks uint64
-	fs.WalkDir(volume, ".", func(name string, entry fs.DirEntry, err error) error {
+	// The callback skips unreadable entries, so the walk itself never fails.
+	_ = fs.WalkDir(volume, ".", func(name string, entry fs.DirEntry, err error) error {
 		if err != nil || name == "." {
 			return nil
 		}
@@ -350,10 +351,14 @@ func runLegacyInfo(imagePath string) error {
 		handle.VolumeOffset = opts.Offset
 	}
 	if opts.Password != "" {
-		handle.SetPassword(opts.Password)
+		if err := handle.SetPassword(opts.Password); err != nil {
+			return err
+		}
 	}
 	if opts.RecoveryPassword != "" {
-		handle.SetRecoveryPassword(opts.RecoveryPassword)
+		if err := handle.SetRecoveryPassword(opts.RecoveryPassword); err != nil {
+			return err
+		}
 	}
 	if infoBodyfile != "" {
 		if err := handle.SetBodyfile(infoBodyfile); err != nil {
@@ -364,7 +369,7 @@ func runLegacyInfo(imagePath string) error {
 	if err := handle.OpenInput(imagePath); err != nil {
 		return withCode(ExitBadImage, err)
 	}
-	defer handle.CloseInput()
+	defer func() { _ = handle.CloseInput() }()
 
 	switch {
 	case infoEntryID != 0:

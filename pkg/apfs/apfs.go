@@ -200,12 +200,12 @@ func volumeByRole(volumes []*Volume, token, selector string) (*Volume, error) {
 func (c *Container) applyPasswords(volume *Volume) {
 	if c.userPassword != "" {
 		if err := volume.SetUTF8Password([]byte(c.userPassword)); err == nil {
-			volume.Unlock()
+			_, _ = volume.Unlock()
 		}
 	}
 	if c.recoveryPassword != "" {
 		if err := volume.SetUTF8RecoveryPassword([]byte(c.recoveryPassword)); err == nil {
-			volume.Unlock()
+			_, _ = volume.Unlock()
 		}
 	}
 }

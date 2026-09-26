@@ -12,11 +12,11 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfswrite"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/disk"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/fidelity"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
 )
 
 // Volume-superblock field offsets (bytes) used by in-place revert.

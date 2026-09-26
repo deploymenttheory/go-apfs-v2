@@ -990,9 +990,7 @@ func (fe *FileEntry) getDataStream() error {
 					}
 				}
 			}
-		} else {
 		}
-	} else {
 	}
 
 	// Try to get file extents for normal files
@@ -1013,11 +1011,8 @@ func (fe *FileEntry) getDataStream() error {
 			return nil
 		}
 
-		// If DataStreamIdentifier is 0, the data might be inline in the inode
-		if fe.Inode.DataStreamIdentifier == 0 {
-			// TODO: Check if inode has inline data
-			// For now, this is an unsupported case
-		}
+		// A DataStreamIdentifier of 0 may mean inline data in the inode,
+		// which is not supported; it falls through to the error below.
 
 		return fmt.Errorf("no file extents and no compressed data")
 	}

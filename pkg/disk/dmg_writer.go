@@ -404,7 +404,7 @@ func readFullAt(r io.ReaderAt, p []byte, off int64) (int, error) {
 var zeroScratch = make([]byte, 64<<10)
 
 // writeZeros feeds n zero bytes into h without allocating.
-func writeZeros(h io.Writer, n int) {
+func writeZeros(h hash.Hash, n int) {
 	for n > 0 {
 		c := n
 		if c > len(zeroScratch) {

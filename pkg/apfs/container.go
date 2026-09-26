@@ -216,7 +216,6 @@ func (c *Container) OpenRead(reader io.ReaderAt, fileOffset int64) error {
 			// Use the superblock with the highest transaction identifier
 			if backupSuperblock.XID > c.Superblock.XID {
 				c.Superblock = backupSuperblock
-			} else {
 			}
 		}
 

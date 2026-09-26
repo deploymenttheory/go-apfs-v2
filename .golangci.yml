@@ -1,0 +1,39 @@
+version: "2"
+
+linters:
+  default: none
+  enable:
+    - govet
+    - staticcheck
+    - errcheck
+    - ineffassign
+    - unused
+    - misspell
+  settings:
+    staticcheck:
+      # Correctness and simplification checks only; the style (ST) and
+      # quick-fix (QF) suggestions are not enforced.
+      checks: ["all", "-ST*", "-QF*"]
+    errcheck:
+      exclude-functions:
+        - (hash.Hash).Write
+        - (*github.com/schollz/progressbar/v3.ProgressBar).Add
+        - (*github.com/schollz/progressbar/v3.ProgressBar).Finish
+        - (*github.com/spf13/cobra.Command).MarkFlagRequired
+        - golang.org/x/sys/windows.CloseHandle
+  exclusions:
+    presets:
+      # Unchecked Close on read paths and fmt.Fprint* to the terminal.
+      - std-error-handling
+    rules:
+      # Test cleanup (hdiutil detach, temp-file removal) is best-effort.
+      - path: _test\.go
+        linters: [errcheck]
+      # Mounting is unsupported on some platforms, where the stub always
+      # returns an error and the check is trivially true.
+      - path: internal/cli/mount\.go
+        text: SA4023
+
+formatters:
+  enable:
+    - gofmt
