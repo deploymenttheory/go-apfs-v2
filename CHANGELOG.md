@@ -25,6 +25,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   preserving supported metadata using opened roots and handles. Tests cover both
   preparation APIs, containment, renamed roots, Windows streams and cleanup.
 
+## [0.11.1](https://github.com/deploymenttheory/go-apfs-v2/compare/v0.11.0...v0.11.1) (2026-09-26)
+
+
+### Bug Fixes
+
+* **lzfse:** reject undersized V2 headers to prevent hangs ([#121](https://github.com/deploymenttheory/go-apfs-v2/issues/121)) ([bd49653](https://github.com/deploymenttheory/go-apfs-v2/commit/bd4965336345fd273f4aca5fd738f35914cda403))
+
 ## [0.11.0](https://github.com/deploymenttheory/go-apfs-v2/compare/v0.10.0...v0.11.0) (2026-09-26)
 
 
