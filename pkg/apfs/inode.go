@@ -188,16 +188,16 @@ func (i *Inode) ReadValueData(data []byte) error {
 
 		timeBytes := make([]byte, 8)
 		binary.LittleEndian.PutUint64(timeBytes, i.ModificationTime)
-		PrintPOSIXTimeValue("Inode.ReadValueData", "modification time\t\t\t", timeBytes, binary.LittleEndian, "nanoseconds")
+		_ = PrintPOSIXTimeValue("Inode.ReadValueData", "modification time\t\t\t", timeBytes, binary.LittleEndian, "nanoseconds")
 
 		binary.LittleEndian.PutUint64(timeBytes, i.CreationTime)
-		PrintPOSIXTimeValue("Inode.ReadValueData", "creation time\t\t\t\t", timeBytes, binary.LittleEndian, "nanoseconds")
+		_ = PrintPOSIXTimeValue("Inode.ReadValueData", "creation time\t\t\t\t", timeBytes, binary.LittleEndian, "nanoseconds")
 
 		binary.LittleEndian.PutUint64(timeBytes, i.InodeChangeTime)
-		PrintPOSIXTimeValue("Inode.ReadValueData", "inode change time\t\t\t", timeBytes, binary.LittleEndian, "nanoseconds")
+		_ = PrintPOSIXTimeValue("Inode.ReadValueData", "inode change time\t\t\t", timeBytes, binary.LittleEndian, "nanoseconds")
 
 		binary.LittleEndian.PutUint64(timeBytes, i.AccessTime)
-		PrintPOSIXTimeValue("Inode.ReadValueData", "access time\t\t\t\t", timeBytes, binary.LittleEndian, "nanoseconds")
+		_ = PrintPOSIXTimeValue("Inode.ReadValueData", "access time\t\t\t\t", timeBytes, binary.LittleEndian, "nanoseconds")
 
 		notifyPrintf("inode flags\t\t\t\t: 0x%08x\n", i.Flags)
 		PrintInodeFlags(i.Flags)

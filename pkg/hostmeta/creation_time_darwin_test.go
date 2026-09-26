@@ -35,10 +35,6 @@ func TestSetCreationTimeDarwinHeldFile(t *testing.T) {
 	if err := os.Link(moved, link); err != nil {
 		t.Fatal(err)
 	}
-	before, err := file.Stat()
-	if err != nil {
-		t.Fatal(err)
-	}
 	neighbour, err := os.Stat(original)
 	if err != nil {
 		t.Fatal(err)
@@ -56,7 +52,8 @@ func TestSetCreationTimeDarwinHeldFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	before, err = file.Stat()
+	// Stat after reading the content, which may move the access time.
+	before, err := file.Stat()
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,0 +1,53 @@
+name: Fuzz
+
+# Each target runs briefly on every change and for longer once a week. A
+# failure uploads the crashing input; commit it under the package's
+# testdata/fuzz/<Target>/ so `go test` replays it as a regression test.
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz:
+    name: ${{ matrix.target }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { pkg: ./pkg/apfs, target: FuzzOpenImage }
+          - { pkg: ./pkg/apfs, target: FuzzBTreeNode }
+          - { pkg: ./pkg/apfs, target: FuzzContainerSuperblock }
+          - { pkg: ./pkg/apfs, target: FuzzVolumeSuperblock }
+          - { pkg: ./pkg/hfsplus, target: FuzzVolume }
+          - { pkg: ./pkg/disk, target: FuzzOpenDMG }
+          - { pkg: ./pkg/disk, target: FuzzFindAPFSPartitionInGPT }
+          - { pkg: ./pkg/disk, target: FuzzFindAPFSPartitionInAPM }
+          - { pkg: ./pkg/disk, target: FuzzDecompressADC }
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      # The fuzzer minimizes every new interesting input, for up to 60s by
+      # default, without counting executions; on these multi-KiB inputs that
+      # stalls it, so minimization is capped at a second.
+      - name: Fuzz
+        env:
+          FUZZTIME: ${{ github.event_name == 'schedule' && '10m' || '30s' }}
+        run: >
+          go test ${{ matrix.pkg }} -run '^$'
+          -fuzz '^${{ matrix.target }}$'
+          -fuzztime "$FUZZTIME" -fuzzminimizetime 1s
+      - name: Upload crashing input
+        if: failure()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: crasher-${{ matrix.target }}
+          path: ${{ matrix.pkg }}/testdata/fuzz/${{ matrix.target }}/

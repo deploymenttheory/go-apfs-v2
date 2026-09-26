@@ -26,7 +26,7 @@ const (
 
 // Object type masks and flags.
 const (
-	objStoragetypeMask = 0xc0000000
+	objStoragetypeMask = 0xc0000000 //nolint:unused // spec mask; storage types are set whole
 
 	objVirtual   = 0x00000000
 	objEphemeral = 0x80000000
@@ -143,7 +143,7 @@ const (
 	// decompressed length of a compressed file. Without it that field is
 	// padding, and Apple's implementation ignored it entirely before macOS
 	// 10.15.
-	inodeHasUncompressedSize = 0x00040000
+	inodeHasUncompressedSize = 0x00040000 //nolint:unused // documents why uncompressed_size stays padding
 )
 
 // BSD file flags (chflags(2)), stored in j_inode_val's bsd_flags.

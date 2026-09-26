@@ -10,6 +10,30 @@ If you find any bugs, please file an issue in the [GitHub issues][GitHubIssues] 
 
 If you are taking the time to mention a problem, even a seemingly minor one, it is greatly appreciated, and a totally valid contribution to this project. Thank you!
 
+## Checks CI runs
+
+```sh
+go vet ./...
+golangci-lint run ./...                  # also run with GOOS=darwin and GOOS=windows
+govulncheck ./...
+CGO_ENABLED=1 go test -race ./pkg/... ./internal/...
+go test ./pkg/... ./internal/... ./acceptance/
+```
+
+The parsers that read untrusted images have fuzz targets (`Fuzz*` in
+`pkg/apfs`, `pkg/hfsplus` and `pkg/disk`). CI runs each one for 30 seconds on
+every change and for 10 minutes weekly. To run one locally:
+
+```sh
+go test ./pkg/hfsplus -run '^$' -fuzz '^FuzzVolume$' -fuzztime 2m -fuzzminimizetime 1s
+```
+
+Keep `-fuzzminimizetime` short. The fuzzer minimizes every new interesting
+input, for up to a minute by default, and stalls on multi-KiB inputs while it
+does. When a target finds a crash it writes the input under
+`testdata/fuzz/<Target>/`. Commit that file with the fix so `go test` replays
+it as a regression test.
+
 ## Proving a refactor changed nothing
 
 Renames, restructures and "no functional change" cleanups in the write path are

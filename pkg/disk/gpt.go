@@ -11,6 +11,10 @@ import (
 const (
 	gptSignature  = "EFI PART"
 	gptSectorSize = 0x200
+	// gptMaxEntries bounds the partition table a header may claim, since the
+	// table is allocated before it is read. Disks use 128 entries; this allows
+	// a 2 MiB table.
+	gptMaxEntries = 16384
 )
 
 const (
@@ -56,6 +60,10 @@ type GPTHeader struct {
 func (h GPTHeader) Verify() error {
 	if h.EntriesSize != 128 {
 		return fmt.Errorf("unsupported GPT format, must be 128 byte entries")
+	}
+
+	if h.EntriesCount > gptMaxEntries {
+		return fmt.Errorf("GPT claims %d partition entries; at most %d are supported", h.EntriesCount, gptMaxEntries)
 	}
 
 	if gptSectorSize-len(h.Padding) != int(h.HeaderSize) {

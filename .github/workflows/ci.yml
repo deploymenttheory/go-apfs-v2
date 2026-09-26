@@ -28,6 +28,48 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
         run: go build ./...
 
+  lint:
+    name: Lint (${{ matrix.goos }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Platform-specific files (mount, host metadata) only lint under their
+        # own GOOS.
+        goos: [linux, darwin, windows]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - uses: golangci/golangci-lint-action@v9.3.0
+        env:
+          GOOS: ${{ matrix.goos }}
+        with:
+          version: v2.14.0
+
+  govulncheck:
+    name: govulncheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: golang/govulncheck-action@v1.1.0
+        with:
+          go-version-file: go.mod
+
+  race:
+    name: Race detector
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      # -race needs cgo, which the other test jobs turn off.
+      - name: Unit tests with -race
+        env:
+          CGO_ENABLED: "1"
+        run: go test -race ./pkg/... ./internal/...
+
   test:
     name: Test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}

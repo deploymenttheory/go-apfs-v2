@@ -201,8 +201,12 @@ func (n *BTreeNode) parseEntries(data []byte, dataOffset int, infoOffset int) er
 
 		// Create entry
 		entry := NewBTreeEntry()
-		entry.SetKeyData(keyData)
-		entry.SetValueData(valueData)
+		if err := entry.SetKeyData(keyData); err != nil {
+			return fmt.Errorf("entry %d: %w", i, err)
+		}
+		if err := entry.SetValueData(valueData); err != nil {
+			return fmt.Errorf("entry %d: %w", i, err)
+		}
 
 		n.Entries = append(n.Entries, entry)
 	}

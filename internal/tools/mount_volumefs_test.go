@@ -256,7 +256,7 @@ func TestInodeNumberIsStableAndDistinct(t *testing.T) {
 	if inodeNumber(".") != 1 {
 		t.Error("the root must be inode 1")
 	}
-	if inodeNumber("a/b.txt") != inodeNumber("a/b.txt") {
+	if first, second := inodeNumber("a/b.txt"), inodeNumber("a/b.txt"); first != second {
 		t.Error("the same path produced different inode numbers")
 	}
 	if inodeNumber("a/b.txt") == inodeNumber("a/c.txt") {

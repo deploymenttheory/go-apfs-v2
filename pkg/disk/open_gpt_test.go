@@ -4,12 +4,13 @@ import (
 	"bytes"
 	"encoding/binary"
 	"runtime"
+	"strings"
 	"testing"
 )
 
 // gptImage builds a two-sector image holding a protective sector and a GPT
 // header whose partition-entry count is entries, with no entries behind it.
-func gptImage(t *testing.T, entries uint32) []byte {
+func gptImage(t testing.TB, entries uint32) []byte {
 	t.Helper()
 	h := GPTHeader{
 		Revision:       0x00010000,
@@ -28,30 +29,34 @@ func gptImage(t *testing.T, entries uint32) []byte {
 	return buf.Bytes()
 }
 
-// TestGPTEntriesAllocationUnbounded measures what a raw image's GPT header can
-// make the opener allocate. The header's entry count is trusted: a 1 KiB image
-// claiming 1<<20 entries makes findAPFSPartitionInGPT allocate the full
-// 128 MiB table before it discovers the entries are not there. The count is a
-// uint32, so a header claiming 0xFFFFFFFF entries asks for about 512 GiB. The
-// DMG path bounds this; the raw-image path does not.
-func TestGPTEntriesAllocationUnbounded(t *testing.T) {
-	const entries = 1 << 20
-	img := gptImage(t, entries)
+// TestGPTEntriesCountBounded checks that a raw image's GPT header cannot make
+// the opener allocate an arbitrary partition table. Before the entry count
+// was bounded, a 1 KiB image claiming 1<<20 entries made findAPFSPartitionInGPT
+// allocate 128 MiB, and 0xFFFFFFFF entries asked for about 512 GiB.
+func TestGPTEntriesCountBounded(t *testing.T) {
+	for _, entries := range []uint32{gptMaxEntries + 1, 1 << 20, 0xFFFFFFFF} {
+		img := gptImage(t, entries)
 
-	var before, after runtime.MemStats
-	runtime.GC()
-	runtime.ReadMemStats(&before)
-	_, err := findAPFSPartitionInGPT(bytes.NewReader(img))
-	runtime.ReadMemStats(&after)
+		var before, after runtime.MemStats
+		runtime.GC()
+		runtime.ReadMemStats(&before)
+		_, err := findAPFSPartitionInGPT(bytes.NewReader(img))
+		runtime.ReadMemStats(&after)
 
-	if err == nil {
-		t.Fatal("expected an error for a GPT whose entries are missing")
+		if err == nil || !strings.Contains(err.Error(), "partition entries") {
+			t.Fatalf("%d entries: err = %v, want the entry-count bound", entries, err)
+		}
+		if allocated := after.TotalAlloc - before.TotalAlloc; allocated > 1<<20 {
+			t.Fatalf("%d entries: allocated %d bytes for a %d-byte image", entries, allocated, len(img))
+		}
 	}
-	allocated := after.TotalAlloc - before.TotalAlloc
-	want := uint64(entries) * 128
-	if allocated < want {
-		t.Fatalf("allocated %d bytes for a %d-byte image; the entry count now appears to be bounded", allocated, len(img))
+}
+
+// TestGPTEntriesCountAtBound checks the largest permitted table is still
+// read: the header is accepted and the missing entries are what fail.
+func TestGPTEntriesCountAtBound(t *testing.T) {
+	_, err := findAPFSPartitionInGPT(bytes.NewReader(gptImage(t, gptMaxEntries)))
+	if err == nil || !strings.Contains(err.Error(), "unable to read GPT partition entries") {
+		t.Fatalf("err = %v, want a failure reading the (absent) entries", err)
 	}
-	t.Logf("LIMIT gpt entries allocation = %d MiB allocated for a %d-byte image claiming %d entries (err: %v)",
-		allocated>>20, len(img), entries, err)
 }
