@@ -5,7 +5,6 @@ package apfswrite
 
 import (
 	"fmt"
-	"slices"
 	"testing"
 )
 
@@ -102,8 +101,12 @@ func TestLargeTreesHaveSoundNodes(t *testing.T) {
 type memWriter struct{ b []byte }
 
 func (m *memWriter) WriteAt(p []byte, off int64) (int, error) {
-	if end := int(off) + len(p); end > len(m.b) {
-		m.b = slices.Grow(m.b, end-len(m.b))[:end]
+	if end := int(off) + len(p); end > cap(m.b) {
+		grown := make([]byte, end, max(end, 2*cap(m.b)))
+		copy(grown, m.b)
+		m.b = grown
+	} else if end > len(m.b) {
+		m.b = m.b[:end]
 	}
 	copy(m.b[off:], p)
 	return len(p), nil
