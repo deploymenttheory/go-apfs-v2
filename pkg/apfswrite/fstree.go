@@ -3,7 +3,10 @@
 
 package apfswrite
 
-import "encoding/binary"
+import (
+	"encoding/binary"
+	"fmt"
+)
 
 // makeFSTree builds the volume's file-system tree (file-system) B-tree. When every
 // record fits in one node the tree is a single root-leaf. When the records
@@ -123,6 +126,13 @@ func (b *builder) writeFSTreeIndex(paddr, oid uint64, idx []fsTreeRecord, footer
 	binary.LittleEndian.PutUint32(block[btnOffNkeys:], uint32(len(idx)))
 
 	tocLen := tocBytesFor(len(idx))
+	used := headLen + tocLen + infoLen
+	for _, r := range idx {
+		used += len(r.key) + len(r.val)
+	}
+	if used > int(b.blocksize) {
+		return fmt.Errorf("apfswrite: file-system tree index needs %d bytes, more than one %d-byte node", used, b.blocksize)
+	}
 	putNloc(block, btnOffTableSpace, 0, uint16(tocLen))
 
 	cur := &fsTreeCursor{
