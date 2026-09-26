@@ -34,6 +34,5 @@ linters:
       - path: internal/cli/mount\.go
         text: SA4023
 
-formatters:
-  enable:
-    - gofmt
+# CI checks gofmt with the Go version from go.mod. The formatter embedded in
+# golangci-lint can use a different Go version and produce conflicting output.

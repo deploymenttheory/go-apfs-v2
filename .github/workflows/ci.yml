@@ -48,6 +48,17 @@ jobs:
         with:
           version: v2.14.0
 
+      # Use the Go version selected above, not the version that built the linter.
+      - name: Check gofmt
+        if: matrix.goos == 'linux'
+        shell: bash
+        run: |
+          files="$(gofmt -l .)"
+          if [ -n "$files" ]; then
+            printf '%s\n' "$files"
+            exit 1
+          fi
+
   govulncheck:
     name: govulncheck
     runs-on: ubuntu-latest
