@@ -25,6 +25,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   preserving supported metadata using opened roots and handles. Tests cover both
   preparation APIs, containment, renamed roots, Windows streams and cleanup.
 
+## [0.11.0](https://github.com/deploymenttheory/go-apfs-v2/compare/v0.10.0...v0.11.0) (2026-09-26)
+
+
+### Features
+
+* **apfswrite:** grow B-trees to any height ([#118](https://github.com/deploymenttheory/go-apfs-v2/issues/118)) ([bdee7ef](https://github.com/deploymenttheory/go-apfs-v2/commit/bdee7ef41d96bb0359a87791828e0bed75e3f004))
+
+
+### Bug Fixes
+
+* **apfswrite:** refuse a file-system tree whose index root overflows ([#115](https://github.com/deploymenttheory/go-apfs-v2/issues/115)) ([68200a4](https://github.com/deploymenttheory/go-apfs-v2/commit/68200a4abf5abf9e500e5580e14ed23f0cae8d60))
+* bound reader inputs found by fuzzing; add lint, govulncheck, race and fuzz CI ([#117](https://github.com/deploymenttheory/go-apfs-v2/issues/117)) ([a603cec](https://github.com/deploymenttheory/go-apfs-v2/commit/a603cec43b6185aa33a4d8545a0a141f3c917cb3))
+* **disk:** write DMGs macOS accepts with every codec ([#119](https://github.com/deploymenttheory/go-apfs-v2/issues/119)) ([1302b3e](https://github.com/deploymenttheory/go-apfs-v2/commit/1302b3ef4221618a24a1aa88ac50423dc1812149))
+
+
+### Performance Improvements
+
+* **disk:** compress DMG chunks in parallel ([#120](https://github.com/deploymenttheory/go-apfs-v2/issues/120)) ([ca68bc4](https://github.com/deploymenttheory/go-apfs-v2/commit/ca68bc477593adb42e95883b28b85c77dd94862b))
+
 ## [0.10.0](https://github.com/deploymenttheory/go-apfs-v2/compare/v0.9.0...v0.10.0) (2026-09-25)
 
 
