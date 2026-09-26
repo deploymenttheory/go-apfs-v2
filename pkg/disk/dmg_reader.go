@@ -18,7 +18,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/go-compressions/lzfse"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/compression/lzfse"
 	"github.com/ulikunitz/xz"
 	"github.com/ulikunitz/xz/lzma"
 	"howett.net/plist"

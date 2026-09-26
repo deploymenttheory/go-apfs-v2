@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/decmpfs"
-	"github.com/go-compressions/lzfse"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/compression/lzfse"
 )
 
 // The committed fixture covers one decmpfs shape with bytes macOS produced:

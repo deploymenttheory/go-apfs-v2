@@ -3,7 +3,6 @@ module github.com/deploymenttheory/go-apfs-v2
 go 1.26.5
 
 require (
-	github.com/go-compressions/lzfse v0.3.0
 	github.com/google/uuid v1.6.0
 	github.com/hanwen/go-fuse/v2 v2.11.0
 	github.com/schollz/progressbar/v3 v3.19.1

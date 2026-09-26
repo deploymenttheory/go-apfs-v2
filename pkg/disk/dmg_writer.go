@@ -25,8 +25,8 @@ import (
 	"io"
 	"os"
 
-	"github.com/go-compressions/lzfse"
-	"github.com/ulikunitz/xz/lzma"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/compression/lzfse"
+	"github.com/ulikunitz/xz"
 )
 
 // Compression selects the chunk compressor used by the encoder.
@@ -458,13 +458,19 @@ func lzfseCompress(data []byte) ([]byte, error) {
 	return lzfse.Compress(data)
 }
 
-// lzmaCompress returns the LZMA1 "alone" stream for data, the payload of a
-// ULMO (0x80000008) chunk. It is the non-XZ form dmg_reader.go decodes with
-// lzma.NewReader, which is what hdiutil emits and reads for ULMO. The encoder
-// takes no timestamps, so identical input yields identical output.
+// lzmaCompress returns the payload of a ULMO (0x80000008) chunk: an xz
+// stream holding LZMA2, with no integrity check.
+//
+// That is what hdiutil writes -- its chunks begin with the xz magic and stream
+// flags 00 00 -- and what it reads: an LZMA1 "alone" stream, which this
+// writer used to emit and dmg_reader.go also accepts, fails hdiutil verify
+// ("checksum failed with error 1000") and leaves the image unreadable on
+// macOS. The DMG's own CRC32s cover the data, so the xz check would be
+// redundant. The encoder takes no timestamps, so identical input yields
+// identical output.
 func lzmaCompress(data []byte) ([]byte, error) {
 	var buf bytes.Buffer
-	zw, err := lzma.NewWriter(&buf)
+	zw, err := xz.WriterConfig{NoCheckSum: true}.NewWriter(&buf)
 	if err != nil {
 		return nil, err
 	}

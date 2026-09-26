@@ -35,3 +35,14 @@ This product includes software design and code adapted from:
    APFS implementation validates on mount (for example the free-queue node
    limits), those values are reproduced as functional interoperability
    requirements of the format.
+
+5. LZFSE (https://github.com/lzfse/lzfse)
+   Copyright (c) 2015-2016, Apple Inc. All rights reserved.
+   Licensed under the BSD 3-Clause License; the licence text is in
+   pkg/compression/lzfse/LICENSE.
+   pkg/compression/lzfse is a Go port of Apple's reference LZFSE and LZVN
+   encoders and decoders. It follows the reference's algorithms and data
+   layout so that it writes the same bytes as macOS's libcompression, with
+   one change found by comparing against libcompression: the LZVN match
+   finder's hash. github.com/go-compressions/lzfse (BSD 3-Clause), which this
+   project used before, informed the Go structure; no code is taken from it.

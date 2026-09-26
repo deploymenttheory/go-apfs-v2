@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/go-compressions/lzfse"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/compression/lzfse"
 )
 
 // memSource is a decmpfs Source over a byte slice.

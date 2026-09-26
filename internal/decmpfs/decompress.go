@@ -7,7 +7,7 @@ import (
 	"io"
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/common"
-	"github.com/go-compressions/lzfse"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/compression/lzfse"
 )
 
 // Decompress decompresses one decmpfs chunk with the given method, writing into
