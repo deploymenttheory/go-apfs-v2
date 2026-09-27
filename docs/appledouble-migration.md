@@ -13,7 +13,9 @@ The next [name-validation increment](appledouble-native-names.md) establishes
 ordinary name byte limits, UTF-8 and NUL/padding behavior with native fixtures.
 The [record-validation increment](appledouble-native-records.md) adds native
 observations for duplicate/overlapping records, header selection and actual read
-bounds. Special attributes, remaining size policy and shared transport remain
+bounds. The [FinderInfo/resource-fork increment](appledouble-native-special.md)
+fixes FinderInfo lengths, zero/absent handling and ordered fork writes. Reserved
+ACL/quarantine policy, remaining size policy and shared transport remain
 outstanding, in that order. The allocation guard's stricter alias policy is
 documented explicitly rather than counted as native parity.
 

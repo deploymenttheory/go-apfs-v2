@@ -93,6 +93,7 @@ func verify() error {
 	files = append(files, "testdata/appledouble/native/large.ad.gz", "testdata/appledouble/native/probe.c", "scripts/verify-appledouble-native.go")
 	files = append(files, "testdata/appledouble/native/names.json")
 	files = append(files, "testdata/appledouble/native/records.json", "testdata/appledouble/native/list.c")
+	files = append(files, "testdata/appledouble/native/special.json")
 	sources := map[string]string{}
 	for _, name := range files {
 		b, err := os.ReadFile(name)

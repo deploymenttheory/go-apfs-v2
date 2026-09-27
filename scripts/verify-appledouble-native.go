@@ -53,11 +53,21 @@ var nameComparisons []nameComparison
 
 type recordComparison struct {
 	Name                                           string
+	PolicyOnly                                     bool
 	NativeAccepted, GoAccepted, CanonicalRestored  bool
 	Baseline, Native, CanonicalBaseline, Canonical map[string][]byte
 }
 
 var recordComparisons []recordComparison
+
+type specialProducerComparison struct {
+	Name, Kind                                                                 string
+	NativeSetAccepted, CodecEncodeAccepted, PackedByteEqual, NativeUnpackEqual bool
+	Baseline, Source, RestoredBaseline, Restored                               map[string][]byte
+}
+
+var specialProducers []specialProducerComparison
+var specialWire []recordComparison
 
 func must(err error) {
 	if err != nil {
@@ -89,7 +99,7 @@ func main() {
 	passed := false
 	defer func() {
 		failure := recover()
-		report := map[string]any{"goos": runtime.GOOS, "goarch": runtime.GOARCH, "go": runtime.Version(), "passed": passed, "commands": commands, "comparisons": comparisons, "name_comparisons": nameComparisons, "record_comparisons": recordComparisons}
+		report := map[string]any{"goos": runtime.GOOS, "goarch": runtime.GOARCH, "go": runtime.Version(), "passed": passed, "commands": commands, "comparisons": comparisons, "name_comparisons": nameComparisons, "record_comparisons": recordComparisons, "special_producers": specialProducers, "special_wire": specialWire}
 		if failure != nil {
 			report["failure"] = fmt.Sprint(failure)
 		}
@@ -212,8 +222,10 @@ func main() {
 	comparisons = append(comparisons, comparison{Name: "table-65552", Bytes: len(raw), SHA256: fmt.Sprintf("%x", sha256.Sum256(raw)), NativeUnpackEqual: true})
 	verifyNames(root, helper)
 	verifyRecords(root, helper)
+	verifySpecial(root, helper)
 	passed = true
 	fmt.Printf("%d native size comparisons, %d name comparisons and %d record comparisons passed\n", len(comparisons), len(nameComparisons), len(recordComparisons))
+	fmt.Printf("%d special-attribute producer probes and %d wire probes passed (four wire probes retain outstanding ACL/quarantine policy observations)\n", len(specialProducers), len(specialWire))
 }
 
 func verifyNames(root, helper string) {
@@ -396,4 +408,152 @@ func checkAttributes(label string, actual, expected map[string][]byte) {
 			panic(fmt.Sprintf("%s attribute %q differs: present=%t got=%x want=%x", label, name, ok, got, want))
 		}
 	}
+}
+
+func verifySpecial(root, helper string) {
+	var fixture struct {
+		HelperSHA256, ListHelperSHA256 string
+		Producers                      []struct {
+			Name, Kind, Attribute string
+			Value                 []byte
+			SetAccepted           bool
+			Expected              map[string][]byte
+		}
+		Wire []struct {
+			Name, SHA256         string
+			Raw                  []byte
+			Accepted, PolicyOnly bool
+			Expected             map[string][]byte
+		}
+	}
+	must(json.Unmarshal(read("testdata/appledouble/native/special.json"), &fixture))
+	if fixture.HelperSHA256 != fmt.Sprintf("%x", sha256.Sum256(read("testdata/appledouble/native/probe.c"))) || fixture.ListHelperSHA256 != fmt.Sprintf("%x", sha256.Sum256(read("testdata/appledouble/native/list.c"))) {
+		panic("special fixture helper provenance mismatch")
+	}
+	if len(fixture.Producers) != 30 || len(fixture.Wire) != 25 {
+		panic("required special observations missing")
+	}
+	// verifyRecords has already compiled and exercised the enumeration helper.
+	listHelper := filepath.Join(root, "list")
+	for _, tc := range fixture.Producers {
+		dir := filepath.Join(root, "special-producers", tc.Name)
+		must(os.MkdirAll(dir, 0755))
+		src, dst := filepath.Join(dir, "source"), filepath.Join(dir, "restored")
+		freshKind(src, tc.Kind)
+		freshKind(dst, tc.Kind)
+		valuePath := filepath.Join(dir, "value")
+		write(valuePath, tc.Value)
+		r := specialProducerComparison{Name: tc.Name, Kind: tc.Kind, Baseline: attributes(helper, listHelper, dir, src, "before")}
+		output, err := observe(helper, "set", src, tc.Attribute, valuePath)
+		r.NativeSetAccepted = err == nil
+		if r.NativeSetAccepted != tc.SetAccepted {
+			panic(fmt.Sprintf("%s native setter changed: %v %s", tc.Name, err, output))
+		}
+		if !r.NativeSetAccepted {
+			expectedNativeFailure(err, output, "set")
+		}
+		r.Source = attributes(helper, listHelper, dir, src, "source")
+		checkAttributes(tc.Name, withoutHostProvenance(r.Source, r.Baseline, tc.Expected), tc.Expected)
+		_, err = appledouble.FromXattrs(map[string][]byte{tc.Attribute: tc.Value}).Encode()
+		r.CodecEncodeAccepted = err == nil
+		invalidFinder := tc.Attribute == appledouble.FinderInfoName && len(tc.Value) != 32
+		if r.CodecEncodeAccepted == invalidFinder {
+			panic("FinderInfo constructor validation differs: " + tc.Name)
+		}
+		if r.NativeSetAccepted {
+			side := filepath.Join(dir, "native.ad")
+			run(helper, "pack", src, side)
+			raw := read(side)
+			decoded, err := appledouble.Decode(raw)
+			must(err)
+			checkAttributes(tc.Name, decoded.Xattrs(), r.Source)
+			encoded, err := decoded.Encode()
+			must(err)
+			fromSource, err := appledouble.FromXattrs(r.Source).Encode()
+			must(err)
+			if !bytes.Equal(raw, encoded) || !bytes.Equal(raw, fromSource) {
+				panic("native producer byte mismatch: " + tc.Name)
+			}
+			r.PackedByteEqual = true
+			side = filepath.Join(dir, "go.ad")
+			write(side, fromSource)
+			r.RestoredBaseline = attributes(helper, listHelper, dir, dst, "restored-before")
+			run(helper, "unpack", side, dst)
+			r.Restored = attributes(helper, listHelper, dir, dst, "restored")
+			checkAttributes(tc.Name, withoutHostProvenance(r.Restored, r.RestoredBaseline, tc.Expected), tc.Expected)
+			r.NativeUnpackEqual = true
+		}
+		specialProducers = append(specialProducers, r)
+		fmt.Printf("native special producer %s: setter accepted=%t, codec accepted=%t\n", tc.Name, r.NativeSetAccepted, r.CodecEncodeAccepted)
+	}
+	for _, tc := range fixture.Wire {
+		if tc.SHA256 != fmt.Sprintf("%x", sha256.Sum256(tc.Raw)) {
+			panic("special wire fixture hash")
+		}
+		dir := filepath.Join(root, "special-wire", tc.Name)
+		must(os.MkdirAll(dir, 0755))
+		input, dst := filepath.Join(dir, "input.ad"), filepath.Join(dir, "restored")
+		write(input, tc.Raw)
+		fresh(dst)
+		r := recordComparison{Name: tc.Name, PolicyOnly: tc.PolicyOnly, Baseline: attributes(helper, listHelper, dir, dst, "before")}
+		output, err := observe(helper, "unpack", input, dst)
+		r.NativeAccepted = err == nil
+		if r.NativeAccepted != tc.Accepted {
+			panic("special wire native acceptance changed: " + tc.Name)
+		}
+		if !r.NativeAccepted {
+			expectedNativeFailure(err, output, "unpack")
+		}
+		r.Native = attributes(helper, listHelper, dir, dst, "after")
+		decoded, err := appledouble.Decode(tc.Raw)
+		r.GoAccepted = err == nil
+		if r.GoAccepted != r.NativeAccepted {
+			panic("special wire acceptance mismatch: " + tc.Name)
+		}
+		checkAttributes(tc.Name, withoutHostProvenance(r.Native, r.Baseline, tc.Expected), tc.Expected)
+		if r.GoAccepted {
+			if !tc.PolicyOnly {
+				checkAttributes(tc.Name, decoded.Xattrs(), tc.Expected)
+			}
+			// Policy-only records are retained verbatim, not falsely classified as
+			// ordinary native attributes. Native handling is observed in both directions.
+			canonical, err := decoded.Encode()
+			must(err)
+			if !bytes.Equal(canonical, tc.Raw) {
+				panic("special wire payload changed: " + tc.Name)
+			}
+			side := filepath.Join(dir, "go.ad")
+			write(side, canonical)
+			dst = filepath.Join(dir, "canonical-restored")
+			fresh(dst)
+			r.CanonicalBaseline = attributes(helper, listHelper, dir, dst, "canonical-before")
+			run(helper, "unpack", side, dst)
+			r.Canonical = attributes(helper, listHelper, dir, dst, "canonical-after")
+			checkAttributes(tc.Name, withoutHostProvenance(r.Canonical, r.CanonicalBaseline, tc.Expected), tc.Expected)
+			r.CanonicalRestored = true
+		}
+		specialWire = append(specialWire, r)
+		fmt.Printf("native special wire %s: accepted=%t, policy-only=%t\n", tc.Name, r.NativeAccepted, tc.PolicyOnly)
+	}
+}
+
+func freshKind(path, kind string) {
+	// Paths are fixed harness-owned children, never user-supplied destinations.
+	must(os.RemoveAll(path))
+	if kind == "directory" {
+		must(os.Mkdir(path, 0700))
+		return
+	}
+	if kind != "file" {
+		panic("invalid fixture kind")
+	}
+	write(path, nil)
+}
+func expectedNativeFailure(err error, output []byte, operation string) {
+	var exitErr *exec.ExitError
+	if !errors.As(err, &exitErr) || exitErr.ExitCode() != 1 || !bytes.Contains(output, []byte(operation+" failed: errno=")) {
+		panic("unexpected native " + operation + " failure")
+	}
+	// This must be called immediately after observe, before any further command.
+	commands[len(commands)-1].ExpectedFailure = true
 }

@@ -24,9 +24,9 @@
 //	attrEnd           resource fork bytes
 //
 // All integers are big-endian. total_size is attrEnd: the Finder-info
-// entry covers everything up to the resource fork. com.apple.FinderInfo
-// and com.apple.ResourceFork live in their own slots, never in the
-// attribute list.
+// entry covers everything up to the resource fork. FromXattrs places valid
+// com.apple.FinderInfo and com.apple.ResourceFork in their own slots. Noncanonical
+// inputs can also contain those names in the attribute list.
 package appledouble
 
 import (
@@ -51,8 +51,8 @@ type Attr struct {
 type File struct {
 	FinderInfo   [32]byte
 	ResourceFork []byte
-	// Attrs are the extended attributes other than Finder info and the
-	// resource fork; Encode sorts them by name.
+	// Attrs holds wire ATTR records, including special names in noncanonical
+	// inputs. Encode sorts them stably by name, retaining duplicate write order.
 	Attrs []Attr
 }
 
@@ -109,13 +109,19 @@ func OwnerName(p string) (string, bool) {
 }
 
 // FromXattrs builds a File from a set of extended attributes, lifting
-// Finder info and the resource fork into their slots.
+// Finder info and the resource fork into their slots. Invalid-length FinderInfo
+// is retained verbatim in Attrs so Encode can report an error without silently
+// padding or truncating the caller's value.
 func FromXattrs(attrs map[string][]byte) *File {
 	f := &File{}
 	for name, value := range attrs {
 		switch name {
 		case FinderInfoName:
-			copy(f.FinderInfo[:], value)
+			if len(value) == len(f.FinderInfo) {
+				copy(f.FinderInfo[:], value)
+			} else {
+				f.Attrs = append(f.Attrs, Attr{Name: name, Value: bytes.Clone(value)})
+			}
 		case ResourceForkName:
 			f.ResourceFork = append([]byte(nil), value...)
 		default:
@@ -127,17 +133,40 @@ func FromXattrs(attrs map[string][]byte) *File {
 }
 
 // Xattrs returns the file's content as extended attributes, with Finder
-// info and the resource fork under their names when present.
+// info and the resource fork under their names when present. For those two
+// special names, ordered ATTR writes precede the dedicated slots: all-zero
+// FinderInfo removes the value; resource writes overwrite a prefix without
+// truncating the previous fork. Other names retain their serialized values;
+// applying ACLs, quarantine and filesystem-specific policy is a separate task.
 func (f *File) Xattrs() map[string][]byte {
 	out := make(map[string][]byte, len(f.Attrs)+2)
+	var fork []byte
+	writeFork := func(value []byte) {
+		if len(value) > len(fork) {
+			fork = append(fork, make([]byte, len(value)-len(fork))...)
+		}
+		copy(fork, value)
+	}
 	for _, a := range f.Attrs {
-		out[a.Name] = a.Value
+		switch a.Name {
+		case ResourceForkName:
+			writeFork(a.Value)
+		case FinderInfoName:
+			if len(a.Value) == 32 && [32]byte(a.Value) == [32]byte{} {
+				delete(out, a.Name)
+			} else {
+				out[a.Name] = a.Value
+			}
+		default:
+			out[a.Name] = a.Value
+		}
 	}
 	if f.FinderInfo != [32]byte{} {
 		out[FinderInfoName] = append([]byte(nil), f.FinderInfo[:]...)
 	}
-	if len(f.ResourceFork) > 0 {
-		out[ResourceForkName] = append([]byte(nil), f.ResourceFork...)
+	writeFork(f.ResourceFork)
+	if len(fork) > 0 {
+		out[ResourceForkName] = fork
 	}
 	return out
 }
@@ -163,6 +192,9 @@ func (f *File) Encode() ([]byte, error) {
 	for _, a := range f.Attrs {
 		if a.Name == "" || len(a.Name) > 127 || strings.IndexByte(a.Name, 0) >= 0 || !utf8.ValidString(a.Name) {
 			return nil, fmt.Errorf("appledouble: invalid attribute name %q", a.Name)
+		}
+		if err := validateFinderInfo(a.Name, uint64(len(a.Value))); err != nil {
+			return nil, err
 		}
 		if entrySize(a.Name) > MaxHeader-attrEntriesOff-entries {
 			return nil, ErrTooLarge
@@ -313,6 +345,9 @@ func Decode(b []byte) (*File, error) {
 			if len(nameBytes) == 0 || !utf8.Valid(nameBytes) {
 				return nil, fmt.Errorf("appledouble: invalid name in attribute entry %d", i)
 			}
+			if err := validateFinderInfo(string(nameBytes), uint64(binary.BigEndian.Uint32(b[off+4:]))); err != nil {
+				return nil, err
+			}
 			value, err := readValue(binary.BigEndian.Uint32(b[off:]), binary.BigEndian.Uint32(b[off+4:]))
 			if err != nil {
 				return nil, err
@@ -337,6 +372,13 @@ func Decode(b []byte) (*File, error) {
 		}
 	}
 	return f, nil
+}
+
+func validateFinderInfo(name string, length uint64) error {
+	if name == FinderInfoName && length != 32 {
+		return fmt.Errorf("appledouble: FinderInfo requires exactly 32 bytes, got %d", length)
+	}
+	return nil
 }
 
 func native32(b []byte, off int) {
