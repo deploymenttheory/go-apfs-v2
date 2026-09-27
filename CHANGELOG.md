@@ -29,6 +29,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   preserving supported metadata using opened roots and handles. Tests cover both
   preparation APIs, containment, renamed roots, Windows streams and cleanup.
 
+## [0.13.0](https://github.com/deploymenttheory/go-apfs-v2/compare/v0.12.0...v0.13.0) (2026-09-27)
+
+
+### Features
+
+* **appledouble:** add shared AppleDouble codec ([a49e162](https://github.com/deploymenttheory/go-apfs-v2/commit/a49e16204949174b3e3141e26eb61a7843ab431c))
+
 ## [0.12.0](https://github.com/deploymenttheory/go-apfs-v2/compare/v0.11.3...v0.12.0) (2026-09-27)
 
 
