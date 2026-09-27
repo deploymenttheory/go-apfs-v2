@@ -39,7 +39,7 @@ func TestDecodeAttrAliasingBounded(t *testing.T) {
 	attrOff := finderOff + 32 // header sits right after the 32-byte FinderInfo
 	hdrLen := 36
 	entriesOff := attrOff + hdrLen
-	total := entriesOff + numAttrs*12
+	total := entriesOff + numAttrs*16
 	b := make([]byte, total)
 	binary.BigEndian.PutUint32(b[0:], magic)
 	binary.BigEndian.PutUint32(b[4:], version)
@@ -52,11 +52,11 @@ func TestDecodeAttrAliasingBounded(t *testing.T) {
 	binary.BigEndian.PutUint32(b[attrOff+8:], uint32(total)) // totalSize <= len(b)
 	binary.BigEndian.PutUint16(b[attrOff+34:], numAttrs)
 	for i := 0; i < numAttrs; i++ {
-		ae := b[entriesOff+12*i:]
+		ae := b[entriesOff+16*i:]
 		binary.BigEndian.PutUint32(ae[0:], 0)      // valOff: all alias offset 0
 		binary.BigEndian.PutUint32(ae[4:], valLen) // valLen
-		ae[10] = 1                                 // nameLen
-		ae[11] = 'a'
+		ae[10] = 2                                 // valid, terminated names so this reaches the copy budget
+		ae[11] = byte('a' + i)
 	}
 	// numAttrs*valLen = 300 > total (~178): rejected instead of retained.
 	if _, err := Decode(b); err == nil {

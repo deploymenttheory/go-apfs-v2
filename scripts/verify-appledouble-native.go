@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -21,9 +22,10 @@ import (
 )
 
 type commandResult struct {
-	Args   []string
-	Output string
-	Error  string
+	Args            []string
+	Output          string
+	Error           string
+	ExpectedFailure bool
 }
 type comparison struct {
 	Name                                       string
@@ -35,22 +37,39 @@ type comparison struct {
 var commands []commandResult
 var comparisons []comparison
 
+type nameRecord struct {
+	Name       string
+	Raw        []byte
+	Accepted   bool
+	Attributes []struct{ Name, Value []byte }
+}
+type nameComparison struct {
+	Name                                          string
+	NativeAccepted, GoAccepted, CanonicalRestored bool
+}
+
+var nameComparisons []nameComparison
+
 func must(err error) {
 	if err != nil {
 		panic(err)
 	}
 }
 func run(args ...string) []byte {
+	b, err := observe(args...)
+	if err != nil {
+		panic(fmt.Errorf("%v: %w: %s", args, err, b))
+	}
+	return b
+}
+func observe(args ...string) ([]byte, error) {
 	b, err := exec.Command(args[0], args[1:]...).CombinedOutput()
 	r := commandResult{Args: args, Output: string(b)}
 	if err != nil {
 		r.Error = err.Error()
 	}
 	commands = append(commands, r)
-	if err != nil {
-		panic(fmt.Errorf("%v: %w: %s", args, err, b))
-	}
-	return b
+	return b, err
 }
 func read(name string) []byte     { b, err := os.ReadFile(name); must(err); return b }
 func write(name string, b []byte) { must(os.WriteFile(name, b, 0600)) }
@@ -61,7 +80,7 @@ func main() {
 	passed := false
 	defer func() {
 		failure := recover()
-		report := map[string]any{"goos": runtime.GOOS, "goarch": runtime.GOARCH, "go": runtime.Version(), "passed": passed, "commands": commands, "comparisons": comparisons}
+		report := map[string]any{"goos": runtime.GOOS, "goarch": runtime.GOARCH, "go": runtime.Version(), "passed": passed, "commands": commands, "comparisons": comparisons, "name_comparisons": nameComparisons}
 		if failure != nil {
 			report["failure"] = fmt.Sprint(failure)
 		}
@@ -182,6 +201,81 @@ func main() {
 		}
 	}
 	comparisons = append(comparisons, comparison{Name: "table-65552", Bytes: len(raw), SHA256: fmt.Sprintf("%x", sha256.Sum256(raw)), NativeUnpackEqual: true})
+	verifyNames(root, helper)
 	passed = true
-	fmt.Printf("%d native comparisons passed\n", len(comparisons))
+	fmt.Printf("%d native size comparisons and %d name comparisons passed\n", len(comparisons), len(nameComparisons))
+}
+
+func verifyNames(root, helper string) {
+	var fixture struct {
+		HelperSHA256 string
+		Records      []nameRecord
+	}
+	must(json.Unmarshal(read("testdata/appledouble/native/names.json"), &fixture))
+	if fixture.HelperSHA256 != fmt.Sprintf("%x", sha256.Sum256(read("testdata/appledouble/native/probe.c"))) {
+		panic("native name fixture helper provenance mismatch")
+	}
+	if len(fixture.Records) != 14 {
+		panic("native name observations missing")
+	}
+	for _, tc := range fixture.Records {
+		dir := filepath.Join(root, "names", tc.Name)
+		must(os.MkdirAll(dir, 0755))
+		input, dst := filepath.Join(dir, "input.ad"), filepath.Join(dir, "restored")
+		write(input, tc.Raw)
+		fresh(dst)
+		output, err := observe(helper, "unpack", input, dst)
+		accepted := err == nil
+		if accepted != tc.Accepted {
+			panic(fmt.Sprintf("%s native acceptance changed: %v %s", tc.Name, err, output))
+		}
+		if !accepted {
+			var exitErr *exec.ExitError
+			if !errors.As(err, &exitErr) || exitErr.ExitCode() != 1 || !bytes.Contains(output, []byte("unpack failed: errno=22 ")) {
+				panic("unexpected native failure, not an EINVAL rejection")
+			}
+			commands[len(commands)-1].ExpectedFailure = true
+		}
+		decoded, err := appledouble.Decode(tc.Raw)
+		if (err == nil) != accepted {
+			panic("Go/native name acceptance differs: " + tc.Name)
+		}
+		result := nameComparison{Name: tc.Name, NativeAccepted: accepted, GoAccepted: err == nil}
+		if accepted {
+			checkNameValues(helper, dir, dst, tc)
+			if len(decoded.Attrs) != len(tc.Attributes) {
+				panic("decoded name count differs")
+			}
+			for i, a := range tc.Attributes {
+				if !bytes.Equal([]byte(decoded.Attrs[i].Name), a.Name) || !bytes.Equal(decoded.Attrs[i].Value, a.Value) {
+					panic("decoded name/value differs")
+				}
+			}
+			canonical, err := decoded.Encode()
+			must(err)
+			write(filepath.Join(dir, "go.ad"), canonical)
+			dst = filepath.Join(dir, "canonical-restored")
+			fresh(dst)
+			run(helper, "unpack", filepath.Join(dir, "go.ad"), dst)
+			checkNameValues(helper, dir, dst, tc)
+			result.CanonicalRestored = true
+		}
+		nameComparisons = append(nameComparisons, result)
+		fmt.Printf("native name %s: accepted=%t, Go agrees\n", tc.Name, accepted)
+	}
+}
+func fresh(path string) {
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		panic(err)
+	}
+	write(path, nil)
+}
+func checkNameValues(helper, dir, dst string, tc nameRecord) {
+	for i, a := range tc.Attributes {
+		valuePath := filepath.Join(dir, fmt.Sprintf("%s-value-%d", filepath.Base(dst), i))
+		run(helper, "get", dst, string(a.Name), valuePath)
+		if !bytes.Equal(read(valuePath), a.Value) {
+			panic("native name readback changed")
+		}
+	}
 }

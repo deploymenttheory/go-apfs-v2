@@ -38,6 +38,7 @@ import (
 	"path"
 	"sort"
 	"strings"
+	"unicode/utf8"
 )
 
 // Attr is one extended attribute.
@@ -160,7 +161,7 @@ func (f *File) Encode() ([]byte, error) {
 	entries := 0
 	var valueBytes uint64
 	for _, a := range f.Attrs {
-		if a.Name == "" || len(a.Name) > 127 || strings.IndexByte(a.Name, 0) >= 0 {
+		if a.Name == "" || len(a.Name) > 127 || strings.IndexByte(a.Name, 0) >= 0 || !utf8.ValidString(a.Name) {
 			return nil, fmt.Errorf("appledouble: invalid attribute name %q", a.Name)
 		}
 		if entrySize(a.Name) > MaxHeader-attrEntriesOff-entries {
@@ -298,7 +299,7 @@ func Decode(b []byte) (*File, error) {
 	// or not, depending on the writer.
 	hdr := -1
 	for _, cand := range []int{finderOff + 32 + 2, finderOff + 32} {
-		if cand+36 <= len(b) && string(b[cand:cand+4]) == attrMagic {
+		if containsRange(len(b), cand, 36) && string(b[cand:cand+4]) == attrMagic {
 			hdr = cand
 			break
 		}
@@ -314,17 +315,27 @@ func Decode(b []byte) (*File, error) {
 	}
 	off := hdr + 36
 	for i := 0; i < numAttrs; i++ {
-		if off+11 > len(b) {
+		if !containsRange(len(b), off, 11) {
 			return nil, fmt.Errorf("appledouble: truncated attribute entry %d", i)
 		}
 		e := b[off:]
 		valOff := int(binary.BigEndian.Uint32(e))
 		valLen := int(binary.BigEndian.Uint32(e[4:]))
 		nameLen := int(e[10])
-		if nameLen == 0 || off+11+nameLen > len(b) {
+		if nameLen < 2 || nameLen > 128 || nameLen > len(b)-off-11 {
 			return nil, fmt.Errorf("appledouble: bad name length in attribute entry %d", i)
 		}
-		name := string(bytes.TrimRight(e[11:11+nameLen], "\x00"))
+		nameBytes := e[11 : 11+nameLen]
+		if nameBytes[nameLen-1] != 0 {
+			return nil, fmt.Errorf("appledouble: unterminated name in attribute entry %d", i)
+		}
+		// Native consumers use a C string but advance by the declared record
+		// length, including any padding after the first NUL.
+		nameBytes = nameBytes[:bytes.IndexByte(nameBytes, 0)]
+		if len(nameBytes) == 0 || !utf8.Valid(nameBytes) {
+			return nil, fmt.Errorf("appledouble: invalid name in attribute entry %d", i)
+		}
+		name := string(nameBytes)
 		if valOff < 0 || valLen < 0 || valOff > len(b) || valLen > len(b)-valOff {
 			return nil, fmt.Errorf("appledouble: attribute %s value outside the file", name)
 		}
@@ -332,7 +343,7 @@ func Decode(b []byte) (*File, error) {
 			return nil, err
 		}
 		f.Attrs = append(f.Attrs, Attr{Name: name, Value: append([]byte(nil), b[valOff:valOff+valLen]...)})
-		// Advance by the length the record declared, not by the trimmed
+		// Advance by the length the record declared, not by the logical
 		// name. The two agree for anything this package or the kernel
 		// writes, since both store the name with a single NUL, but the
 		// format allows a longer padded name and the kernel steps over
@@ -341,4 +352,9 @@ func Decode(b []byte) (*File, error) {
 		off += (11 + nameLen + 3) &^ 3
 	}
 	return f, nil
+}
+
+// Subtraction-based bounds avoid overflowing int before a slice check on 386.
+func containsRange(size, offset, length int) bool {
+	return offset >= 0 && length >= 0 && offset <= size && length <= size-offset
 }
