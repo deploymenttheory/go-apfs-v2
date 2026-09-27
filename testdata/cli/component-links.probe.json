@@ -1,0 +1,1915 @@
+{
+ "Payload": [
+  {
+   "dataOffset": 78,
+   "dev": 0,
+   "gid": 0,
+   "header": "0707070000000000000407550000000000000000110000001454467644500000200000000000",
+   "ino": 0,
+   "mode": "40755",
+   "mtime": 1704164645,
+   "name": ".",
+   "nlink": 9,
+   "size": 0,
+   "uid": 0
+  },
+  {
+   "dataOffset": 162,
+   "dev": 0,
+   "gid": 0,
+   "header": "0707070000000000010407550000000000000000070000001454467644500001000000000000",
+   "ino": 1,
+   "mode": "40755",
+   "mtime": 1704164645,
+   "name": "./attrs",
+   "nlink": 7,
+   "size": 0,
+   "uid": 0
+  },
+  {
+   "dataOffset": 252,
+   "dev": 0,
+   "gid": 0,
+   "header": "0707070000000000021006440000000000000000010000001454467644500001600000000000",
+   "ino": 2,
+   "mode": "100644",
+   "mtime": 1704164645,
+   "name": "./attrs/empty",
+   "nlink": 1,
+   "size": 0,
+   "uid": 0
+  },
+  {
+   "appleDouble": {
+    "attr": {
+     "attrs": [
+      {
+       "entryLen": 32,
+       "entryOffset": 120,
+       "flags": 0,
+       "length": 11,
+       "name": "com.apple.provenance",
+       "nameLen": 21,
+       "offset": 184,
+       "value": "AQIAkDeVyCO0haI="
+      },
+      {
+       "entryLen": 32,
+       "entryOffset": 152,
+       "flags": 0,
+       "length": 1,
+       "name": "com.example.empty",
+       "nameLen": 18,
+       "offset": 195,
+       "value": "dg=="
+      }
+     ],
+     "dataLength": 12,
+     "dataStart": 184,
+     "debugTag": 0,
+     "flags": 0,
+     "headerOffset": 84,
+     "numAttrs": 2,
+     "reserved": [
+      0,
+      0,
+      0
+     ],
+     "totalSize": 196
+    },
+    "entries": [
+     {
+      "id": 9,
+      "length": 146,
+      "offset": 50
+     },
+     {
+      "id": 2,
+      "length": 0,
+      "offset": 196
+     }
+    ],
+    "filler": "Mac OS X        ",
+    "finderInfo": "0000000000000000000000000000000000000000000000000000000000000000",
+    "numEntries": 2,
+    "padBeforeATTR": 2,
+    "raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAAJIAAAACAAAAxAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQVRUUgAAAAAAAADEAAAAuAAAAAwAAAAAAAAAAAAAAAAAAAACAAAAuAAAAAsAABVjb20uYXBwbGUucHJvdmVuYW5jZQAAAADDAAAAAQAAEmNvbS5leGFtcGxlLmVtcHR5AAAAAAECAJA3lcgjtIWidg==",
+    "resourceFork": {
+     "length": 0,
+     "offset": 196
+    },
+    "size": 196,
+    "version": "00020000"
+   },
+   "dataOffset": 344,
+   "dev": 0,
+   "gid": 0,
+   "header": "0707070000000000031006440000000000000000010000001454467644500002000000000304",
+   "ino": 3,
+   "mode": "100644",
+   "mtime": 1704164645,
+   "name": "./attrs/._empty",
+   "nlink": 1,
+   "size": 196,
+   "uid": 0
+  },
+  {
+   "dataOffset": 629,
+   "dev": 0,
+   "gid": 0,
+   "header": "0707070000000000041207550000000000000000010000001454467644500001500000000001",
+   "ino": 4,
+   "mode": "120755",
+   "mtime": 1704164645,
+   "name": "./attrs/link",
+   "nlink": 1,
+   "size": 1,
+   "uid": 0
+  },
+  {
+   "appleDouble": {
+    "attr": {
+     "attrs": [
+      {
+       "entryLen": 32,
+       "entryOffset": 120,
+       "flags": 0,
+       "length": 11,
+       "name": "com.apple.provenance",
+       "nameLen": 21,
+       "offset": 184,
+       "value": "AQIAkDeVyCO0haI="
+      },
+      {
+       "entryLen": 32,
+       "entryOffset": 152,
+       "flags": 0,
+       "length": 3,
+       "name": "com.example.onlink",
+       "nameLen": 19,
+       "offset": 195,
+       "value": "eWVz"
+      }
+     ],
+     "dataLength": 14,
+     "dataStart": 184,
+     "debugTag": 0,
+     "flags": 0,
+     "headerOffset": 84,
+     "numAttrs": 2,
+     "reserved": [
+      0,
+      0,
+      0
+     ],
+     "totalSize": 198
+    },
+    "entries": [
+     {
+      "id": 9,
+      "length": 148,
+      "offset": 50
+     },
+     {
+      "id": 2,
+      "length": 0,
+      "offset": 198
+     }
+    ],
+    "filler": "Mac OS X        ",
+    "finderInfo": "0000000000000000000000000000000000000000000000000000000000000000",
+    "numEntries": 2,
+    "padBeforeATTR": 2,
+    "raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAAJQAAAACAAAAxgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQVRUUgAAAAAAAADGAAAAuAAAAA4AAAAAAAAAAAAAAAAAAAACAAAAuAAAAAsAABVjb20uYXBwbGUucHJvdmVuYW5jZQAAAADDAAAAAwAAE2NvbS5leGFtcGxlLm9ubGluawAAAAECAJA3lcgjtIWieWVz",
+    "resourceFork": {
+     "length": 0,
+     "offset": 198
+    },
+    "size": 198,
+    "version": "00020000"
+   },
+   "dataOffset": 721,
+   "dev": 0,
+   "gid": 0,
+   "header": "0707070000000000051006440000000000000000010000001454467644500001700000000306",
+   "ino": 5,
+   "mode": "100644",
+   "mtime": 1704164645,
+   "name": "./attrs/._link",
+   "nlink": 1,
+   "size": 198,
+   "uid": 0
+  },
+  {
+   "dataOffset": 1008,
+   "dev": 0,
+   "gid": 0,
+   "header": "0707070000000000061006440000000000000000010000001454467644500001500000000005",
+   "ino": 6,
+   "mode": "100644",
+   "mtime": 1704164645,
+   "name": "./attrs/rsrc",
+   "nlink": 1,
+   "size": 5,
+   "uid": 0
+  },
+  {
+   "appleDouble": {
+    "attr": {
+     "attrs": [
+      {
+       "entryLen": 32,
+       "entryOffset": 120,
+       "flags": 0,
+       "length": 11,
+       "name": "com.apple.provenance",
+       "nameLen": 21,
+       "offset": 152,
+       "value": "AQIAkDeVyCO0haI="
+      }
+     ],
+     "dataLength": 11,
+     "dataStart": 152,
+     "debugTag": 0,
+     "flags": 0,
+     "headerOffset": 84,
+     "numAttrs": 1,
+     "reserved": [
+      0,
+      0,
+      0
+     ],
+     "totalSize": 163
+    },
+    "entries": [
+     {
+      "id": 9,
+      "length": 113,
+      "offset": 50
+     },
+     {
+      "id": 2,
+      "length": 19,
+      "offset": 163
+     }
+    ],
+    "filler": "Mac OS X        ",
+    "finderInfo": "0000000000000000000000000000000000000000000000000000000000000000",
+    "numEntries": 2,
+    "padBeforeATTR": 2,
+    "raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAAHEAAAACAAAAowAAABMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQVRUUgAAAAAAAACjAAAAmAAAAAsAAAAAAAAAAAAAAAAAAAABAAAAmAAAAAsAABVjb20uYXBwbGUucHJvdmVuYW5jZQABAgCQN5XII7SFonJlc291cmNlIGZvcmsgYnl0ZXM=",
+    "resourceFork": {
+     "length": 19,
+     "offset": 163
+    },
+    "size": 182,
+    "version": "00020000"
+   },
+   "dataOffset": 1104,
+   "dev": 0,
+   "gid": 0,
+   "header": "0707070000000000071006440000000000000000010000001454467644500001700000000266",
+   "ino": 7,
+   "mode": "100644",
+   "mtime": 1704164645,
+   "name": "./attrs/._rsrc",
+   "nlink": 1,
+   "size": 182,
+   "uid": 0
+  },
+  {
+   "dataOffset": 1377,
+   "dev": 0,
+   "gid": 0,
+   "header": "0707070000000000101006440000000000000000010000001454467644500001700000000007",
+   "ino": 8,
+   "mode": "100644",
+   "mtime": 1704164645,
+   "name": "./attrs/finder",
+   "nlink": 1,
+   "size": 7,
+   "uid": 0
+  },
+  {
+   "appleDouble": {
+    "attr": {
+     "attrs": [
+      {
+       "entryLen": 32,
+       "entryOffset": 120,
+       "flags": 0,
+       "length": 11,
+       "name": "com.apple.provenance",
+       "nameLen": 21,
+       "offset": 152,
+       "value": "AQIAkDeVyCO0haI="
+      }
+     ],
+     "dataLength": 11,
+     "dataStart": 152,
+     "debugTag": 0,
+     "flags": 0,
+     "headerOffset": 84,
+     "numAttrs": 1,
+     "reserved": [
+      0,
+      0,
+      0
+     ],
+     "totalSize": 163
+    },
+    "entries": [
+     {
+      "id": 9,
+      "length": 113,
+      "offset": 50
+     },
+     {
+      "id": 2,
+      "length": 0,
+      "offset": 163
+     }
+    ],
+    "filler": "Mac OS X        ",
+    "finderInfo": "4141414141414141414141414141414141414141414141414141414141414141",
+    "numEntries": 2,
+    "padBeforeATTR": 2,
+    "raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAAHEAAAACAAAAowAAAABBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQAAQVRUUgAAAAAAAACjAAAAmAAAAAsAAAAAAAAAAAAAAAAAAAABAAAAmAAAAAsAABVjb20uYXBwbGUucHJvdmVuYW5jZQABAgCQN5XII7SFog==",
+    "resourceFork": {
+     "length": 0,
+     "offset": 163
+    },
+    "size": 163,
+    "version": "00020000"
+   },
+   "dataOffset": 1477,
+   "dev": 0,
+   "gid": 0,
+   "header": "0707070000000000111006440000000000000000010000001454467644500002100000000243",
+   "ino": 9,
+   "mode": "100644",
+   "mtime": 1704164645,
+   "name": "./attrs/._finder",
+   "nlink": 1,
+   "size": 163,
+   "uid": 0
+  },
+  {
+   "dataOffset": 1726,
+   "dev": 0,
+   "gid": 0,
+   "header": "0707070000000000121006440000000000000000010000001454467644500001200000000017",
+   "ino": 10,
+   "mode": "100644",
+   "mtime": 1704164645,
+   "name": "./attrs/x",
+   "nlink": 1,
+   "size": 15,
+   "uid": 0
+  },
+  {
+   "appleDouble": {
+    "attr": {
+     "attrs": [
+      {
+       "entryLen": 32,
+       "entryOffset": 120,
+       "flags": 0,
+       "length": 11,
+       "name": "com.apple.provenance",
+       "nameLen": 21,
+       "offset": 208,
+       "value": "AQIAkDeVyCO0haI="
+      },
+      {
+       "entryLen": 28,
+       "entryOffset": 152,
+       "flags": 0,
+       "length": 300,
+       "name": "com.example.big",
+       "nameLen": 16,
+       "offset": 219,
+       "value": "YTE60s2puMGclGK+78MbEEDZ1/tFtcA/lcNlDtpvvA6w6NenBiMlrxm9qSuGY6SdrakWDVwQopLjwQ13VTa5A88X9NIW+5Agh/eO6bwRLhW8JowrJQt+yBv1JDVZtwbsCxYvx/B4SGpjhiTWdHABovKFca7cZyURrZDbYLtTHoBcb0T8z3qtbk6eGSXGYSPbx43Oqdp2KUhm3gfBClDFnecUhhSTsKwIL5BHUymL4sGfMeTVeOvnJdu6vrulunXTLU+BwwIRJQNnSZlh0R0j31FDdppo6S7qg1Zbp4Ts+FLk9OgeA/ZrJOZGQfgRZJ2VXM4YWxRmbm8cObOLC00my1+wC3UZNoskTjsdnhpuE6o1O7D1yQa5Ss6nRYvUbltC9Ntk9BbZLZKNOCQK"
+      },
+      {
+       "entryLen": 28,
+       "entryOffset": 180,
+       "flags": 0,
+       "length": 5,
+       "name": "com.example.one",
+       "nameLen": 16,
+       "offset": 519,
+       "value": "aGVsbG8="
+      }
+     ],
+     "dataLength": 316,
+     "dataStart": 208,
+     "debugTag": 0,
+     "flags": 0,
+     "headerOffset": 84,
+     "numAttrs": 3,
+     "reserved": [
+      0,
+      0,
+      0
+     ],
+     "totalSize": 524
+    },
+    "entries": [
+     {
+      "id": 9,
+      "length": 474,
+      "offset": 50
+     },
+     {
+      "id": 2,
+      "length": 0,
+      "offset": 524
+     }
+    ],
+    "filler": "Mac OS X        ",
+    "finderInfo": "0000000000000000000000000000000000000000000000000000000000000000",
+    "numEntries": 2,
+    "padBeforeATTR": 2,
+    "raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAAdoAAAACAAACDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQVRUUgAAAAAAAAIMAAAA0AAAATwAAAAAAAAAAAAAAAAAAAADAAAA0AAAAAsAABVjb20uYXBwbGUucHJvdmVuYW5jZQAAAADbAAABLAAAEGNvbS5leGFtcGxlLmJpZwAAAAACBwAAAAUAABBjb20uZXhhbXBsZS5vbmUAAAECAJA3lcgjtIWiYTE60s2puMGclGK+78MbEEDZ1/tFtcA/lcNlDtpvvA6w6NenBiMlrxm9qSuGY6SdrakWDVwQopLjwQ13VTa5A88X9NIW+5Agh/eO6bwRLhW8JowrJQt+yBv1JDVZtwbsCxYvx/B4SGpjhiTWdHABovKFca7cZyURrZDbYLtTHoBcb0T8z3qtbk6eGSXGYSPbx43Oqdp2KUhm3gfBClDFnecUhhSTsKwIL5BHUymL4sGfMeTVeOvnJdu6vrulunXTLU+BwwIRJQNnSZlh0R0j31FDdppo6S7qg1Zbp4Ts+FLk9OgeA/ZrJOZGQfgRZJ2VXM4YWxRmbm8cObOLC00my1+wC3UZNoskTjsdnhpuE6o1O7D1yQa5Ss6nRYvUbltC9Ntk9BbZLZKNOCQKaGVsbG8=",
+    "resourceFork": {
+     "length": 0,
+     "offset": 524
+    },
+    "size": 524,
+    "version": "00020000"
+   },
+   "dataOffset": 1829,
+   "dev": 0,
+   "gid": 0,
+   "header": "0707070000000000131006440000000000000000010000001454467644500001400000001014",
+   "ino": 11,
+   "mode": "100644",
+   "mtime": 1704164645,
+   "name": "./attrs/._x",
+   "nlink": 1,
+   "size": 524,
+   "uid": 0
+  },
+  {
+   "appleDouble": {
+    "attr": {
+     "attrs": [
+      {
+       "entryLen": 32,
+       "entryOffset": 120,
+       "flags": 0,
+       "length": 11,
+       "name": "com.apple.provenance",
+       "nameLen": 21,
+       "offset": 184,
+       "value": "AQIAkDeVyCO0haI="
+      },
+      {
+       "entryLen": 32,
+       "entryOffset": 152,
+       "flags": 0,
+       "length": 6,
+       "name": "com.example.ondir",
+       "nameLen": 18,
+       "offset": 195,
+       "value": "ZGlydmFs"
+      }
+     ],
+     "dataLength": 17,
+     "dataStart": 184,
+     "debugTag": 0,
+     "flags": 0,
+     "headerOffset": 84,
+     "numAttrs": 2,
+     "reserved": [
+      0,
+      0,
+      0
+     ],
+     "totalSize": 201
+    },
+    "entries": [
+     {
+      "id": 9,
+      "length": 151,
+      "offset": 50
+     },
+     {
+      "id": 2,
+      "length": 0,
+      "offset": 201
+     }
+    ],
+    "filler": "Mac OS X        ",
+    "finderInfo": "0000000000000000000000000000000000000000000000000000000000000000",
+    "numEntries": 2,
+    "padBeforeATTR": 2,
+    "raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAAJcAAAACAAAAyQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQVRUUgAAAAAAAADJAAAAuAAAABEAAAAAAAAAAAAAAAAAAAACAAAAuAAAAAsAABVjb20uYXBwbGUucHJvdmVuYW5jZQAAAADDAAAABgAAEmNvbS5leGFtcGxlLm9uZGlyAAAAAAECAJA3lcgjtIWiZGlydmFs",
+    "resourceFork": {
+     "length": 0,
+     "offset": 201
+    },
+    "size": 201,
+    "version": "00020000"
+   },
+   "dataOffset": 2439,
+   "dev": 0,
+   "gid": 0,
+   "header": "0707070000000000141006440000000000000000070000001454467644500001200000000311",
+   "ino": 12,
+   "mode": "100644",
+   "mtime": 1704164645,
+   "name": "./._attrs",
+   "nlink": 7,
+   "size": 201,
+   "uid": 0
+  },
+  {
+   "dataOffset": 2720,
+   "dev": 0,
+   "gid": 0,
+   "header": "0707070000000000151006440000000000000000030000001454467644500000400000000014",
+   "ino": 13,
+   "mode": "100644",
+   "mtime": 1704164645,
+   "name": "./r",
+   "nlink": 3,
+   "size": 12,
+   "uid": 0
+  },
+  {
+   "appleDouble": {
+    "attr": {
+     "attrs": [
+      {
+       "entryLen": 32,
+       "entryOffset": 120,
+       "flags": 0,
+       "length": 11,
+       "name": "com.apple.provenance",
+       "nameLen": 21,
+       "offset": 152,
+       "value": "AQIAkDeVyCO0haI="
+      }
+     ],
+     "dataLength": 11,
+     "dataStart": 152,
+     "debugTag": 0,
+     "flags": 0,
+     "headerOffset": 84,
+     "numAttrs": 1,
+     "reserved": [
+      0,
+      0,
+      0
+     ],
+     "totalSize": 163
+    },
+    "entries": [
+     {
+      "id": 9,
+      "length": 113,
+      "offset": 50
+     },
+     {
+      "id": 2,
+      "length": 0,
+      "offset": 163
+     }
+    ],
+    "filler": "Mac OS X        ",
+    "finderInfo": "0000000000000000000000000000000000000000000000000000000000000000",
+    "numEntries": 2,
+    "padBeforeATTR": 2,
+    "raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAAHEAAAACAAAAowAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQVRUUgAAAAAAAACjAAAAmAAAAAsAAAAAAAAAAAAAAAAAAAABAAAAmAAAAAsAABVjb20uYXBwbGUucHJvdmVuYW5jZQABAgCQN5XII7SFog==",
+    "resourceFork": {
+     "length": 0,
+     "offset": 163
+    },
+    "size": 163,
+    "version": "00020000"
+   },
+   "dataOffset": 2814,
+   "dev": 0,
+   "gid": 0,
+   "header": "0707070000000000151006440000000000000000030000001454467644500000600000000243",
+   "ino": 13,
+   "mode": "100644",
+   "mtime": 1704164645,
+   "name": "./._r",
+   "nlink": 3,
+   "size": 163,
+   "uid": 0
+  },
+  {
+   "dataOffset": 3061,
+   "dev": 0,
+   "gid": 0,
+   "header": "0707070000000000161006440000000000000000030000001454467644500001000000000017",
+   "ino": 14,
+   "mode": "100644",
+   "mtime": 1704164645,
+   "name": "./b.txt",
+   "nlink": 3,
+   "size": 15,
+   "uid": 0
+  },
+  {
+   "appleDouble": {
+    "attr": {
+     "attrs": [
+      {
+       "entryLen": 32,
+       "entryOffset": 120,
+       "flags": 0,
+       "length": 11,
+       "name": "com.apple.provenance",
+       "nameLen": 21,
+       "offset": 152,
+       "value": "AQIAkDeVyCO0haI="
+      }
+     ],
+     "dataLength": 11,
+     "dataStart": 152,
+     "debugTag": 0,
+     "flags": 0,
+     "headerOffset": 84,
+     "numAttrs": 1,
+     "reserved": [
+      0,
+      0,
+      0
+     ],
+     "totalSize": 163
+    },
+    "entries": [
+     {
+      "id": 9,
+      "length": 113,
+      "offset": 50
+     },
+     {
+      "id": 2,
+      "length": 0,
+      "offset": 163
+     }
+    ],
+    "filler": "Mac OS X        ",
+    "finderInfo": "0000000000000000000000000000000000000000000000000000000000000000",
+    "numEntries": 2,
+    "padBeforeATTR": 2,
+    "raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAAHEAAAACAAAAowAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQVRUUgAAAAAAAACjAAAAmAAAAAsAAAAAAAAAAAAAAAAAAAABAAAAmAAAAAsAABVjb20uYXBwbGUucHJvdmVuYW5jZQABAgCQN5XII7SFog==",
+    "resourceFork": {
+     "length": 0,
+     "offset": 163
+    },
+    "size": 163,
+    "version": "00020000"
+   },
+   "dataOffset": 3162,
+   "dev": 0,
+   "gid": 0,
+   "header": "0707070000000000161006440000000000000000030000001454467644500001200000000243",
+   "ino": 14,
+   "mode": "100644",
+   "mtime": 1704164645,
+   "name": "./._b.txt",
+   "nlink": 3,
+   "size": 163,
+   "uid": 0
+  },
+  {
+   "dataOffset": 3409,
+   "dev": 0,
+   "gid": 0,
+   "header": "0707070000000000161006440000000000000000030000001454467644500001000000000017",
+   "ino": 14,
+   "mode": "100644",
+   "mtime": 1704164645,
+   "name": "./a.txt",
+   "nlink": 3,
+   "size": 15,
+   "uid": 0
+  },
+  {
+   "appleDouble": {
+    "attr": {
+     "attrs": [
+      {
+       "entryLen": 32,
+       "entryOffset": 120,
+       "flags": 0,
+       "length": 11,
+       "name": "com.apple.provenance",
+       "nameLen": 21,
+       "offset": 152,
+       "value": "AQIAkDeVyCO0haI="
+      }
+     ],
+     "dataLength": 11,
+     "dataStart": 152,
+     "debugTag": 0,
+     "flags": 0,
+     "headerOffset": 84,
+     "numAttrs": 1,
+     "reserved": [
+      0,
+      0,
+      0
+     ],
+     "totalSize": 163
+    },
+    "entries": [
+     {
+      "id": 9,
+      "length": 113,
+      "offset": 50
+     },
+     {
+      "id": 2,
+      "length": 0,
+      "offset": 163
+     }
+    ],
+    "filler": "Mac OS X        ",
+    "finderInfo": "0000000000000000000000000000000000000000000000000000000000000000",
+    "numEntries": 2,
+    "padBeforeATTR": 2,
+    "raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAAHEAAAACAAAAowAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQVRUUgAAAAAAAACjAAAAmAAAAAsAAAAAAAAAAAAAAAAAAAABAAAAmAAAAAsAABVjb20uYXBwbGUucHJvdmVuYW5jZQABAgCQN5XII7SFog==",
+    "resourceFork": {
+     "length": 0,
+     "offset": 163
+    },
+    "size": 163,
+    "version": "00020000"
+   },
+   "dataOffset": 3510,
+   "dev": 0,
+   "gid": 0,
+   "header": "0707070000000000161006440000000000000000030000001454467644500001200000000243",
+   "ino": 14,
+   "mode": "100644",
+   "mtime": 1704164645,
+   "name": "./._a.txt",
+   "nlink": 3,
+   "size": 163,
+   "uid": 0
+  },
+  {
+   "dataOffset": 3753,
+   "dev": 0,
+   "gid": 0,
+   "header": "0707070000000000170407550000000000000000030000001454467644500000400000000000",
+   "ino": 15,
+   "mode": "40755",
+   "mtime": 1704164645,
+   "name": "./d",
+   "nlink": 3,
+   "size": 0,
+   "uid": 0
+  },
+  {
+   "dataOffset": 3839,
+   "dev": 0,
+   "gid": 0,
+   "header": "0707070000000000161006440000000000000000030000001454467644500001200000000017",
+   "ino": 14,
+   "mode": "100644",
+   "mtime": 1704164645,
+   "name": "./d/c.txt",
+   "nlink": 3,
+   "size": 15,
+   "uid": 0
+  },
+  {
+   "appleDouble": {
+    "attr": {
+     "attrs": [
+      {
+       "entryLen": 32,
+       "entryOffset": 120,
+       "flags": 0,
+       "length": 11,
+       "name": "com.apple.provenance",
+       "nameLen": 21,
+       "offset": 152,
+       "value": "AQIAkDeVyCO0haI="
+      }
+     ],
+     "dataLength": 11,
+     "dataStart": 152,
+     "debugTag": 0,
+     "flags": 0,
+     "headerOffset": 84,
+     "numAttrs": 1,
+     "reserved": [
+      0,
+      0,
+      0
+     ],
+     "totalSize": 163
+    },
+    "entries": [
+     {
+      "id": 9,
+      "length": 113,
+      "offset": 50
+     },
+     {
+      "id": 2,
+      "length": 0,
+      "offset": 163
+     }
+    ],
+    "filler": "Mac OS X        ",
+    "finderInfo": "0000000000000000000000000000000000000000000000000000000000000000",
+    "numEntries": 2,
+    "padBeforeATTR": 2,
+    "raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAAHEAAAACAAAAowAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQVRUUgAAAAAAAACjAAAAmAAAAAsAAAAAAAAAAAAAAAAAAAABAAAAmAAAAAsAABVjb20uYXBwbGUucHJvdmVuYW5jZQABAgCQN5XII7SFog==",
+    "resourceFork": {
+     "length": 0,
+     "offset": 163
+    },
+    "size": 163,
+    "version": "00020000"
+   },
+   "dataOffset": 3942,
+   "dev": 0,
+   "gid": 0,
+   "header": "0707070000000000161006440000000000000000030000001454467644500001400000000243",
+   "ino": 14,
+   "mode": "100644",
+   "mtime": 1704164645,
+   "name": "./d/._c.txt",
+   "nlink": 3,
+   "size": 163,
+   "uid": 0
+  },
+  {
+   "appleDouble": {
+    "attr": {
+     "attrs": [
+      {
+       "entryLen": 32,
+       "entryOffset": 120,
+       "flags": 0,
+       "length": 11,
+       "name": "com.apple.provenance",
+       "nameLen": 21,
+       "offset": 152,
+       "value": "AQIAkDeVyCO0haI="
+      }
+     ],
+     "dataLength": 11,
+     "dataStart": 152,
+     "debugTag": 0,
+     "flags": 0,
+     "headerOffset": 84,
+     "numAttrs": 1,
+     "reserved": [
+      0,
+      0,
+      0
+     ],
+     "totalSize": 163
+    },
+    "entries": [
+     {
+      "id": 9,
+      "length": 113,
+      "offset": 50
+     },
+     {
+      "id": 2,
+      "length": 0,
+      "offset": 163
+     }
+    ],
+    "filler": "Mac OS X        ",
+    "finderInfo": "0000000000000000000000000000000000000000000000000000000000000000",
+    "numEntries": 2,
+    "padBeforeATTR": 2,
+    "raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAAHEAAAACAAAAowAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQVRUUgAAAAAAAACjAAAAmAAAAAsAAAAAAAAAAAAAAAAAAAABAAAAmAAAAAsAABVjb20uYXBwbGUucHJvdmVuYW5jZQABAgCQN5XII7SFog==",
+    "resourceFork": {
+     "length": 0,
+     "offset": 163
+    },
+    "size": 163,
+    "version": "00020000"
+   },
+   "dataOffset": 4187,
+   "dev": 0,
+   "gid": 0,
+   "header": "0707070000000000201006440000000000000000030000001454467644500000600000000243",
+   "ino": 16,
+   "mode": "100644",
+   "mtime": 1704164645,
+   "name": "./._d",
+   "nlink": 3,
+   "size": 163,
+   "uid": 0
+  },
+  {
+   "dataOffset": 4430,
+   "dev": 0,
+   "gid": 0,
+   "header": "0707070000000000151006440000000000000000030000001454467644500000400000000014",
+   "ino": 13,
+   "mode": "100644",
+   "mtime": 1704164645,
+   "name": "./q",
+   "nlink": 3,
+   "size": 12,
+   "uid": 0
+  },
+  {
+   "appleDouble": {
+    "attr": {
+     "attrs": [
+      {
+       "entryLen": 32,
+       "entryOffset": 120,
+       "flags": 0,
+       "length": 11,
+       "name": "com.apple.provenance",
+       "nameLen": 21,
+       "offset": 152,
+       "value": "AQIAkDeVyCO0haI="
+      }
+     ],
+     "dataLength": 11,
+     "dataStart": 152,
+     "debugTag": 0,
+     "flags": 0,
+     "headerOffset": 84,
+     "numAttrs": 1,
+     "reserved": [
+      0,
+      0,
+      0
+     ],
+     "totalSize": 163
+    },
+    "entries": [
+     {
+      "id": 9,
+      "length": 113,
+      "offset": 50
+     },
+     {
+      "id": 2,
+      "length": 0,
+      "offset": 163
+     }
+    ],
+    "filler": "Mac OS X        ",
+    "finderInfo": "0000000000000000000000000000000000000000000000000000000000000000",
+    "numEntries": 2,
+    "padBeforeATTR": 2,
+    "raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAAHEAAAACAAAAowAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQVRUUgAAAAAAAACjAAAAmAAAAAsAAAAAAAAAAAAAAAAAAAABAAAAmAAAAAsAABVjb20uYXBwbGUucHJvdmVuYW5jZQABAgCQN5XII7SFog==",
+    "resourceFork": {
+     "length": 0,
+     "offset": 163
+    },
+    "size": 163,
+    "version": "00020000"
+   },
+   "dataOffset": 4524,
+   "dev": 0,
+   "gid": 0,
+   "header": "0707070000000000151006440000000000000000030000001454467644500000600000000243",
+   "ino": 13,
+   "mode": "100644",
+   "mtime": 1704164645,
+   "name": "./._q",
+   "nlink": 3,
+   "size": 163,
+   "uid": 0
+  },
+  {
+   "dataOffset": 4767,
+   "dev": 0,
+   "gid": 0,
+   "header": "0707070000000000151006440000000000000000030000001454467644500000400000000014",
+   "ino": 13,
+   "mode": "100644",
+   "mtime": 1704164645,
+   "name": "./p",
+   "nlink": 3,
+   "size": 12,
+   "uid": 0
+  },
+  {
+   "appleDouble": {
+    "attr": {
+     "attrs": [
+      {
+       "entryLen": 32,
+       "entryOffset": 120,
+       "flags": 0,
+       "length": 11,
+       "name": "com.apple.provenance",
+       "nameLen": 21,
+       "offset": 152,
+       "value": "AQIAkDeVyCO0haI="
+      }
+     ],
+     "dataLength": 11,
+     "dataStart": 152,
+     "debugTag": 0,
+     "flags": 0,
+     "headerOffset": 84,
+     "numAttrs": 1,
+     "reserved": [
+      0,
+      0,
+      0
+     ],
+     "totalSize": 163
+    },
+    "entries": [
+     {
+      "id": 9,
+      "length": 113,
+      "offset": 50
+     },
+     {
+      "id": 2,
+      "length": 0,
+      "offset": 163
+     }
+    ],
+    "filler": "Mac OS X        ",
+    "finderInfo": "0000000000000000000000000000000000000000000000000000000000000000",
+    "numEntries": 2,
+    "padBeforeATTR": 2,
+    "raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAAHEAAAACAAAAowAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQVRUUgAAAAAAAACjAAAAmAAAAAsAAAAAAAAAAAAAAAAAAAABAAAAmAAAAAsAABVjb20uYXBwbGUucHJvdmVuYW5jZQABAgCQN5XII7SFog==",
+    "resourceFork": {
+     "length": 0,
+     "offset": 163
+    },
+    "size": 163,
+    "version": "00020000"
+   },
+   "dataOffset": 4861,
+   "dev": 0,
+   "gid": 0,
+   "header": "0707070000000000151006440000000000000000030000001454467644500000600000000243",
+   "ino": 13,
+   "mode": "100644",
+   "mtime": 1704164645,
+   "name": "./._p",
+   "nlink": 3,
+   "size": 163,
+   "uid": 0
+  }
+ ],
+ "bom": {
+  "blockTableEntries": 2730,
+  "hlindex": {
+   "leaves": [
+    {
+     "key": "0000000b",
+     "keyBlock": 110,
+     "keyRecordBlock": 11,
+     "path": ".",
+     "subTree": {
+      "block": 108,
+      "leaves": [],
+      "tree": {
+       "blockSize": 64,
+       "child": 109,
+       "pathCount": 0
+      }
+     },
+     "value": "0000006c",
+     "valueBlock": 111
+    },
+    {
+     "key": "0000000e",
+     "keyBlock": 143,
+     "keyRecordBlock": 14,
+     "path": "./attrs",
+     "subTree": {
+      "block": 141,
+      "leaves": [],
+      "tree": {
+       "blockSize": 64,
+       "child": 142,
+       "pathCount": 0
+      }
+     },
+     "value": "0000008d",
+     "valueBlock": 144
+    },
+    {
+     "key": "00000011",
+     "keyBlock": 167,
+     "keyRecordBlock": 17,
+     "path": "./attrs/empty",
+     "subTree": {
+      "block": 165,
+      "leaves": [],
+      "tree": {
+       "blockSize": 64,
+       "child": 166,
+       "pathCount": 0
+      }
+     },
+     "value": "000000a5",
+     "valueBlock": 168
+    },
+    {
+     "key": "00000014",
+     "keyBlock": 175,
+     "keyRecordBlock": 20,
+     "path": "./attrs/link",
+     "subTree": {
+      "block": 173,
+      "leaves": [],
+      "tree": {
+       "blockSize": 64,
+       "child": 174,
+       "pathCount": 0
+      }
+     },
+     "value": "000000ad",
+     "valueBlock": 176
+    },
+    {
+     "key": "00000017",
+     "keyBlock": 179,
+     "keyRecordBlock": 23,
+     "path": "./attrs/rsrc",
+     "subTree": {
+      "block": 177,
+      "leaves": [],
+      "tree": {
+       "blockSize": 64,
+       "child": 178,
+       "pathCount": 0
+      }
+     },
+     "value": "000000b1",
+     "valueBlock": 180
+    },
+    {
+     "key": "0000001a",
+     "keyBlock": 171,
+     "keyRecordBlock": 26,
+     "path": "./attrs/finder",
+     "subTree": {
+      "block": 169,
+      "leaves": [],
+      "tree": {
+       "blockSize": 64,
+       "child": 170,
+       "pathCount": 0
+      }
+     },
+     "value": "000000a9",
+     "valueBlock": 172
+    },
+    {
+     "key": "0000001d",
+     "keyBlock": 183,
+     "keyRecordBlock": 29,
+     "path": "./attrs/x",
+     "subTree": {
+      "block": 181,
+      "leaves": [],
+      "tree": {
+       "blockSize": 64,
+       "child": 182,
+       "pathCount": 0
+      }
+     },
+     "value": "000000b5",
+     "valueBlock": 184
+    },
+    {
+     "key": "00000020",
+     "keyBlock": 59,
+     "keyRecordBlock": 32,
+     "path": "./r",
+     "subTree": {
+      "block": 57,
+      "leaves": [],
+      "tree": {
+       "blockSize": 64,
+       "child": 58,
+       "pathCount": 0
+      }
+     },
+     "value": "00000039",
+     "valueBlock": 60
+    },
+    {
+     "key": "00000023",
+     "keyBlock": 42,
+     "keyRecordBlock": 35,
+     "path": "./d/c.txt",
+     "subTree": {
+      "block": 40,
+      "leaves": [],
+      "tree": {
+       "blockSize": 64,
+       "child": 41,
+       "pathCount": 0
+      }
+     },
+     "value": "00000028",
+     "valueBlock": 43
+    },
+    {
+     "key": "00000030",
+     "keyBlock": 188,
+     "keyRecordBlock": 48,
+     "path": "./d",
+     "subTree": {
+      "block": 186,
+      "leaves": [],
+      "tree": {
+       "blockSize": 64,
+       "child": 187,
+       "pathCount": 0
+      }
+     },
+     "value": "000000ba",
+     "valueBlock": 189
+    },
+    {
+     "key": "00000045",
+     "keyBlock": 114,
+     "keyRecordBlock": 69,
+     "path": "./._a.txt",
+     "subTree": {
+      "block": 112,
+      "leaves": [],
+      "tree": {
+       "blockSize": 64,
+       "child": 113,
+       "pathCount": 0
+      }
+     },
+     "value": "00000070",
+     "valueBlock": 115
+    },
+    {
+     "key": "00000048",
+     "keyBlock": 118,
+     "keyRecordBlock": 72,
+     "path": "./._attrs",
+     "subTree": {
+      "block": 116,
+      "leaves": [],
+      "tree": {
+       "blockSize": 64,
+       "child": 117,
+       "pathCount": 0
+      }
+     },
+     "value": "00000074",
+     "valueBlock": 119
+    },
+    {
+     "key": "0000004b",
+     "keyBlock": 147,
+     "keyRecordBlock": 75,
+     "path": "./attrs/._empty",
+     "subTree": {
+      "block": 145,
+      "leaves": [],
+      "tree": {
+       "blockSize": 64,
+       "child": 146,
+       "pathCount": 0
+      }
+     },
+     "value": "00000091",
+     "valueBlock": 148
+    },
+    {
+     "key": "0000004e",
+     "keyBlock": 151,
+     "keyRecordBlock": 78,
+     "path": "./attrs/._finder",
+     "subTree": {
+      "block": 149,
+      "leaves": [],
+      "tree": {
+       "blockSize": 64,
+       "child": 150,
+       "pathCount": 0
+      }
+     },
+     "value": "00000095",
+     "valueBlock": 152
+    },
+    {
+     "key": "00000051",
+     "keyBlock": 155,
+     "keyRecordBlock": 81,
+     "path": "./attrs/._link",
+     "subTree": {
+      "block": 153,
+      "leaves": [],
+      "tree": {
+       "blockSize": 64,
+       "child": 154,
+       "pathCount": 0
+      }
+     },
+     "value": "00000099",
+     "valueBlock": 156
+    },
+    {
+     "key": "00000054",
+     "keyBlock": 159,
+     "keyRecordBlock": 84,
+     "path": "./attrs/._rsrc",
+     "subTree": {
+      "block": 157,
+      "leaves": [],
+      "tree": {
+       "blockSize": 64,
+       "child": 158,
+       "pathCount": 0
+      }
+     },
+     "value": "0000009d",
+     "valueBlock": 160
+    },
+    {
+     "key": "00000057",
+     "keyBlock": 163,
+     "keyRecordBlock": 87,
+     "path": "./attrs/._x",
+     "subTree": {
+      "block": 161,
+      "leaves": [],
+      "tree": {
+       "blockSize": 64,
+       "child": 162,
+       "pathCount": 0
+      }
+     },
+     "value": "000000a1",
+     "valueBlock": 164
+    },
+    {
+     "key": "0000005a",
+     "keyBlock": 122,
+     "keyRecordBlock": 90,
+     "path": "./._b.txt",
+     "subTree": {
+      "block": 120,
+      "leaves": [],
+      "tree": {
+       "blockSize": 64,
+       "child": 121,
+       "pathCount": 0
+      }
+     },
+     "value": "00000078",
+     "valueBlock": 123
+    },
+    {
+     "key": "0000005d",
+     "keyBlock": 126,
+     "keyRecordBlock": 93,
+     "path": "./._d",
+     "subTree": {
+      "block": 124,
+      "leaves": [],
+      "tree": {
+       "blockSize": 64,
+       "child": 125,
+       "pathCount": 0
+      }
+     },
+     "value": "0000007c",
+     "valueBlock": 127
+    },
+    {
+     "key": "00000060",
+     "keyBlock": 192,
+     "keyRecordBlock": 96,
+     "path": "./d/._c.txt",
+     "subTree": {
+      "block": 190,
+      "leaves": [],
+      "tree": {
+       "blockSize": 64,
+       "child": 191,
+       "pathCount": 0
+      }
+     },
+     "value": "000000be",
+     "valueBlock": 193
+    },
+    {
+     "key": "00000063",
+     "keyBlock": 130,
+     "keyRecordBlock": 99,
+     "path": "./._p",
+     "subTree": {
+      "block": 128,
+      "leaves": [],
+      "tree": {
+       "blockSize": 64,
+       "child": 129,
+       "pathCount": 0
+      }
+     },
+     "value": "00000080",
+     "valueBlock": 131
+    },
+    {
+     "key": "00000066",
+     "keyBlock": 134,
+     "keyRecordBlock": 102,
+     "path": "./._q",
+     "subTree": {
+      "block": 132,
+      "leaves": [],
+      "tree": {
+       "blockSize": 64,
+       "child": 133,
+       "pathCount": 0
+      }
+     },
+     "value": "00000084",
+     "valueBlock": 135
+    },
+    {
+     "key": "00000069",
+     "keyBlock": 138,
+     "keyRecordBlock": 105,
+     "path": "./._r",
+     "subTree": {
+      "block": 136,
+      "leaves": [],
+      "tree": {
+       "blockSize": 64,
+       "child": 137,
+       "pathCount": 0
+      }
+     },
+     "value": "00000088",
+     "valueBlock": 139
+    }
+   ],
+   "tree": {
+    "blockSize": 4096,
+    "child": 5,
+    "pathCount": 23
+   }
+  },
+  "numberOfBlocks": 195,
+  "records": [
+   {
+    "arch": 15,
+    "checksum": 0,
+    "fileBlock": 12,
+    "id": 1,
+    "infoBlock": 13,
+    "mode": "40755",
+    "name": ".",
+    "parent": 0,
+    "path": ".",
+    "record": "0201000f41ed000000000000000065937d2500000120010000000000000000",
+    "recordBlock": 11,
+    "recordLen": 31,
+    "size": 288,
+    "type": 2
+   },
+   {
+    "arch": 1,
+    "checksum": 0,
+    "fileBlock": 70,
+    "id": 15,
+    "infoBlock": 71,
+    "mode": "100644",
+    "name": "._a.txt",
+    "parent": 1,
+    "path": "./._a.txt",
+    "record": "0101000181a400000000000000000000000000000000010000000000000000",
+    "recordBlock": 69,
+    "recordLen": 31,
+    "size": 0,
+    "type": 1
+   },
+   {
+    "arch": 1,
+    "checksum": 0,
+    "fileBlock": 73,
+    "id": 16,
+    "infoBlock": 74,
+    "mode": "40755",
+    "name": "._attrs",
+    "parent": 1,
+    "path": "./._attrs",
+    "record": "0101000141ed00000000000000000000000000000000010000000000000000",
+    "recordBlock": 72,
+    "recordLen": 31,
+    "size": 0,
+    "type": 1
+   },
+   {
+    "arch": 1,
+    "checksum": 0,
+    "fileBlock": 91,
+    "id": 22,
+    "infoBlock": 92,
+    "mode": "100644",
+    "name": "._b.txt",
+    "parent": 1,
+    "path": "./._b.txt",
+    "record": "0101000181a400000000000000000000000000000000010000000000000000",
+    "recordBlock": 90,
+    "recordLen": 31,
+    "size": 0,
+    "type": 1
+   },
+   {
+    "arch": 1,
+    "checksum": 0,
+    "fileBlock": 94,
+    "id": 23,
+    "infoBlock": 95,
+    "mode": "40755",
+    "name": "._d",
+    "parent": 1,
+    "path": "./._d",
+    "record": "0101000141ed00000000000000000000000000000000010000000000000000",
+    "recordBlock": 93,
+    "recordLen": 31,
+    "size": 0,
+    "type": 1
+   },
+   {
+    "arch": 1,
+    "checksum": 0,
+    "fileBlock": 100,
+    "id": 25,
+    "infoBlock": 101,
+    "mode": "100644",
+    "name": "._p",
+    "parent": 1,
+    "path": "./._p",
+    "record": "0101000181a400000000000000000000000000000000010000000000000000",
+    "recordBlock": 99,
+    "recordLen": 31,
+    "size": 0,
+    "type": 1
+   },
+   {
+    "arch": 1,
+    "checksum": 0,
+    "fileBlock": 103,
+    "id": 26,
+    "infoBlock": 104,
+    "mode": "100644",
+    "name": "._q",
+    "parent": 1,
+    "path": "./._q",
+    "record": "0101000181a400000000000000000000000000000000010000000000000000",
+    "recordBlock": 102,
+    "recordLen": 31,
+    "size": 0,
+    "type": 1
+   },
+   {
+    "arch": 1,
+    "checksum": 0,
+    "fileBlock": 106,
+    "id": 27,
+    "infoBlock": 107,
+    "mode": "100644",
+    "name": "._r",
+    "parent": 1,
+    "path": "./._r",
+    "record": "0101000181a400000000000000000000000000000000010000000000000000",
+    "recordBlock": 105,
+    "recordLen": 31,
+    "size": 0,
+    "type": 1
+   },
+   {
+    "arch": 15,
+    "checksum": 1287924163,
+    "fileBlock": 38,
+    "id": 10,
+    "infoBlock": 39,
+    "mode": "100644",
+    "name": "a.txt",
+    "parent": 1,
+    "path": "./a.txt",
+    "record": "0101000f81a4000000000000000065937d250000000f014cc429c30000000000000000",
+    "recordBlock": 140,
+    "recordLen": 35,
+    "size": 15,
+    "type": 1
+   },
+   {
+    "arch": 15,
+    "checksum": 0,
+    "fileBlock": 15,
+    "id": 2,
+    "infoBlock": 16,
+    "mode": "40755",
+    "name": "attrs",
+    "parent": 1,
+    "path": "./attrs",
+    "record": "0201000f41ed000000000000000065937d25000000e0010000000000000000",
+    "recordBlock": 14,
+    "recordLen": 31,
+    "size": 224,
+    "type": 2
+   },
+   {
+    "arch": 15,
+    "checksum": 1287924163,
+    "fileBlock": 36,
+    "id": 9,
+    "infoBlock": 37,
+    "mode": "100644",
+    "name": "b.txt",
+    "parent": 1,
+    "path": "./b.txt",
+    "record": "0101000f81a4000000000000000065937d250000000f014cc429c30000000000000000",
+    "recordBlock": 185,
+    "recordLen": 35,
+    "size": 15,
+    "type": 1
+   },
+   {
+    "arch": 15,
+    "checksum": 0,
+    "fileBlock": 49,
+    "id": 11,
+    "infoBlock": 50,
+    "mode": "40755",
+    "name": "d",
+    "parent": 1,
+    "path": "./d",
+    "record": "0201000f41ed000000000000000065937d2500000060010000000000000000",
+    "recordBlock": 48,
+    "recordLen": 31,
+    "size": 96,
+    "type": 2
+   },
+   {
+    "arch": 15,
+    "checksum": 3618651432,
+    "fileBlock": 65,
+    "id": 14,
+    "infoBlock": 66,
+    "mode": "100644",
+    "name": "p",
+    "parent": 1,
+    "path": "./p",
+    "record": "0101000f81a4000000000000000065937d250000000c01d7b03d280000000000000000",
+    "recordBlock": 194,
+    "recordLen": 35,
+    "size": 12,
+    "type": 1
+   },
+   {
+    "arch": 15,
+    "checksum": 3618651432,
+    "fileBlock": 55,
+    "id": 13,
+    "infoBlock": 56,
+    "mode": "100644",
+    "name": "q",
+    "parent": 1,
+    "path": "./q",
+    "record": "0101000f81a4000000000000000065937d250000000c01d7b03d280000000000000000",
+    "recordBlock": 195,
+    "recordLen": 35,
+    "size": 12,
+    "type": 1
+   },
+   {
+    "arch": 15,
+    "checksum": 3618651432,
+    "fileBlock": 33,
+    "id": 8,
+    "infoBlock": 34,
+    "mode": "100644",
+    "name": "r",
+    "parent": 1,
+    "path": "./r",
+    "record": "0101000f81a4000000000000000065937d250000000c01d7b03d280000000000000000",
+    "recordBlock": 32,
+    "recordLen": 35,
+    "size": 12,
+    "type": 1
+   },
+   {
+    "arch": 1,
+    "checksum": 0,
+    "fileBlock": 76,
+    "id": 17,
+    "infoBlock": 77,
+    "mode": "100644",
+    "name": "._empty",
+    "parent": 2,
+    "path": "./attrs/._empty",
+    "record": "0101000181a400000000000000000000000000000000010000000000000000",
+    "recordBlock": 75,
+    "recordLen": 31,
+    "size": 0,
+    "type": 1
+   },
+   {
+    "arch": 1,
+    "checksum": 0,
+    "fileBlock": 79,
+    "id": 18,
+    "infoBlock": 80,
+    "mode": "100644",
+    "name": "._finder",
+    "parent": 2,
+    "path": "./attrs/._finder",
+    "record": "0101000181a400000000000000000000000000000000010000000000000000",
+    "recordBlock": 78,
+    "recordLen": 31,
+    "size": 0,
+    "type": 1
+   },
+   {
+    "arch": 1,
+    "checksum": 0,
+    "fileBlock": 82,
+    "id": 19,
+    "infoBlock": 83,
+    "mode": "120755",
+    "name": "._link",
+    "parent": 2,
+    "path": "./attrs/._link",
+    "record": "01010001a1ed00000000000000000000000000000000010000000000000000",
+    "recordBlock": 81,
+    "recordLen": 31,
+    "size": 0,
+    "type": 1
+   },
+   {
+    "arch": 1,
+    "checksum": 0,
+    "fileBlock": 85,
+    "id": 20,
+    "infoBlock": 86,
+    "mode": "100644",
+    "name": "._rsrc",
+    "parent": 2,
+    "path": "./attrs/._rsrc",
+    "record": "0101000181a400000000000000000000000000000000010000000000000000",
+    "recordBlock": 84,
+    "recordLen": 31,
+    "size": 0,
+    "type": 1
+   },
+   {
+    "arch": 1,
+    "checksum": 0,
+    "fileBlock": 88,
+    "id": 21,
+    "infoBlock": 89,
+    "mode": "100644",
+    "name": "._x",
+    "parent": 2,
+    "path": "./attrs/._x",
+    "record": "0101000181a400000000000000000000000000000000010000000000000000",
+    "recordBlock": 87,
+    "recordLen": 31,
+    "size": 0,
+    "type": 1
+   },
+   {
+    "arch": 15,
+    "checksum": 4294967295,
+    "fileBlock": 18,
+    "id": 3,
+    "infoBlock": 19,
+    "mode": "100644",
+    "name": "empty",
+    "parent": 2,
+    "path": "./attrs/empty",
+    "record": "0101000f81a4000000000000000065937d250000000001ffffffff0000000000000000",
+    "recordBlock": 17,
+    "recordLen": 35,
+    "size": 0,
+    "type": 1
+   },
+   {
+    "arch": 15,
+    "checksum": 1092498559,
+    "fileBlock": 27,
+    "id": 6,
+    "infoBlock": 28,
+    "mode": "100644",
+    "name": "finder",
+    "parent": 2,
+    "path": "./attrs/finder",
+    "record": "0101000f81a4000000000000000065937d250000000701411e347f0000000000000000",
+    "recordBlock": 26,
+    "recordLen": 35,
+    "size": 7,
+    "type": 1
+   },
+   {
+    "arch": 15,
+    "checksum": 12738659,
+    "fileBlock": 21,
+    "id": 4,
+    "infoBlock": 22,
+    "mode": "120755",
+    "name": "link",
+    "parent": 2,
+    "path": "./attrs/link",
+    "record": "0301000fa1ed000000000000000065937d25000000010100c260630000000278000000000000000000",
+    "recordBlock": 20,
+    "recordLen": 41,
+    "size": 1,
+    "type": 3
+   },
+   {
+    "arch": 15,
+    "checksum": 2560569464,
+    "fileBlock": 24,
+    "id": 5,
+    "infoBlock": 25,
+    "mode": "100644",
+    "name": "rsrc",
+    "parent": 2,
+    "path": "./attrs/rsrc",
+    "record": "0101000f81a4000000000000000065937d250000000501989f30780000000000000000",
+    "recordBlock": 23,
+    "recordLen": 35,
+    "size": 5,
+    "type": 1
+   },
+   {
+    "arch": 15,
+    "checksum": 3741726505,
+    "fileBlock": 30,
+    "id": 7,
+    "infoBlock": 31,
+    "mode": "100644",
+    "name": "x",
+    "parent": 2,
+    "path": "./attrs/x",
+    "record": "0101000f81a4000000000000000065937d250000000f01df0637290000000000000000",
+    "recordBlock": 29,
+    "recordLen": 35,
+    "size": 15,
+    "type": 1
+   },
+   {
+    "arch": 1,
+    "checksum": 0,
+    "fileBlock": 97,
+    "id": 24,
+    "infoBlock": 98,
+    "mode": "100644",
+    "name": "._c.txt",
+    "parent": 11,
+    "path": "./d/._c.txt",
+    "record": "0101000181a400000000000000000000000000000000010000000000000000",
+    "recordBlock": 96,
+    "recordLen": 31,
+    "size": 0,
+    "type": 1
+   },
+   {
+    "arch": 15,
+    "checksum": 1287924163,
+    "fileBlock": 51,
+    "id": 12,
+    "infoBlock": 52,
+    "mode": "100644",
+    "name": "c.txt",
+    "parent": 11,
+    "path": "./d/c.txt",
+    "record": "0101000f81a4000000000000000065937d250000000f014cc429c30000000000000000",
+    "recordBlock": 35,
+    "recordLen": 35,
+    "size": 15,
+    "type": 1
+   }
+  ],
+  "vars": {
+   "BomInfo": 1,
+   "HLIndex": 4,
+   "Paths": 2,
+   "Size64": 9,
+   "VIndex": 6
+  },
+  "version": 1
+ },
+ "package": "component-links.pkg"
+}

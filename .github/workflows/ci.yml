@@ -107,6 +107,17 @@ jobs:
 
       - name: Vet
         run: go vet ./...
+      - name: AppleDouble unit tests and coverage above 95%
+        env:
+          CGO_ENABLED: "0"
+        run: go run scripts/verify-appledouble.go
+      - name: Upload AppleDouble evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: appledouble-${{ matrix.os }}
+          path: artifacts/appledouble/
+          if-no-files-found: error
       - name: Strict xattr API tests and coverage above 95%
         env:
           CGO_ENABLED: "0"
