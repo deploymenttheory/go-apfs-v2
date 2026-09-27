@@ -4,6 +4,12 @@ The filesystem SDK owns `pkg/appledouble` (bytes) and `pkg/hostmeta` (filesystem
 operations). `go-macos-pkg` consumes the codec; codesign eventually consumes the
 shared metadata APIs. There must be no APFS-to-package-tooling dependency cycle.
 
+Status: relocation was released in APFS v0.13.0. The downstream package migration
+remains in draft PR #72 until APFS compatibility work is complete; further package
+changes belong on that PR. The subsequent native size/empty-value correction is
+documented in [appledouble-native-sizes.md](appledouble-native-sizes.md). This is
+one codec increment, not completion of the codec or host transport phases.
+
 ## 1. Relocate without changing format behavior
 
 - Move the existing codec, safety regressions and archived native fixture into
@@ -14,11 +20,12 @@ shared metadata APIs. There must be no APFS-to-package-tooling dependency cycle.
 - Open an APFS relocation PR and a package-project compatibility PR. Keep the
   old import path usable through aliases and forwarding functions. Core tests
   belong in APFS; package integration and compatibility tests stay in the consumer.
-- Pin the consumer PR to the immutable APFS relocation commit while no release
-  contains it. Use a Go pseudo-version, never a local replacement or invented tag.
-  Replace that pin with the qualified APFS release after the later gates pass.
-- Maintainers merge the PRs. Do not publish an APFS version just to unblock this
-  migration, and do not resume codesign implementation during the migration.
+- The consumer initially used the immutable APFS relocation commit and now uses
+  published v0.13.0. Continue updating draft PR #72 to the subsequent qualified
+  release; never use an invented tag or local replacement in a submitted PR.
+- Maintainers merge the PRs. Keep package PR #72 draft until the outstanding APFS
+  work is complete, and notify the maintainer when its downstream validation is
+  ready. Do not resume codesign implementation during the migration.
 
 ## 2. Establish and fix actual native codec behavior
 

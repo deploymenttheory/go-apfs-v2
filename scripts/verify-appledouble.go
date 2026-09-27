@@ -90,6 +90,7 @@ func verify() error {
 		return err
 	}
 	files = append(files, "testdata/cli/component-links.probe.json", "scripts/verify-appledouble.go", "go.mod", "go.sum")
+	files = append(files, "testdata/appledouble/native/large.ad.gz", "testdata/appledouble/native/probe.c", "scripts/verify-appledouble-native.go")
 	sources := map[string]string{}
 	for _, name := range files {
 		b, err := os.ReadFile(name)

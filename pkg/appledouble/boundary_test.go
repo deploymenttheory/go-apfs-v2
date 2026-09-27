@@ -3,7 +3,6 @@ package appledouble
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
 	"strings"
 	"testing"
 )
@@ -17,9 +16,7 @@ func TestCodecNamesAndLimits(t *testing.T) {
 			t.Fatalf("accepted invalid name %q", name)
 		}
 	}
-	// One one-byte name occupies a 16-byte record; resource-fork content is
-	// outside the attribute header's limit. This pins the inherited contract,
-	// not a claim that every host filesystem supports these values.
+	// Both values and the resource fork live beyond the bounded entry table.
 	f := &File{Attrs: []Attr{{Name: "x", Value: make([]byte, MaxHeader-136)}}, ResourceFork: bytes.Repeat([]byte{42}, MaxHeader*2)}
 	raw, err := f.Encode()
 	if err != nil || len(raw) != MaxHeader*3 {
@@ -30,7 +27,7 @@ func TestCodecNamesAndLimits(t *testing.T) {
 		t.Fatal("boundary round trip", err)
 	}
 	f.Attrs[0].Value = append(f.Attrs[0].Value, 0)
-	if _, err := f.Encode(); !errors.Is(err, ErrTooLarge) {
+	if _, err := f.Encode(); err != nil {
 		t.Fatal(err)
 	}
 }

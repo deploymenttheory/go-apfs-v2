@@ -23,7 +23,7 @@ Source revision: `6785561c02967366e61327607abc7594a3e8ffe3`.
 | `pkg/appledouble/padname_test.go` | `5250edac0eb7f91837d3b9abd6dd0037885ac24cdb85a05fbfbefae172d2f3b4` |
 | `testdata/cli/component-links.probe.json` | `450b5a23661072a6de625c55e37de0af2602253f1ab71b063e889fbb71985865` |
 
-Production logic is unchanged in the relocation. The only source edits explicitly
+Production logic was unchanged in the relocation. Its only source edits explicitly
 acknowledge the ignored errors from writing fixed-width integers into a
 `bytes.Buffer` (`_ = binary.Write`), to satisfy this repository's linter. The
 native fixture is copied byte for byte and its absence now fails tests rather
@@ -39,14 +39,27 @@ on Linux, macOS and Windows, fails on any skipped codec test or unit coverage at
 or below 95%, and retains raw events, coverage and source hashes. `FuzzDecode`
 checks parsing bounds and encoded-output readability in the existing fuzz matrix.
 
+## Native size and empty-value correction
+
+The encoder now separates the entry table from value storage: `MaxHeader` is
+65,554 bytes (copyfile's buffer), with a largest aligned table of 65,552 bytes.
+Values do not count against this limit. Wire offsets/lengths and the host's `int`
+range are checked before allocation. Empty attribute records use native zero
+offsets and remain present when decoded.
+
+The [native size investigation](../../docs/appledouble-native-sizes.md) records
+pinned source, Clang AST/layout evidence, the portable native fixture and live
+pack/unpack checks. The codec is still pure Go on every platform; the native
+harness is a test oracle only.
+
 ## Behavior still requiring native investigation
 
-The relocation preserves these existing decisions; moving code or reaching a
-coverage threshold does not establish that they all match macOS:
+The size correction does not establish full native parity. Outstanding items:
 
-- `MaxHeader` currently limits the complete ordinary-attribute section, including
-  values, to 64 KiB. Resource-fork data is outside that limit. Check the meanings
-  of header, entry-table and value limits separately in XNU and `copyfile`.
+- Native copyfile packing replaces an ordinary value above 16 MiB with an empty
+  value on the observed host. The byte codec permits values within its wire/address-space
+  bounds and never silently discards them. Define and validate packing-policy
+  behavior separately, including oversized aggregates and resource forks.
 - Encoder names are limited to 127 bytes. Measure byte versus character limits,
   UTF-8, terminal NULs, duplicate names and reserved special-attribute names.
 - `FromXattrs` copies FinderInfo into 32 bytes, truncating long values and padding
