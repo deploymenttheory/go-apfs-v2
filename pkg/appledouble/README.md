@@ -60,7 +60,7 @@ The size correction does not establish full native parity. Outstanding items:
   value on the observed host. The byte codec permits values within its wire/address-space
   bounds and never silently discards them. Define and validate packing-policy
   behavior separately, including oversized aggregates and resource forks.
-- Duplicate names and reserved special-attribute names still require investigation.
+- Reserved special-attribute names still require investigation.
   Ordinary UTF-8 byte limits,
   NUL termination and padded records are covered by the native name fixtures; see
   [name validation](../../docs/appledouble-native-names.md).
@@ -68,9 +68,12 @@ The size correction does not establish full native parity. Outstanding items:
   short ones. `Xattrs` omits all-zero FinderInfo and empty resource forks. Establish
   which normalization comes from APFS, which comes from native packing/unpacking,
   and which the codec must preserve or reject.
-- Decode tolerates unknown entries, missing attribute sections and two ATTR-header
-  alignments. Validate duplicate entries, region overlap, declared bounds,
-  truncated names, padding and reserved fields against independent native cases.
+- Decode now follows the native two-entry profile, fixed ATTR position, duplicate
+  name ordering and overlap/read-bound behavior; see
+  [record validation](../../docs/appledouble-native-records.md). It no longer
+  accepts arbitrary tables or an unaligned ATTR fallback. Unused summary sizes
+  do not constrain actual reads. General reserved-field policy and special-name
+  handling are not established by these record fixtures.
 - Establish integer/aggregate allocation limits for large forks and attribute
   sets, including 32-bit builds. Retain the existing alias-amplification guards.
 

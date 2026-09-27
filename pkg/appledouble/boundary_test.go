@@ -43,8 +43,6 @@ func TestCodecMalformedBoundaries(t *testing.T) {
 	}{
 		{"truncated-entry-table", func(b []byte) []byte { return b[:26] }},
 		{"entry-offset", func(b []byte) []byte { binary.BigEndian.PutUint32(b[30:], ^uint32(0)); return b }},
-		{"entry-length", func(b []byte) []byte { binary.BigEndian.PutUint32(b[34:], ^uint32(0)); return b }},
-		{"attribute-section-size", func(b []byte) []byte { binary.BigEndian.PutUint32(b[92:], ^uint32(0)); return b }},
 		{"truncated-attribute-record", func(b []byte) []byte { binary.BigEndian.PutUint16(b[118:], 20); return b }},
 		{"empty-declared-name", func(b []byte) []byte { b[130] = 0; return b }},
 		{"truncated-name", func(b []byte) []byte { b[130] = 255; return b }},
@@ -64,13 +62,10 @@ func TestCodecWithoutAttributesSection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, finder := range []bool{false, true} {
+	for _, length := range []uint32{0, 31, 32} {
 		b := bytes.Clone(raw)
-		if finder {
-			copy(b[84:], "NONE")
-		} else {
-			binary.BigEndian.PutUint32(b[26:], 42)
-		}
+		binary.BigEndian.PutUint32(b[34:], length)
+		copy(b[84:], "NONE")
 		f, err := Decode(b)
 		if err != nil || string(f.ResourceFork) != "fork" || len(f.Attrs) != 0 {
 			t.Fatal(f, err)
