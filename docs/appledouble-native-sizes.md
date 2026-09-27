@@ -58,6 +58,10 @@ SHA-256: `cf9147dc250d8f01a14faf0bd40c5b2f4b09b2cf168d0ffcc265fc05399cd204`.
 Every OS must decode it, verify its value and reproduce its exact bytes. Coverage
 is measured from portable unit tests only, independently of the Mac harness.
 Linux also runs the codec on 386 to exercise address-space rejection.
+That check exposed an existing decoder bug: a declared section size of
+`0xffffffff` became a negative `int` on 386 and bypassed an upper-bound-only
+check. Negative converted sizes are now rejected, using the same malformed-input
+regression on every architecture.
 
 ## Remaining work
 

@@ -309,7 +309,7 @@ func Decode(b []byte) (*File, error) {
 	h := b[hdr:]
 	totalSize := int(binary.BigEndian.Uint32(h[8:]))
 	numAttrs := int(binary.BigEndian.Uint16(h[34:]))
-	if totalSize > len(b) {
+	if totalSize < 0 || totalSize > len(b) {
 		return nil, fmt.Errorf("appledouble: attribute section (%d bytes) outside the file", totalSize)
 	}
 	off := hdr + 36
