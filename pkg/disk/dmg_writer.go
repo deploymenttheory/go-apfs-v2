@@ -341,7 +341,7 @@ func encodeBlock(dfw *dataForkWriter, index int, blk *SourceBlock, secCount uint
 		StartSector:      blk.StartSector,
 		SectorCount:      secCount,
 		DataOffset:       0,
-		BuffersNeeded:    uint32(o.ChunkSectors) + 8,
+		BuffersNeeded:    buffersNeeded(o),
 		BlockDescriptors: uint32(index),
 		Checksum:         udifChecksum(e.crc.Sum32(), o.NoChecksums),
 		ChunkCount:       e.chunkCount,
@@ -355,6 +355,23 @@ func encodeBlock(dfw *dataForkWriter, index int, blk *SourceBlock, secCount uint
 	out.Write(e.chunks.Bytes())
 
 	return out.Bytes(), e.crc.Sum32(), nil
+}
+
+// buffersNeeded is the BuffersNeeded field of every block: the sectors macOS
+// sets aside to decode one chunk. A zlib chunk inflates as a stream into the
+// chunk and a few sectors more, which is what hdiutil writes for UDZO (2056
+// for 1 MiB chunks). LZFSE and LZMA decode a whole chunk at once, so the
+// compressed chunk needs room beside the decoded one; compressChunk keeps it
+// smaller than the chunk, so twice the chunk suffices (hdiutil writes 4117 for
+// ULFO and 4097 for ULMO). With the zlib figure, macOS 26 fails to read some
+// LZFSE and LZMA chunks of a mounted image ("Unknown error: 1000") even though
+// hdiutil verify passes.
+func buffersNeeded(o *EncodeOptions) uint32 {
+	switch o.Compression {
+	case CompressionLZFSE, CompressionLZMA:
+		return uint32(2 * o.ChunkSectors)
+	}
+	return uint32(o.ChunkSectors) + 8
 }
 
 // blockEncoder holds one block's output: its chunk records, written to the

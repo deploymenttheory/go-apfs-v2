@@ -2,12 +2,15 @@ package disk
 
 import (
 	"bytes"
+	"cmp"
 	"crypto/sha256"
 	"encoding/binary"
 	"math/rand"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"howett.net/plist"
 )
 
 // TestKolyFooterSize guards the on-disk invariant that the koly trailer is
@@ -87,6 +90,52 @@ func TestEncodeDecodeSyntheticImage(t *testing.T) {
 				t.Fatalf("content mismatch after round-trip")
 			}
 			t.Logf("encoded %d bytes -> DMG %d bytes", len(img), buf.Len())
+		})
+	}
+}
+
+// TestBuffersNeededHoldsEveryChunk checks the decode room each block asks
+// macOS for: the chunk and a few sectors for zlib and raw chunks, and room for
+// the largest compressed chunk beside the decoded one for LZFSE and LZMA.
+func TestBuffersNeededHoldsEveryChunk(t *testing.T) {
+	img := buildSyntheticImage()
+	for _, tc := range []struct {
+		name string
+		opts *EncodeOptions
+		want uint32
+	}{
+		{"zlib", &EncodeOptions{Compression: CompressionZlib}, 2048 + 8},
+		{"none", &EncodeOptions{Compression: CompressionNone}, 2048 + 8},
+		{"lzfse", &EncodeOptions{Compression: CompressionLZFSE}, 2 * 2048},
+		{"lzma", &EncodeOptions{Compression: CompressionLZMA}, 2 * 2048},
+		{"lzfse smallchunks", &EncodeOptions{Compression: CompressionLZFSE, ChunkSectors: 128}, 2 * 128},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			if err := EncodeUDIF(&buf, []SourceBlock{{Name: "disk image (Apple_HFS : 0)", Data: img}}, tc.opts); err != nil {
+				t.Fatalf("EncodeUDIF: %v", err)
+			}
+			r, err := NewDMGReader(bytes.NewReader(buf.Bytes()), int64(buf.Len()), DMGLimits{})
+			if err != nil {
+				t.Fatalf("NewDMGReader: %v", err)
+			}
+			var document dmgPlist
+			if _, err := plist.Unmarshal(buf.Bytes()[r.footer.PlistOffset:r.footer.PlistOffset+r.footer.PlistLength], &document); err != nil {
+				t.Fatalf("plist: %v", err)
+			}
+			var header dmgBlockData
+			if err := binary.Read(bytes.NewReader(document.ResourceFork.Blkx[0].Data), binary.BigEndian, &header); err != nil {
+				t.Fatalf("block header: %v", err)
+			}
+			if header.BuffersNeeded != tc.want {
+				t.Fatalf("BuffersNeeded = %d, want %d", header.BuffersNeeded, tc.want)
+			}
+			chunkSectors := cmp.Or(tc.opts.ChunkSectors, encodeDefaultChunkSectors)
+			for _, chunk := range r.Partitions()[0].Chunks {
+				if (chunk.Type == chunkTypeCompressLZFSE || chunk.Type == chunkTypeCompressLZMA) && chunk.CompressedLength > (uint64(header.BuffersNeeded)-chunkSectors)*sectorSize {
+					t.Fatalf("a %d-byte chunk does not fit beside the decoded chunk", chunk.CompressedLength)
+				}
+			}
 		})
 	}
 }
