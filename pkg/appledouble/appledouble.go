@@ -247,111 +247,103 @@ func Sniff(b []byte) bool {
 	return len(b) >= 8 && binary.BigEndian.Uint32(b) == magic && binary.BigEndian.Uint32(b[4:]) == version
 }
 
-// Decode parses a sidecar. It tolerates files without an attribute
-// section, with no attributes, and with either alignment before the
-// ATTR header.
+// Decode parses the macOS AppleDouble profile used by copyfile. The first
+// entry describes FinderInfo and the optional ATTR records; only a resource
+// fork in the second entry is consumed. Summary sizes do not bound value reads:
+// each actual read is checked against the input, with a cumulative copy budget.
 func Decode(b []byte) (*File, error) {
-	if !Sniff(b) || len(b) < 26 {
+	if !Sniff(b) || len(b) < 82 || binary.BigEndian.Uint16(b[24:]) != 2 || binary.BigEndian.Uint32(b[26:]) != entryFinder {
 		return nil, ErrNotAppleDouble
 	}
-	n := int(binary.BigEndian.Uint16(b[24:]))
-	if len(b) < 26+12*n {
-		return nil, fmt.Errorf("appledouble: truncated entry table")
+	// copyfile reads only this much into its header buffer. Attribute values
+	// and the resource fork are read separately from their file offsets.
+	header := bytes.Clone(b[:min(len(b), MaxHeader)])
+	for _, off := range []int{0, 4, 26, 30, 34, 38, 42, 46} {
+		native32(header, off)
 	}
+	native16(header, 24)
 	f := &File{}
-	// A real sidecar stores each region (resource fork, attribute values)
-	// once and contiguously, so the bytes copied out can never exceed the
-	// file. Without this budget a table of many entries, or many attributes,
-	// each pointing at the same near-whole-file region would have every copy
-	// retained: O(entries x len(b)) memory from a small input.
+	// Canonical files store each payload once. Bound retained payload copies
+	// even if many records alias the same bytes; this deliberately rejects
+	// some inputs native copyfile can process sequentially without retaining.
 	copyBudget := len(b)
-	spend := func(nbytes int) error {
-		copyBudget -= nbytes
-		if copyBudget < 0 {
-			return fmt.Errorf("appledouble: copied data exceeds the file size")
+	readValue := func(offset, length uint32) ([]byte, error) {
+		// Native pread of zero bytes succeeds even beyond EOF. Avoid converting
+		// the unused offset to int, which could wrap on 386.
+		if length == 0 {
+			return nil, nil
 		}
-		return nil
+		if uint64(offset)+uint64(length) > uint64(len(b)) {
+			return nil, fmt.Errorf("appledouble: value (offset %d, length %d) outside the file", offset, length)
+		}
+		if uint64(length) > uint64(copyBudget) {
+			return nil, fmt.Errorf("appledouble: copied data exceeds the file size")
+		}
+		copyBudget -= int(length)
+		return bytes.Clone(b[int(offset) : int(offset)+int(length)]), nil
 	}
-	var finderOff, finderLen int
-	for i := 0; i < n; i++ {
-		e := b[26+12*i:]
-		id := binary.BigEndian.Uint32(e)
-		off := int(binary.BigEndian.Uint32(e[4:]))
-		length := int(binary.BigEndian.Uint32(e[8:]))
-		if off < 0 || length < 0 || off > len(b) || length > len(b)-off {
-			return nil, fmt.Errorf("appledouble: entry %d (offset %d, length %d) outside the file", id, off, length)
+	finderLength := binary.BigEndian.Uint32(b[34:])
+	if finderLength > 32 {
+		if len(header) < attrEntriesOff || string(b[attrHeaderOff:attrHeaderOff+4]) != attrMagic {
+			return nil, fmt.Errorf("appledouble: missing or truncated ATTR header")
 		}
-		switch id {
-		case entryFinder:
-			finderOff, finderLen = off, length
-		case entryResource:
-			if err := spend(length); err != nil {
+		for _, off := range []int{84, 88, 92, 96, 100} {
+			native32(header, off)
+		}
+		native16(header, 116)
+		native16(header, 118)
+		numAttrs := int(binary.BigEndian.Uint16(b[118:]))
+		off := attrEntriesOff
+		for i := 0; i < numAttrs; i++ {
+			if !containsRange(len(header), off, 12) {
+				return nil, fmt.Errorf("appledouble: truncated attribute entry %d", i)
+			}
+			native32(header, off)
+			native32(header, off+4)
+			native16(header, off+8)
+			nameLen := int(header[off+10])
+			if nameLen < 2 || nameLen > 128 || nameLen > len(header)-off-11 {
+				return nil, fmt.Errorf("appledouble: bad name length in attribute entry %d", i)
+			}
+			nameBytes := header[off+11 : off+11+nameLen]
+			if nameBytes[nameLen-1] != 0 {
+				return nil, fmt.Errorf("appledouble: unterminated name in attribute entry %d", i)
+			}
+			nameBytes = nameBytes[:bytes.IndexByte(nameBytes, 0)]
+			if len(nameBytes) == 0 || !utf8.Valid(nameBytes) {
+				return nil, fmt.Errorf("appledouble: invalid name in attribute entry %d", i)
+			}
+			value, err := readValue(binary.BigEndian.Uint32(b[off:]), binary.BigEndian.Uint32(b[off+4:]))
+			if err != nil {
 				return nil, err
 			}
-			f.ResourceFork = append([]byte(nil), b[off:off+length]...)
+			f.Attrs = append(f.Attrs, Attr{Name: string(nameBytes), Value: value})
+			off += (11 + nameLen + 3) &^ 3
 		}
 	}
-	if finderLen == 0 {
-		return f, nil
+	finderOffset := binary.BigEndian.Uint32(b[30:])
+	if uint64(finderOffset)+32 > uint64(len(header)) {
+		return nil, fmt.Errorf("appledouble: FinderInfo outside the native header buffer")
 	}
-	copy(f.FinderInfo[:], b[finderOff:finderOff+min(finderLen, 32)])
-	// The attribute header follows the Finder info, aligned to 4 bytes
-	// or not, depending on the writer.
-	hdr := -1
-	for _, cand := range []int{finderOff + 32 + 2, finderOff + 32} {
-		if containsRange(len(b), cand, 36) && string(b[cand:cand+4]) == attrMagic {
-			hdr = cand
-			break
-		}
-	}
-	if hdr < 0 {
-		return f, nil
-	}
-	h := b[hdr:]
-	totalSize := int(binary.BigEndian.Uint32(h[8:]))
-	numAttrs := int(binary.BigEndian.Uint16(h[34:]))
-	if totalSize < 0 || totalSize > len(b) {
-		return nil, fmt.Errorf("appledouble: attribute section (%d bytes) outside the file", totalSize)
-	}
-	off := hdr + 36
-	for i := 0; i < numAttrs; i++ {
-		if !containsRange(len(b), off, 11) {
-			return nil, fmt.Errorf("appledouble: truncated attribute entry %d", i)
-		}
-		e := b[off:]
-		valOff := int(binary.BigEndian.Uint32(e))
-		valLen := int(binary.BigEndian.Uint32(e[4:]))
-		nameLen := int(e[10])
-		if nameLen < 2 || nameLen > 128 || nameLen > len(b)-off-11 {
-			return nil, fmt.Errorf("appledouble: bad name length in attribute entry %d", i)
-		}
-		nameBytes := e[11 : 11+nameLen]
-		if nameBytes[nameLen-1] != 0 {
-			return nil, fmt.Errorf("appledouble: unterminated name in attribute entry %d", i)
-		}
-		// Native consumers use a C string but advance by the declared record
-		// length, including any padding after the first NUL.
-		nameBytes = nameBytes[:bytes.IndexByte(nameBytes, 0)]
-		if len(nameBytes) == 0 || !utf8.Valid(nameBytes) {
-			return nil, fmt.Errorf("appledouble: invalid name in attribute entry %d", i)
-		}
-		name := string(nameBytes)
-		if valOff < 0 || valLen < 0 || valOff > len(b) || valLen > len(b)-valOff {
-			return nil, fmt.Errorf("appledouble: attribute %s value outside the file", name)
-		}
-		if err := spend(valLen); err != nil {
+	// Native copyfile reads FinderInfo from its endian-converted header buffer,
+	// not from the file. This also defines overlapping-header behavior. Both
+	// supported Mac architectures are little-endian; emulate that on every host.
+	copy(f.FinderInfo[:], header[int(finderOffset):int(finderOffset)+32])
+	if binary.BigEndian.Uint32(b[38:]) == entryResource {
+		var err error
+		f.ResourceFork, err = readValue(binary.BigEndian.Uint32(b[42:]), binary.BigEndian.Uint32(b[46:]))
+		if err != nil {
 			return nil, err
 		}
-		f.Attrs = append(f.Attrs, Attr{Name: name, Value: append([]byte(nil), b[valOff:valOff+valLen]...)})
-		// Advance by the length the record declared, not by the logical
-		// name. The two agree for anything this package or the kernel
-		// writes, since both store the name with a single NUL, but the
-		// format allows a longer padded name and the kernel steps over
-		// whatever nameLen says. Measuring from the trimmed name instead
-		// lands the cursor inside the next record and misreads it.
-		off += (11 + nameLen + 3) &^ 3
 	}
 	return f, nil
+}
+
+func native32(b []byte, off int) {
+	binary.LittleEndian.PutUint32(b[off:], binary.BigEndian.Uint32(b[off:]))
+}
+func native16(b []byte, off int) {
+	binary.LittleEndian.PutUint16(b[off:], binary.BigEndian.Uint16(b[off:]))
 }
 
 // Subtraction-based bounds avoid overflowing int before a slice check on 386.

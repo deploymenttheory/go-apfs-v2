@@ -2,12 +2,12 @@ package appledouble
 
 import (
 	"encoding/binary"
+	"strings"
 	"testing"
 )
 
-// TestDecodeResourceEntryAliasingBounded pins F4 (entry-table variant): many
-// resource entries each pointing at the same region must not multiply the
-// bytes copied out.
+// The native two-entry profile rejects repeated resource-entry tables before
+// copying their aliased data.
 func TestDecodeResourceEntryAliasingBounded(t *testing.T) {
 	const n = 3
 	const dataLen = 100
@@ -35,15 +35,16 @@ func TestDecodeResourceEntryAliasingBounded(t *testing.T) {
 func TestDecodeAttrAliasingBounded(t *testing.T) {
 	const numAttrs = 3
 	const valLen = 100
-	finderOff := 38
-	attrOff := finderOff + 32 // header sits right after the 32-byte FinderInfo
+	finderOff := 50
+	attrOff := 84
 	hdrLen := 36
 	entriesOff := attrOff + hdrLen
 	total := entriesOff + numAttrs*16
 	b := make([]byte, total)
 	binary.BigEndian.PutUint32(b[0:], magic)
 	binary.BigEndian.PutUint32(b[4:], version)
-	binary.BigEndian.PutUint16(b[24:], 1) // one entry: the Finder region
+	binary.BigEndian.PutUint16(b[24:], 2)
+	binary.BigEndian.PutUint32(b[38:], entryResource)
 	e := b[26:]
 	binary.BigEndian.PutUint32(e[0:], entryFinder)
 	binary.BigEndian.PutUint32(e[4:], uint32(finderOff))
@@ -58,8 +59,8 @@ func TestDecodeAttrAliasingBounded(t *testing.T) {
 		ae[10] = 2                                 // valid, terminated names so this reaches the copy budget
 		ae[11] = byte('a' + i)
 	}
-	// numAttrs*valLen = 300 > total (~178): rejected instead of retained.
-	if _, err := Decode(b); err == nil {
-		t.Fatal("aliased attribute values were accepted; retained memory is unbounded")
+	// numAttrs*valLen = 300 > total (168): reach the allocation guard.
+	if _, err := Decode(b); err == nil || !strings.Contains(err.Error(), "copied data exceeds") {
+		t.Fatal("did not reach cumulative allocation guard", err)
 	}
 }

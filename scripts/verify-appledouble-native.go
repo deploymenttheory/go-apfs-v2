@@ -15,6 +15,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"time"
 
@@ -50,6 +51,14 @@ type nameComparison struct {
 
 var nameComparisons []nameComparison
 
+type recordComparison struct {
+	Name                                           string
+	NativeAccepted, GoAccepted, CanonicalRestored  bool
+	Baseline, Native, CanonicalBaseline, Canonical map[string][]byte
+}
+
+var recordComparisons []recordComparison
+
 func must(err error) {
 	if err != nil {
 		panic(err)
@@ -80,7 +89,7 @@ func main() {
 	passed := false
 	defer func() {
 		failure := recover()
-		report := map[string]any{"goos": runtime.GOOS, "goarch": runtime.GOARCH, "go": runtime.Version(), "passed": passed, "commands": commands, "comparisons": comparisons, "name_comparisons": nameComparisons}
+		report := map[string]any{"goos": runtime.GOOS, "goarch": runtime.GOARCH, "go": runtime.Version(), "passed": passed, "commands": commands, "comparisons": comparisons, "name_comparisons": nameComparisons, "record_comparisons": recordComparisons}
 		if failure != nil {
 			report["failure"] = fmt.Sprint(failure)
 		}
@@ -202,8 +211,9 @@ func main() {
 	}
 	comparisons = append(comparisons, comparison{Name: "table-65552", Bytes: len(raw), SHA256: fmt.Sprintf("%x", sha256.Sum256(raw)), NativeUnpackEqual: true})
 	verifyNames(root, helper)
+	verifyRecords(root, helper)
 	passed = true
-	fmt.Printf("%d native size comparisons and %d name comparisons passed\n", len(comparisons), len(nameComparisons))
+	fmt.Printf("%d native size comparisons, %d name comparisons and %d record comparisons passed\n", len(comparisons), len(nameComparisons), len(recordComparisons))
 }
 
 func verifyNames(root, helper string) {
@@ -276,6 +286,114 @@ func checkNameValues(helper, dir, dst string, tc nameRecord) {
 		run(helper, "get", dst, string(a.Name), valuePath)
 		if !bytes.Equal(read(valuePath), a.Value) {
 			panic("native name readback changed")
+		}
+	}
+}
+
+func verifyRecords(root, helper string) {
+	var fixture struct {
+		HelperSHA256, ListHelperSHA256 string
+		Records                        []struct {
+			Name, SHA256 string
+			Raw          []byte
+			Accepted     bool
+			Expected     map[string][]byte
+		}
+	}
+	must(json.Unmarshal(read("testdata/appledouble/native/records.json"), &fixture))
+	if fixture.HelperSHA256 != fmt.Sprintf("%x", sha256.Sum256(read("testdata/appledouble/native/probe.c"))) || fixture.ListHelperSHA256 != fmt.Sprintf("%x", sha256.Sum256(read("testdata/appledouble/native/list.c"))) {
+		panic("record fixture helper provenance mismatch")
+	}
+	if len(fixture.Records) != 44 {
+		panic("required native record observations missing")
+	}
+	listHelper := filepath.Join(root, "list")
+	run("xcrun", "clang", "-Wall", "-Wextra", "-Werror", "testdata/appledouble/native/list.c", "-o", listHelper)
+	for _, tc := range fixture.Records {
+		if tc.SHA256 != fmt.Sprintf("%x", sha256.Sum256(tc.Raw)) {
+			panic("record fixture hash mismatch")
+		}
+		dir := filepath.Join(root, "records", tc.Name)
+		must(os.MkdirAll(dir, 0755))
+		input, dst := filepath.Join(dir, "input.ad"), filepath.Join(dir, "restored")
+		write(input, tc.Raw)
+		fresh(dst)
+		r := recordComparison{Name: tc.Name, Baseline: attributes(helper, listHelper, dir, dst, "before")}
+		output, err := observe(helper, "unpack", input, dst)
+		r.NativeAccepted = err == nil
+		if r.NativeAccepted != tc.Accepted {
+			panic(fmt.Sprintf("%s native acceptance changed: %v %s", tc.Name, err, output))
+		}
+		if !r.NativeAccepted {
+			var exitErr *exec.ExitError
+			if !errors.As(err, &exitErr) || exitErr.ExitCode() != 1 || !bytes.Contains(output, []byte("unpack failed: errno=")) {
+				panic("unexpected native record failure")
+			}
+			// Some copyfile header failures preserve stale errno. Do not pretend every
+			// rejection is EINVAL, or accept a crash/setup error as a rejection.
+			commands[len(commands)-1].ExpectedFailure = true
+		}
+		r.Native = attributes(helper, listHelper, dir, dst, "after")
+		decoded, err := appledouble.Decode(tc.Raw)
+		r.GoAccepted = err == nil
+		if r.GoAccepted != r.NativeAccepted {
+			panic("Go/native record acceptance differs: " + tc.Name)
+		}
+		if r.GoAccepted {
+			checkAttributes(tc.Name, decoded.Xattrs(), tc.Expected)
+			checkAttributes(tc.Name, withoutHostProvenance(r.Native, r.Baseline, tc.Expected), tc.Expected)
+			canonical, err := decoded.Encode()
+			must(err)
+			write(filepath.Join(dir, "go.ad"), canonical)
+			dst = filepath.Join(dir, "canonical-restored")
+			fresh(dst)
+			r.CanonicalBaseline = attributes(helper, listHelper, dir, dst, "canonical-before")
+			run(helper, "unpack", filepath.Join(dir, "go.ad"), dst)
+			r.Canonical = attributes(helper, listHelper, dir, dst, "canonical-after")
+			checkAttributes(tc.Name, withoutHostProvenance(r.Canonical, r.CanonicalBaseline, tc.Expected), tc.Expected)
+			r.CanonicalRestored = true
+		}
+		recordComparisons = append(recordComparisons, r)
+		fmt.Printf("native record %s: accepted=%t, Go agrees\n", tc.Name, r.NativeAccepted)
+	}
+}
+
+func attributes(helper, listHelper, dir, dst, label string) map[string][]byte {
+	namesPath := filepath.Join(dir, label+"-names")
+	run(listHelper, dst, namesPath)
+	names := bytes.Split(read(namesPath), []byte{0})
+	sort.Slice(names, func(i, j int) bool { return bytes.Compare(names[i], names[j]) < 0 })
+	result := map[string][]byte{}
+	for i, name := range names {
+		if len(name) == 0 {
+			continue
+		}
+		valuePath := filepath.Join(dir, fmt.Sprintf("%s-value-%d", label, i))
+		run(helper, "get", dst, string(name), valuePath)
+		result[string(name)] = read(valuePath)
+	}
+	return result
+}
+func withoutHostProvenance(actual, baseline, expected map[string][]byte) map[string][]byte {
+	result := map[string][]byte{}
+	for name, value := range actual {
+		_, supplied := expected[name]
+		before, present := baseline[name]
+		if name == "com.apple.provenance" && !supplied && present && bytes.Equal(value, before) {
+			continue
+		}
+		result[name] = value
+	}
+	return result
+}
+func checkAttributes(label string, actual, expected map[string][]byte) {
+	if len(actual) != len(expected) {
+		panic(fmt.Sprintf("%s attribute count differs: got %d, want %d", label, len(actual), len(expected)))
+	}
+	for name, want := range expected {
+		got, ok := actual[name]
+		if !ok || !bytes.Equal(got, want) {
+			panic(fmt.Sprintf("%s attribute %q differs: present=%t got=%x want=%x", label, name, ok, got, want))
 		}
 	}
 }

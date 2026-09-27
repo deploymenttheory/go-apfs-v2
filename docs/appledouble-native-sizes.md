@@ -60,8 +60,10 @@ is measured from portable unit tests only, independently of the Mac harness.
 Linux also runs the codec on 386 to exercise address-space rejection.
 That check exposed an existing decoder bug: a declared section size of
 `0xffffffff` became a negative `int` on 386 and bypassed an upper-bound-only
-check. Negative converted sizes are now rejected, using the same malformed-input
-regression on every architecture.
+check. The initial correction rejected negative converted sizes. Subsequent
+[native record research](appledouble-native-records.md) established that copyfile
+ignores this summary field entirely. The decoder now does the same without an int
+conversion, while retaining overflow-safe bounds on every actual read.
 
 ## Remaining work
 
@@ -72,6 +74,7 @@ emulates. Oversized-value policy, aggregates near wire limits and very large for
 need further native investigation. The portable unit suite already checks multiple
 16 MiB values plus a fork; that is not a native aggregate-parity claim.
 
-Name validation, special attribute normalization, malformed/overlapping records,
-duplicate entries and shared host transport remain on the migration plan. This
-increment does not complete those phases or authorize resuming codesign.
+Name validation and malformed/overlapping record increments are documented
+separately. Special attribute normalization, remaining size policy and shared
+host transport remain on the migration plan. These increments do not authorize
+resuming codesign.

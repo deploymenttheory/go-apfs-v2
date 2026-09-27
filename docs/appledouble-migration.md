@@ -11,7 +11,11 @@ documented in [appledouble-native-sizes.md](appledouble-native-sizes.md). This i
 one codec increment, not completion of the codec or host transport phases.
 The next [name-validation increment](appledouble-native-names.md) establishes
 ordinary name byte limits, UTF-8 and NUL/padding behavior with native fixtures.
-Duplicate/overlapping records, special attributes and transport remain outstanding.
+The [record-validation increment](appledouble-native-records.md) adds native
+observations for duplicate/overlapping records, header selection and actual read
+bounds. Special attributes, remaining size policy and shared transport remain
+outstanding, in that order. The allocation guard's stricter alias policy is
+documented explicitly rather than counted as native parity.
 
 ## 1. Relocate without changing format behavior
 
