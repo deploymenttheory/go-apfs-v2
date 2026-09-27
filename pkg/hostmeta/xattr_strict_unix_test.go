@@ -23,8 +23,14 @@ func strictSetXattr(t *testing.T, path, name string, value []byte) {
 }
 
 func TestStrictXattrHostLifecycle(t *testing.T) {
+	// ext4 may store names, values and metadata in one 4 KiB block. A 4 KiB
+	// value alone is not a portable fixture (ENOSPC even on an empty volume).
+	lengths := []int{0, 1, 1024}
+	if runtime.GOOS == "darwin" {
+		lengths = append(lengths, 4096)
+	}
 	for _, kind := range []string{"file", "directory"} {
-		for _, length := range []int{0, 1, 4096} {
+		for _, length := range lengths {
 			t.Run(fmt.Sprintf("%s/%d", kind, length), func(t *testing.T) {
 				path := filepath.Join(t.TempDir(), "input")
 				if kind == "directory" {
