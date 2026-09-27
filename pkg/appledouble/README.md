@@ -60,8 +60,10 @@ The size correction does not establish full native parity. Outstanding items:
   value on the observed host. The byte codec permits values within its wire/address-space
   bounds and never silently discards them. Define and validate packing-policy
   behavior separately, including oversized aggregates and resource forks.
-- Encoder names are limited to 127 bytes. Measure byte versus character limits,
-  UTF-8, terminal NULs, duplicate names and reserved special-attribute names.
+- Duplicate names and reserved special-attribute names still require investigation.
+  Ordinary UTF-8 byte limits,
+  NUL termination and padded records are covered by the native name fixtures; see
+  [name validation](../../docs/appledouble-native-names.md).
 - `FromXattrs` copies FinderInfo into 32 bytes, truncating long values and padding
   short ones. `Xattrs` omits all-zero FinderInfo and empty resource forks. Establish
   which normalization comes from APFS, which comes from native packing/unpacking,

@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- AppleDouble name decoding now matches native UTF-8, length and NUL validation,
+  including logical names in padded records; encode rejects invalid UTF-8 and
+  record bounds avoid integer overflow. Native acceptance fixtures run on every OS.
+
 - AppleDouble values no longer count against the entry-table size limit. Match
   native empty-value offsets and table capacity, validate size arithmetic, and
   retain portable native fixtures plus live Mac pack/unpack and Clang evidence.

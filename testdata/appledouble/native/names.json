@@ -1,0 +1,140 @@
+{
+  "AppleSource": "9f91eb6ced021952278816cdc76ad68da8631ccb",
+  "HelperSHA256": "b8cfda6c04ee053cc60adbd854d00889141c463fc29321195b2c5aad0d2fab88",
+  "Host": "ProductName:\t\tmacOS\nProductVersion:\t\t27.0\nBuildVersion:\t\t26A428\n",
+  "Records": [
+    {
+      "Name": "ascii",
+      "Raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAAF0AAAACAAAAjwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQVRUUgAAAAAAAACPAAAAiAAAAAcAAAAAAAAAAAAAAAAAAAABAAAAiAAAAAcAAARhYWEAAFZBTFVFLUE=",
+      "Accepted": true,
+      "Attributes": [
+        {
+          "Name": "YWFh",
+          "Value": "VkFMVUUtQQ=="
+        }
+      ],
+      "Diagnostic": ""
+    },
+    {
+      "Name": "padded",
+      "Raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAAGEAAAACAAAAkwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQVRUUgAAAAAAAACTAAAAjAAAAAcAAAAAAAAAAAAAAAAAAAABAAAAjAAAAAcAAAhhYWEAAAAAAABWQUxVRS1B",
+      "Accepted": true,
+      "Attributes": [
+        {
+          "Name": "YWFh",
+          "Value": "VkFMVUUtQQ=="
+        }
+      ],
+      "Diagnostic": ""
+    },
+    {
+      "Name": "embedded",
+      "Raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAAF0AAAACAAAAjwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQVRUUgAAAAAAAACPAAAAiAAAAAcAAAAAAAAAAAAAAAAAAAABAAAAiAAAAAcAAARhAHoAAFZBTFVFLUE=",
+      "Accepted": true,
+      "Attributes": [
+        {
+          "Name": "YQ==",
+          "Value": "VkFMVUUtQQ=="
+        }
+      ],
+      "Diagnostic": ""
+    },
+    {
+      "Name": "invalid-padding",
+      "Raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAAF0AAAACAAAAjwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQVRUUgAAAAAAAACPAAAAiAAAAAcAAAAAAAAAAAAAAAAAAAABAAAAiAAAAAcAAARhAP8AAFZBTFVFLUE=",
+      "Accepted": true,
+      "Attributes": [
+        {
+          "Name": "YQ==",
+          "Value": "VkFMVUUtQQ=="
+        }
+      ],
+      "Diagnostic": ""
+    },
+    {
+      "Name": "empty",
+      "Raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAAF0AAAACAAAAjwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQVRUUgAAAAAAAACPAAAAiAAAAAcAAAAAAAAAAAAAAAAAAAABAAAAiAAAAAcAAAIAAAAAAFZBTFVFLUE=",
+      "Accepted": false,
+      "Attributes": null,
+      "Diagnostic": "unpack failed: errno=22 Invalid argument\n"
+    },
+    {
+      "Name": "no-terminator",
+      "Raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAAF0AAAACAAAAjwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQVRUUgAAAAAAAACPAAAAiAAAAAcAAAAAAAAAAAAAAAAAAAABAAAAiAAAAAcAAARhYWFhAFZBTFVFLUE=",
+      "Accepted": false,
+      "Attributes": null,
+      "Diagnostic": "unpack failed: errno=22 Invalid argument\n"
+    },
+    {
+      "Name": "zero-length",
+      "Raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAAFkAAAACAAAAiwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQVRUUgAAAAAAAACLAAAAhAAAAAcAAAAAAAAAAAAAAAAAAAABAAAAhAAAAAcAAAAAVkFMVUUtQQ==",
+      "Accepted": false,
+      "Attributes": null,
+      "Diagnostic": "unpack failed: errno=22 Invalid argument\n"
+    },
+    {
+      "Name": "one-byte",
+      "Raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAAFkAAAACAAAAiwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQVRUUgAAAAAAAACLAAAAhAAAAAcAAAAAAAAAAAAAAAAAAAABAAAAhAAAAAcAAAFhVkFMVUUtQQ==",
+      "Accepted": false,
+      "Attributes": null,
+      "Diagnostic": "unpack failed: errno=22 Invalid argument\n"
+    },
+    {
+      "Name": "max-name",
+      "Raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAANkAAAACAAABCwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQVRUUgAAAAAAAAELAAABBAAAAAcAAAAAAAAAAAAAAAAAAAABAAABBAAAAAcAAIBubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5uAABWQUxVRS1B",
+      "Accepted": true,
+      "Attributes": [
+        {
+          "Name": "bm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubg==",
+          "Value": "VkFMVUUtQQ=="
+        }
+      ],
+      "Diagnostic": ""
+    },
+    {
+      "Name": "over-name",
+      "Raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAANkAAAACAAABCwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQVRUUgAAAAAAAAELAAABBAAAAAcAAAAAAAAAAAAAAAAAAAABAAABBAAAAAcAAIFubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubgBWQUxVRS1B",
+      "Accepted": false,
+      "Attributes": null,
+      "Diagnostic": "unpack failed: errno=22 Invalid argument\n"
+    },
+    {
+      "Name": "unicode",
+      "Raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAANkAAAACAAABCwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQVRUUgAAAAAAAAELAAABBAAAAAcAAAAAAAAAAAAAAAAAAAABAAABBAAAAAcAAH/DqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6kAAABWQUxVRS1B",
+      "Accepted": true,
+      "Attributes": [
+        {
+          "Name": "w6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOp",
+          "Value": "VkFMVUUtQQ=="
+        }
+      ],
+      "Diagnostic": ""
+    },
+    {
+      "Name": "unicode-max",
+      "Raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAANkAAAACAAABCwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQVRUUgAAAAAAAAELAAABBAAAAAcAAAAAAAAAAAAAAAAAAAABAAABBAAAAAcAAIDDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6l4AABWQUxVRS1B",
+      "Accepted": true,
+      "Attributes": [
+        {
+          "Name": "w6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpeA==",
+          "Value": "VkFMVUUtQQ=="
+        }
+      ],
+      "Diagnostic": ""
+    },
+    {
+      "Name": "invalid-utf8",
+      "Raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAAF0AAAACAAAAjwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQVRUUgAAAAAAAACPAAAAiAAAAAcAAAAAAAAAAAAAAAAAAAABAAAAiAAAAAcAAAN4/wAAAFZBTFVFLUE=",
+      "Accepted": false,
+      "Attributes": null,
+      "Diagnostic": "unpack failed: errno=22 Invalid argument\n"
+    },
+    {
+      "Name": "truncated-utf8",
+      "Raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAANkAAAACAAABCwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQVRUUgAAAAAAAAELAAABBAAAAAcAAAAAAAAAAAAAAAAAAAABAAABBAAAAAcAAIDDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDAABWQUxVRS1B",
+      "Accepted": false,
+      "Attributes": null,
+      "Diagnostic": "unpack failed: errno=22 Invalid argument\n"
+    }
+  ]
+}

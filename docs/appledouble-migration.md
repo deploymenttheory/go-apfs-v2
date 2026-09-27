@@ -9,6 +9,9 @@ remains in draft PR #72 until APFS compatibility work is complete; further packa
 changes belong on that PR. The subsequent native size/empty-value correction is
 documented in [appledouble-native-sizes.md](appledouble-native-sizes.md). This is
 one codec increment, not completion of the codec or host transport phases.
+The next [name-validation increment](appledouble-native-names.md) establishes
+ordinary name byte limits, UTF-8 and NUL/padding behavior with native fixtures.
+Duplicate/overlapping records, special attributes and transport remain outstanding.
 
 ## 1. Relocate without changing format behavior
 
