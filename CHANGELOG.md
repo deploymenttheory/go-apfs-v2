@@ -25,6 +25,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   preserving supported metadata using opened roots and handles. Tests cover both
   preparation APIs, containment, renamed roots, Windows streams and cleanup.
 
+## [0.11.3](https://github.com/deploymenttheory/go-apfs-v2/compare/v0.11.2...v0.11.3) (2026-09-27)
+
+
+### Bug Fixes
+
+* **disk:** record BuffersNeeded as hdiutil does for LZFSE and LZMA DMGs ([#129](https://github.com/deploymenttheory/go-apfs-v2/issues/129)) ([e960ee7](https://github.com/deploymenttheory/go-apfs-v2/commit/e960ee7c5e6d805f1e52c3ad64ae7b1bc50d027c))
+
 ## [0.11.2](https://github.com/deploymenttheory/go-apfs-v2/compare/v0.11.1...v0.11.2) (2026-09-26)
 
 
