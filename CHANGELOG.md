@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Shared `pkg/appledouble` codec relocated from `go-macos-pkg`, preserving its
+  API and native fixtures, with mandatory three-OS unit coverage above 95%.
+  Codec parity fixes and host transport integration remain separately gated.
+
 - `hostmeta.CopyAccessTime` copies Darwin nanosecond access time between held
   regular-file descriptors without recording a read or changing other target
   metadata apart from change time. Other hosts report unsupported.
