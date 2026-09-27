@@ -56,6 +56,41 @@ func TestPackedDMGsPassHdiutilVerify(t *testing.T) {
 	}
 }
 
+// TestPackedDMGsMountAndRead attaches each packed DMG and reads a file back.
+// hdiutil verify decodes chunks in its own process; attaching goes through the
+// disk image driver, which sizes its decode buffers from each block's
+// BuffersNeeded. macOS 26 refused to attach LZFSE and LZMA images holding
+// incompressible data whose BuffersNeeded only covered a zlib chunk, although
+// they verified.
+func TestPackedDMGsMountAndRead(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("hdiutil is only available on darwin")
+	}
+	requireTools(t, "hdiutil")
+	src := t.TempDir()
+	data := randomBytes(t, 1<<20)
+	if err := os.WriteFile(filepath.Join(src, "random.bin"), data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, fs := range []string{"apfs", "hfs+"} {
+		for _, codec := range []string{"lzfse", "lzma", "zlib"} {
+			t.Run(fs+"/"+codec, func(t *testing.T) {
+				dmg := filepath.Join(t.TempDir(), "packed.dmg")
+				mustRun(t, "pack", src, dmg, "--fs", fs, "--compression", codec)
+				mnt := t.TempDir()
+				if out, err := exec.Command("hdiutil", "attach", "-readonly", "-nobrowse", "-noautoopen", "-mountpoint", mnt, dmg).CombinedOutput(); err != nil {
+					t.Fatalf("hdiutil attach: %v\n%s", err, out)
+				}
+				defer func() { _ = exec.Command("hdiutil", "detach", "-force", mnt).Run() }()
+				got, err := os.ReadFile(filepath.Join(mnt, "random.bin"))
+				if err != nil || !bytes.Equal(got, data) {
+					t.Fatalf("mounted random.bin does not match: %v", err)
+				}
+			})
+		}
+	}
+}
+
 // TestLZFSESplitLiteralChunkPassesHdiutilVerify writes a DMG whose first chunk
 // begins with a literal run too long for one LZFSE record and then repeats its
 // start. The old encoder split that run into records carrying the repeat's
