@@ -111,12 +111,30 @@ jobs:
         env:
           CGO_ENABLED: "0"
         run: go run scripts/verify-appledouble.go
+      - name: AppleDouble 32-bit address-space regressions
+        if: runner.os == 'Linux'
+        env:
+          CGO_ENABLED: "0"
+          GOARCH: "386"
+        run: go test -count=1 ./pkg/appledouble
       - name: Upload AppleDouble evidence
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: appledouble-${{ matrix.os }}
           path: artifacts/appledouble/
+          if-no-files-found: error
+      - name: AppleDouble native pack and unpack comparisons
+        if: runner.os == 'macOS'
+        env:
+          CGO_ENABLED: "0"
+        run: go run scripts/verify-appledouble-native.go
+      - name: Upload AppleDouble native evidence
+        if: always() && runner.os == 'macOS'
+        uses: actions/upload-artifact@v7
+        with:
+          name: appledouble-native
+          path: artifacts/appledouble-native/
           if-no-files-found: error
       - name: Strict xattr API tests and coverage above 95%
         env:

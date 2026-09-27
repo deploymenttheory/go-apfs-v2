@@ -34,6 +34,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"math"
 	"path"
 	"sort"
 	"strings"
@@ -71,16 +72,17 @@ const (
 	attrHeaderOff  = 84
 	attrEntriesOff = 120
 	attrMagic      = "ATTR"
-	// MaxHeader bounds the attribute section a sidecar may carry, as
-	// the kernel does (ATTR_MAX_HDR_SIZE).
-	MaxHeader = 65536
+	// MaxHeader bounds the header and attribute entry table, not the values.
+	// Apple's copyfile uses ATTR_MAX_HDR_SIZE = 65536 + 18. Entry records are
+	// four-byte aligned, so the largest encodable data_start is 65552.
+	MaxHeader = 65536 + 18
 )
 
 var (
 	// ErrNotAppleDouble reports bytes that do not start like a sidecar.
 	ErrNotAppleDouble = errors.New("appledouble: not an AppleDouble file")
 	// ErrTooLarge reports an attribute set the format cannot hold.
-	ErrTooLarge = errors.New("appledouble: attributes exceed the 64 KiB header")
+	ErrTooLarge = errors.New("appledouble: header, data offsets or lengths exceed format or address-space limits")
 )
 
 // IsSidecarName reports whether a payload or file name is an AppleDouble
@@ -156,22 +158,30 @@ func entrySize(name string) int {
 func (f *File) Encode() ([]byte, error) {
 	f.sortAttrs()
 	entries := 0
-	values := 0
+	var valueBytes uint64
 	for _, a := range f.Attrs {
 		if a.Name == "" || len(a.Name) > 127 || strings.IndexByte(a.Name, 0) >= 0 {
 			return nil, fmt.Errorf("appledouble: invalid attribute name %q", a.Name)
 		}
+		if entrySize(a.Name) > MaxHeader-attrEntriesOff-entries {
+			return nil, ErrTooLarge
+		}
 		entries += entrySize(a.Name)
-		values += len(a.Value)
+		valueBytes += uint64(len(a.Value))
+		if valueBytes > math.MaxUint32 {
+			return nil, ErrTooLarge
+		}
 	}
 	dataStart := attrEntriesOff + entries
-	attrEnd := dataStart + values
-	if attrEnd > MaxHeader {
-		return nil, ErrTooLarge
+	bufferSize, err := encodedSize(uint64(dataStart), valueBytes, uint64(len(f.ResourceFork)))
+	if err != nil {
+		return nil, err
 	}
+	values := int(valueBytes)
+	attrEnd := dataStart + values
 
 	var b bytes.Buffer
-	b.Grow(attrEnd + len(f.ResourceFork))
+	b.Grow(bufferSize)
 	_ = binary.Write(&b, binary.BigEndian, uint32(magic))
 	_ = binary.Write(&b, binary.BigEndian, uint32(version))
 	b.WriteString(filler)
@@ -194,7 +204,13 @@ func (f *File) Encode() ([]byte, error) {
 	_ = binary.Write(&b, binary.BigEndian, uint16(len(f.Attrs)))
 	off := dataStart
 	for _, a := range f.Attrs {
-		_ = binary.Write(&b, binary.BigEndian, uint32(off))
+		valueOffset := off
+		// copyfile leaves the zero-initialized offset for an empty value.
+		// Presence is represented by the named entry, not by a data pointer.
+		if len(a.Value) == 0 {
+			valueOffset = 0
+		}
+		_ = binary.Write(&b, binary.BigEndian, uint32(valueOffset))
 		_ = binary.Write(&b, binary.BigEndian, uint32(len(a.Value)))
 		_ = binary.Write(&b, binary.BigEndian, uint16(0))
 		b.WriteByte(byte(len(a.Name) + 1))
@@ -210,6 +226,19 @@ func (f *File) Encode() ([]byte, error) {
 	}
 	b.Write(f.ResourceFork)
 	return b.Bytes(), nil
+}
+
+// Validate wire widths and address space before converting sizes or allocating.
+// Values may extend beyond the header buffer; the fork has its own uint32 length.
+func encodedSize(header, values, fork uint64) (int, error) {
+	if header > MaxHeader || values > math.MaxUint32-header || fork > math.MaxUint32 {
+		return 0, ErrTooLarge
+	}
+	total := header + values + fork
+	if total > uint64(math.MaxInt) {
+		return 0, ErrTooLarge
+	}
+	return int(total), nil
 }
 
 // Sniff reports whether b starts with the AppleDouble magic and version.
@@ -280,7 +309,7 @@ func Decode(b []byte) (*File, error) {
 	h := b[hdr:]
 	totalSize := int(binary.BigEndian.Uint32(h[8:]))
 	numAttrs := int(binary.BigEndian.Uint16(h[34:]))
-	if totalSize > len(b) {
+	if totalSize < 0 || totalSize > len(b) {
 		return nil, fmt.Errorf("appledouble: attribute section (%d bytes) outside the file", totalSize)
 	}
 	off := hdr + 36

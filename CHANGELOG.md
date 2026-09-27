@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed
+
+- AppleDouble values no longer count against the entry-table size limit. Match
+  native empty-value offsets and table capacity, validate size arithmetic, and
+  retain portable native fixtures plus live Mac pack/unpack and Clang evidence.
+
 ### Added
 
 - Shared `pkg/appledouble` codec relocated from `go-macos-pkg`, preserving its
