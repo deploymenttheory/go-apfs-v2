@@ -25,6 +25,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   preserving supported metadata using opened roots and handles. Tests cover both
   preparation APIs, containment, renamed roots, Windows streams and cleanup.
 
+## [0.12.0](https://github.com/deploymenttheory/go-apfs-v2/compare/v0.11.3...v0.12.0) (2026-09-27)
+
+
+### Features
+
+* **hostmeta:** add strict descriptor and no-follow xattr APIs ([#131](https://github.com/deploymenttheory/go-apfs-v2/issues/131)) ([0a89df0](https://github.com/deploymenttheory/go-apfs-v2/commit/0a89df004ee7ea8e751f62aaa687eb53f2d92497))
+
 ## [0.11.3](https://github.com/deploymenttheory/go-apfs-v2/compare/v0.11.2...v0.11.3) (2026-09-27)
 
 
