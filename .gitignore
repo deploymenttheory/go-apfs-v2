@@ -19,4 +19,5 @@
 /apfs.exe
 dist/
 coverage.out
+artifacts/
 profiler.csv
