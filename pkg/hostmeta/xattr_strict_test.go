@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -126,7 +127,7 @@ func TestStrictXattrHostSupport(t *testing.T) {
 	}
 	defer f.Close()
 	path := f.Name()
-	if XattrsSupported {
+	if XattrsSupported || runtime.GOOS == "windows" {
 		path = filepath.Join(t.TempDir(), "absent")
 		if _, _, err := XattrSizeNoFollow(path, "user.test"); !errors.Is(err, os.ErrNotExist) {
 			t.Fatal(err)
