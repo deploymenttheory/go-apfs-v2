@@ -220,6 +220,7 @@ func EncodeUDIF(dst io.Writer, blocks []SourceBlock, opts *EncodeOptions) error 
 		blkxEntries  []udifBlkx
 		blockCRCs    []uint32
 		totalSectors uint64
+		largest      uint64
 	)
 
 	// One chunk-sized window, shared by every block that reads lazily. This is
@@ -245,10 +246,11 @@ func EncodeUDIF(dst io.Writer, blocks []SourceBlock, opts *EncodeOptions) error 
 			secCount = uint64(len(blk.Data)) / sectorSize
 		}
 
-		mish, blockCRC, err := encodeBlock(dfw, bi, blk, secCount, &o, window)
+		mish, blockCRC, blockLargest, err := encodeBlock(dfw, bi, blk, secCount, &o, window)
 		if err != nil {
 			return fmt.Errorf("EncodeUDIF: block %q: %w", blk.Name, err)
 		}
+		largest = max(largest, blockLargest)
 
 		blkxEntries = append(blkxEntries, udifBlkx{
 			Attributes: firstNonEmpty(blk.Attributes, "0x0050"),
@@ -262,6 +264,11 @@ func EncodeUDIF(dst io.Writer, blocks []SourceBlock, opts *EncodeOptions) error 
 		if end := blk.StartSector + secCount; end > totalSectors {
 			totalSectors = end
 		}
+	}
+
+	// Like hdiutil, every block records the allowance of the image's largest chunk.
+	for _, entry := range blkxEntries {
+		binary.BigEndian.PutUint32(entry.Data[mishBuffersNeededOffset:], buffersNeeded(&o, largest))
 	}
 
 	dataForkLen := dfw.n
@@ -312,15 +319,16 @@ func EncodeUDIF(dst io.Writer, blocks []SourceBlock, opts *EncodeOptions) error 
 }
 
 // encodeBlock chunks a single source block, streams its compressed chunk data
-// to dfw, and returns the serialised mish block bytes plus the CRC32 of the
-// block's uncompressed data.
+// to dfw, and returns the serialised mish block bytes, the CRC32 of the
+// block's uncompressed data and the length of its largest LZFSE or LZMA chunk.
+// The caller sets BuffersNeeded once every block is encoded.
 //
 // Chunks are read, and the block CRC taken, in order on the calling goroutine.
 // With more than one worker they are compressed concurrently and written in
 // order by a single consumer, so the output does not depend on the worker
 // count. window, when non-nil, is a scratch buffer of ChunkSectors*512 bytes
 // shared across blocks, used only when the block reads lazily with one worker.
-func encodeBlock(dfw *dataForkWriter, index int, blk *SourceBlock, secCount uint64, o *EncodeOptions, window []byte) ([]byte, uint32, error) {
+func encodeBlock(dfw *dataForkWriter, index int, blk *SourceBlock, secCount uint64, o *EncodeOptions, window []byte) ([]byte, uint32, uint64, error) {
 	e := &blockEncoder{dfw: dfw, o: o, crc: crc32.NewIEEE()}
 	var err error
 	if o.Workers <= 1 {
@@ -329,7 +337,7 @@ func encodeBlock(dfw *dataForkWriter, index int, blk *SourceBlock, secCount uint
 		err = e.parallel(blk, secCount)
 	}
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, 0, err
 	}
 
 	// Terminator chunk: type 0xffffffff, SectorNumber = end sector, no data.
@@ -341,7 +349,6 @@ func encodeBlock(dfw *dataForkWriter, index int, blk *SourceBlock, secCount uint
 		StartSector:      blk.StartSector,
 		SectorCount:      secCount,
 		DataOffset:       0,
-		BuffersNeeded:    buffersNeeded(o),
 		BlockDescriptors: uint32(index),
 		Checksum:         udifChecksum(e.crc.Sum32(), o.NoChecksums),
 		ChunkCount:       e.chunkCount,
@@ -350,26 +357,26 @@ func encodeBlock(dfw *dataForkWriter, index int, blk *SourceBlock, secCount uint
 
 	var out bytes.Buffer
 	if err := binary.Write(&out, binary.BigEndian, &header); err != nil {
-		return nil, 0, err
+		return nil, 0, 0, err
 	}
 	out.Write(e.chunks.Bytes())
 
-	return out.Bytes(), e.crc.Sum32(), nil
+	return out.Bytes(), e.crc.Sum32(), e.largest, nil
 }
 
-// buffersNeeded is the BuffersNeeded field of every block: the sectors macOS
-// sets aside to decode one chunk. A zlib chunk inflates as a stream into the
-// chunk and a few sectors more, which is what hdiutil writes for UDZO (2056
-// for 1 MiB chunks). LZFSE and LZMA decode a whole chunk at once, so the
-// compressed chunk needs room beside the decoded one; compressChunk keeps it
-// smaller than the chunk, so twice the chunk suffices (hdiutil writes 4117 for
-// ULFO and 4097 for ULMO). With the zlib figure, macOS 26 fails to read some
-// LZFSE and LZMA chunks of a mounted image ("Unknown error: 1000") even though
-// hdiutil verify passes.
-func buffersNeeded(o *EncodeOptions) uint32 {
+// mishBuffersNeededOffset is where BuffersNeeded sits in a serialised mish
+// header, after Signature, Version, StartSector, SectorCount and DataOffset.
+const mishBuffersNeededOffset = 32
+
+// buffersNeeded is the BuffersNeeded that hdiutil records, measured from its
+// own images: a chunk plus 8 sectors for UDZO, and a chunk plus the image's
+// largest compressed chunk for ULFO and ULMO. The macOS disk image driver
+// relies on it: given zlib's figure, macOS 26 fails to attach or read LZFSE
+// and LZMA images that hdiutil verify accepts.
+func buffersNeeded(o *EncodeOptions, largest uint64) uint32 {
 	switch o.Compression {
 	case CompressionLZFSE, CompressionLZMA:
-		return uint32(2 * o.ChunkSectors)
+		return uint32(o.ChunkSectors + (largest+sectorSize-1)/sectorSize)
 	}
 	return uint32(o.ChunkSectors) + 8
 }
@@ -382,6 +389,7 @@ type blockEncoder struct {
 	crc        hash.Hash32
 	chunks     bytes.Buffer
 	chunkCount uint32
+	largest    uint64
 }
 
 // chunkJob is one chunk on its way through the pipeline. raw is nil for an
@@ -435,6 +443,9 @@ func (e *blockEncoder) write(sector, n uint64, zero bool, payload []byte, typ ui
 			return err
 		}
 		encodeChunkRecord(&e.chunks, typ, sector, n, coff, uint64(len(payload)))
+		if typ == chunkTypeCompressLZFSE || typ == chunkTypeCompressLZMA {
+			e.largest = max(e.largest, uint64(len(payload)))
+		}
 	}
 	e.chunkCount++
 	return nil

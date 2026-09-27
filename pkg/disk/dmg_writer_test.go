@@ -94,46 +94,60 @@ func TestEncodeDecodeSyntheticImage(t *testing.T) {
 	}
 }
 
-// TestBuffersNeededHoldsEveryChunk checks the decode room each block asks
-// macOS for: the chunk and a few sectors for zlib and raw chunks, and room for
-// the largest compressed chunk beside the decoded one for LZFSE and LZMA.
-func TestBuffersNeededHoldsEveryChunk(t *testing.T) {
+// TestBuffersNeededMatchesHdiutil checks every block's BuffersNeeded against
+// the rule measured from hdiutil's own images: a chunk plus 8 sectors for zlib
+// and raw images, and a chunk plus the image's largest compressed chunk for
+// LZFSE and LZMA, recorded in every block alike.
+func TestBuffersNeededMatchesHdiutil(t *testing.T) {
 	img := buildSyntheticImage()
+	tail := bytes.Repeat([]byte("a small, compressible block "), 1024)[:32*sectorSize]
 	for _, tc := range []struct {
 		name string
 		opts *EncodeOptions
-		want uint32
 	}{
-		{"zlib", &EncodeOptions{Compression: CompressionZlib}, 2048 + 8},
-		{"none", &EncodeOptions{Compression: CompressionNone}, 2048 + 8},
-		{"lzfse", &EncodeOptions{Compression: CompressionLZFSE}, 2 * 2048},
-		{"lzma", &EncodeOptions{Compression: CompressionLZMA}, 2 * 2048},
-		{"lzfse smallchunks", &EncodeOptions{Compression: CompressionLZFSE, ChunkSectors: 128}, 2 * 128},
+		{"zlib", &EncodeOptions{Compression: CompressionZlib}},
+		{"none", &EncodeOptions{Compression: CompressionNone}},
+		{"lzfse", &EncodeOptions{Compression: CompressionLZFSE}},
+		{"lzma", &EncodeOptions{Compression: CompressionLZMA}},
+		{"lzfse smallchunks", &EncodeOptions{Compression: CompressionLZFSE, ChunkSectors: 128}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			blocks := []SourceBlock{
+				{Name: "disk image (Apple_HFS : 0)", Data: img},
+				{Name: "tail", StartSector: uint64(len(img)) / sectorSize, Data: tail},
+			}
 			var buf bytes.Buffer
-			if err := EncodeUDIF(&buf, []SourceBlock{{Name: "disk image (Apple_HFS : 0)", Data: img}}, tc.opts); err != nil {
+			if err := EncodeUDIF(&buf, blocks, tc.opts); err != nil {
 				t.Fatalf("EncodeUDIF: %v", err)
 			}
 			r, err := NewDMGReader(bytes.NewReader(buf.Bytes()), int64(buf.Len()), DMGLimits{})
 			if err != nil {
 				t.Fatalf("NewDMGReader: %v", err)
 			}
+			chunkSectors := cmp.Or(tc.opts.ChunkSectors, encodeDefaultChunkSectors)
+			want := uint32(chunkSectors) + 8
+			if tc.opts.Compression == CompressionLZFSE || tc.opts.Compression == CompressionLZMA {
+				var largest uint64
+				for _, partition := range r.Partitions() {
+					for _, chunk := range partition.Chunks {
+						if chunk.Type == chunkTypeCompressLZFSE || chunk.Type == chunkTypeCompressLZMA {
+							largest = max(largest, chunk.CompressedLength)
+						}
+					}
+				}
+				want = uint32(chunkSectors + (largest+sectorSize-1)/sectorSize)
+			}
 			var document dmgPlist
 			if _, err := plist.Unmarshal(buf.Bytes()[r.footer.PlistOffset:r.footer.PlistOffset+r.footer.PlistLength], &document); err != nil {
 				t.Fatalf("plist: %v", err)
 			}
-			var header dmgBlockData
-			if err := binary.Read(bytes.NewReader(document.ResourceFork.Blkx[0].Data), binary.BigEndian, &header); err != nil {
-				t.Fatalf("block header: %v", err)
-			}
-			if header.BuffersNeeded != tc.want {
-				t.Fatalf("BuffersNeeded = %d, want %d", header.BuffersNeeded, tc.want)
-			}
-			chunkSectors := cmp.Or(tc.opts.ChunkSectors, encodeDefaultChunkSectors)
-			for _, chunk := range r.Partitions()[0].Chunks {
-				if (chunk.Type == chunkTypeCompressLZFSE || chunk.Type == chunkTypeCompressLZMA) && chunk.CompressedLength > (uint64(header.BuffersNeeded)-chunkSectors)*sectorSize {
-					t.Fatalf("a %d-byte chunk does not fit beside the decoded chunk", chunk.CompressedLength)
+			for _, block := range document.ResourceFork.Blkx {
+				var header dmgBlockData
+				if err := binary.Read(bytes.NewReader(block.Data), binary.BigEndian, &header); err != nil {
+					t.Fatalf("block header: %v", err)
+				}
+				if header.BuffersNeeded != want {
+					t.Fatalf("block %q BuffersNeeded = %d, want %d", block.Name, header.BuffersNeeded, want)
 				}
 			}
 		})
