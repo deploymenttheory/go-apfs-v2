@@ -107,6 +107,17 @@ jobs:
 
       - name: Vet
         run: go vet ./...
+      - name: Strict xattr API tests and coverage above 95%
+        env:
+          CGO_ENABLED: "0"
+        run: go run scripts/verify-xattrs.go
+      - name: Upload strict xattr API evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: strict-xattrs-${{ matrix.os }}
+          path: artifacts/strict-xattrs/
+          if-no-files-found: error
       - name: Build apfsck (Linux; pinned version)
         if: runner.os == 'Linux'
         run: |
