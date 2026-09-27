@@ -19,7 +19,8 @@ var (
 )
 
 // MaxXattrReadSize bounds the allocation made by ReadXattr and ReadXattrNoFollow.
-// Size queries and removal do not read or allocate attribute values.
+// Unix size queries and removal do not allocate values. Windows native EA queries
+// use fixed scratch space bounded to one maximum EA record (65799 bytes).
 const MaxXattrReadSize = 8 << 20
 
 // XattrSize returns the visible attribute's byte size and whether it exists on
@@ -32,8 +33,12 @@ const MaxXattrReadSize = 8 << 20
 // passed through without a pathname fallback. The operation holds the descriptor
 // against concurrent Close using SyscallConn.Control.
 //
-// Darwin/Linux use supported x/sys wrappers with the ordinary visible namespace.
-// Darwin compression-hidden attributes are not exposed. Other hosts return
+// Darwin/Linux use the ordinary visible namespace; Windows uses native NTFS EAs
+// through supported x/sys wrappers. Darwin compression-hidden attributes are not
+// exposed. Windows names are case-insensitive ASCII (at most 255 bytes), and
+// zero-length assignment is native deletion, not a present-empty value. Windows
+// operations reopen the held object for synchronous EA access without resolving
+// its name; current filesystem permissions still apply. Other hosts return
 // ErrXattrUnsupported. This API is independent of best-effort ListXattrs.
 func XattrSize(file *os.File, name string) (size int, present bool, err error) {
 	err = withXattrFile(file, name, func(fd int) error {

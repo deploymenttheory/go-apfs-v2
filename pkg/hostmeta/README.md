@@ -29,8 +29,10 @@ _, _ = size, present
 | `ErrXattrTooLarge` | Value exceeds the caller's explicit read limit; no value is returned |
 | `ErrXattrChanged` | A value disappeared or its observed size changed during the two-call read; no partial value or retry |
 
-Read limits range from zero to `MaxXattrReadSize` (8 MiB). Size queries and
-removal do not allocate the value. Reading a zero-length value uses a one-byte
+Read limits range from zero to `MaxXattrReadSize` (8 MiB). Unix size queries and
+removal do not allocate the value. Windows native EA queries require a complete
+record and use at most 65,799 bytes of scratch space, including for size queries.
+This is separate from the caller-bounded returned value. Reading a zero-length value uses a one-byte
 buffer to make a real read rather than another size-only query. A successful
 present-empty read returns a non-nil empty slice. Error results never return a
 truncated value. A same-size concurrent value change is not detectable: callers
@@ -55,9 +57,22 @@ there are no new direct syscalls, native bindings or helper processes. The
 namespace is the ordinary native namespace: Darwin does not request
 `XATTR_SHOWCOMPRESSION`, so compression-hidden metadata is not exposed. Linux
 namespace/permission rules still apply; names are not automatically remapped.
-Other hosts, including Windows, return `ErrXattrUnsupported`, never a successful
-empty result. `XattrsSupported` describes the platform, not every mounted
-filesystem or descriptor kind.
+Windows implements all six strict operations using native NTFS extended
+attributes through the supported `NtCreateFile`, `NtQueryEaFile` and `NtSetEaFile`
+wrappers. Path opens use `FILE_FLAG_OPEN_REPARSE_POINT`; held-object opens use an
+empty relative name without looking up `File.Name`. Access is checked against the
+current DACL, without backup privilege. Files, directories and held symbolic links
+are supported. Native EA names are case-insensitive ASCII, up to 255 bytes, with
+Windows name restrictions; values follow native EA storage limits. Assigning zero
+length deletes a native EA, so NTFS cannot store a present-empty EA. Removal
+queries presence before deletion on the same handle; concurrent mutation is not
+atomic. Protected `$Kernel.` removal is explicitly denied because Windows silently
+ignores user-mode updates in that namespace. Alternate data streams remain separate
+and untouched. The older best-effort `ListXattrs`/`SetXattrs` APIs and their
+`XattrsSupported` constant retain their existing behavior.
+
+`ErrXattrUnsupported` is reserved for other unimplemented hosts or an actual
+filesystem capability error, never used as a blanket Windows result.
 
 Removal requests deletion of one named attribute, returns true on success and
 false/nil for native absence, and preserves other errors. Hard links share the
@@ -71,8 +86,11 @@ The Mac tests compare reads and removals with `/usr/bin/xattr`, cover file/direc
 and held symlink identity, and assert real ACL-denial errors. APFS normalizes an
 empty ResourceFork and all-zero FinderInfo to absence; an ordinary empty
 attribute remains present. Linux tests cover permission denial, final-link
-behavior and rejection of `O_PATH` handles. Windows tests require explicit
-unsupported results. Shared tests cover bounded allocation, changing sizes,
+behavior and rejection of `O_PATH` handles. Windows tests perform real file/directory EA creation, query, bounded read and
+removal, including 60,000-byte values, case-insensitive lookup, empty-value
+normalization, moved handles, hard links, old-name decoys, dangling and held
+symbolic links, alternate-stream retention and real DACL denials for every API.
+No Windows lifecycle or permission test skips an unsupported result. Shared tests cover bounded allocation, changing sizes,
 disappearance, nil/closed files and retained error causes. The existing CI runs
 these tests and enforces **above 95% statement coverage in the new strict API**
 using `go run scripts/verify-xattrs.go`; this is not a whole-repository coverage
@@ -241,3 +259,7 @@ The native helper is compiled only for tests, never for production.
 Reference: Apple's [copyfile implementation](https://github.com/apple-oss-distributions/copyfile/blob/9f91eb6ced021952278816cdc76ad68da8631ccb/copyfile.c)
 and [flag masks](https://github.com/apple-oss-distributions/copyfile/blob/9f91eb6ced021952278816cdc76ad68da8631ccb/copyfile_private.h),
 pinned at `9f91eb6ced021952278816cdc76ad68da8631ccb`.
+
+Strict Windows EA references: [query](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntifs/nf-ntifs-zwqueryeafile),
+[EA wire format and zero-length deletion](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-fscc/0eb94f48-6aac-41df-a878-79f4dcfd8989),
+and [protected kernel EAs](https://learn.microsoft.com/en-us/windows-hardware/drivers/ifs/kernel-extended-attributes).

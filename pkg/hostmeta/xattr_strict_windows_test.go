@@ -42,10 +42,17 @@ func strictWindowsFile(t *testing.T, path string) *os.File {
 	if err := os.WriteFile(path, []byte("contents"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	f, err := os.Open(path)
+	p, err := windows.UTF16PtrFromString(path)
 	if err != nil {
 		t.Fatal(err)
 	}
+	// A held Windows handle must share deletion for rename/hard-link identity
+	// tests. os.Open deliberately omits FILE_SHARE_DELETE.
+	h, err := windows.CreateFile(p, windows.GENERIC_READ, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, nil, windows.OPEN_EXISTING, 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := os.NewFile(uintptr(h), path)
 	t.Cleanup(func() { _ = f.Close() })
 	return f
 }
