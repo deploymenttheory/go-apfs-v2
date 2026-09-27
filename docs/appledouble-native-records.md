@@ -83,8 +83,9 @@ The live harness records before/after maps and excludes it from logical comparis
 only when it was absent from the expected sidecar attributes and is byte-identical
 to the destination baseline. It does not broadly discard unknown attributes.
 
-Local validation: 177/180 codec statements covered (98.3%), with no skipped codec
-tests; all 44 record, 14 name and nine size/native-consumer comparisons pass.
+Portable CI validation: 181/184 codec statements covered (98.4%) on Linux, macOS
+and Windows, with 101 passing test records and no skipped codec tests. All 44
+record, 14 name and nine size/native-consumer comparisons pass on the Mac runner.
 CI independently enforces over 95% codec coverage on all three operating systems
 and runs the 386 regressions on Linux. CI artifacts retain commands, full maps,
 sidecars, readback files, coverage and source/fixture hashes.
