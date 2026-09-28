@@ -19,6 +19,7 @@ type applicationRawProcess struct {
 	Agent       string
 }
 type applicationSnapshot struct {
+	Import  *struct{ Code, Errno int }
 	Present bool
 	Bytes   string
 }
@@ -53,6 +54,7 @@ func TestNativeQuarantineApplication(t *testing.T) {
 		profile QuarantineProfile
 		count   int
 	}{
+		{"existing-macos27.json.gz", QuarantineMacOS27, 6672},
 		{"contexts-macos26.json.gz", QuarantineMacOS26, 3324},
 		{"contexts-macos27.json.gz", QuarantineMacOS27, 3328},
 		{"processes-macos26.json.gz", QuarantineMacOS26, 4388},
@@ -137,7 +139,11 @@ func verifyApplicationFixture(t *testing.T, tc applicationFixtureCase, profile Q
 	}
 	before := applicationHex(t, r.Prepared.Bytes)
 	after := applicationHex(t, r.Applied.Bytes)
-	if r.Prepared.Present {
+	if r.Prepared.Import != nil {
+		if r.Prepared.Present {
+			ctx.ExistingXattr = append([]byte{}, before...)
+		}
+	} else if r.Prepared.Present {
 		ctx.Existing, e = ParseQuarantineXattrWithProfile(before, profile)
 		if e != nil {
 			t.Fatal(e)
@@ -155,6 +161,10 @@ func verifyApplicationFixture(t *testing.T, tc applicationFixtureCase, profile Q
 		return
 	}
 	switch r.FileApplyCode {
+	case 22:
+		if r.FileApplyErrno != 22 || !errors.Is(e, ErrQuarantineExisting) || got != nil {
+			t.Fatal("native malformed existing-header failure", got, e)
+		}
 	case 34:
 		if !errors.Is(e, ErrQuarantineApplicationSize) || got != nil {
 			t.Fatal("native application range failure", got, e)

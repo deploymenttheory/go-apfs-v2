@@ -36,7 +36,9 @@ type processSnapshot struct {
 	Raw                 *rawProcessEvidence `json:",omitempty"`
 	Serialized          string              // Exact native bytes, hex encoded (including final NUL).
 }
+type xattrImport struct{ Code, Errno int }
 type xattrSnapshot struct {
+	Import          *xattrImport `json:",omitempty"`
 	Present         bool
 	Errno           int
 	Bytes, Envelope string
@@ -56,9 +58,9 @@ type runtimeCase struct {
 	Result                            runtimeResult
 }
 type runtimeFixture struct {
-	Host, Profile, HelperSHA256, SDKExportsSHA256                 string
-	BaseHelperSHA256, CaptureHelperSHA256, KernelSDKExportsSHA256 string `json:",omitempty"`
-	Records                                                       []runtimeCase
+	Host, Profile, HelperSHA256, SDKExportsSHA256                                       string
+	BaseHelperSHA256, CaptureHelperSHA256, ExistingHelperSHA256, KernelSDKExportsSHA256 string `json:",omitempty"`
+	Records                                                                             []runtimeCase
 }
 type runtimeCommand struct {
 	Args          []string
@@ -94,13 +96,14 @@ func saveRuntime(path string, v any) {
 	writeRuntime(path, append(b, '\n'))
 }
 func main() {
+	existing := flag.Bool("existing", false, "qualify raw and malformed destination quarantine state")
 	contexts := flag.Bool("contexts", false, "qualify raw process capture and confirmed absent state")
 	processes := flag.Bool("processes", false, "qualify additional effective process flag combinations")
 	normalization := flag.Bool("normalization", false, "qualify extended destination normalization inputs")
 	fixtureOverride := flag.String("fixture", "", "explicit independently captured fixture for a qualified host preparation context")
 	capture := flag.Bool("capture", false, "record independent observations without claiming qualification")
 	flag.Parse()
-	if (*processes && *normalization) || (*contexts && (*processes || *normalization)) {
+	if (*processes && *normalization) || (*contexts && (*processes || *normalization)) || (*existing && (*contexts || *processes || *normalization)) {
 		panic("choose one extended matrix")
 	}
 	root := "artifacts/appledouble-quarantine-runtime"
@@ -112,6 +115,9 @@ func main() {
 	}
 	if *contexts {
 		root += "-contexts"
+	}
+	if *existing {
+		root += "-existing"
 	}
 	mustRuntime(os.MkdirAll(root, 0755))
 	qualified := false
@@ -155,7 +161,7 @@ func main() {
 		}
 	}
 	source := "testdata/appledouble/native/quarantine-runtime.c"
-	if *contexts {
+	if *contexts || *existing {
 		base := readRuntime(source)
 		capture := readRuntime("testdata/appledouble/native/quarantine-process-capture.h")
 		observed.BaseHelperSHA256 = hashRuntime(base)
@@ -167,6 +173,15 @@ func main() {
 		}
 		generated := bytes.Replace(base, marker, append(append(bytes.Clone(capture), '\n'), marker...), 1)
 		generated = bytes.Replace(generated, end, []byte("hex(data, length); raw_process_snapshot(); putchar('}');"), 1)
+		if *existing {
+			capture := readRuntime("testdata/appledouble/native/quarantine-existing-capture.h")
+			observed.ExistingHelperSHA256 = hashRuntime(capture)
+			start, end := bytes.Index(generated, []byte("static void xattr(int fd) {")), bytes.Index(generated, []byte("static int baseline_code, baseline_errno;"))
+			if start < 0 || end <= start {
+				panic("native existing capture injection points changed")
+			}
+			generated = append(append(append(bytes.Clone(generated[:start]), capture...), '\n'), generated[end:]...)
+		}
 		source = filepath.Join(root, "quarantine-runtime-context.c")
 		writeRuntime(source, generated)
 		kernel := readRuntime(filepath.Join(sdk, "usr/lib/system/libsystem_kernel.tbd"))
@@ -192,6 +207,9 @@ func main() {
 	if *contexts {
 		cases = contextCases(observed.Profile)
 	}
+	if *existing {
+		cases = existingCases()
+	}
 	for _, tc := range cases {
 		dir, e := os.MkdirTemp(root, tc.Name+"-")
 		mustRuntime(e)
@@ -212,7 +230,7 @@ func main() {
 		validateRuntime(tc)
 		observed.Records = append(observed.Records, tc)
 	}
-	if *contexts {
+	if *contexts || *existing {
 		absent, present := 0, 0
 		for _, tc := range observed.Records {
 			raw := tc.Result.Effective.Raw
@@ -244,6 +262,9 @@ func main() {
 	if *contexts {
 		fixturePath = "testdata/appledouble/native/quarantine-contexts-" + observed.Profile + ".json.gz"
 	}
+	if *existing {
+		fixturePath = "testdata/appledouble/native/quarantine-existing-" + observed.Profile + ".json.gz"
+	}
 	if *fixtureOverride != "" {
 		fixturePath = *fixtureOverride
 	}
@@ -256,7 +277,7 @@ func main() {
 		mustRuntime(z.Close())
 	}
 	mustRuntime(json.Unmarshal(data, &fixture))
-	if fixture.Profile != observed.Profile || fixture.HelperSHA256 != observed.HelperSHA256 || fixture.BaseHelperSHA256 != observed.BaseHelperSHA256 || fixture.CaptureHelperSHA256 != observed.CaptureHelperSHA256 || len(fixture.Records) != len(observed.Records) {
+	if fixture.Profile != observed.Profile || fixture.HelperSHA256 != observed.HelperSHA256 || fixture.BaseHelperSHA256 != observed.BaseHelperSHA256 || fixture.CaptureHelperSHA256 != observed.CaptureHelperSHA256 || fixture.ExistingHelperSHA256 != observed.ExistingHelperSHA256 || len(fixture.Records) != len(observed.Records) {
 		panic("runtime fixture provenance or case count")
 	}
 	for i, want := range fixture.Records {
@@ -359,6 +380,9 @@ func compareRuntime(name string, want, got runtimeResult) {
 	compareRuntimeXattr(name+"/applied-envelope", a, b, want, got)
 }
 func compareRuntimeXattr(name string, want, got xattrSnapshot, oldInterval, newInterval runtimeResult) {
+	if !reflect.DeepEqual(want.Import, got.Import) {
+		panic("xattr import differs: " + name)
+	}
 	if want.Present != got.Present || want.Errno != got.Errno {
 		panic("xattr presence differs: " + name)
 	}
@@ -369,6 +393,9 @@ func compareRuntimeXattr(name string, want, got xattrSnapshot, oldInterval, newI
 	mustRuntime(e)
 	b, e := hex.DecodeString(got.Bytes)
 	mustRuntime(e)
+	if bytes.Equal(a, b) {
+		return
+	}
 	x, y := bytes.SplitN(a, []byte{';'}, 4), bytes.SplitN(b, []byte{';'}, 4)
 	if len(x) != 4 || len(y) != 4 {
 		panic("unexpected runtime xattr form: " + name)
@@ -729,7 +756,29 @@ func verifyApplicationPlan(tc runtimeCase, profileName string) applicationCompar
 		}
 	}
 	before, after := decode(r.Prepared.Bytes), decode(r.Applied.Bytes)
-	if r.Prepared.Present {
+	if r.Prepared.Import != nil {
+		for _, snapshot := range []xattrSnapshot{r.Prepared, r.Applied} {
+			if !snapshot.Present {
+				continue
+			}
+			q, err := appledouble.ParseQuarantineXattrWithProfile(decode(snapshot.Bytes), profile)
+			if (err == nil) != (snapshot.Import.Code == 0) {
+				panic("native/Go existing import differs: " + tc.Name)
+			}
+			if err == nil {
+				envelope, err := q.MarshalBinaryWithProfile(profile)
+				mustRuntime(err)
+				if !bytes.Equal(envelope, decode(snapshot.Envelope)) {
+					panic("native/Go existing envelope differs: " + tc.Name)
+				}
+			} else if snapshot.Envelope != "" {
+				panic("failed import has envelope: " + tc.Name)
+			}
+		}
+		if r.Prepared.Present {
+			ctx.ExistingXattr = append([]byte{}, before...)
+		}
+	} else if r.Prepared.Present {
 		q, e := appledouble.ParseQuarantineXattrWithProfile(before, profile)
 		mustRuntime(e)
 		ctx.Existing = q
@@ -758,6 +807,11 @@ func verifyApplicationPlan(tc runtimeCase, profileName string) applicationCompar
 			result.ErrorKind = "application-size"
 			if r.FileApplyCode != 34 {
 				panic("native size outcome differs: " + tc.Name)
+			}
+		case errors.Is(e, appledouble.ErrQuarantineExisting):
+			result.ErrorKind = "invalid-existing-header"
+			if r.FileApplyCode != 22 || r.FileApplyErrno != 22 {
+				panic("native existing-header outcome differs: " + tc.Name)
 			}
 		case errors.Is(e, appledouble.ErrQuarantineMissing):
 			result.ErrorKind = "missing-attribute"
@@ -805,4 +859,46 @@ func verifyApplicationPlan(tc runtimeCase, profileName string) applicationCompar
 		panic("native destination changed on preservation/error: " + tc.Name)
 	}
 	return result
+}
+
+// Existing values intentionally include data rejected by full library import.
+// All baseline writes happen before the helper changes its own process label.
+func existingCases() []runtimeCase {
+	var cases []runtimeCase
+	add := func(name string, process []byte, flags uint32, baseline []byte, kind string) {
+		cases = append(cases, runtimeCase{Name: name, Kind: kind, CreationOrder: "before", ProcessInput: process, Baseline: baseline, FileInput: []byte(fmt.Sprintf("q/%04x;12345678;Source;Identifier\x00", flags))})
+	}
+	values := [][]byte{nil, {}, []byte("garbage"), []byte("0006"), []byte("6"), []byte("0006;"), []byte("0006;invalid"), []byte("0006;0"), []byte("0006;0;"), []byte("0006;0;Agent"), []byte("0006;0;Agent;ID"), []byte("0006garbage"), []byte("00060000;0;A;B"), []byte("ffff;0;A;B"), []byte("2006;0;A;B"), []byte("0000;0;A;B"), []byte("0002;0;A;B"), []byte("0004;0;A;B"), []byte("0006\x00;0;A;B"), []byte("0006;0\x00junk"), []byte("0006;0;A\\x00B;C"), []byte("0006;0;A;B;C"), []byte("0006;0;\xff;\xfe"), []byte("q/0006;0;A;B")}
+	for _, header := range []string{" 006", "\t006", "\n006", "\r006", "\v006", "\f006", "+006", "-006", "0x06", "0X06", "0x6", "06", "006", "6", "0006 ", "0x", "-0x", "+", "-", "", "ffff", "FFFF"} {
+		values = append(values, []byte(header+";0;A;B"))
+	}
+	for _, stamp := range []string{"", "z", "+", "-", "0x", "-0x", "+1", "-1", " 0", "\t0", "\x000", "123456789", "ffffffff", "00000000junk"} {
+		values = append(values, []byte("0006;"+stamp+";A;B"))
+	}
+	for _, length := range []int{255, 256, 381, 382, 383, 384, 511, 512, 1023, 1024, 4096} {
+		for _, prefix := range []string{"0006;0;", "garbage", "0006;0\x00"} {
+			values = append(values, []byte(prefix+strings.Repeat("X", length-len(prefix))))
+		}
+	}
+	for _, n := range []int{380, 381, 382, 383, 500, 1020, 2000} {
+		values = append(values, []byte(strings.Repeat(" ", n)+"6;0"), []byte("0006;"+strings.Repeat(" ", n)+"0"))
+	}
+	processes := [][]byte{nil, []byte("q/0001;Process;"), []byte("q/0002;Process;"), []byte("q/0004;Process;")}
+	for vi, baseline := range values {
+		for pi, process := range processes {
+			for _, flags := range []uint32{1, 2, 4, 0x40, 0x60, 0x218} {
+				for _, kind := range []string{"file", "directory"} {
+					add(fmt.Sprintf("existing-%03d-p%d-%04x-%s", vi, pi, flags, kind), process, flags, baseline, kind)
+				}
+			}
+		}
+	}
+	for b := 0; b <= 255; b++ {
+		for i, baseline := range [][]byte{append([]byte{byte(b)}, []byte("006;0;A;B")...), append(append([]byte("0006;"), byte(b)), []byte("0;A;B")...)} {
+			for _, flags := range []uint32{1, 0x40, 0x218} {
+				add(fmt.Sprintf("existing-byte-%02x-field%d-%04x", b, i, flags), processes[2], flags, baseline, "file")
+			}
+		}
+	}
+	return cases
 }

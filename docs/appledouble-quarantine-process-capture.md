@@ -91,7 +91,7 @@ cannot silently qualify the new behavior.
 
 Production capture and host transport still need integration, including capture
 races, additional privilege/tracking contexts and errors. An absent process on
-macOS 27 is not qualified. Destination automatic creation, malformed existing
-values, links, cleanup/callback behavior and the remaining size/allocation gaps
+macOS 27 is not qualified. Destination automatic creation, links,
+cleanup/callback behavior and the remaining size/allocation gaps
 also remain part of the [migration gate](appledouble-migration.md). Package PR #72
 stays draft and codesign remains paused until that gate is complete.
