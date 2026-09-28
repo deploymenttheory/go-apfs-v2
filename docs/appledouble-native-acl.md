@@ -85,8 +85,9 @@ APFS on-disk security record has the same representation.
 
 `Decode`, `Encode` and `Xattrs` continue to preserve raw serialized ACL records.
 Parsing is explicit: invalid ACL policy text does not invalidate an otherwise
-readable AppleDouble container. Applying deferred/duplicate ACL records, native
-inheritance, ownership/file flags and destination policy remains separate work.
+readable AppleDouble container. Deferred/duplicate record selection is available through `File.ACLUpdate`;
+executing the result, native inheritance, ownership/file flags and destination
+write-failure policy remain separate work.
 Canonical text formatting and external-binary import are described below.
 
 ## Quarantine finding and remaining gate
@@ -163,3 +164,57 @@ Source licenses remain in the retained files.
 `FuzzACLBinary` checks bounded import and stable binary/text canonicalization.
 The portable unit suite exercises fixture agreement, every truncation of a
 single-entry blob, input ownership and source resolver success/failure paths.
+
+## Deferred replacement decisions
+
+`File.ACLUpdate(resolve)` interprets the ordered ACL records for a consumer that
+will apply metadata. Its `ACLUpdate` result separates three outcomes:
+
+| Result | Consumer action |
+| --- | --- |
+| `ACL == nil`, `Invalid == false` | Preserve the existing ACL; there was no nonempty ACL record. |
+| `ACL == nil`, `Invalid == true` | Preserve the existing ACL; native unpack ignores the selected malformed text. Report or reject this explicitly if the consumer requires stricter validation. |
+| `ACL != nil` | Replace the existing ACL after restoring other metadata. A valid zero-entry ACL requests clearing entries. |
+
+`RecordIndex` identifies the selected `File.Attrs` entry, or -1 if none was
+selected. Only the last nonempty `com.apple.acl.text` record is parsed. An empty
+record cannot undo an earlier nonempty record. Invalid later text prevents an
+earlier valid ACL from being applied; there is no fallback. Earlier principal
+names are never resolved. Missing source resolution and callback failures return
+errors, including callback errors that wrap `ErrACLText`; consumers must not
+mistake operational failure for an ignored malformed record.
+
+This is a pure-Go decision API on all three OSes, with no destination mutation.
+It does not merge entries with an existing ACL. It also does not translate a
+macOS ACL into a Linux or Windows ACL, model every destination's inheritance or
+file flags, or claim success applying permissions. Those responsibilities remain
+with shared metadata transport. `Xattrs` retains its raw serialized-map behavior;
+consumers needing ACL policy must use the ordered-record API explicitly.
+
+The native fixture `acl-update.json` captures 21 cases on each of a file and a
+directory, both starting with a known existing ACL. The independent helper sets
+and reads that baseline, native copyfile unpacks a raw sidecar, and the helper
+reads the actual destination ACL afterward. Cases include absence, empty/NUL-only
+records, malformed text, clearing, allow/deny replacement, duplicates, trailing
+NUL data, inert entries, zero UUIDs and global inherit flags. All 42 native
+unpacks succeeded; malformed text was ignored, while valid replacements matched
+the portable binary representation. Clearing a zero-flag, zero-entry ACL made
+native `acl_get_file` report ENOENT. Inert entries remained in the binary ACL
+although native text formatting omitted them.
+
+Portable tests replay the raw sidecars and compare the decision's resulting ACL
+with those independent before/after bytes. The native CI harness recreates each
+baseline and requires the same live outcome. Expected missing-ACL readback is
+accepted only for the corresponding fixture, with exit status 1, ENOENT and a
+successful stat of the destination. Missing files, setup failures and unexpected
+read errors fail the check. The report retains the selected record, invalid-text
+flag, native equality and policy equality; raw sidecars and readbacks remain in
+the ACL artifact.
+
+The source for this decision is the pinned copyfile revision documented in the
+size investigation: `copyfile_unpack` defers the last nonempty record until after
+other metadata, and `copyfile_unpack_acl` ignores a failed text parse. The full
+source and hash are retained in the ACL artifact. Existing AST evidence covers
+Libc parsing/conversion and copyfile wire structures; this increment does not
+claim to compile copyfile's private filesystem implementation. Native runtime
+probes establish the observed destination behavior.

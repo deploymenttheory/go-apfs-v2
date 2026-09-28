@@ -36,6 +36,13 @@ var results []result
 var roundTrips []string
 var externalResults []result
 var identityResults []string
+var updateResults []aclUpdateResult
+
+type aclUpdateResult struct {
+	Name, Kind                                     string
+	RecordIndex                                    int
+	Invalid, AfterAbsent, NativeEqual, PolicyEqual bool
+}
 
 func must(err error) {
 	if err != nil {
@@ -66,7 +73,7 @@ func main() {
 	passed := false
 	defer func() {
 		failure := recover()
-		report := map[string]any{"passed": passed, "goos": runtime.GOOS, "goarch": runtime.GOARCH, "commands": commands, "comparisons": results, "round_trips": roundTrips, "external_comparisons": externalResults, "identity_comparisons": identityResults}
+		report := map[string]any{"passed": passed, "goos": runtime.GOOS, "goarch": runtime.GOARCH, "commands": commands, "comparisons": results, "round_trips": roundTrips, "external_comparisons": externalResults, "identity_comparisons": identityResults, "acl_updates": updateResults}
 		if failure != nil {
 			report["failure"] = fmt.Sprint(failure)
 		}
@@ -185,6 +192,7 @@ func main() {
 	// no account database or host-specific principal mapping can affect the result.
 	unpack := filepath.Join(root, "copyfile")
 	run("xcrun", "clang", "-Wall", "-Wextra", "-Werror", "testdata/appledouble/native/probe.c", "-o", unpack)
+	verifyACLUpdates(root, helper, unpack)
 	for _, kind := range []string{"file", "directory"} {
 		dir, e := os.MkdirTemp(root, "roundtrip-"+kind+"-")
 		must(e)
@@ -230,7 +238,7 @@ func main() {
 		roundTrips = append(roundTrips, kind)
 	}
 	passed = true
-	fmt.Printf("ACL oracle: %d parser, %d external, %d identity cases and %d filesystem round trips passed\n", len(results), len(externalResults), len(identityResults), len(roundTrips))
+	fmt.Printf("ACL oracle: %d parser, %d external, %d identity cases, %d filesystem round trips and %d ACL updates passed\n", len(results), len(externalResults), len(identityResults), len(roundTrips), len(updateResults))
 }
 
 func verifyExternal(root string, source []byte) {
@@ -350,5 +358,100 @@ func verifyIdentities(root, helper string) {
 			panic("source identity text differs: " + tc.kind)
 		}
 		identityResults = append(identityResults, tc.kind)
+	}
+}
+
+func verifyACLUpdates(root, helper, unpack string) {
+	var fixture struct {
+		SourceSHA256, ACLHelperSHA256, CopyfileHelperSHA256 string
+		Records                                             []struct {
+			Name, Kind            string
+			Raw, Before, After    []byte
+			Accepted, AfterAbsent bool
+		}
+	}
+	must(json.Unmarshal(read("testdata/appledouble/native/acl-update.json"), &fixture))
+	if len(fixture.Records) != 42 || fmt.Sprintf("%x", sha256.Sum256(read("testdata/appledouble/native/acl.c"))) != fixture.ACLHelperSHA256 || fmt.Sprintf("%x", sha256.Sum256(read("testdata/appledouble/native/probe.c"))) != fixture.CopyfileHelperSHA256 {
+		panic("ACL update fixture provenance")
+	}
+	// Pinned copyfile source is independently fetched by the preceding native
+	// pack/unpack CI step; this script also fetches it for standalone execution.
+	client := http.Client{Timeout: 30 * time.Second}
+	response, e := client.Get("https://raw.githubusercontent.com/apple-oss-distributions/copyfile/9f91eb6ced021952278816cdc76ad68da8631ccb/copyfile.c")
+	must(e)
+	source, e := io.ReadAll(io.LimitReader(response.Body, 2<<20))
+	must(e)
+	must(response.Body.Close())
+	if response.StatusCode != http.StatusOK || fmt.Sprintf("%x", sha256.Sum256(source)) != fixture.SourceSHA256 {
+		panic("ACL update copyfile source hash")
+	}
+	write(filepath.Join(root, "copyfile.c"), source)
+	for _, tc := range fixture.Records {
+		if !tc.Accepted {
+			panic("fixture contains failed unpack")
+		}
+		dir := filepath.Join(root, "updates", tc.Kind+"-"+tc.Name)
+		must(os.MkdirAll(dir, 0700))
+		work, e := os.MkdirTemp(dir, "destination-")
+		must(e)
+		dst := filepath.Join(work, "item")
+		if tc.Kind == "directory" {
+			must(os.Mkdir(dst, 0700))
+		} else if tc.Kind == "file" {
+			write(dst, nil)
+		} else {
+			panic("unknown destination kind")
+		}
+		// Restore the independently captured baseline and check native setup exactly.
+		before, e := appledouble.ParseACLBinary(tc.Before)
+		must(e)
+		text, e := before.MarshalText()
+		must(e)
+		write(filepath.Join(dir, "before.txt"), text)
+		run(helper, "set", filepath.Join(dir, "before.txt"), dst)
+		run(helper, "get", dst, filepath.Join(dir, "before.bin"), filepath.Join(dir, "before-canonical.txt"))
+		if !bytes.Equal(read(filepath.Join(dir, "before.bin")), tc.Before) {
+			panic("ACL baseline differs")
+		}
+		write(filepath.Join(dir, "input.ad"), tc.Raw)
+		run(unpack, "unpack", filepath.Join(dir, "input.ad"), dst)
+		output, getErr := observe(helper, "get", dst, filepath.Join(dir, "after.bin"), filepath.Join(dir, "after.txt"))
+		absent := getErr != nil
+		if absent {
+			var exit *exec.ExitError
+			if !tc.AfterAbsent || !errors.As(getErr, &exit) || exit.ExitCode() != 1 || !strings.HasPrefix(string(output), "get failed: errno=2 ") {
+				panic(fmt.Sprintf("unexpected ACL read failure: %v %s", getErr, output))
+			}
+			commands[len(commands)-1].ExpectedFailure = true
+			_, e := os.Stat(dst)
+			must(e)
+		}
+		nativeEqual := absent == tc.AfterAbsent
+		if !absent {
+			nativeEqual = nativeEqual && bytes.Equal(read(filepath.Join(dir, "after.bin")), tc.After)
+		}
+		if !nativeEqual {
+			panic("native ACL update differs: " + tc.Name)
+		}
+		f, e := appledouble.Decode(tc.Raw)
+		must(e)
+		update, e := f.ACLUpdate(nil)
+		must(e)
+		policyEqual := false
+		switch {
+		case update.ACL == nil:
+			policyEqual = !absent && bytes.Equal(tc.Before, tc.After)
+		case absent:
+			policyEqual = update.ACL.Flags == 0 && len(update.ACL.Entries) == 0
+		default:
+			b, e := update.ACL.MarshalBinary()
+			must(e)
+			write(filepath.Join(dir, "go.bin"), b)
+			policyEqual = bytes.Equal(b, tc.After)
+		}
+		if !policyEqual {
+			panic("portable ACL update differs: " + tc.Name)
+		}
+		updateResults = append(updateResults, aclUpdateResult{Name: tc.Name, Kind: tc.Kind, RecordIndex: update.RecordIndex, Invalid: update.Invalid, AfterAbsent: absent, NativeEqual: nativeEqual, PolicyEqual: policyEqual})
 	}
 }

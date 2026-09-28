@@ -15,7 +15,7 @@ The [record-validation increment](appledouble-native-records.md) adds native
 observations for duplicate/overlapping records, header selection and actual read
 bounds. The [FinderInfo/resource-fork increment](appledouble-native-special.md)
 fixes FinderInfo lengths, zero/absent handling and ordered fork writes. Reserved
-ACL text/binary conversion and source-resolved text formatting are covered by the
+ACL conversion, source-resolved formatting and deferred replacement decisions are covered by the
 [ACL interpretation increment](appledouble-native-acl.md). ACL application,
 quarantine policy, remaining size policy and shared transport remain
 outstanding, in that order. The allocation guard's stricter alias policy is
