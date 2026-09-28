@@ -107,7 +107,9 @@ filesystem transport:
 1. **Complete ACL application and transport.** Integrate deferred replacement
    decisions with source identity transport, inheritance, ownership, file flags
    and destination write-failure handling.
-2. **Implement quarantine application policy.** Build on the envelope codec to
+2. **Implement quarantine application policy.** Use the
+   [controlled runtime evidence](../../docs/appledouble-quarantine-runtime.md) and
+   envelope codec to
    reproduce native flag, timestamp and agent normalization using explicit runtime
    context. Integrate the ordered update decisions with destination cleanup,
    existing state, source-state capture and write-failure handling.
