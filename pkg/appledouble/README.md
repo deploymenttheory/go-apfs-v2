@@ -5,7 +5,8 @@ AppleDouble stores macOS file metadata in a separate file, usually named
 resource fork and extended attributes belonging to `Report.pdf`.
 
 `pkg/appledouble` reads and writes those metadata bytes in pure Go. It also
-interprets serialized macOS ACLs (access control lists). The same implementation
+interprets serialized macOS ACLs (access control lists) and quarantine envelopes.
+The same implementation
 works on Linux, macOS and Windows without cgo, macOS commands or access to a host
 account database.
 
@@ -29,6 +30,7 @@ to process the bytes.
 | Building a package or archive that carries macOS metadata | Encode captured metadata into an AppleDouble sidecar. |
 | Preserving metadata across filesystems or operating systems | Encode and decode the metadata container used by the surrounding transport layer. |
 | Inspecting a serialized `com.apple.acl.text` record | Convert between ACL text, structured entries and portable external binary bytes. |
+| Inspecting a serialized `com.apple.quarantine` record | Parse its envelope or construct canonical serialized quarantine bytes. |
 
 The package operates on bytes. Filesystem reads/writes, choosing where to store a
 sidecar, resolving filename conflicts and applying permissions belong to the
@@ -53,12 +55,18 @@ full AppleDouble transport integration is on the roadmap below.
 - **ACL update decisions:** `File.ACLUpdate` selects the last nonempty ACL record
   and reports whether to preserve or replace the destination ACL. Malformed text
   is explicitly marked as ignored; a valid zero-entry ACL requests clearing.
+- **Quarantine conversion:** `ParseQuarantine` reads the serialized `q/` envelope;
+  `Quarantine.MarshalBinary` writes canonical bytes. These APIs handle escaping,
+  field limits and native parsing quirks without applying destination policy.
+  The default targets macOS 27. The `WithProfile` variants explicitly select
+  macOS 26 or 27 behavior on any supported operating system.
 
 Always check encoding and decoding errors. FinderInfo must contain exactly 32
 bytes. `Sniff` is a format hint; `Decode` performs validation. Canonical encoding
 can change padding or layout while preserving logical metadata.
 
-ACL parsing is explicit. The raw codec preserves ACL and quarantine payloads;
+ACL and quarantine parsing are explicit. The raw codec preserves ACL and
+quarantine payloads;
 executing ACL update decisions or restoring quarantine state is a
 separate operation. Binary ACL conversion retains unknown bits and entry kinds;
 text formatting follows macOS by emitting only known bits and allow/deny entries.
@@ -93,8 +101,9 @@ filesystem transport:
 1. **Complete ACL application and transport.** Integrate deferred replacement
    decisions with source identity transport, inheritance, ownership, file flags
    and destination write-failure handling.
-2. **Implement quarantine policy.** Validate the serialized envelope and reproduce
-   native flag, timestamp and agent normalization using explicit runtime context.
+2. **Implement quarantine application policy.** Build on the envelope codec to
+   reproduce native flag, timestamp and agent normalization using explicit runtime
+   context. Qualify source overrides, existing destinations and record selection.
 3. **Resolve large-value and allocation behavior.** Qualify oversized attributes,
    aggregates and resource forks. Resolve the difference between native packing
    of values above 16 MiB and the codec's preservation behavior, and between
@@ -111,5 +120,6 @@ For implementation detail, see the [migration and implementation plan](../../doc
 The native investigations document [sizes](../../docs/appledouble-native-sizes.md),
 [names](../../docs/appledouble-native-names.md),
 [records](../../docs/appledouble-native-records.md),
-[FinderInfo/resource forks](../../docs/appledouble-native-special.md) and
-[ACLs](../../docs/appledouble-native-acl.md).
+[FinderInfo/resource forks](../../docs/appledouble-native-special.md),
+[ACLs](../../docs/appledouble-native-acl.md) and
+[quarantine](../../docs/appledouble-native-quarantine.md).

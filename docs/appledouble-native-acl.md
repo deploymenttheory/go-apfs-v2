@@ -92,13 +92,10 @@ Canonical text formatting and external-binary import are described below.
 
 ## Quarantine finding and remaining gate
 
-Initial native research shows that a packed quarantine record contains `q/`,
-then quarantine text, then NUL. Plain xattr text alone was not restored by the
-native unpacker. With a valid native envelope, unpacking refreshed the timestamp
-and agent fields; setting an initial `0001` flag produced `0081` on the observed
-host. These are preliminary observations, not a complete quarantine API or a
-portable fixture qualification claim. The next policy increment must retain
-independent envelope and runtime-context fixtures before implementing this.
+The [quarantine codec and native investigation](appledouble-native-quarantine.md)
+now cover serialized envelope parsing and canonical output. Independent
+application observations distinguish fresh-file and directory behavior; runtime
+normalization remains separate policy work.
 
 Remaining work includes ACL application and source identity transport,
 quarantine normalization, remaining size/allocation policy and shared host metadata
