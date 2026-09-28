@@ -18,6 +18,11 @@ var ErrQuarantineApplicationSize = errors.New("appledouble: quarantine applicati
 // quarantine attribute but finds none (the qualified native ENOATTR outcome).
 var ErrQuarantineMissing = errors.New("appledouble: quarantine application requires an existing attribute")
 
+// ErrQuarantineExisting identifies the native EINVAL outcome when application
+// needs the destination's numeric quarantine header but cannot interpret it.
+// Other operations can replace or preserve the same malformed bytes successfully.
+var ErrQuarantineExisting = errors.New("appledouble: quarantine application requires a valid existing header")
+
 // MaxQuarantineApplicationSize is the largest canonical plain value accepted
 // before native application. This is distinct from MaxQuarantineXattrSize.
 const MaxQuarantineApplicationSize = 381
@@ -45,16 +50,20 @@ type QuarantineProcess struct {
 // further native qualification.
 //
 // Existing describes the actual prepared destination, after cleanup or baseline
-// writes; nil means confirmed attribute absence. Timestamp is an injected Unix
+// writes. Alternatively, ExistingXattr supplies its exact filesystem bytes,
+// including malformed values: nil means absent and a non-nil empty slice means
+// present with zero bytes. Supply at most one representation. With neither set,
+// attribute absence is confirmed. Timestamp is an injected Unix
 // time in seconds, used when policy refreshes a regular file's timestamp.
 // Directory selects the qualified directory behavior; links and other object
 // kinds have not been qualified. This type grants no filesystem permission.
 type QuarantineApplicationContext struct {
-	Profile   QuarantineProfile
-	Process   *QuarantineProcess
-	Existing  *Quarantine
-	Directory bool
-	Timestamp uint32
+	Profile       QuarantineProfile
+	Process       *QuarantineProcess
+	Existing      *Quarantine
+	ExistingXattr []byte
+	Directory     bool
+	Timestamp     uint32
 }
 
 // QuarantineApplication requests either an exact xattr write or preservation.
@@ -82,6 +91,9 @@ func (q *Quarantine) PlanApplication(ctx QuarantineApplicationContext) (*Quarant
 		return nil, err
 	}
 	if ctx.Existing != nil {
+		if ctx.ExistingXattr != nil {
+			return nil, ErrQuarantine
+		}
 		if _, err := ctx.Existing.MarshalBinaryWithProfile(ctx.Profile); err != nil {
 			return nil, err
 		}
@@ -104,10 +116,17 @@ func (q *Quarantine) PlanApplication(ctx QuarantineApplicationContext) (*Quarant
 		return &QuarantineApplication{Write: true, Value: raw}, nil
 	}
 	sandbox := ctx.Process.Flags&2 != 0
+	existingFlags, existingValid := uint32(0), true
+	existingPresent := ctx.Existing != nil || ctx.ExistingXattr != nil
 	if sandbox {
 		flags &^= 0x60
 		if ctx.Existing != nil {
-			flags |= ctx.Existing.Flags & 6
+			existingFlags = ctx.Existing.Flags
+		} else if ctx.ExistingXattr != nil {
+			existingFlags, existingValid = quarantineExistingHeader(ctx.ExistingXattr)
+		}
+		if existingValid {
+			flags |= existingFlags & 6
 		}
 		if flags == 0 {
 			// This native fallback keeps the input's encoded fields and timestamp,
@@ -120,8 +139,13 @@ func (q *Quarantine) PlanApplication(ctx QuarantineApplicationContext) (*Quarant
 		flags &^= 0x218
 	}
 	if flags == 0 {
-		if sandbox && ctx.Existing == nil {
-			return nil, ErrQuarantineMissing
+		if sandbox {
+			if !existingPresent {
+				return nil, ErrQuarantineMissing
+			}
+			if !existingValid {
+				return nil, ErrQuarantineExisting
+			}
 		}
 		return &QuarantineApplication{}, nil
 	}
@@ -137,6 +161,23 @@ func (q *Quarantine) PlanApplication(ctx QuarantineApplicationContext) (*Quarant
 	// Native truncates encoded bytes, even partway through a four-byte escape.
 	value = append(value, identifier[:min(len(identifier), 63)]...)
 	return &QuarantineApplication{Write: true, Value: value}, nil
+}
+
+// Native application consumes two numeric assignments, not a libquarantine
+// import. Field lengths, flag masks and the trailing text are irrelevant here.
+// Reuse the codec's scanner without normalizing zero or validating the envelope.
+func quarantineExistingHeader(data []byte) (uint32, bool) {
+	s := string(data)
+	if n := strings.IndexByte(s, 0); n >= 0 {
+		s = s[:n]
+	}
+	// XNU's scanner skips space, tab and LF, unlike libc's six ASCII spaces.
+	flags, pos, ok := quarantineHexSpace(s, 0, 4, " \t\n")
+	if !ok || pos >= len(s) || s[pos] != ';' {
+		return 0, false
+	}
+	_, _, ok = quarantineHexSpace(s, pos+1, 8, " \t\n")
+	return flags, ok
 }
 
 func qualifiedQuarantineProcess(profile QuarantineProfile, p *QuarantineProcess) bool {

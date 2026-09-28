@@ -118,7 +118,9 @@ filesystem transport:
    [controlled runtime evidence](../../docs/appledouble-quarantine-runtime.md) and
    application planner to unresolved process contexts (including absence on macOS
    27), production raw-agent capture and destination kinds. Integrate ordered plans with destination cleanup,
-   existing state, source-state capture and write-failure handling.
+   source-state capture and write-failure handling. Raw existing values, including
+   malformed metadata, are handled by `ExistingXattr`; see
+   [destination-state policy](../../docs/appledouble-quarantine-existing.md).
 3. **Resolve large-value and allocation behavior.** Qualify oversized attributes,
    aggregates and resource forks. Resolve the difference between native packing
    of values above 16 MiB and the codec's preservation behavior, and between

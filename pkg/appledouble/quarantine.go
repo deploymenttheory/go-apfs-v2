@@ -101,7 +101,11 @@ func ParseQuarantineWithProfile(data []byte, profile QuarantineProfile) (*Quaran
 }
 
 func quarantineHex(s string, pos, width int) (uint32, int, bool) {
-	for pos < len(s) && strings.IndexByte(" \t\n\r\v\f", s[pos]) >= 0 {
+	return quarantineHexSpace(s, pos, width, " \t\n\r\v\f")
+}
+
+func quarantineHexSpace(s string, pos, width int, space string) (uint32, int, bool) {
+	for pos < len(s) && strings.IndexByte(space, s[pos]) >= 0 {
 		pos++
 	}
 	end := pos + min(width, len(s)-pos)

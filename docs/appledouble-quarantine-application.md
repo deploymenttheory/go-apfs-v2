@@ -27,7 +27,7 @@ plan, err := source.PlanApplication(appledouble.QuarantineApplicationContext{
         Agent: "Browser", // Known raw kernel agent bytes.
     },
     Timestamp: 1700000000, // Injected operation time; no hidden clock read.
-    // Existing: nil means confirmed absence after destination preparation.
+    // Existing and ExistingXattr both nil confirm absence after preparation.
 })
 if err != nil {
     return err
@@ -39,6 +39,13 @@ if plan.Write {
 ```
 
 ## Context and supported behavior
+
+Supply `ExistingXattr` when you have exact destination bytes. A non-nil empty
+slice means an existing zero-byte attribute; nil means absent unless `Existing`
+supplies a valid imported model. Supplying both representations is an error.
+The raw form handles values that full library import rejects, without discarding
+the original bytes. See [existing destination state](appledouble-quarantine-existing.md)
+for numeric-header interpretation and the `ErrQuarantineExisting` outcome.
 
 The caller selects the target profile independently of its operating system.
 Qualified effective process flags are `0001` through `001f` for macOS 26 and
@@ -68,7 +75,8 @@ The raw-process native matrix instead reads the kernel agent through libSystem,
 without deriving it from a request or reconstructing lost snapshot bytes.
 Production capture and integration still remain transport work.
 
-`Existing` is a valid imported destination model, or nil for confirmed absence.
+`Existing` supplies a valid imported destination model. Use `ExistingXattr` for
+exact raw bytes; both nil confirm absence.
 `Directory` selects the qualified directory behavior; regular files use the
 injected `Timestamp`. Symlinks and other object kinds still require qualification.
 Input models and process state are not mutated, and every write result owns its
@@ -143,6 +151,7 @@ CGO_ENABLED=0 go run scripts/verify-appledouble-quarantine-runtime.go
 CGO_ENABLED=0 go run scripts/verify-appledouble-quarantine-runtime.go -normalization
 CGO_ENABLED=0 go run scripts/verify-appledouble-quarantine-runtime.go -processes
 CGO_ENABLED=0 go run scripts/verify-appledouble-quarantine-runtime.go -contexts
+CGO_ENABLED=0 go run scripts/verify-appledouble-quarantine-runtime.go -existing
 ```
 
 Native runs require macOS and Command Line Tools; portable production and tests
@@ -153,7 +162,7 @@ architectures. `-capture` remains an unqualified native-only recording mode.
 ## Remaining work
 
 1. Qualify absent process state on macOS 27, other effective process contexts,
-   production raw-agent capture, additional privilege/entitlement combinations, malformed existing values,
+   production raw-agent capture, additional privilege/entitlement combinations,
    links and destination protection.
 2. Integrate ordered plans with real source capture, destination preparation,
    actual write/readback and `copyfile` callback/error handling in shared transport.
