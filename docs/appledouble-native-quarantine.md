@@ -39,7 +39,8 @@ escapes, embedded NULs and decoded field boundaries. Portable unit tests replay
 all cases. The corresponding [macOS 26 corpus](../testdata/appledouble/native/quarantine-macos26.json)
 records the same 434 inputs (363 accepted, 71 rejected), captured independently
 on the CI Mac. Both corpora run on every supported Go OS: 868 native fixture
-cases in total. The Mac harness selects its host's qualified corpus and repeats it against the host library and compares
+cases in total. The Mac harness selects its host's qualified corpus, repeats it
+against the host library and compares
 native, recorded and Go serialization byte for byte. Helper setup failures are
 fatal and cannot count as native parse rejections. Ten additional flag-boundary
 probes exercise both sides of the format limits on the native host.
@@ -116,11 +117,83 @@ the different native environments; the eventual application API must establish
 which differences depend on OS version and which depend on runtime context.
 
 These observations are deliberately narrower than a portable runtime policy.
-Remaining work must establish source-side quarantine override, process context,
-existing destination state, duplicate/invalid records and write failures. It must
+Ordered record selection and source override are covered below. Remaining work
+must establish process context, source-state capture, destination preparation,
+existing-state normalization and write failures. It must
 then expose explicit context to pure-Go policy and integrate application through
 shared host metadata transport without an OS-dependent feature gap. Neither
 these observations nor serialization support completes that release gate.
+
+## Ordered quarantine update decisions
+
+`File.QuarantineUpdates(profile, source)` returns one `QuarantineUpdate` for each
+`com.apple.quarantine` record. The caller selects the target profile and may
+supply an already-resolved source `Quarantine` model. A nil source means record
+payloads supply the values.
+
+Each decision carries its `RecordIndex`, a `Quarantine` value to apply, and
+`Invalid`/`SourceOverride` indicators. Apply valid decisions at their original
+record positions relative to other metadata. Unlike deferred ACL replacement,
+quarantine processes every matching record in order. Duplicate records must not
+be collapsed into a map or reduced to the last record before application.
+
+- Without source state, malformed, plain-xattr, empty and NUL-only envelopes
+  produce an ignored decision. A later malformed record does not cancel an
+  earlier valid application.
+- With source state, each matching record uses that state instead of its payload,
+  including empty and malformed records. The source model is validated against
+  the target profile; invalid models return `ErrQuarantine` rather than silently
+  falling back to record data. Zero source flags normalize to one.
+- No matching records means no application decisions, even with source state.
+  Nil files and ordinary-only containers follow the same rule.
+- Results own their models and do not alias source state, input bytes or one
+  another. Their indices describe the `File.Attrs` order when called. `Encode`
+  sorts attributes stably, so obtain decisions after the final record order has
+  been established.
+
+These are application **decisions**, not destination xattr values. In particular,
+`copyfile_unpack` attempts to remove existing destination xattrs before processing
+records. Removal can be refused by the native host. An ignored record therefore
+does not promise preservation of the destination's pre-unpack quarantine value.
+Host transport must separately reproduce preparation, normalization and write
+failure handling, and capture source state from the appropriate context.
+
+### Independent native qualification
+
+[`quarantine-update.json`](../testdata/appledouble/native/quarantine-update.json)
+contains 288 native observations: 18 record sequences, four source contexts,
+fresh/existing quarantine state and file/directory destinations. Source contexts
+are absent, explicitly supplied copyfile state, a quarantine-bearing AppleDouble
+carrier file, and a carrier whose quarantine value is malformed. The sequences
+include duplicate ordering, malformed/empty/NUL records, plain xattr text and
+valid records whose native application can be a no-op.
+
+The fixture was captured before implementing the decision API. Its candidate
+values come from independent native serialization. Portable unit tests replay
+all decisions under both target profiles. The Mac harness additionally compares:
+
+1. Native `copyfile` unpacking the complete recorded container with its source
+   context.
+2. A separate destination prepared using a native no-quarantine control container,
+   followed by libquarantine application of the **Go-selected** candidate values.
+
+The two destinations must agree on quarantine presence, flags, agent and
+identifier. Bytes match exactly on macOS 26. Where macOS 27 refreshes timestamps,
+both timestamps must independently fall within the recorded operation interval;
+other fields still match exactly. Initial and prepared states, carrier readbacks,
+candidate bytes, resulting xattrs, diagnostics and commands are retained. Missing
+attributes count as absence only after the expected native error and an existing
+destination have been verified.
+
+This comparison qualifies dispatch and source override. It deliberately uses
+native application on both sides to avoid claiming an unimplemented portable
+normalizer. The fresh-destination policy-only observations above remain separate.
+
+The harness also extracts the unchanged `copyfile_unpack_quarantine` function and
+complete `attr_entry_t` declaration from the hash-pinned Apple source, preserving
+the license header. Clang ASTs for arm64 and x86_64 retain those bodies and the
+native helper. Minimal state/dependency declarations allow syntax analysis;
+they are explicitly **not** a claim about the private state structure's ABI.
 
 ## Reproduce
 
