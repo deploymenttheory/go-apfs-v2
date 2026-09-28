@@ -1,0 +1,1094 @@
+{
+  "SourceURL": "https://github.com/apple-oss-distributions/copyfile/blob/9f91eb6ced021952278816cdc76ad68da8631ccb/copyfile.c",
+  "SourceSHA256": "19f3ad0910f05bb2a6ae982ebdabcc4dc9c911b65ec2d99e75b7c4c52272805c",
+  "HelperSHA256": "b8cfda6c04ee053cc60adbd854d00889141c463fc29321195b2c5aad0d2fab88",
+  "ListHelperSHA256": "7ae64d3d09d8860ff3d35f4353984ac730584eb65edf47ed5287115f5fff8792",
+  "Host": "ProductName:\t\tmacOS\nProductVersion:\t\t27.0\nBuildVersion:\t\t26A428\n",
+  "Producers": [
+    {
+      "Name": "file-com.apple.FinderInfo-0",
+      "Kind": "file",
+      "Attribute": "com.apple.FinderInfo",
+      "Value": "",
+      "Raw": null,
+      "SetAccepted": false,
+      "UnpackAccepted": false,
+      "SetDiagnostic": "set failed: errno=34 Result too large\n",
+      "UnpackDiagnostic": "",
+      "Baseline": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Source": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Restored": null,
+      "Expected": {},
+      "SHA256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "Name": "file-com.apple.FinderInfo-1",
+      "Kind": "file",
+      "Attribute": "com.apple.FinderInfo",
+      "Value": "QQ==",
+      "Raw": null,
+      "SetAccepted": false,
+      "UnpackAccepted": false,
+      "SetDiagnostic": "set failed: errno=34 Result too large\n",
+      "UnpackDiagnostic": "",
+      "Baseline": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Source": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Restored": null,
+      "Expected": {},
+      "SHA256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "Name": "file-com.apple.FinderInfo-31",
+      "Kind": "file",
+      "Attribute": "com.apple.FinderInfo",
+      "Value": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ==",
+      "Raw": null,
+      "SetAccepted": false,
+      "UnpackAccepted": false,
+      "SetDiagnostic": "set failed: errno=34 Result too large\n",
+      "UnpackDiagnostic": "",
+      "Baseline": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Source": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Restored": null,
+      "Expected": {},
+      "SHA256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "Name": "file-com.apple.FinderInfo-32",
+      "Kind": "file",
+      "Attribute": "com.apple.FinderInfo",
+      "Value": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=",
+      "Raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAAHEAAAACAAAAowAAAABBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQAAQVRUUgAAAAAAAACjAAAAmAAAAAsAAAAAAAAAAAAAAAAAAAABAAAAmAAAAAsAABVjb20uYXBwbGUucHJvdmVuYW5jZQABAgCVPHrCpv5juQ==",
+      "SetAccepted": true,
+      "UnpackAccepted": true,
+      "SetDiagnostic": "",
+      "UnpackDiagnostic": "",
+      "Baseline": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Source": {
+        "com.apple.FinderInfo": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=",
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Restored": {
+        "com.apple.FinderInfo": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=",
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Expected": {
+        "com.apple.FinderInfo": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE="
+      },
+      "SHA256": "14109fe9fddc9454cdc121ae17b55a8ca9b256ed10ca73b70d6249a9bf216f28"
+    },
+    {
+      "Name": "file-com.apple.FinderInfo-33",
+      "Kind": "file",
+      "Attribute": "com.apple.FinderInfo",
+      "Value": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFB",
+      "Raw": null,
+      "SetAccepted": false,
+      "UnpackAccepted": false,
+      "SetDiagnostic": "set failed: errno=34 Result too large\n",
+      "UnpackDiagnostic": "",
+      "Baseline": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Source": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Restored": null,
+      "Expected": {},
+      "SHA256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "Name": "file-com.apple.FinderInfo-64",
+      "Kind": "file",
+      "Attribute": "com.apple.FinderInfo",
+      "Value": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ==",
+      "Raw": null,
+      "SetAccepted": false,
+      "UnpackAccepted": false,
+      "SetDiagnostic": "set failed: errno=34 Result too large\n",
+      "UnpackDiagnostic": "",
+      "Baseline": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Source": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Restored": null,
+      "Expected": {},
+      "SHA256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "Name": "file-com.apple.ResourceFork-0",
+      "Kind": "file",
+      "Attribute": "com.apple.ResourceFork",
+      "Value": "",
+      "Raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAAHEAAAACAAAAowAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQVRUUgAAAAAAAACjAAAAmAAAAAsAAAAAAAAAAAAAAAAAAAABAAAAmAAAAAsAABVjb20uYXBwbGUucHJvdmVuYW5jZQABAgCVPHrCpv5juQ==",
+      "SetAccepted": true,
+      "UnpackAccepted": true,
+      "SetDiagnostic": "",
+      "UnpackDiagnostic": "",
+      "Baseline": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Source": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Restored": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Expected": {},
+      "SHA256": "a68d2e7cf8013740b2d6c3e4d522eb3e525fb152a1202a9734f5b905d7e685b5"
+    },
+    {
+      "Name": "file-com.apple.ResourceFork-1",
+      "Kind": "file",
+      "Attribute": "com.apple.ResourceFork",
+      "Value": "QQ==",
+      "Raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAAHEAAAACAAAAowAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQVRUUgAAAAAAAACjAAAAmAAAAAsAAAAAAAAAAAAAAAAAAAABAAAAmAAAAAsAABVjb20uYXBwbGUucHJvdmVuYW5jZQABAgCVPHrCpv5juUE=",
+      "SetAccepted": true,
+      "UnpackAccepted": true,
+      "SetDiagnostic": "",
+      "UnpackDiagnostic": "",
+      "Baseline": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Source": {
+        "com.apple.ResourceFork": "QQ==",
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Restored": {
+        "com.apple.ResourceFork": "QQ==",
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Expected": {
+        "com.apple.ResourceFork": "QQ=="
+      },
+      "SHA256": "f8064f708b911e94a0a2936daffd3c12c82c949235a99c6ac7af2daf11d585a4"
+    },
+    {
+      "Name": "file-com.apple.ResourceFork-31",
+      "Kind": "file",
+      "Attribute": "com.apple.ResourceFork",
+      "Value": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ==",
+      "Raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAAHEAAAACAAAAowAAAB8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQVRUUgAAAAAAAACjAAAAmAAAAAsAAAAAAAAAAAAAAAAAAAABAAAAmAAAAAsAABVjb20uYXBwbGUucHJvdmVuYW5jZQABAgCVPHrCpv5juUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=",
+      "SetAccepted": true,
+      "UnpackAccepted": true,
+      "SetDiagnostic": "",
+      "UnpackDiagnostic": "",
+      "Baseline": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Source": {
+        "com.apple.ResourceFork": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ==",
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Restored": {
+        "com.apple.ResourceFork": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ==",
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Expected": {
+        "com.apple.ResourceFork": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ=="
+      },
+      "SHA256": "2a17ffb9ea28935d05068024c7a9d428046778d65a7e2540c302a0c2e9612cd0"
+    },
+    {
+      "Name": "file-com.apple.ResourceFork-32",
+      "Kind": "file",
+      "Attribute": "com.apple.ResourceFork",
+      "Value": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=",
+      "Raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAAHEAAAACAAAAowAAACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQVRUUgAAAAAAAACjAAAAmAAAAAsAAAAAAAAAAAAAAAAAAAABAAAAmAAAAAsAABVjb20uYXBwbGUucHJvdmVuYW5jZQABAgCVPHrCpv5juUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFB",
+      "SetAccepted": true,
+      "UnpackAccepted": true,
+      "SetDiagnostic": "",
+      "UnpackDiagnostic": "",
+      "Baseline": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Source": {
+        "com.apple.ResourceFork": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=",
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Restored": {
+        "com.apple.ResourceFork": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=",
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Expected": {
+        "com.apple.ResourceFork": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE="
+      },
+      "SHA256": "0d4bafe6758ebcc40a26a1572b5f94ed3a8aa6383d69255ef65684da54f39cfd"
+    },
+    {
+      "Name": "file-com.apple.ResourceFork-33",
+      "Kind": "file",
+      "Attribute": "com.apple.ResourceFork",
+      "Value": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFB",
+      "Raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAAHEAAAACAAAAowAAACEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQVRUUgAAAAAAAACjAAAAmAAAAAsAAAAAAAAAAAAAAAAAAAABAAAAmAAAAAsAABVjb20uYXBwbGUucHJvdmVuYW5jZQABAgCVPHrCpv5juUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ==",
+      "SetAccepted": true,
+      "UnpackAccepted": true,
+      "SetDiagnostic": "",
+      "UnpackDiagnostic": "",
+      "Baseline": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Source": {
+        "com.apple.ResourceFork": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFB",
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Restored": {
+        "com.apple.ResourceFork": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFB",
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Expected": {
+        "com.apple.ResourceFork": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFB"
+      },
+      "SHA256": "d9465503480d73ebbaba31e3fe57525bc5f63adccee05b221e99e78db386de1e"
+    },
+    {
+      "Name": "file-com.apple.ResourceFork-64",
+      "Kind": "file",
+      "Attribute": "com.apple.ResourceFork",
+      "Value": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ==",
+      "Raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAAHEAAAACAAAAowAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQVRUUgAAAAAAAACjAAAAmAAAAAsAAAAAAAAAAAAAAAAAAAABAAAAmAAAAAsAABVjb20uYXBwbGUucHJvdmVuYW5jZQABAgCVPHrCpv5juUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=",
+      "SetAccepted": true,
+      "UnpackAccepted": true,
+      "SetDiagnostic": "",
+      "UnpackDiagnostic": "",
+      "Baseline": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Source": {
+        "com.apple.ResourceFork": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ==",
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Restored": {
+        "com.apple.ResourceFork": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ==",
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Expected": {
+        "com.apple.ResourceFork": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ=="
+      },
+      "SHA256": "3b5231aee3c484fb07ec0c0705bc158ce06775bc6c15fc44d892d81f8d62d5c5"
+    },
+    {
+      "Name": "directory-com.apple.FinderInfo-0",
+      "Kind": "directory",
+      "Attribute": "com.apple.FinderInfo",
+      "Value": "",
+      "Raw": null,
+      "SetAccepted": false,
+      "UnpackAccepted": false,
+      "SetDiagnostic": "set failed: errno=34 Result too large\n",
+      "UnpackDiagnostic": "",
+      "Baseline": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Source": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Restored": null,
+      "Expected": {},
+      "SHA256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "Name": "directory-com.apple.FinderInfo-1",
+      "Kind": "directory",
+      "Attribute": "com.apple.FinderInfo",
+      "Value": "QQ==",
+      "Raw": null,
+      "SetAccepted": false,
+      "UnpackAccepted": false,
+      "SetDiagnostic": "set failed: errno=34 Result too large\n",
+      "UnpackDiagnostic": "",
+      "Baseline": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Source": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Restored": null,
+      "Expected": {},
+      "SHA256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "Name": "directory-com.apple.FinderInfo-31",
+      "Kind": "directory",
+      "Attribute": "com.apple.FinderInfo",
+      "Value": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ==",
+      "Raw": null,
+      "SetAccepted": false,
+      "UnpackAccepted": false,
+      "SetDiagnostic": "set failed: errno=34 Result too large\n",
+      "UnpackDiagnostic": "",
+      "Baseline": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Source": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Restored": null,
+      "Expected": {},
+      "SHA256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "Name": "directory-com.apple.FinderInfo-32",
+      "Kind": "directory",
+      "Attribute": "com.apple.FinderInfo",
+      "Value": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=",
+      "Raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAAHEAAAACAAAAowAAAABBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQAAQVRUUgAAAAAAAACjAAAAmAAAAAsAAAAAAAAAAAAAAAAAAAABAAAAmAAAAAsAABVjb20uYXBwbGUucHJvdmVuYW5jZQABAgCVPHrCpv5juQ==",
+      "SetAccepted": true,
+      "UnpackAccepted": true,
+      "SetDiagnostic": "",
+      "UnpackDiagnostic": "",
+      "Baseline": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Source": {
+        "com.apple.FinderInfo": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=",
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Restored": {
+        "com.apple.FinderInfo": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=",
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Expected": {
+        "com.apple.FinderInfo": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE="
+      },
+      "SHA256": "14109fe9fddc9454cdc121ae17b55a8ca9b256ed10ca73b70d6249a9bf216f28"
+    },
+    {
+      "Name": "directory-com.apple.FinderInfo-33",
+      "Kind": "directory",
+      "Attribute": "com.apple.FinderInfo",
+      "Value": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFB",
+      "Raw": null,
+      "SetAccepted": false,
+      "UnpackAccepted": false,
+      "SetDiagnostic": "set failed: errno=34 Result too large\n",
+      "UnpackDiagnostic": "",
+      "Baseline": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Source": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Restored": null,
+      "Expected": {},
+      "SHA256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "Name": "directory-com.apple.FinderInfo-64",
+      "Kind": "directory",
+      "Attribute": "com.apple.FinderInfo",
+      "Value": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ==",
+      "Raw": null,
+      "SetAccepted": false,
+      "UnpackAccepted": false,
+      "SetDiagnostic": "set failed: errno=34 Result too large\n",
+      "UnpackDiagnostic": "",
+      "Baseline": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Source": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Restored": null,
+      "Expected": {},
+      "SHA256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "Name": "directory-com.apple.ResourceFork-0",
+      "Kind": "directory",
+      "Attribute": "com.apple.ResourceFork",
+      "Value": "",
+      "Raw": null,
+      "SetAccepted": false,
+      "UnpackAccepted": false,
+      "SetDiagnostic": "set failed: errno=1 Operation not permitted\n",
+      "UnpackDiagnostic": "",
+      "Baseline": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Source": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Restored": null,
+      "Expected": {},
+      "SHA256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "Name": "directory-com.apple.ResourceFork-1",
+      "Kind": "directory",
+      "Attribute": "com.apple.ResourceFork",
+      "Value": "QQ==",
+      "Raw": null,
+      "SetAccepted": false,
+      "UnpackAccepted": false,
+      "SetDiagnostic": "set failed: errno=1 Operation not permitted\n",
+      "UnpackDiagnostic": "",
+      "Baseline": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Source": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Restored": null,
+      "Expected": {},
+      "SHA256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "Name": "directory-com.apple.ResourceFork-31",
+      "Kind": "directory",
+      "Attribute": "com.apple.ResourceFork",
+      "Value": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ==",
+      "Raw": null,
+      "SetAccepted": false,
+      "UnpackAccepted": false,
+      "SetDiagnostic": "set failed: errno=1 Operation not permitted\n",
+      "UnpackDiagnostic": "",
+      "Baseline": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Source": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Restored": null,
+      "Expected": {},
+      "SHA256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "Name": "directory-com.apple.ResourceFork-32",
+      "Kind": "directory",
+      "Attribute": "com.apple.ResourceFork",
+      "Value": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=",
+      "Raw": null,
+      "SetAccepted": false,
+      "UnpackAccepted": false,
+      "SetDiagnostic": "set failed: errno=1 Operation not permitted\n",
+      "UnpackDiagnostic": "",
+      "Baseline": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Source": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Restored": null,
+      "Expected": {},
+      "SHA256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "Name": "directory-com.apple.ResourceFork-33",
+      "Kind": "directory",
+      "Attribute": "com.apple.ResourceFork",
+      "Value": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFB",
+      "Raw": null,
+      "SetAccepted": false,
+      "UnpackAccepted": false,
+      "SetDiagnostic": "set failed: errno=1 Operation not permitted\n",
+      "UnpackDiagnostic": "",
+      "Baseline": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Source": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Restored": null,
+      "Expected": {},
+      "SHA256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "Name": "directory-com.apple.ResourceFork-64",
+      "Kind": "directory",
+      "Attribute": "com.apple.ResourceFork",
+      "Value": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ==",
+      "Raw": null,
+      "SetAccepted": false,
+      "UnpackAccepted": false,
+      "SetDiagnostic": "set failed: errno=1 Operation not permitted\n",
+      "UnpackDiagnostic": "",
+      "Baseline": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Source": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Restored": null,
+      "Expected": {},
+      "SHA256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "Name": "file-finder-zero",
+      "Kind": "file",
+      "Attribute": "com.apple.FinderInfo",
+      "Value": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+      "Raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAAHEAAAACAAAAowAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQVRUUgAAAAAAAACjAAAAmAAAAAsAAAAAAAAAAAAAAAAAAAABAAAAmAAAAAsAABVjb20uYXBwbGUucHJvdmVuYW5jZQABAgCVPHrCpv5juQ==",
+      "SetAccepted": true,
+      "UnpackAccepted": true,
+      "SetDiagnostic": "",
+      "UnpackDiagnostic": "",
+      "Baseline": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Source": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Restored": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Expected": {},
+      "SHA256": "a68d2e7cf8013740b2d6c3e4d522eb3e525fb152a1202a9734f5b905d7e685b5"
+    },
+    {
+      "Name": "file-finder-sequence",
+      "Kind": "file",
+      "Attribute": "com.apple.FinderInfo",
+      "Value": "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=",
+      "Raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAAHEAAAACAAAAowAAAAABAgMEBQYHCAkKCwwNDg8QERITFBUWFxgZGhscHR4fIAAAQVRUUgAAAAAAAACjAAAAmAAAAAsAAAAAAAAAAAAAAAAAAAABAAAAmAAAAAsAABVjb20uYXBwbGUucHJvdmVuYW5jZQABAgCVPHrCpv5juQ==",
+      "SetAccepted": true,
+      "UnpackAccepted": true,
+      "SetDiagnostic": "",
+      "UnpackDiagnostic": "",
+      "Baseline": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Source": {
+        "com.apple.FinderInfo": "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=",
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Restored": {
+        "com.apple.FinderInfo": "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=",
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Expected": {
+        "com.apple.FinderInfo": "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA="
+      },
+      "SHA256": "7edf6f254e12d1247554afd5fd44377ad68eb777454babad250fa396e21ab462"
+    },
+    {
+      "Name": "file-finder-ff",
+      "Kind": "file",
+      "Attribute": "com.apple.FinderInfo",
+      "Value": "//////////////////////////////////////////8=",
+      "Raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAAHEAAAACAAAAowAAAAD//////////////////////////////////////////wAAQVRUUgAAAAAAAACjAAAAmAAAAAsAAAAAAAAAAAAAAAAAAAABAAAAmAAAAAsAABVjb20uYXBwbGUucHJvdmVuYW5jZQABAgCVPHrCpv5juQ==",
+      "SetAccepted": true,
+      "UnpackAccepted": true,
+      "SetDiagnostic": "",
+      "UnpackDiagnostic": "",
+      "Baseline": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Source": {
+        "com.apple.FinderInfo": "//////////////////////////////////////////8=",
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Restored": {
+        "com.apple.FinderInfo": "//////////////////////////////////////////8=",
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Expected": {
+        "com.apple.FinderInfo": "//////////////////////////////////////////8="
+      },
+      "SHA256": "1afd903461379283f6758884dd7d4e846212c528a12b4dc97fb2af26cec84fe2"
+    },
+    {
+      "Name": "directory-finder-zero",
+      "Kind": "directory",
+      "Attribute": "com.apple.FinderInfo",
+      "Value": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+      "Raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAAHEAAAACAAAAowAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQVRUUgAAAAAAAACjAAAAmAAAAAsAAAAAAAAAAAAAAAAAAAABAAAAmAAAAAsAABVjb20uYXBwbGUucHJvdmVuYW5jZQABAgCVPHrCpv5juQ==",
+      "SetAccepted": true,
+      "UnpackAccepted": true,
+      "SetDiagnostic": "",
+      "UnpackDiagnostic": "",
+      "Baseline": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Source": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Restored": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Expected": {},
+      "SHA256": "a68d2e7cf8013740b2d6c3e4d522eb3e525fb152a1202a9734f5b905d7e685b5"
+    },
+    {
+      "Name": "directory-finder-sequence",
+      "Kind": "directory",
+      "Attribute": "com.apple.FinderInfo",
+      "Value": "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=",
+      "Raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAAHEAAAACAAAAowAAAAABAgMEBQYHCAkKCwwNDg8QERITFBUWFxgZGhscHR4fIAAAQVRUUgAAAAAAAACjAAAAmAAAAAsAAAAAAAAAAAAAAAAAAAABAAAAmAAAAAsAABVjb20uYXBwbGUucHJvdmVuYW5jZQABAgCVPHrCpv5juQ==",
+      "SetAccepted": true,
+      "UnpackAccepted": true,
+      "SetDiagnostic": "",
+      "UnpackDiagnostic": "",
+      "Baseline": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Source": {
+        "com.apple.FinderInfo": "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=",
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Restored": {
+        "com.apple.FinderInfo": "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=",
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Expected": {
+        "com.apple.FinderInfo": "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA="
+      },
+      "SHA256": "7edf6f254e12d1247554afd5fd44377ad68eb777454babad250fa396e21ab462"
+    },
+    {
+      "Name": "directory-finder-ff",
+      "Kind": "directory",
+      "Attribute": "com.apple.FinderInfo",
+      "Value": "//////////////////////////////////////////8=",
+      "Raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAAHEAAAACAAAAowAAAAD//////////////////////////////////////////wAAQVRUUgAAAAAAAACjAAAAmAAAAAsAAAAAAAAAAAAAAAAAAAABAAAAmAAAAAsAABVjb20uYXBwbGUucHJvdmVuYW5jZQABAgCVPHrCpv5juQ==",
+      "SetAccepted": true,
+      "UnpackAccepted": true,
+      "SetDiagnostic": "",
+      "UnpackDiagnostic": "",
+      "Baseline": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Source": {
+        "com.apple.FinderInfo": "//////////////////////////////////////////8=",
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Restored": {
+        "com.apple.FinderInfo": "//////////////////////////////////////////8=",
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Expected": {
+        "com.apple.FinderInfo": "//////////////////////////////////////////8="
+      },
+      "SHA256": "1afd903461379283f6758884dd7d4e846212c528a12b4dc97fb2af26cec84fe2"
+    }
+  ],
+  "Wire": [
+    {
+      "Name": "attr-com.apple.FinderInfo-0",
+      "Raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAAGYAAAACAAAAmAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQVRUUgAAAAAAAACYAAAAmAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAABVjb20uYXBwbGUuRmluZGVySW5mbwA=",
+      "Accepted": false,
+      "Diagnostic": "unpack failed: errno=34 Result too large\n",
+      "Baseline": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Native": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Expected": {},
+      "SHA256": "f86f3b9f69ba3ff4263098d25b8062ba899e615dc3440b39ee552a09476c20d9",
+      "PolicyOnly": false
+    },
+    {
+      "Name": "attr-com.apple.FinderInfo-1",
+      "Raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAAGcAAAACAAAAmQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQVRUUgAAAAAAAACZAAAAmAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAmAAAAAEAABVjb20uYXBwbGUuRmluZGVySW5mbwBB",
+      "Accepted": false,
+      "Diagnostic": "unpack failed: errno=34 Result too large\n",
+      "Baseline": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Native": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Expected": {},
+      "SHA256": "a5a0d3be46d11d36632e20b4e21502bac1f0f8e804d32443fae0aad58be4b049",
+      "PolicyOnly": false
+    },
+    {
+      "Name": "attr-com.apple.FinderInfo-31",
+      "Raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAAIUAAAACAAAAtwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQVRUUgAAAAAAAAC3AAAAmAAAAB8AAAAAAAAAAAAAAAAAAAABAAAAmAAAAB8AABVjb20uYXBwbGUuRmluZGVySW5mbwBBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFB",
+      "Accepted": false,
+      "Diagnostic": "unpack failed: errno=34 Result too large\n",
+      "Baseline": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Native": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Expected": {},
+      "SHA256": "63d1e3f0f19c5f98923e8981eecb20f3203858ef580b717514e5b3eb9298ef0b",
+      "PolicyOnly": false
+    },
+    {
+      "Name": "attr-com.apple.FinderInfo-32",
+      "Raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAAIYAAAACAAAAuAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQVRUUgAAAAAAAAC4AAAAmAAAACAAAAAAAAAAAAAAAAAAAAABAAAAmAAAACAAABVjb20uYXBwbGUuRmluZGVySW5mbwBBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ==",
+      "Accepted": true,
+      "Diagnostic": "",
+      "Baseline": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Native": {
+        "com.apple.FinderInfo": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=",
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Expected": {
+        "com.apple.FinderInfo": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE="
+      },
+      "SHA256": "e0486293c737b124eadc9b69264963d9d3facc3b303b3987d373cc334a70c212",
+      "PolicyOnly": false
+    },
+    {
+      "Name": "attr-com.apple.FinderInfo-33",
+      "Raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAAIcAAAACAAAAuQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQVRUUgAAAAAAAAC5AAAAmAAAACEAAAAAAAAAAAAAAAAAAAABAAAAmAAAACEAABVjb20uYXBwbGUuRmluZGVySW5mbwBBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=",
+      "Accepted": false,
+      "Diagnostic": "unpack failed: errno=34 Result too large\n",
+      "Baseline": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Native": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Expected": {},
+      "SHA256": "a1b7f8276af23054650c51fcaa5e70792c85953419bb64faa5fec8e82f5cf73f",
+      "PolicyOnly": false
+    },
+    {
+      "Name": "attr-com.apple.FinderInfo-64",
+      "Raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAAKYAAAACAAAA2AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQVRUUgAAAAAAAADYAAAAmAAAAEAAAAAAAAAAAAAAAAAAAAABAAAAmAAAAEAAABVjb20uYXBwbGUuRmluZGVySW5mbwBBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFB",
+      "Accepted": false,
+      "Diagnostic": "unpack failed: errno=34 Result too large\n",
+      "Baseline": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Native": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Expected": {},
+      "SHA256": "7af6d41ade8f25a08e5491832cf85b05759c91fb8ed2190bc1f61f929e4a7cb8",
+      "PolicyOnly": false
+    },
+    {
+      "Name": "attr-com.apple.ResourceFork-0",
+      "Raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAAGoAAAACAAAAnAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQVRUUgAAAAAAAACcAAAAnAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAABdjb20uYXBwbGUuUmVzb3VyY2VGb3JrAAAA",
+      "Accepted": true,
+      "Diagnostic": "",
+      "Baseline": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Native": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Expected": {},
+      "SHA256": "a40025a5affdcb08ee67fa072412f8ba8a718b13b75c14144fa58359b3e3e73a",
+      "PolicyOnly": false
+    },
+    {
+      "Name": "attr-com.apple.ResourceFork-1",
+      "Raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAAGsAAAACAAAAnQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQVRUUgAAAAAAAACdAAAAnAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAnAAAAAEAABdjb20uYXBwbGUuUmVzb3VyY2VGb3JrAAAAQQ==",
+      "Accepted": true,
+      "Diagnostic": "",
+      "Baseline": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Native": {
+        "com.apple.ResourceFork": "QQ==",
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Expected": {
+        "com.apple.ResourceFork": "QQ=="
+      },
+      "SHA256": "56eb8cc099466ff1865d1dc787d1169016512d275bee7655d32796902258f868",
+      "PolicyOnly": false
+    },
+    {
+      "Name": "attr-com.apple.ResourceFork-31",
+      "Raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAAIkAAAACAAAAuwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQVRUUgAAAAAAAAC7AAAAnAAAAB8AAAAAAAAAAAAAAAAAAAABAAAAnAAAAB8AABdjb20uYXBwbGUuUmVzb3VyY2VGb3JrAAAAQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ==",
+      "Accepted": true,
+      "Diagnostic": "",
+      "Baseline": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Native": {
+        "com.apple.ResourceFork": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ==",
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Expected": {
+        "com.apple.ResourceFork": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ=="
+      },
+      "SHA256": "194c1a5666f717c78acc89148735d3b22a9c3b63e4713a6285100c87f288e32e",
+      "PolicyOnly": false
+    },
+    {
+      "Name": "attr-com.apple.ResourceFork-32",
+      "Raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAAIoAAAACAAAAvAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQVRUUgAAAAAAAAC8AAAAnAAAACAAAAAAAAAAAAAAAAAAAAABAAAAnAAAACAAABdjb20uYXBwbGUuUmVzb3VyY2VGb3JrAAAAQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=",
+      "Accepted": true,
+      "Diagnostic": "",
+      "Baseline": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Native": {
+        "com.apple.ResourceFork": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=",
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Expected": {
+        "com.apple.ResourceFork": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE="
+      },
+      "SHA256": "31e98d4570a7aa8f642edcde8d00491ea0ed422c54aea25c76de7fab4726faf9",
+      "PolicyOnly": false
+    },
+    {
+      "Name": "attr-com.apple.ResourceFork-33",
+      "Raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAAIsAAAACAAAAvQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQVRUUgAAAAAAAAC9AAAAnAAAACEAAAAAAAAAAAAAAAAAAAABAAAAnAAAACEAABdjb20uYXBwbGUuUmVzb3VyY2VGb3JrAAAAQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFB",
+      "Accepted": true,
+      "Diagnostic": "",
+      "Baseline": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Native": {
+        "com.apple.ResourceFork": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFB",
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Expected": {
+        "com.apple.ResourceFork": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFB"
+      },
+      "SHA256": "2f89243df86197bfd35a8d99ab67e1369616efb84a71cb358f5665e2054c80ec",
+      "PolicyOnly": false
+    },
+    {
+      "Name": "attr-com.apple.ResourceFork-64",
+      "Raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAAKoAAAACAAAA3AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQVRUUgAAAAAAAADcAAAAnAAAAEAAAAAAAAAAAAAAAAAAAAABAAAAnAAAAEAAABdjb20uYXBwbGUuUmVzb3VyY2VGb3JrAAAAQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ==",
+      "Accepted": true,
+      "Diagnostic": "",
+      "Baseline": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Native": {
+        "com.apple.ResourceFork": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ==",
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Expected": {
+        "com.apple.ResourceFork": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ=="
+      },
+      "SHA256": "f18c69edb097ff583a8454c255ebea74cdbb30df880e8bc481cf8be59cd49061",
+      "PolicyOnly": false
+    },
+    {
+      "Name": "finder-attr-zero",
+      "Raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAAIYAAAACAAAAuAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQVRUUgAAAAAAAAC4AAAAmAAAACAAAAAAAAAAAAAAAAAAAAABAAAAmAAAACAAABVjb20uYXBwbGUuRmluZGVySW5mbwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+      "Accepted": true,
+      "Diagnostic": "",
+      "Baseline": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Native": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Expected": {},
+      "SHA256": "b0aeca20fe1697150057bb764860f90b05f64a96c59191205c15093521f92755",
+      "PolicyOnly": false
+    },
+    {
+      "Name": "finder-slot-wins",
+      "Raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAAIYAAAACAAAAuAAAAABCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQgAAQVRUUgAAAAAAAAC4AAAAmAAAACAAAAAAAAAAAAAAAAAAAAABAAAAmAAAACAAABVjb20uYXBwbGUuRmluZGVySW5mbwBBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ==",
+      "Accepted": true,
+      "Diagnostic": "",
+      "Baseline": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Native": {
+        "com.apple.FinderInfo": "QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI=",
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Expected": {
+        "com.apple.FinderInfo": "QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI="
+      },
+      "SHA256": "46aa329701f993ee719e21f601ef32a8028cd7b2fa69dd794b3abfa193bfef13",
+      "PolicyOnly": false
+    },
+    {
+      "Name": "fork-slot-wins",
+      "Raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAAG4AAAACAAAAoAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQVRUUgAAAAAAAACgAAAAnAAAAAQAAAAAAAAAAAAAAAAAAAABAAAAnAAAAAQAABdjb20uYXBwbGUuUmVzb3VyY2VGb3JrAAAAQVRUUlNMT1Q=",
+      "Accepted": true,
+      "Diagnostic": "",
+      "Baseline": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Native": {
+        "com.apple.ResourceFork": "U0xPVA==",
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Expected": {
+        "com.apple.ResourceFork": "U0xPVA=="
+      },
+      "SHA256": "59cf1fb00b495176ffcf1af0e45c589b8d3152b5092aeec90bf9ce46298f6ce3",
+      "PolicyOnly": false
+    },
+    {
+      "Name": "finder-attr-last-zero",
+      "Raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAAMYAAAACAAAA+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQVRUUgAAAAAAAAD4AAAAuAAAAEAAAAAAAAAAAAAAAAAAAAACAAAAuAAAACAAABVjb20uYXBwbGUuRmluZGVySW5mbwAAAADYAAAAIAAAFWNvbS5hcHBsZS5GaW5kZXJJbmZvAEFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+      "Accepted": true,
+      "Diagnostic": "",
+      "Baseline": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Native": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Expected": {},
+      "SHA256": "47d27b37c98b321056fb2e8863b640e7a836c14f630c569c68cdd1d023452a7d",
+      "PolicyOnly": false
+    },
+    {
+      "Name": "fork-attr-last-empty",
+      "Raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAAJIAAAACAAAAxAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQVRUUgAAAAAAAADEAAAAwAAAAAQAAAAAAAAAAAAAAAAAAAACAAAAwAAAAAQAABdjb20uYXBwbGUuUmVzb3VyY2VGb3JrAAAAAAAAAAAAAAAAABdjb20uYXBwbGUuUmVzb3VyY2VGb3JrAAAAQVRUUg==",
+      "Accepted": true,
+      "Diagnostic": "",
+      "Baseline": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Native": {
+        "com.apple.ResourceFork": "QVRUUg==",
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Expected": {
+        "com.apple.ResourceFork": "QVRUUg=="
+      },
+      "SHA256": "e40633f6b9e75196e3554d063e8f57c0ffc43390c6c78d1e390914a6418adb4b",
+      "PolicyOnly": false
+    },
+    {
+      "Name": "acl-empty",
+      "Raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAAGYAAAACAAAAmAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQVRUUgAAAAAAAACYAAAAmAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAABNjb20uYXBwbGUuYWNsLnRleHQAAAA=",
+      "Accepted": true,
+      "Diagnostic": "",
+      "Baseline": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Native": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Expected": {},
+      "SHA256": "5dfbd98d3bcc55b7be7a4fab1e5265ef535e43cd913536ea4d833eb9e9b3d3f1",
+      "PolicyOnly": true
+    },
+    {
+      "Name": "acl-invalid",
+      "Raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAAG0AAAACAAAAnwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQVRUUgAAAAAAAACfAAAAmAAAAAcAAAAAAAAAAAAAAAAAAAABAAAAmAAAAAcAABNjb20uYXBwbGUuYWNsLnRleHQAAABJTlZBTElE",
+      "Accepted": true,
+      "Diagnostic": "",
+      "Baseline": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Native": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Expected": {},
+      "SHA256": "6c08771ef8d9d0bb136850ec5a7fecb8353726115b1dc29194bff9595c34a2f5",
+      "PolicyOnly": true
+    },
+    {
+      "Name": "quarantine-empty",
+      "Raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAAGYAAAACAAAAmAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQVRUUgAAAAAAAACYAAAAmAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAABVjb20uYXBwbGUucXVhcmFudGluZQA=",
+      "Accepted": true,
+      "Diagnostic": "",
+      "Baseline": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Native": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Expected": {},
+      "SHA256": "5bad5fa093894c28839b0650730e87f71a73952c8cad3a0bcd2a77eb2df080cf",
+      "PolicyOnly": true
+    },
+    {
+      "Name": "quarantine-invalid",
+      "Raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAAG0AAAACAAAAnwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQVRUUgAAAAAAAACfAAAAmAAAAAcAAAAAAAAAAAAAAAAAAAABAAAAmAAAAAcAABVjb20uYXBwbGUucXVhcmFudGluZQBJTlZBTElE",
+      "Accepted": true,
+      "Diagnostic": "",
+      "Baseline": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Native": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Expected": {},
+      "SHA256": "6c8e63698fa68891fe664ddb5a4ccedec107e896d7b00dd6fa06b3c5ea70bb27",
+      "PolicyOnly": true
+    },
+    {
+      "Name": "fork-attr-shorter",
+      "Raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAAJkAAAACAAAAywAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQVRUUgAAAAAAAADLAAAAwAAAAAsAAAAAAAAAAAAAAAAAAAACAAAAwAAAAAgAABdjb20uYXBwbGUuUmVzb3VyY2VGb3JrAAAAAAAAyAAAAAMAABdjb20uYXBwbGUuUmVzb3VyY2VGb3JrAAAAT1JJR0lOQUxORVc=",
+      "Accepted": true,
+      "Diagnostic": "",
+      "Baseline": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Native": {
+        "com.apple.ResourceFork": "TkVXR0lOQUw=",
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Expected": {
+        "com.apple.ResourceFork": "TkVXR0lOQUw="
+      },
+      "SHA256": "b2b94fa1b0c7b0208872dacd21879bb4df1d3c3539fb2ebbf68ae9abcf98e8d1",
+      "PolicyOnly": false
+    },
+    {
+      "Name": "fork-slot-shorter",
+      "Raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAAHIAAAACAAAApAAAAAMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQVRUUgAAAAAAAACkAAAAnAAAAAgAAAAAAAAAAAAAAAAAAAABAAAAnAAAAAgAABdjb20uYXBwbGUuUmVzb3VyY2VGb3JrAAAAT1JJR0lOQUxORVc=",
+      "Accepted": true,
+      "Diagnostic": "",
+      "Baseline": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Native": {
+        "com.apple.ResourceFork": "TkVXR0lOQUw=",
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Expected": {
+        "com.apple.ResourceFork": "TkVXR0lOQUw="
+      },
+      "SHA256": "b10f55825bcd98b31b51d8d84271fb2f5cdc3fc319be9718fb48ae5c2a5a910d",
+      "PolicyOnly": false
+    },
+    {
+      "Name": "fork-attr-longer",
+      "Raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAAKEAAAACAAAA0wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQVRUUgAAAAAAAADTAAAAwAAAABMAAAAAAAAAAAAAAAAAAAACAAAAwAAAAAgAABdjb20uYXBwbGUuUmVzb3VyY2VGb3JrAAAAAAAAyAAAAAsAABdjb20uYXBwbGUuUmVzb3VyY2VGb3JrAAAAT1JJR0lOQUxMT05HRVJWQUxVRQ==",
+      "Accepted": true,
+      "Diagnostic": "",
+      "Baseline": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Native": {
+        "com.apple.ResourceFork": "TE9OR0VSVkFMVUU=",
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Expected": {
+        "com.apple.ResourceFork": "TE9OR0VSVkFMVUU="
+      },
+      "SHA256": "48cbeef6a92907f0e497edd14fd56a8c99ca86728f8d46d82e2206b0c1508cf0",
+      "PolicyOnly": false
+    },
+    {
+      "Name": "finder-invalid-shadowed",
+      "Raw": "AAUWBwACAABNYWMgT1MgWCAgICAgICAgAAIAAAAJAAAAMgAAAGkAAAACAAAAmwAAAABBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQAAQVRUUgAAAAAAAACbAAAAmAAAAAMAAAAAAAAAAAAAAAAAAAABAAAAmAAAAAMAABVjb20uYXBwbGUuRmluZGVySW5mbwBiYWQ=",
+      "Accepted": false,
+      "Diagnostic": "unpack failed: errno=34 Result too large\n",
+      "Baseline": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Native": {
+        "com.apple.provenance": "AQIAlTx6wqb+Y7k="
+      },
+      "Expected": {},
+      "SHA256": "43313459e63bf12f03a2c5ac13acaf8467cafd88c50b606abe44ab1dda5ca7dd",
+      "PolicyOnly": false
+    }
+  ]
+}

@@ -98,7 +98,8 @@ aliased records beyond this budget sequentially. This is a documented safety
 policy difference, not a native parity success. The regression constructs a valid
 two-entry header and verifies that it reaches the allocation guard.
 
-This phase does not establish reserved/special-attribute semantics, FinderInfo
-normalization, oversized native packing policy, or shared filesystem transport.
-Those remain the next work in the [migration plan](appledouble-migration.md).
+The later [FinderInfo/resource-fork increment](appledouble-native-special.md)
+establishes length validation, zero/absent behavior and ordered fork writes.
+Reserved ACL/quarantine policy, oversized native packing policy and shared
+filesystem transport remain in the [migration plan](appledouble-migration.md).
 Package PR #72 stays draft and codesign remains paused.

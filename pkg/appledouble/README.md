@@ -64,10 +64,11 @@ The size correction does not establish full native parity. Outstanding items:
   Ordinary UTF-8 byte limits,
   NUL termination and padded records are covered by the native name fixtures; see
   [name validation](../../docs/appledouble-native-names.md).
-- `FromXattrs` copies FinderInfo into 32 bytes, truncating long values and padding
-  short ones. `Xattrs` omits all-zero FinderInfo and empty resource forks. Establish
-  which normalization comes from APFS, which comes from native packing/unpacking,
-  and which the codec must preserve or reject.
+- FinderInfo now requires exactly 32 bytes; invalid constructor input is retained
+  until Encode reports an error. Zero FinderInfo, absent/empty forks and ordered
+  fork writes are covered by [native special-attribute probes](../../docs/appledouble-native-special.md).
+  ACL/quarantine handling, associated file flags and destination-type policy
+  remain outstanding. The codec retains serialized policy records for consumers.
 - Decode now follows the native two-entry profile, fixed ATTR position, duplicate
   name ordering and overlap/read-bound behavior; see
   [record validation](../../docs/appledouble-native-records.md). It no longer
