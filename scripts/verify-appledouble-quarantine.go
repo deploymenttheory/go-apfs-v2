@@ -44,6 +44,16 @@ var commands []command
 var comparisons []comparison
 var applications []application
 var flagBoundaries []comparison
+
+type quarantineUpdateResult struct {
+	Name                                                                string
+	Updates                                                             []appledouble.QuarantineUpdate
+	Prepared, Native, Selected                                          []byte
+	PreparedPresent, Present, SelectedPresent, PolicyEqual, NativeEqual bool
+	Start, End                                                          int64
+}
+
+var quarantineUpdates []quarantineUpdateResult
 var producers []string
 var nativeProfile = appledouble.QuarantineMacOS27
 var profileName = "macos27"
@@ -78,7 +88,7 @@ func main() {
 	passed := false
 	defer func() {
 		failure := recover()
-		report := map[string]any{"passed": passed, "goos": runtime.GOOS, "goarch": runtime.GOARCH, "commands": commands, "comparisons": comparisons, "applications": applications, "producers": producers, "profile": profileName, "flag_boundaries": flagBoundaries}
+		report := map[string]any{"passed": passed, "goos": runtime.GOOS, "goarch": runtime.GOARCH, "commands": commands, "comparisons": comparisons, "applications": applications, "producers": producers, "profile": profileName, "flag_boundaries": flagBoundaries, "quarantine_updates": quarantineUpdates}
 		if failure != nil {
 			report["failure"] = fmt.Sprint(failure)
 		}
@@ -189,8 +199,10 @@ func main() {
 	run("xcrun", "clang", "-Wall", "-Wextra", "-Werror", "testdata/appledouble/native/probe.c", "-o", unpack)
 	verifyProducers(root, unpack)
 	verifyApplicationObservations(root, unpack)
+	verifyQuarantineUpdates(root, unpack)
 	passed = true
 	fmt.Printf("Quarantine (%s): %d serialization cases, %d flag boundaries, %d native producers, %d policy-only application observations passed\n", profileName, len(comparisons), len(flagBoundaries), len(producers), len(applications))
+	fmt.Printf("Quarantine: %d ordered update comparisons passed\n", len(quarantineUpdates))
 }
 func verifyProducers(root, helper string) {
 	extraFlag := "2000"
@@ -357,5 +369,196 @@ func verifyFlagBoundaries(root, helper string) {
 			}
 		}
 		flagBoundaries = append(flagBoundaries, v)
+	}
+}
+
+// These comparisons prove record selection by applying the Go-selected values
+// through the native library on a separately prepared destination. They do not
+// claim that Go implements native destination normalization.
+func verifyQuarantineUpdates(root, xattrHelper string) {
+	var fixture struct {
+		HelperSHA256, SourceSHA256, SerializationHelperSHA256, XattrHelperSHA256 string
+		Records                                                                  []struct {
+			Name, Kind, SourceMode       string
+			Initial                      bool
+			Raw, Source, Carrier, Before []byte
+			Updates                      []struct {
+				RecordIndex             int
+				Invalid, SourceOverride bool
+				Serialized              []byte
+			}
+		}
+	}
+	must(json.Unmarshal(read("testdata/appledouble/native/quarantine-update.json"), &fixture))
+	if len(fixture.Records) != 288 || hash(read("testdata/appledouble/native/quarantine-update.c")) != fixture.HelperSHA256 || hash(read(filepath.Join(root, "copyfile.c"))) != fixture.SourceSHA256 || hash(read("testdata/appledouble/native/quarantine.c")) != fixture.SerializationHelperSHA256 || hash(read("testdata/appledouble/native/probe.c")) != fixture.XattrHelperSHA256 {
+		panic("quarantine update provenance")
+	}
+	helper := filepath.Join(root, "quarantine-update")
+	run("xcrun", "clang", "-Wall", "-Wextra", "-Werror", "testdata/appledouble/native/quarantine-update.c", "-o", helper)
+	quarantineUpdateAST(root)
+	get := func(dst, output string) ([]byte, bool) {
+		diagnostic, err := observe(xattrHelper, "get", dst, appledouble.QuarantineName, output)
+		if err == nil {
+			return read(output), true
+		}
+		var exit *exec.ExitError
+		if !errors.As(err, &exit) || exit.ExitCode() != 1 || !strings.HasPrefix(string(diagnostic), "get size: Attribute not found") {
+			panic(fmt.Sprintf("quarantine read %s: %v %s", dst, err, diagnostic))
+		}
+		commands[len(commands)-1].ExpectedFailure = true
+		_, e := os.Stat(dst)
+		must(e)
+		return nil, false
+	}
+	for _, tc := range fixture.Records {
+		name := fmt.Sprintf("%s-%t-%s-%s", tc.Kind, tc.Initial, tc.SourceMode, tc.Name)
+		dir := filepath.Join(root, "updates", name)
+		must(os.MkdirAll(dir, 0700))
+		work, e := os.MkdirTemp(dir, "destinations-")
+		must(e)
+		dst, selected := filepath.Join(work, "native"), filepath.Join(work, "selected")
+		for _, path := range []string{dst, selected} {
+			switch tc.Kind {
+			case "file":
+				write(path, nil)
+			case "directory":
+				must(os.Mkdir(path, 0700))
+			default:
+				panic("update destination kind")
+			}
+			if tc.Initial {
+				write(filepath.Join(dir, "baseline"), tc.Before)
+				run(xattrHelper, "set", path, appledouble.QuarantineName, filepath.Join(dir, "baseline"))
+			}
+		}
+		before, beforePresent := get(dst, filepath.Join(dir, "before"))
+		selectedBefore, selectedBeforePresent := get(selected, filepath.Join(dir, "selected-before"))
+		if beforePresent != tc.Initial || selectedBeforePresent != tc.Initial || !bytes.Equal(before, tc.Before) || !bytes.Equal(selectedBefore, tc.Before) {
+			panic("update initial state: " + name)
+		}
+		side := filepath.Join(dir, "input.ad")
+		write(side, tc.Raw)
+		override := "-"
+		var source *appledouble.Quarantine
+		if len(tc.Source) != 0 {
+			write(filepath.Join(dir, "source"), tc.Source)
+			source, e = appledouble.ParseQuarantineWithProfile(tc.Source, nativeProfile)
+			must(e)
+		}
+		switch tc.SourceMode {
+		case "state":
+			override = filepath.Join(dir, "source")
+		case "carrier", "invalid-carrier":
+			write(filepath.Join(dir, "carrier"), tc.Carrier)
+			run(xattrHelper, "set", side, appledouble.QuarantineName, filepath.Join(dir, "carrier"))
+			actual, present := get(side, filepath.Join(dir, "carrier-readback"))
+			if !present || !bytes.Equal(actual, tc.Carrier) {
+				panic("carrier setup: " + name)
+			}
+		case "none":
+		default:
+			panic("source mode")
+		}
+		f, e := appledouble.Decode(tc.Raw)
+		must(e)
+		updates, e := f.QuarantineUpdates(nativeProfile, source)
+		must(e)
+		if len(updates) != len(tc.Updates) {
+			panic("update count: " + name)
+		}
+		applyArgs := []string{helper, "apply", selected}
+		for i, want := range tc.Updates {
+			got := updates[i]
+			if got.RecordIndex != want.RecordIndex || got.Invalid != want.Invalid || got.SourceOverride != want.SourceOverride {
+				panic("update decision: " + name)
+			}
+			if want.Invalid {
+				if got.Quarantine != nil {
+					panic("ignored update has value")
+				}
+				continue
+			}
+			b, e := got.Quarantine.MarshalBinaryWithProfile(nativeProfile)
+			must(e)
+			if !bytes.Equal(b, want.Serialized) {
+				panic("update serialized value: " + name)
+			}
+			path := filepath.Join(dir, fmt.Sprintf("go-%d", i))
+			write(path, b)
+			applyArgs = append(applyArgs, path)
+		}
+		// Native copyfile prepares its destination before processing records. Use a
+		// no-quarantine control container for the independent application destination.
+		control, e := appledouble.FromXattrs(map[string][]byte{"org.example.before": []byte("before")}).Encode()
+		must(e)
+		write(filepath.Join(dir, "prepare.ad"), control)
+		run(helper, "unpack", filepath.Join(dir, "prepare.ad"), selected, "-")
+		prepared, preparedPresent := get(selected, filepath.Join(dir, "prepared"))
+		start := time.Now().Unix()
+		run(helper, "unpack", side, dst, override)
+		run(applyArgs...)
+		end := time.Now().Unix()
+		actual, present := get(dst, filepath.Join(dir, "after"))
+		chosen, chosenPresent := get(selected, filepath.Join(dir, "selected-after"))
+		equal := present == chosenPresent
+		if equal && present && !bytes.Equal(actual, chosen) {
+			a, b := strings.SplitN(string(actual), ";", 4), strings.SplitN(string(chosen), ";", 4)
+			equal = nativeProfile == appledouble.QuarantineMacOS27 && len(a) == 4 && len(b) == 4 && a[0] == b[0] && a[2] == b[2] && a[3] == b[3]
+			if equal {
+				for _, fields := range [][]string{a, b} {
+					stamp, e := strconv.ParseInt(fields[1], 16, 64)
+					must(e)
+					if stamp < start || stamp > end {
+						equal = false
+					}
+				}
+			}
+		}
+		result := quarantineUpdateResult{Name: name, Updates: updates, Prepared: prepared, PreparedPresent: preparedPresent, Native: actual, Selected: chosen, Present: present, SelectedPresent: chosenPresent, Start: start, End: end, PolicyEqual: true, NativeEqual: equal}
+		quarantineUpdates = append(quarantineUpdates, result)
+		if !equal {
+			panic(fmt.Sprintf("native selected application differs %s: native=%q selected=%q", name, actual, chosen))
+		}
+	}
+}
+
+func quarantineUpdateAST(root string) {
+	source := read(filepath.Join(root, "copyfile.c"))
+	start := bytes.Index(source, []byte("static int copyfile_unpack_quarantine("))
+	end := bytes.Index(source, []byte("static int copyfile_unpack_acl("))
+	entryStart := bytes.Index(source, []byte("typedef struct attr_entry\n"))
+	entryEnd := bytes.Index(source, []byte("} __attribute__((aligned(2), packed)) attr_entry_t;"))
+	licenseEnd := bytes.Index(source, []byte("#include"))
+	if start < 0 || end <= start || entryStart < 0 || entryEnd <= entryStart || licenseEnd < 0 {
+		panic("quarantine source extraction boundaries")
+	}
+	entryEnd += len("} __attribute__((aligned(2), packed)) attr_entry_t;")
+	unit := append(bytes.Clone(source[:licenseEnd]), []byte(`
+// Syntax-analysis shims only: this partial state is not an ABI layout claim.
+#include <copyfile.h>
+#include <sys/types.h>
+#include <stddef.h>
+#include <errno.h>
+typedef void *qtn_file_t;
+struct _copyfile_state { qtn_file_t qinfo; int dst_fd,err; copyfile_callback_t statuscb; char *xattr_name,*src,*dst; void *ctx; };
+qtn_file_t qtn_file_alloc(void);
+int qtn_file_init_with_data(qtn_file_t,const void *,size_t);
+void qtn_file_free(qtn_file_t);
+int qtn_file_apply_to_fd(qtn_file_t,int);
+const char *qtn_error(int);
+void copyfile_warn(const char *,...);
+#define XATTR_QUARANTINE_NAME "com.apple.quarantine"
+`)...)
+	unit = append(unit, source[entryStart:entryEnd]...)
+	unit = append(unit, '\n')
+	unit = append(unit, source[start:end]...)
+	path := filepath.Join(root, "copyfile_unpack_quarantine.c")
+	write(path, unit)
+	for _, arch := range []string{"arm64", "x86_64"} {
+		for _, item := range []struct{ name, path string }{{"quarantine-update", "testdata/appledouble/native/quarantine-update.c"}, {"copyfile_unpack_quarantine", path}} {
+			ast := run("xcrun", "clang", "-arch", arch, "-fsyntax-only", "-Xclang", "-ast-dump=json", item.path)
+			commands[len(commands)-1].Output = fmt.Sprintf("AST retained: %d bytes", len(ast))
+			write(filepath.Join(root, item.name+"-"+arch+".ast.json"), ast)
+		}
 	}
 }

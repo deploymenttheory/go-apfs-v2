@@ -60,6 +60,9 @@ full AppleDouble transport integration is on the roadmap below.
   field limits and native parsing quirks without applying destination policy.
   The default targets macOS 27. The `WithProfile` variants explicitly select
   macOS 26 or 27 behavior on any supported operating system.
+- **Quarantine update decisions:** `File.QuarantineUpdates` preserves record order
+  and reports ignored malformed records. Optional resolved source quarantine
+  state overrides each matching record, including empty records.
 
 Always check encoding and decoding errors. FinderInfo must contain exactly 32
 bytes. `Sniff` is a format hint; `Decode` performs validation. Canonical encoding
@@ -103,7 +106,8 @@ filesystem transport:
    and destination write-failure handling.
 2. **Implement quarantine application policy.** Build on the envelope codec to
    reproduce native flag, timestamp and agent normalization using explicit runtime
-   context. Qualify source overrides, existing destinations and record selection.
+   context. Integrate the ordered update decisions with destination cleanup,
+   existing state, source-state capture and write-failure handling.
 3. **Resolve large-value and allocation behavior.** Qualify oversized attributes,
    aggregates and resource forks. Resolve the difference between native packing
    of values above 16 MiB and the codec's preservation behavior, and between
