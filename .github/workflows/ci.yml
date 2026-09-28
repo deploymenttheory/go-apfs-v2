@@ -160,7 +160,20 @@ jobs:
           name: appledouble-acl-inherit
           path: artifacts/appledouble-acl-inherit/
           if-no-files-found: error
+      - name: AppleDouble native security records and ACL application
+        if: runner.os == 'macOS'
+        env:
+          CGO_ENABLED: "0"
+        run: go run scripts/verify-appledouble-filesec.go
+      - name: Upload AppleDouble security record evidence
+        if: always() && runner.os == 'macOS'
+        uses: actions/upload-artifact@v7
+        with:
+          name: appledouble-filesec
+          path: artifacts/appledouble-filesec/
+          if-no-files-found: error
       - name: AppleDouble native quarantine comparisons
+
         if: runner.os == 'macOS'
         env:
           CGO_ENABLED: "0"

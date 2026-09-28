@@ -22,7 +22,10 @@ covered by the [quarantine codec](appledouble-native-quarantine.md). ACL creatio
 inheritance and replacement over inherited destinations are qualified through
 [the portable inheritance policy](appledouble-acl-inheritance.md). Source identity
 queries can be [captured and replayed](appledouble-acl-identities.md) portably;
-live acquisition adapters remain transport work. ACL application,
+live acquisition adapters remain transport work. [Full security records and
+owner-preserving replacement requests](appledouble-filesec.md) have native byte
+conversion and restrictive-flag application comparisons. Non-owner authorization,
+retry contexts and full ACL restoration ordering remain unqualified. ACL application,
 remaining [quarantine application contexts](appledouble-quarantine-application.md),
 size policy and shared transport remain
 outstanding, in that order. The allocation guard's stricter alias policy is

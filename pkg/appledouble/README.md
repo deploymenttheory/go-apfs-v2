@@ -55,6 +55,10 @@ full AppleDouble transport integration is on the roadmap below.
 - **ACL update decisions:** `File.ACLUpdate` selects the last nonempty ACL record
   and reports whether to preserve or replace the destination ACL. Malformed text
   is explicitly marked as ignored; a valid zero-entry ACL requests clearing.
+- **Complete security records:** `FileSecurity` preserves owner/group UUIDs, ACLs
+  and opaque bytes in disk and Darwin memory byte orders. `ACLUpdate.FileSecurity`
+  prepares a replacement using captured destination ownership. See
+  [security records and native write refusals](../../docs/appledouble-filesec.md).
 - **ACL creation inheritance:** `InheritACL` computes a new file or directory's
   ACL from captured parent and initial ACLs, including propagation flags and
   allocation limits. It runs on every supported OS without applying host
@@ -122,7 +126,10 @@ filesystem transport:
 
 1. **Complete ACL application and transport.** Integrate deferred replacement
    decisions, qualified creation inheritance and captured identity replay with
-   source acquisition adapters, ownership, file flags and destination write-failure handling. Creation
+   source acquisition adapters and actual filesystem writes. Ownership-preserving
+   security requests and owner-operated restrictive-flag failures have native
+   comparisons; non-owner authorization, retry contexts and full restoration
+   ordering still need qualification. Creation
    inheritance and replacement over inherited ACLs have native comparisons;
    shared filesystem execution remains outstanding.
 2. **Complete quarantine context and transport qualification.** Extend the

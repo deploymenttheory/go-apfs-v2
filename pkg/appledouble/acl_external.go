@@ -30,19 +30,23 @@ type ACLPrincipalResolver func([16]byte) (principal ACLPrincipal, found bool, er
 // native API, this function checks every read and rejects truncated input.
 // This does not import acl_copy_ext_native or APFS on-disk security records.
 func ParseACLBinary(b []byte) (*ACL, error) {
-	if len(b) < 44 || binary.BigEndian.Uint32(b) != 0x012cc16d {
+	return parseACLBinary(b, binary.BigEndian)
+}
+
+func parseACLBinary(b []byte, order binary.ByteOrder) (*ACL, error) {
+	if len(b) < 44 || order.Uint32(b) != 0x012cc16d {
 		return nil, ErrACLBinary
 	}
-	count := binary.BigEndian.Uint32(b[36:])
+	count := order.Uint32(b[36:])
 	if count > 128 || len(b) < 44+24*int(count) {
 		return nil, ErrACLBinary
 	}
-	a := &ACL{Flags: binary.BigEndian.Uint32(b[40:]), Entries: make([]ACLEntry, int(count))}
+	a := &ACL{Flags: order.Uint32(b[40:]), Entries: make([]ACLEntry, int(count))}
 	for i := range a.Entries {
 		off := 44 + 24*i
 		copy(a.Entries[i].Principal[:], b[off:off+16])
-		a.Entries[i].Flags = binary.BigEndian.Uint32(b[off+16:])
-		a.Entries[i].Rights = binary.BigEndian.Uint32(b[off+20:])
+		a.Entries[i].Flags = order.Uint32(b[off+16:])
+		a.Entries[i].Rights = order.Uint32(b[off+20:])
 	}
 	return a, nil
 }
