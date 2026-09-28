@@ -394,10 +394,21 @@ func normalizationCases(profile string) []runtimeCase {
 	return cases
 }
 
+// Preserve binary agent bytes; encoding/json replaces invalid UTF-8 in strings.
+type applicationContextEvidence struct {
+	Profile         appledouble.QuarantineProfile
+	ProcessFlags    uint32
+	ProcessAgent    []byte
+	ExistingPresent bool
+	Existing        []byte
+	Directory       bool
+	Timestamp       uint32
+}
+
 type applicationComparison struct {
 	Name                    string
 	ContextKnown            bool
-	Context                 appledouble.QuarantineApplicationContext
+	Context                 applicationContextEvidence
 	Plan                    *appledouble.QuarantineApplication
 	ErrorKind               string
 	NativeCode, NativeErrno int
@@ -441,7 +452,11 @@ func verifyApplicationPlan(tc runtimeCase, profileName string) applicationCompar
 	}
 	source, e := appledouble.ParseQuarantineWithProfile(tc.FileInput, profile)
 	mustRuntime(e)
-	result.Context = ctx
+	result.Context = applicationContextEvidence{Profile: profile, ExistingPresent: r.Prepared.Present, Existing: before, Directory: ctx.Directory, Timestamp: ctx.Timestamp}
+	if ctx.Process != nil {
+		result.Context.ProcessFlags = ctx.Process.Flags
+		result.Context.ProcessAgent = []byte(ctx.Process.Agent)
+	}
 	plan, e := source.PlanApplication(ctx)
 	result.Plan = plan
 	if !result.ContextKnown {

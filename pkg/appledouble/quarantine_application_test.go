@@ -50,6 +50,7 @@ func TestNativeQuarantineApplication(t *testing.T) {
 		{"runtime-macos26.json", QuarantineMacOS26, 768},
 		{"runtime-macos27.json", QuarantineMacOS27, 768},
 		{"normalization-macos27.json.gz", QuarantineMacOS27, 2218},
+		{"normalization-macos26.json.gz", QuarantineMacOS26, 2210},
 	} {
 		t.Run(corpus.name, func(t *testing.T) {
 			b, e := os.ReadFile("../../testdata/appledouble/native/quarantine-" + corpus.name)
