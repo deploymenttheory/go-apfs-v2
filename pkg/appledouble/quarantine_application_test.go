@@ -51,6 +51,7 @@ func TestNativeQuarantineApplication(t *testing.T) {
 		{"processes-macos27.json.gz", QuarantineMacOS27, 4396},
 		{"runtime-macos26.json", QuarantineMacOS26, 768},
 		{"runtime-macos27.json", QuarantineMacOS27, 768},
+		{"runtime-macos27-no-creation.json.gz", QuarantineMacOS27, 768},
 		{"normalization-macos27.json.gz", QuarantineMacOS27, 2218},
 		{"normalization-macos26.json.gz", QuarantineMacOS26, 2210},
 	} {

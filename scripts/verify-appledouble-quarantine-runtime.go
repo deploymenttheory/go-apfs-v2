@@ -86,6 +86,7 @@ func saveRuntime(path string, v any) {
 func main() {
 	processes := flag.Bool("processes", false, "qualify additional effective process flag combinations")
 	normalization := flag.Bool("normalization", false, "qualify extended destination normalization inputs")
+	fixtureOverride := flag.String("fixture", "", "explicit independently captured fixture for a qualified host preparation context")
 	capture := flag.Bool("capture", false, "record independent observations without claiming qualification")
 	flag.Parse()
 	if *processes && *normalization {
@@ -104,7 +105,7 @@ func main() {
 	defer func() {
 		failure := recover()
 		saveRuntime(filepath.Join(root, "observed.json"), observed)
-		report := map[string]any{"qualified": qualified, "capture_only": *capture, "commands": runtimeCommands, "goos": runtime.GOOS, "goarch": runtime.GOARCH, "cases": len(observed.Records), "application_comparisons": applicationComparisons}
+		report := map[string]any{"qualified": qualified, "capture_only": *capture, "commands": runtimeCommands, "goos": runtime.GOOS, "goarch": runtime.GOARCH, "cases": len(observed.Records), "application_comparisons": applicationComparisons, "fixture_override": *fixtureOverride}
 		if failure != nil {
 			report["failure"] = fmt.Sprint(failure)
 		}
@@ -184,8 +185,11 @@ func main() {
 	if *processes {
 		fixturePath = "testdata/appledouble/native/quarantine-processes-" + observed.Profile + ".json.gz"
 	}
+	if *fixtureOverride != "" {
+		fixturePath = *fixtureOverride
+	}
 	data := readRuntime(fixturePath)
-	if *normalization || *processes {
+	if strings.HasSuffix(fixturePath, ".gz") {
 		z, e := gzip.NewReader(bytes.NewReader(data))
 		mustRuntime(e)
 		data, e = io.ReadAll(z)

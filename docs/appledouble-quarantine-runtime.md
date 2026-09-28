@@ -117,6 +117,32 @@ process still has one of the supported effective masks, or capture is unavailabl
 See [application planning](appledouble-quarantine-application.md) for caller inputs,
 byte substitution, errors and the boundary between policy and transport.
 
+## Destination creation is a separate input
+
+Two macOS 27 captures have identical effective process snapshots but different
+prepared destinations: in one, process `0202` automatically quarantines objects
+created after the process change; in the other, the attribute remains absent.
+The baseline setter still refuses the same writes. This changes 48 prepared
+states in the base matrix and consequently some file-application results.
+The cause is not established by the captured flags or library interface.
+
+Both independent corpora are retained and replayed against the planner on every
+Go operating system. The planner uses the actual `Existing` state and matches
+both; it does not predict automatic metadata creation from process flags.
+Qualification keeps fixture matching strict. For the captured host context with
+no automatic creation, explicitly select its fixture:
+
+```sh
+CGO_ENABLED=0 go run scripts/verify-appledouble-quarantine-runtime.go \
+  -fixture testdata/appledouble/native/quarantine-runtime-macos27-no-creation.json.gz
+```
+
+The override still requires matching profile, helper source hash, case count,
+exact matrix inputs, process statuses, destination snapshots and Go/native
+outcomes. It is recorded in the report and does not suppress mismatches or replace
+native inputs. The default fixture and its portable tests remain intact. This
+variation reinforces the need to capture real prepared state in shared transport.
+
 ## Qualification
 
 Run the native matrix on a qualified Mac with Command Line Tools:
