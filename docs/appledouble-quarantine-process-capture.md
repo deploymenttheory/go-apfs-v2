@@ -15,8 +15,8 @@ context behaves identically in Go on Linux, macOS and Windows.
 
 Without a process label, application retains the source's encoded agent, full
 identifier and original timestamp, including for directories. It still normalizes
-zero source flags and adds the native approval bit when the low quarantine bits
-require it. Existing destination flags do not replace source fields. The same
+zero source flags and adds bit `0x80` when either low quarantine bit is set
+without bit `0x40`. Existing destination flags do not replace source fields. The same
 381-byte canonical application limit applies before a write is planned.
 
 ```go

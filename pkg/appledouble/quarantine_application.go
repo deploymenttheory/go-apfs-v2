@@ -100,7 +100,7 @@ func (q *Quarantine) PlanApplication(ctx QuarantineApplicationContext) (*Quarant
 	if ctx.Process.Absent {
 		// Without a process label, native preserves the encoded source fields,
 		// full identifier and original timestamp even for directories.
-		copy(raw[:4], fmt.Sprintf("%04x", approvedQuarantineFlags(flags)))
+		copy(raw[:4], fmt.Sprintf("%04x", normalizedQuarantineApplicationFlags(flags)))
 		return &QuarantineApplication{Write: true, Value: raw}, nil
 	}
 	sandbox := ctx.Process.Flags&2 != 0
@@ -125,7 +125,7 @@ func (q *Quarantine) PlanApplication(ctx QuarantineApplicationContext) (*Quarant
 		}
 		return &QuarantineApplication{}, nil
 	}
-	flags = approvedQuarantineFlags(flags)
+	flags = normalizedQuarantineApplicationFlags(flags)
 	timestamp := ctx.Timestamp
 	if ctx.Directory {
 		timestamp = 0
@@ -156,7 +156,7 @@ func qualifiedQuarantineProcess(profile QuarantineProfile, p *QuarantineProcess)
 	}
 }
 
-func approvedQuarantineFlags(flags uint32) uint32 {
+func normalizedQuarantineApplicationFlags(flags uint32) uint32 {
 	if flags&3 != 0 && flags&0x40 == 0 {
 		flags |= 0x80
 	}
