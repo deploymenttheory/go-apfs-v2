@@ -117,7 +117,9 @@ filesystem transport:
 2. **Complete quarantine context and transport qualification.** Extend the
    [controlled runtime evidence](../../docs/appledouble-quarantine-runtime.md) and
    application planner to unresolved process contexts (including absence on macOS
-   27), production raw-agent capture and destination kinds. Integrate ordered plans with destination cleanup,
+   27), production raw-agent capture and destination protection. Regular files,
+   directories and symlinks have qualified [destination-kind policy](../../docs/appledouble-quarantine-destinations.md).
+   Integrate ordered plans with destination cleanup,
    source-state capture and write-failure handling. Raw existing values, including
    malformed metadata, are handled by `ExistingXattr`; see
    [destination-state policy](../../docs/appledouble-quarantine-existing.md).

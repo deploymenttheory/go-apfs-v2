@@ -83,7 +83,8 @@ with the planner, allowing only current timestamps bounded by each operation.
 Clang ASTs for arm64/x86_64, SDK exports, helper hashes, inputs and outputs are
 retained. All portable tests replay the committed native corpora without skips.
 
-Destination kinds beyond regular files/directories, production capture, actual
+Regular files, directories and symlinks have qualified
+[destination-kind policy](appledouble-quarantine-destinations.md). Production capture, actual
 write refusals, cleanup/callback integration and process contexts outside the
 qualified range remain separate transport work. These observations do not
 resolve the general large-value/allocation or APFS/HFS+ preservation gates.

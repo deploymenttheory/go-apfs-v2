@@ -23,6 +23,23 @@ var ErrQuarantineMissing = errors.New("appledouble: quarantine application requi
 // Other operations can replace or preserve the same malformed bytes successfully.
 var ErrQuarantineExisting = errors.New("appledouble: quarantine application requires a valid existing header")
 
+// ErrQuarantineDestination identifies an unknown or contradictory destination
+// kind. It applies equally on every Go operating system.
+var ErrQuarantineDestination = errors.New("appledouble: unqualified quarantine destination kind")
+
+// QuarantineDestinationKind describes the object receiving metadata, independent
+// of the Go host. A symlink means the link itself, never its target.
+type QuarantineDestinationKind uint8
+
+const (
+	// QuarantineRegularFile is the default destination kind.
+	QuarantineRegularFile QuarantineDestinationKind = iota
+	// QuarantineDirectory selects native directory timestamp behavior.
+	QuarantineDirectory
+	// QuarantineSymlink applies to the link itself, including dangling links.
+	QuarantineSymlink
+)
+
 // MaxQuarantineApplicationSize is the largest canonical plain value accepted
 // before native application. This is distinct from MaxQuarantineXattrSize.
 const MaxQuarantineApplicationSize = 381
@@ -54,14 +71,17 @@ type QuarantineProcess struct {
 // including malformed values: nil means absent and a non-nil empty slice means
 // present with zero bytes. Supply at most one representation. With neither set,
 // attribute absence is confirmed. Timestamp is an injected Unix
-// time in seconds, used when policy refreshes a regular file's timestamp.
-// Directory selects the qualified directory behavior; links and other object
-// kinds have not been qualified. This type grants no filesystem permission.
+// time in seconds, used when policy refreshes a file or symlink's timestamp.
+// Kind selects the receiving object. Directory retains the original directory
+// selector: true with a zero Kind selects a directory; true with a symlink Kind
+// is contradictory. Other object kinds require qualification. This type grants
+// no filesystem permission and never follows or resolves a path.
 type QuarantineApplicationContext struct {
 	Profile       QuarantineProfile
 	Process       *QuarantineProcess
 	Existing      *Quarantine
 	ExistingXattr []byte
+	Kind          QuarantineDestinationKind
 	Directory     bool
 	Timestamp     uint32
 }
@@ -100,6 +120,9 @@ func (q *Quarantine) PlanApplication(ctx QuarantineApplicationContext) (*Quarant
 	}
 	if !qualifiedQuarantineProcess(ctx.Profile, ctx.Process) {
 		return nil, ErrQuarantineContext
+	}
+	if ctx.Kind > QuarantineSymlink || (ctx.Directory && ctx.Kind == QuarantineSymlink) {
+		return nil, ErrQuarantineDestination
 	}
 	raw := envelope[2 : len(envelope)-1]
 	if len(raw) > MaxQuarantineApplicationSize {
@@ -151,7 +174,7 @@ func (q *Quarantine) PlanApplication(ctx QuarantineApplicationContext) (*Quarant
 	}
 	flags = normalizedQuarantineApplicationFlags(flags)
 	timestamp := ctx.Timestamp
-	if ctx.Directory {
+	if ctx.Directory || ctx.Kind == QuarantineDirectory {
 		timestamp = 0
 	}
 	value := fmt.Appendf(nil, "%04x;%08x;", flags, timestamp)
