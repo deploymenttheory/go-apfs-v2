@@ -76,8 +76,21 @@ without a baseline, when file flags are `0008`, `0010` or `0200`. The actual
 return is `-1` with errno 93 and the xattr remains absent. Neither a successful
 file-envelope parse nor a nominal no-op flag proves that application succeeds.
 
+The macOS 26 CI runner cannot capture its inherited context (`-1`, errno 93).
+Successful requests establish effective flags `0001`, `0002` or `0004` without
+the macOS 27 host's `0200` bit. It also refuses 192 process changes and 24
+baseline writes, but all 768 file applications succeed in this matrix.
+
+Crucially, macOS 26 preserves `FileAgent` and the input timestamp in the inherited
+context, but successful process-state changes make it use `ContextAgent` and the
+operation time for the same file input. Thus agent/timestamp replacement is
+provably process-dependent on one OS. That does not prove every observed flag
+difference is caused by process state: the hosts retain different effective flags,
+and requests to set `0200` are refused on both. Those differences remain scoped
+to the captured runtime profiles until further native evidence separates them.
+
 These are observations of captured process and filesystem contexts, not universal
-macOS-version rules. The macOS 26 fixture is qualified separately on CI. Captured
+macOS-version rules. The macOS 26 fixture is captured and qualified separately on CI. Captured
 unavailable state must not be replaced with an invented zero-flags context.
 Successful context changes do not establish whether all privilege, entitlement,
 filesystem or kernel-policy combinations behave identically.

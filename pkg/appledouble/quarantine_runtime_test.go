@@ -15,7 +15,7 @@ func TestNativeQuarantineRuntimeImports(t *testing.T) {
 	for _, target := range []struct {
 		name    string
 		profile QuarantineProfile
-	}{{"macos27", QuarantineMacOS27}} {
+	}{{"macos26", QuarantineMacOS26}, {"macos27", QuarantineMacOS27}} {
 		t.Run(target.name, func(t *testing.T) {
 			raw, err := os.ReadFile("../../testdata/appledouble/native/quarantine-runtime-" + target.name + ".json")
 			if err != nil {
