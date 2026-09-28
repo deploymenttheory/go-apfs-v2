@@ -62,7 +62,8 @@ full AppleDouble transport integration is on the roadmap below.
   macOS 26 or 27 behavior on any supported operating system.
 - **Quarantine application planning:** `Quarantine.PlanApplication` computes exact
   destination bytes, preservation decisions and specific errors for qualified
-  effective process contexts. It requires explicit process/destination state and
+  effective process contexts, including explicitly confirmed process-label absence
+  for the macOS 26 target profile. It requires explicit process/destination state and
   an injected timestamp; it never reads the Go host's policy. See
   [application planning](../../docs/appledouble-quarantine-application.md) for
   supported contexts and the remaining transport work.
@@ -115,8 +116,8 @@ filesystem transport:
    and destination write-failure handling.
 2. **Complete quarantine context and transport qualification.** Extend the
    [controlled runtime evidence](../../docs/appledouble-quarantine-runtime.md) and
-   application planner to unresolved/absent process contexts, reliable raw-agent
-   capture and destination kinds. Integrate ordered plans with destination cleanup,
+   application planner to unresolved process contexts (including absence on macOS
+   27), production raw-agent capture and destination kinds. Integrate ordered plans with destination cleanup,
    existing state, source-state capture and write-failure handling.
 3. **Resolve large-value and allocation behavior.** Qualify oversized attributes,
    aggregates and resource forks. Resolve the difference between native packing

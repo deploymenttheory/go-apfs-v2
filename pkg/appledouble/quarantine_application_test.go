@@ -53,6 +53,7 @@ func TestNativeQuarantineApplication(t *testing.T) {
 		profile QuarantineProfile
 		count   int
 	}{
+		{"contexts-macos26.json.gz", QuarantineMacOS26, 3324},
 		{"contexts-macos27.json.gz", QuarantineMacOS27, 3328},
 		{"processes-macos26.json.gz", QuarantineMacOS26, 4388},
 		{"processes-macos27.json.gz", QuarantineMacOS27, 4396},
@@ -101,7 +102,7 @@ func verifyApplicationFixture(t *testing.T, tc applicationFixtureCase, profile Q
 		t.Fatal(e)
 	}
 	ctx := QuarantineApplicationContext{Profile: profile, Timestamp: uint32(r.Start), Directory: tc.Kind == "directory"}
-	if r.Effective.InitCode == 0 {
+	if r.Effective.InitCode == 0 && r.Effective.Raw == nil {
 		// Captures use the canonical process envelope. Reuse the established field
 		// decoder by inserting a timestamp; no requested state supplies policy input.
 		p := applicationHex(t, r.Effective.Serialized)
@@ -274,6 +275,7 @@ func TestQuarantineApplicationValidationAndOwnership(t *testing.T) {
 
 func FuzzQuarantineApplication(f *testing.F) {
 	f.Add([]byte{1, 0, 0, 0, 'A', 'B'})
+	f.Add([]byte{1, 0, 0, 4, 'A', 'B'})
 	f.Add([]byte{0x40, 0, 1, 6, ';', '\\'})
 	f.Add(bytes.Repeat([]byte{0xff}, 80))
 	f.Fuzz(func(t *testing.T, b []byte) {

@@ -45,8 +45,13 @@ Qualified effective process flags are `0001` through `001f` for macOS 26 and
 `0200` through `021f` for macOS 27. These include every combination of the five
 low process bits; other combinations return
 `ErrQuarantineContext`. A nil process is unavailable state and returns that error;
-it never becomes an unquarantined context. This restriction applies identically
-on all three Go operating systems.
+it never becomes an unquarantined context. For the macOS 26 profile,
+`QuarantineProcess{Absent: true}` explicitly selects independently confirmed
+process-label absence; its flags and agent must be empty. This state retains
+the source fields and timestamp, including for directories, while applying the
+native flag adjustment and application size limit. See
+[process capture and absence](appledouble-quarantine-process-capture.md). These
+profile restrictions apply identically on all three Go operating systems.
 
 The planner accepts **effective** flags only. In the native matrix, requesting
 zero becomes one, some high requested bits are discarded, and requests carrying
@@ -59,8 +64,9 @@ lossy: a raw kernel backslash can be decoded again during `init_with_self`, so
 blindly importing a snapshot can change `a\b` into `a?b`. In controlled tests,
 only a successful process request supplies the independently known agent; actual
 flags still come from the effective capture. A refused request supplies neither.
-Resolving arbitrary host process context remains transport work. The SDK does
-not claim to reconstruct lost bytes from a snapshot.
+The raw-process native matrix instead reads the kernel agent through libSystem,
+without deriving it from a request or reconstructing lost snapshot bytes.
+Production capture and integration still remain transport work.
 
 `Existing` is a valid imported destination model, or nil for confirmed absence.
 `Directory` selects the qualified directory behavior; regular files use the
@@ -136,6 +142,7 @@ CGO_ENABLED=0 go run scripts/verify-appledouble.go
 CGO_ENABLED=0 go run scripts/verify-appledouble-quarantine-runtime.go
 CGO_ENABLED=0 go run scripts/verify-appledouble-quarantine-runtime.go -normalization
 CGO_ENABLED=0 go run scripts/verify-appledouble-quarantine-runtime.go -processes
+CGO_ENABLED=0 go run scripts/verify-appledouble-quarantine-runtime.go -contexts
 ```
 
 Native runs require macOS and Command Line Tools; portable production and tests
@@ -145,8 +152,8 @@ architectures. `-capture` remains an unqualified native-only recording mode.
 
 ## Remaining work
 
-1. Qualify absent and other effective process contexts, reliable raw-agent capture,
-   additional privilege/entitlement combinations, malformed existing values,
+1. Qualify absent process state on macOS 27, other effective process contexts,
+   production raw-agent capture, additional privilege/entitlement combinations, malformed existing values,
    links and destination protection.
 2. Integrate ordered plans with real source capture, destination preparation,
    actual write/readback and `copyfile` callback/error handling in shared transport.

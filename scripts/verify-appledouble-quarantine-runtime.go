@@ -706,7 +706,7 @@ func verifyApplicationPlan(tc runtimeCase, profileName string) applicationCompar
 		mustRuntime(e)
 		return q
 	}
-	if result.ContextKnown {
+	if result.ContextKnown && r.Effective.Raw == nil {
 		captured := processModel(r.Effective.Serialized)
 		ctx.Process = &appledouble.QuarantineProcess{Flags: captured.Flags, Agent: captured.Agent}
 		// Controlled successful requests establish the raw agent. init_with_self

@@ -37,8 +37,10 @@ which source supplies each field without relying on byte coincidences.
 The helper records:
 
 - Process capture before and after the request, including initialization status,
-  errno and exact serialized bytes. A failed capture is unavailable state, not a
-  successfully captured empty process context.
+  errno and exact serialized bytes. A failed library snapshot alone is unavailable state, not a
+  successfully captured empty process context. The separate
+  [raw-process matrix](appledouble-quarantine-process-capture.md) distinguishes
+  confirmed absence using additional native evidence.
 - Canonical requested process data and the process-application return code. A
   refused change never counts as an applied request; subsequent observations are
   associated with the actual captured context.
@@ -175,8 +177,9 @@ explicitly rejected and is not counted as policy parity.
 
 ## Remaining implementation
 
-1. Extend the explicit application context to absent and other effective process
-   states, raw-agent resolution and privilege/destination combinations.
+1. Extend the explicit application context to absent state on macOS 27 and other
+   effective process states; integrate raw capture and qualify additional
+   privilege/destination combinations.
 2. Build on qualified Go write/preserve/error planning, including buffer limits
    and native field truncation, to cover the remaining normalization cases.
 3. Extend the matrix for additional agents/tracking data, flag combinations,
