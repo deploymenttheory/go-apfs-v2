@@ -27,13 +27,15 @@ type command struct {
 	ExpectedFailure bool
 }
 type result struct {
-	Name                  string
-	Accepted, BinaryEqual bool
+	Name                             string
+	Accepted, BinaryEqual, TextEqual bool
 }
 
 var commands []command
 var results []result
 var roundTrips []string
+var externalResults []result
+var identityResults []string
 
 func must(err error) {
 	if err != nil {
@@ -64,7 +66,7 @@ func main() {
 	passed := false
 	defer func() {
 		failure := recover()
-		report := map[string]any{"passed": passed, "goos": runtime.GOOS, "goarch": runtime.GOARCH, "commands": commands, "comparisons": results, "round_trips": roundTrips}
+		report := map[string]any{"passed": passed, "goos": runtime.GOOS, "goarch": runtime.GOARCH, "commands": commands, "comparisons": results, "round_trips": roundTrips, "external_comparisons": externalResults, "identity_comparisons": identityResults}
 		if failure != nil {
 			report["failure"] = fmt.Sprint(failure)
 		}
@@ -88,9 +90,9 @@ func main() {
 	var fixture struct {
 		SourceSHA256, HelperSHA256 string
 		Records                    []struct {
-			Name           string
-			Text, External []byte
-			Accepted       bool
+			Name                      string
+			Text, External, Canonical []byte
+			Accepted                  bool
 		}
 	}
 	must(json.Unmarshal(read("testdata/appledouble/native/acl.json"), &fixture))
@@ -164,12 +166,21 @@ func main() {
 			must(e)
 			write(filepath.Join(dir, "go.bin"), b)
 			r.BinaryEqual = bytes.Equal(b, read(external)) && bytes.Equal(b, tc.External)
+			text, e := a.MarshalText()
+			must(e)
+			write(filepath.Join(dir, "go.txt"), text)
+			r.TextEqual = bytes.Equal(text, read(canonical)) && bytes.Equal(text, tc.Canonical)
+			if !r.TextEqual {
+				panic("ACL canonical text differs: " + tc.Name)
+			}
 			if !r.BinaryEqual {
 				panic("ACL binary differs: " + tc.Name)
 			}
 		}
 		results = append(results, r)
 	}
+	verifyExternal(root, source)
+	verifyIdentities(root, helper)
 	// Exercise ACL application in both directions with an explicit, unknown UUID:
 	// no account database or host-specific principal mapping can affect the result.
 	unpack := filepath.Join(root, "copyfile")
@@ -199,7 +210,15 @@ func main() {
 		if !bytes.Equal(b, read(filepath.Join(dir, "source.bin"))) {
 			panic("native packed ACL differs: " + kind)
 		}
-		// Use the original text, not native canonical output, in the Go-produced sidecar.
+		// Import actual native bytes and format the ACL, including copyfile's NUL.
+		imported, e := appledouble.ParseACLBinary(read(filepath.Join(dir, "source.bin")))
+		must(e)
+		text, e = imported.MarshalText()
+		must(e)
+		text = append(text, 0)
+		if !bytes.Equal(text, f.Xattrs()[appledouble.ACLTextName]) {
+			panic("packed ACL payload differs: " + kind)
+		}
 		encoded, e := appledouble.FromXattrs(map[string][]byte{appledouble.ACLTextName: text}).Encode()
 		must(e)
 		write(filepath.Join(dir, "go.ad"), encoded)
@@ -211,5 +230,125 @@ func main() {
 		roundTrips = append(roundTrips, kind)
 	}
 	passed = true
-	fmt.Printf("ACL oracle: %d parser cases and %d filesystem round trips passed\n", len(results), len(roundTrips))
+	fmt.Printf("ACL oracle: %d parser, %d external, %d identity cases and %d filesystem round trips passed\n", len(results), len(externalResults), len(identityResults), len(roundTrips))
+}
+
+func verifyExternal(root string, source []byte) {
+	var fixture struct {
+		SourceSHA256, HelperSHA256 string
+		Records                    []struct {
+			Name, InputSHA256     string
+			Input, External, Text []byte
+			Accepted              bool
+		}
+	}
+	must(json.Unmarshal(read("testdata/appledouble/native/acl-external.json"), &fixture))
+	if len(fixture.Records) != 34 || fmt.Sprintf("%x", sha256.Sum256(source)) != fixture.SourceSHA256 {
+		panic("external fixture provenance")
+	}
+	helperSource := "testdata/appledouble/native/acl-external.c"
+	if fmt.Sprintf("%x", sha256.Sum256(read(helperSource))) != fixture.HelperSHA256 {
+		panic("external helper hash mismatch")
+	}
+	helper := filepath.Join(root, "acl-external")
+	run("xcrun", "clang", "-Wall", "-Wextra", "-Werror", helperSource, "-o", helper)
+	// Supply the pinned private type declarations, not guessed substitute structs.
+	client := http.Client{Timeout: 30 * time.Second}
+	response, e := client.Get("https://raw.githubusercontent.com/apple-oss-distributions/Libc/71bbe350ab79eef58113991d817ccc6165061a64/posix1e/aclvar.h")
+	must(e)
+	header, e := io.ReadAll(io.LimitReader(response.Body, 1<<20))
+	must(e)
+	must(response.Body.Close())
+	if response.StatusCode != http.StatusOK || fmt.Sprintf("%x", sha256.Sum256(header)) != "74711afda9818508af93ec472db57243ed45b13908a22e2bff35af9d6a8f7fd7" {
+		panic("pinned ACL declarations hash mismatch")
+	}
+	write(filepath.Join(root, "aclvar.h"), header)
+	licenseEnd := bytes.Index(source, []byte("#include <sys/appleapiopts.h>"))
+	tableStart := bytes.Index(source, []byte("#define ACL_TYPE_DIR"))
+	formatEnd := bytes.Index(source, []byte("\nssize_t\nacl_size("))
+	importStart := bytes.Index(source, []byte("acl_t\nacl_copy_int("))
+	importEnd := bytes.Index(source, []byte("/*\n * external representation, native system endianity"))
+	if licenseEnd < 0 || tableStart < 0 || formatEnd <= tableStart || importStart < 0 || importEnd <= importStart {
+		panic("ACL conversion extraction failed")
+	}
+	conversion := append(bytes.Clone(source[:licenseEnd]), []byte("#include <sys/types.h>\n#include <sys/acl.h>\n#include <stdint.h>\n#include <errno.h>\n#include <stdio.h>\n#include <stdarg.h>\n#include <stdlib.h>\n#include <string.h>\n#include <strings.h>\n#include <membership.h>\n#include <uuid/uuid.h>\n#include <pwd.h>\n#include <grp.h>\n#include <libkern/OSByteOrder.h>\n#include \"aclvar.h\"\n")...)
+	conversion = append(conversion, source[importStart:importEnd]...)
+	conversion = append(conversion, source[tableStart:formatEnd]...)
+	conversionPath := filepath.Join(root, "acl_conversion.c")
+	write(conversionPath, conversion)
+	for _, arch := range []string{"arm64", "x86_64"} {
+		for _, unit := range []struct{ name, path string }{{"acl-external", helperSource}, {"acl_conversion", conversionPath}} {
+			ast := run("xcrun", "clang", "-arch", arch, "-fsyntax-only", "-Xclang", "-ast-dump=json", unit.path)
+			commands[len(commands)-1].Output = fmt.Sprintf("AST retained: %d bytes", len(ast))
+			write(filepath.Join(root, unit.name+"-"+arch+".ast.json"), ast)
+		}
+	}
+	for _, tc := range fixture.Records {
+		dir := filepath.Join(root, "external", tc.Name)
+		must(os.MkdirAll(dir, 0700))
+		input, external, text := filepath.Join(dir, "input.bin"), filepath.Join(dir, "native.bin"), filepath.Join(dir, "native.txt")
+		write(input, tc.Input)
+		if fmt.Sprintf("%x", sha256.Sum256(tc.Input)) != tc.InputSHA256 {
+			panic("external input hash mismatch")
+		}
+		output, nativeErr := observe(helper, input, external, text)
+		if nativeErr != nil {
+			var exit *exec.ExitError
+			if tc.Accepted || !errors.As(nativeErr, &exit) || exit.ExitCode() != 1 || !strings.HasPrefix(string(output), "import failed: errno=") {
+				panic(fmt.Sprintf("unexpected external failure: %s: %v: %s", tc.Name, nativeErr, output))
+			}
+			commands[len(commands)-1].ExpectedFailure = true
+		}
+		a, goErr := appledouble.ParseACLBinary(tc.Input)
+		if (nativeErr == nil) != tc.Accepted || (goErr == nil) != tc.Accepted {
+			panic("external acceptance differs: " + tc.Name)
+		}
+		r := result{Name: tc.Name, Accepted: tc.Accepted}
+		if tc.Accepted {
+			b, e := a.MarshalBinary()
+			must(e)
+			write(filepath.Join(dir, "go.bin"), b)
+			canonical, e := a.MarshalText()
+			must(e)
+			write(filepath.Join(dir, "go.txt"), canonical)
+			r.BinaryEqual = bytes.Equal(b, read(external)) && bytes.Equal(b, tc.External)
+			r.TextEqual = bytes.Equal(canonical, read(text)) && bytes.Equal(canonical, tc.Text)
+			if !r.BinaryEqual || !r.TextEqual {
+				panic("external conversion differs: " + tc.Name)
+			}
+		}
+		externalResults = append(externalResults, r)
+	}
+}
+
+func verifyIdentities(root, helper string) {
+	// Native host lookup supplies source identity evidence; production lookup is
+	// exclusively caller supplied. Do not assume a fixed UUID for either account.
+	for _, tc := range []struct {
+		kind, name string
+		group      bool
+	}{{"user", "root", false}, {"group", "wheel", true}} {
+		dir := filepath.Join(root, "identity-"+tc.kind)
+		must(os.MkdirAll(dir, 0700))
+		input, external, native := filepath.Join(dir, "input.txt"), filepath.Join(dir, "native.bin"), filepath.Join(dir, "native.txt")
+		write(input, []byte(fmt.Sprintf("!#acl 1\n%s::%s::allow:read\n", tc.kind, tc.name)))
+		run(helper, "parse", input, external, native)
+		a, e := appledouble.ParseACLBinary(read(external))
+		must(e)
+		if len(a.Entries) != 1 || a.Entries[0].Principal == [16]byte{} {
+			panic("source identity lookup failed")
+		}
+		b, e := a.FormatText(func(uuid [16]byte) (appledouble.ACLPrincipal, bool, error) {
+			if uuid != a.Entries[0].Principal {
+				panic("unexpected source UUID")
+			}
+			return appledouble.ACLPrincipal{Group: tc.group, Name: tc.name, ID: 0}, true, nil
+		})
+		must(e)
+		write(filepath.Join(dir, "go.txt"), b)
+		if !bytes.Equal(b, read(native)) {
+			panic("source identity text differs: " + tc.kind)
+		}
+		identityResults = append(identityResults, tc.kind)
+	}
 }

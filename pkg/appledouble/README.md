@@ -28,7 +28,7 @@ to process the bytes.
 | Reading an archive or package payload containing `._` files | Decode the sidecar and inspect the metadata belonging to its companion file. |
 | Building a package or archive that carries macOS metadata | Encode captured metadata into an AppleDouble sidecar. |
 | Preserving metadata across filesystems or operating systems | Encode and decode the metadata container used by the surrounding transport layer. |
-| Inspecting a serialized `com.apple.acl.text` record | Parse its ACL entries and export their portable binary representation. |
+| Inspecting a serialized `com.apple.acl.text` record | Convert between ACL text, structured entries and portable external binary bytes. |
 
 The package operates on bytes. Filesystem reads/writes, choosing where to store a
 sidecar, resolving filename conflicts and applying permissions belong to the
@@ -45,10 +45,11 @@ full AppleDouble transport integration is on the roadmap below.
 - **Naming helpers:** `IsSidecarName`, `SidecarName` and `OwnerName` work with
   sidecar path names. The caller is responsible for establishing which files
   actually belong together.
-- **ACL interpretation:** `ParseACLText` produces an `ACL`; `MarshalBinary`
-  exports portable `acl_copy_ext` bytes. Explicit UUID principals need no lookup.
-  Name/UID/GID principals require a caller-provided `ACLResolver` using source
-  identity information.
+- **ACL conversion:** `ParseACLText` and `ParseACLBinary` produce an `ACL`.
+  `MarshalBinary` exports portable `acl_copy_ext` bytes; `MarshalText` formats
+  canonical text using UUIDs. `FormatText` accepts a source UUID-to-account resolver
+  when names and IDs are needed. Name/UID/GID-only text input requires an
+  `ACLResolver` using source identity information.
 
 Always check encoding and decoding errors. FinderInfo must contain exactly 32
 bytes. `Sniff` is a format hint; `Decode` performs validation. Canonical encoding
@@ -56,7 +57,9 @@ can change padding or layout while preserving logical metadata.
 
 ACL parsing is explicit. The raw codec preserves ACL and quarantine payloads;
 turning those records into filesystem permissions or quarantine state is a
-separate operation.
+separate operation. Binary ACL conversion retains unknown bits and entry kinds;
+text formatting follows macOS by emitting only known bits and allow/deny entries.
+Use the binary representation when those additional details must be preserved.
 
 ## Example
 
@@ -84,8 +87,7 @@ Use `File.Attrs` instead of the map when duplicate record order matters.
 The remaining work is ordered around completing metadata policy before integrating
 filesystem transport:
 
-1. **Complete ACL conversion and application policy.** Add canonical text
-   formatting and external-binary import; define deferred/duplicate ACL handling,
+1. **Complete ACL application policy.** Define deferred/duplicate ACL handling,
    source identity transport, inheritance, ownership and file-flag behavior.
 2. **Implement quarantine policy.** Validate the serialized envelope and reproduce
    native flag, timestamp and agent normalization using explicit runtime context.
