@@ -43,7 +43,23 @@ type xattrSnapshot struct {
 	Errno           int
 	Bytes, Envelope string
 }
+type destinationSnapshot struct {
+	Mode            uint32
+	IdentityMatches bool
+	LinkTarget      string
+}
+type targetSnapshot struct {
+	Present       bool
+	Errno         int
+	Device, Inode uint64
+	Mode          uint32
+	Entries       int
+	Content       string
+	Quarantine    xattrSnapshot
+}
 type runtimeResult struct {
+	DestinationBefore, DestinationAfter                                *destinationSnapshot `json:",omitempty"`
+	TargetBefore, TargetAfter                                          *targetSnapshot      `json:",omitempty"`
 	BaselineSetCode, BaselineSetErrno                                  int
 	Start, End                                                         int64
 	UID, EUID                                                          uint32
@@ -58,9 +74,9 @@ type runtimeCase struct {
 	Result                            runtimeResult
 }
 type runtimeFixture struct {
-	Host, Profile, HelperSHA256, SDKExportsSHA256                                       string
-	BaseHelperSHA256, CaptureHelperSHA256, ExistingHelperSHA256, KernelSDKExportsSHA256 string `json:",omitempty"`
-	Records                                                                             []runtimeCase
+	Host, Profile, HelperSHA256, SDKExportsSHA256                                                                string
+	BaseHelperSHA256, CaptureHelperSHA256, ExistingHelperSHA256, DestinationHelperSHA256, KernelSDKExportsSHA256 string `json:",omitempty"`
+	Records                                                                                                      []runtimeCase
 }
 type runtimeCommand struct {
 	Args          []string
@@ -96,6 +112,7 @@ func saveRuntime(path string, v any) {
 	writeRuntime(path, append(b, '\n'))
 }
 func main() {
+	destinations := flag.Bool("destinations", false, "qualify regular, directory and symlink destination policy")
 	existing := flag.Bool("existing", false, "qualify raw and malformed destination quarantine state")
 	contexts := flag.Bool("contexts", false, "qualify raw process capture and confirmed absent state")
 	processes := flag.Bool("processes", false, "qualify additional effective process flag combinations")
@@ -103,7 +120,7 @@ func main() {
 	fixtureOverride := flag.String("fixture", "", "explicit independently captured fixture for a qualified host preparation context")
 	capture := flag.Bool("capture", false, "record independent observations without claiming qualification")
 	flag.Parse()
-	if (*processes && *normalization) || (*contexts && (*processes || *normalization)) || (*existing && (*contexts || *processes || *normalization)) {
+	if (*processes && *normalization) || (*contexts && (*processes || *normalization)) || (*existing && (*contexts || *processes || *normalization)) || (*destinations && (*existing || *contexts || *processes || *normalization)) {
 		panic("choose one extended matrix")
 	}
 	root := "artifacts/appledouble-quarantine-runtime"
@@ -118,6 +135,9 @@ func main() {
 	}
 	if *existing {
 		root += "-existing"
+	}
+	if *destinations {
+		root += "-destinations"
 	}
 	mustRuntime(os.MkdirAll(root, 0755))
 	qualified := false
@@ -161,7 +181,7 @@ func main() {
 		}
 	}
 	source := "testdata/appledouble/native/quarantine-runtime.c"
-	if *contexts || *existing {
+	if *contexts || *existing || *destinations {
 		base := readRuntime(source)
 		capture := readRuntime("testdata/appledouble/native/quarantine-process-capture.h")
 		observed.BaseHelperSHA256 = hashRuntime(base)
@@ -173,7 +193,7 @@ func main() {
 		}
 		generated := bytes.Replace(base, marker, append(append(bytes.Clone(capture), '\n'), marker...), 1)
 		generated = bytes.Replace(generated, end, []byte("hex(data, length); raw_process_snapshot(); putchar('}');"), 1)
-		if *existing {
+		if *existing || *destinations {
 			capture := readRuntime("testdata/appledouble/native/quarantine-existing-capture.h")
 			observed.ExistingHelperSHA256 = hashRuntime(capture)
 			start, end := bytes.Index(generated, []byte("static void xattr(int fd) {")), bytes.Index(generated, []byte("static int baseline_code, baseline_errno;"))
@@ -181,6 +201,29 @@ func main() {
 				panic("native existing capture injection points changed")
 			}
 			generated = append(append(append(bytes.Clone(generated[:start]), capture...), '\n'), generated[end:]...)
+		}
+		if *destinations {
+			capture := readRuntime("testdata/appledouble/native/quarantine-destination-capture.h")
+			observed.DestinationHelperSHA256 = hashRuntime(capture)
+			start, end := bytes.Index(generated, []byte("static int baseline_code, baseline_errno;")), bytes.Index(generated, []byte("int main(int argc, char **argv) {"))
+			if start < 0 || end <= start {
+				panic("native destination injection points changed")
+			}
+			generated = append(append(append(bytes.Clone(generated[:start]), capture...), '\n'), generated[end:]...)
+			replacements := [][2]string{
+				{`int directory = !strcmp(argv[4], "directory"), before`, `int directory = destination_kind(argv[4]), before`},
+				{`(!directory && strcmp(argv[4], "file"))`, `(directory < 0)`},
+				{`size_t length; char *data = load(argv[3], &length);`, `printf(",\"DestinationBefore\":"); destination_snapshot(fd); printf(",\"TargetBefore\":"); target_snapshot();
+    size_t length; char *data = load(argv[3], &length);`},
+				{`printf(",\"End\":%lld}\n", (long long)time(NULL));`, `printf(",\"DestinationAfter\":"); destination_snapshot(fd); printf(",\"TargetAfter\":"); target_snapshot();
+    printf(",\"End\":%lld}\n", (long long)time(NULL));`},
+			}
+			for _, replacement := range replacements {
+				if bytes.Count(generated, []byte(replacement[0])) != 1 {
+					panic("native destination marker changed")
+				}
+				generated = bytes.Replace(generated, []byte(replacement[0]), []byte(replacement[1]), 1)
+			}
 		}
 		source = filepath.Join(root, "quarantine-runtime-context.c")
 		writeRuntime(source, generated)
@@ -210,6 +253,9 @@ func main() {
 	if *existing {
 		cases = existingCases()
 	}
+	if *destinations {
+		cases = destinationCases()
+	}
 	for _, tc := range cases {
 		dir, e := os.MkdirTemp(root, tc.Name+"-")
 		mustRuntime(e)
@@ -230,7 +276,7 @@ func main() {
 		validateRuntime(tc)
 		observed.Records = append(observed.Records, tc)
 	}
-	if *contexts || *existing {
+	if *contexts || *existing || *destinations {
 		absent, present := 0, 0
 		for _, tc := range observed.Records {
 			raw := tc.Result.Effective.Raw
@@ -265,6 +311,9 @@ func main() {
 	if *existing {
 		fixturePath = "testdata/appledouble/native/quarantine-existing-" + observed.Profile + ".json.gz"
 	}
+	if *destinations {
+		fixturePath = "testdata/appledouble/native/quarantine-destinations-" + observed.Profile + ".json.gz"
+	}
 	if *fixtureOverride != "" {
 		fixturePath = *fixtureOverride
 	}
@@ -277,7 +326,7 @@ func main() {
 		mustRuntime(z.Close())
 	}
 	mustRuntime(json.Unmarshal(data, &fixture))
-	if fixture.Profile != observed.Profile || fixture.HelperSHA256 != observed.HelperSHA256 || fixture.BaseHelperSHA256 != observed.BaseHelperSHA256 || fixture.CaptureHelperSHA256 != observed.CaptureHelperSHA256 || fixture.ExistingHelperSHA256 != observed.ExistingHelperSHA256 || len(fixture.Records) != len(observed.Records) {
+	if fixture.Profile != observed.Profile || fixture.HelperSHA256 != observed.HelperSHA256 || fixture.BaseHelperSHA256 != observed.BaseHelperSHA256 || fixture.CaptureHelperSHA256 != observed.CaptureHelperSHA256 || fixture.ExistingHelperSHA256 != observed.ExistingHelperSHA256 || fixture.DestinationHelperSHA256 != observed.DestinationHelperSHA256 || len(fixture.Records) != len(observed.Records) {
 		panic("runtime fixture provenance or case count")
 	}
 	for i, want := range fixture.Records {
@@ -294,6 +343,7 @@ func main() {
 }
 func validateRuntime(tc runtimeCase) {
 	r := tc.Result
+	validateDestination(tc)
 	if r.Start <= 0 || r.End < r.Start {
 		panic("invalid operation interval: " + tc.Name)
 	}
@@ -358,6 +408,22 @@ func validateRawProcess(s processSnapshot) {
 }
 
 func compareRuntime(name string, want, got runtimeResult) {
+	if !reflect.DeepEqual(want.DestinationBefore, got.DestinationBefore) || !reflect.DeepEqual(want.DestinationAfter, got.DestinationAfter) {
+		panic("destination proof differs: " + name)
+	}
+	// Inodes/devices differ between runs; identity and unchanged target evidence
+	// are checked within each operation before comparing logical target state.
+	target := func(s *targetSnapshot) *targetSnapshot {
+		if s == nil {
+			return nil
+		}
+		c := *s
+		c.Device, c.Inode = 0, 0
+		return &c
+	}
+	if !reflect.DeepEqual(target(want.TargetBefore), target(got.TargetBefore)) || !reflect.DeepEqual(target(want.TargetAfter), target(got.TargetAfter)) {
+		panic("target proof differs: " + name)
+	}
 	if !reflect.DeepEqual(want.Before, got.Before) || !reflect.DeepEqual(want.Effective, got.Effective) || (want.Requested == nil) != (got.Requested == nil) {
 		panic("process capture differs: " + name)
 	}
@@ -692,6 +758,7 @@ func normalizationCases(profile string) []runtimeCase {
 
 // Preserve binary agent bytes; encoding/json replaces invalid UTF-8 in strings.
 type applicationContextEvidence struct {
+	Kind              appledouble.QuarantineDestinationKind
 	Profile           appledouble.QuarantineProfile
 	ProcessFlags      uint32
 	ProcessAbsent     bool
@@ -721,6 +788,10 @@ func verifyApplicationPlan(tc runtimeCase, profileName string) applicationCompar
 	r := tc.Result
 	result := applicationComparison{Name: tc.Name, ContextKnown: r.Effective.InitCode == 0, NativeCode: r.FileApplyCode, NativeErrno: r.FileApplyErrno}
 	ctx := appledouble.QuarantineApplicationContext{Profile: profile, Directory: tc.Kind == "directory", Timestamp: uint32(r.Start)}
+	if r.DestinationBefore != nil {
+		ctx.Directory = false
+		ctx.Kind = applicationDestinationKind(tc.Kind)
+	}
 	decode := func(s string) []byte { b, e := hex.DecodeString(s); mustRuntime(e); return b }
 	processModel := func(s string) *appledouble.Quarantine {
 		p := decode(s)
@@ -785,7 +856,7 @@ func verifyApplicationPlan(tc runtimeCase, profileName string) applicationCompar
 	}
 	source, e := appledouble.ParseQuarantineWithProfile(tc.FileInput, profile)
 	mustRuntime(e)
-	result.Context = applicationContextEvidence{Profile: profile, ExistingPresent: r.Prepared.Present, Existing: before, Directory: ctx.Directory, Timestamp: ctx.Timestamp}
+	result.Context = applicationContextEvidence{Profile: profile, ExistingPresent: r.Prepared.Present, Existing: before, Directory: ctx.Directory, Kind: ctx.Kind, Timestamp: ctx.Timestamp}
 	if ctx.Process != nil {
 		result.Context.ProcessAbsent = ctx.Process.Absent
 		result.Context.RawProcessCapture = r.Effective.Raw != nil
@@ -897,6 +968,108 @@ func existingCases() []runtimeCase {
 		for i, baseline := range [][]byte{append([]byte{byte(b)}, []byte("006;0;A;B")...), append(append([]byte("0006;"), byte(b)), []byte("0;A;B")...)} {
 			for _, flags := range []uint32{1, 0x40, 0x218} {
 				add(fmt.Sprintf("existing-byte-%02x-field%d-%04x", b, i, flags), processes[2], flags, baseline, "file")
+			}
+		}
+	}
+	return cases
+}
+
+func applicationDestinationKind(kind string) appledouble.QuarantineDestinationKind {
+	switch kind {
+	case "file":
+		return appledouble.QuarantineRegularFile
+	case "directory":
+		return appledouble.QuarantineDirectory
+	case "symlink-file", "symlink-directory", "symlink-dangling":
+		return appledouble.QuarantineSymlink
+	default:
+		panic("unrecognized destination kind")
+	}
+}
+func validateDestination(tc runtimeCase) {
+	r := tc.Result
+	if r.DestinationBefore == nil {
+		return
+	}
+	mode := uint32(0100000)
+	switch applicationDestinationKind(tc.Kind) {
+	case appledouble.QuarantineDirectory:
+		mode = 0040000
+	case appledouble.QuarantineSymlink:
+		mode = 0120000
+	}
+	if r.DestinationBefore.Mode != mode || !r.DestinationBefore.IdentityMatches || !reflect.DeepEqual(r.DestinationBefore, r.DestinationAfter) {
+		panic("destination vnode proof: " + tc.Name)
+	}
+	if !reflect.DeepEqual(r.TargetBefore, r.TargetAfter) {
+		panic("target changed: " + tc.Name)
+	}
+	if mode != 0120000 {
+		if r.TargetBefore != nil || r.DestinationBefore.LinkTarget != "" {
+			panic("unexpected target proof: " + tc.Name)
+		}
+		return
+	}
+	if r.DestinationBefore.LinkTarget != hex.EncodeToString([]byte("target")) || r.TargetBefore == nil {
+		panic("missing link target proof: " + tc.Name)
+	}
+	target := r.TargetBefore
+	if tc.Kind == "symlink-dangling" {
+		if target.Present || target.Errno != 2 {
+			panic("dangling target changed: " + tc.Name)
+		}
+		return
+	}
+	targetMode, entries := uint32(0100000), 0
+	if tc.Kind == "symlink-directory" {
+		targetMode, entries = 0040000, 1
+	}
+	if !target.Present || target.Errno != 0 || target.Inode == 0 || target.Mode != targetMode || target.Entries != entries || target.Content != hex.EncodeToString([]byte("target-content\n")) || !target.Quarantine.Present || target.Quarantine.Bytes != hex.EncodeToString([]byte("0081;23456789;TargetAgent;TargetID")) || target.Quarantine.Import == nil || target.Quarantine.Import.Code != 0 {
+		panic("target sentinel proof: " + tc.Name)
+	}
+}
+
+func destinationCases() []runtimeCase {
+	var cases []runtimeCase
+	kinds := []string{"file", "directory", "symlink-file", "symlink-directory", "symlink-dangling"}
+	add := func(name string, process []byte, flags uint32, agent, id string, baseline []byte, kind string) {
+		cases = append(cases, runtimeCase{Name: name, Kind: kind, CreationOrder: "before", ProcessInput: process, Baseline: baseline, FileInput: []byte(fmt.Sprintf("q/%04x;12345678;%s;%s\x00", flags, agent, id))})
+	}
+	processes := [][]byte{nil, []byte("q/0001;Process;"), []byte("q/0002;Process;"), []byte("q/0004;Process;")}
+	for pi, p := range processes {
+		for bi, baseline := range [][]byte{nil, {}, []byte("garbage"), []byte("0006;0;Existing;ID"), []byte("ffff;0"), []byte("0000;0;Existing;ID")} {
+			for _, flags := range []uint32{0, 1, 2, 4, 0x40, 0x60, 0x218, 0x1fff} {
+				for _, kind := range kinds {
+					add(fmt.Sprintf("destination-p%d-b%d-%04x-%s", pi, bi, flags, kind), p, flags, "Source", "ID", baseline, kind)
+				}
+			}
+		}
+	}
+	for p := 1; p <= 31; p++ {
+		for _, flags := range []uint32{1, 0x40, 0x218} {
+			for bi, baseline := range [][]byte{nil, []byte("0006;0;Existing;ID")} {
+				for _, kind := range kinds[2:] {
+					add(fmt.Sprintf("destination-flags-%02x-%04x-b%d-%s", p, flags, bi, kind), []byte(fmt.Sprintf("q/%04x;Process;", p)), flags, "Source", "ID", baseline, kind)
+				}
+			}
+		}
+	}
+	for b := 1; b <= 255; b++ {
+		for _, kind := range kinds[2:] {
+			add(fmt.Sprintf("destination-byte-%02x-%s", b, kind), processes[2], 1, fmt.Sprintf("\\x%02x", b), fmt.Sprintf("\\x%02x", b), nil, kind)
+		}
+	}
+	for n := 89; n <= 120; n++ {
+		for _, flags := range []uint32{1, 0x40} {
+			for _, kind := range kinds[2:] {
+				add(fmt.Sprintf("destination-size-%d-%04x-%s", n+271, flags, kind), processes[2], flags, strings.Repeat("A", n), strings.Repeat(`\x20`, 64), nil, kind)
+			}
+		}
+	}
+	for _, n := range []int{0, 62, 63, 64} {
+		for _, flags := range []uint32{1, 0x40} {
+			for _, kind := range kinds[2:] {
+				add(fmt.Sprintf("destination-id-%d-%04x-%s", n, flags, kind), processes[2], flags, "Source", strings.Repeat("I", n), nil, kind)
 			}
 		}
 	}

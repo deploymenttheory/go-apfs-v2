@@ -77,8 +77,11 @@ Production capture and integration still remain transport work.
 
 `Existing` supplies a valid imported destination model. Use `ExistingXattr` for
 exact raw bytes; both nil confirm absence.
-`Directory` selects the qualified directory behavior; regular files use the
-injected `Timestamp`. Symlinks and other object kinds still require qualification.
+`Kind` selects a regular file, directory or symlink itself. Regular files and
+symlinks use the injected `Timestamp`; directories use zero when policy refreshes
+the timestamp. The original `Directory` option remains supported. Unknown kinds
+or a contradictory symlink/directory selection return `ErrQuarantineDestination`.
+See [destination kinds and link targets](appledouble-quarantine-destinations.md).
 Input models and process state are not mutated, and every write result owns its
 bytes.
 
@@ -152,6 +155,7 @@ CGO_ENABLED=0 go run scripts/verify-appledouble-quarantine-runtime.go -normaliza
 CGO_ENABLED=0 go run scripts/verify-appledouble-quarantine-runtime.go -processes
 CGO_ENABLED=0 go run scripts/verify-appledouble-quarantine-runtime.go -contexts
 CGO_ENABLED=0 go run scripts/verify-appledouble-quarantine-runtime.go -existing
+CGO_ENABLED=0 go run scripts/verify-appledouble-quarantine-runtime.go -destinations
 ```
 
 Native runs require macOS and Command Line Tools; portable production and tests
@@ -163,7 +167,7 @@ architectures. `-capture` remains an unqualified native-only recording mode.
 
 1. Qualify absent process state on macOS 27, other effective process contexts,
    production raw-agent capture, additional privilege/entitlement combinations,
-   links and destination protection.
+   other object kinds and destination protection.
 2. Integrate ordered plans with real source capture, destination preparation,
    actual write/readback and `copyfile` callback/error handling in shared transport.
 3. Close the remaining size/allocation gaps, qualify APFS/HFS+ preservation across

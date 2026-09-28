@@ -27,10 +27,11 @@ type applicationFixtureCase struct {
 	Name, Kind string
 	FileInput  []byte
 	Result     struct {
-		Start, End       int64
-		Requested        *string
-		ProcessApplyCode int
-		Effective        struct {
+		DestinationBefore *struct{ Mode uint32 }
+		Start, End        int64
+		Requested         *string
+		ProcessApplyCode  int
+		Effective         struct {
 			InitCode, InitErrno int
 			Serialized          string
 			Raw                 *struct{ Self applicationRawProcess }
@@ -54,6 +55,7 @@ func TestNativeQuarantineApplication(t *testing.T) {
 		profile QuarantineProfile
 		count   int
 	}{
+		{"destinations-macos27.json.gz", QuarantineMacOS27, 2499},
 		{"existing-macos26.json.gz", QuarantineMacOS26, 6672},
 		{"existing-macos27.json.gz", QuarantineMacOS27, 6672},
 		{"contexts-macos26.json.gz", QuarantineMacOS26, 3324},
@@ -105,6 +107,19 @@ func verifyApplicationFixture(t *testing.T, tc applicationFixtureCase, profile Q
 		t.Fatal(e)
 	}
 	ctx := QuarantineApplicationContext{Profile: profile, Timestamp: uint32(r.Start), Directory: tc.Kind == "directory"}
+	if r.DestinationBefore != nil {
+		ctx.Directory = false
+		switch tc.Kind {
+		case "file":
+			ctx.Kind = QuarantineRegularFile
+		case "directory":
+			ctx.Kind = QuarantineDirectory
+		case "symlink-file", "symlink-directory", "symlink-dangling":
+			ctx.Kind = QuarantineSymlink
+		default:
+			t.Fatal("unknown native destination kind", tc.Kind)
+		}
+	}
 	if r.Effective.InitCode == 0 && r.Effective.Raw == nil {
 		// Captures use the canonical process envelope. Reuse the established field
 		// decoder by inserting a timestamp; no requested state supplies policy input.
@@ -288,6 +303,7 @@ func FuzzQuarantineApplication(f *testing.F) {
 	f.Add([]byte{1, 0, 0, 0, 'A', 'B'})
 	f.Add([]byte{1, 0, 0, 4, 'A', 'B'})
 	f.Add([]byte{0x40, 0, 1, 6, ';', '\\'})
+	f.Add([]byte{1, 0, 1, 16, 'A', 'B'})
 	f.Add(bytes.Repeat([]byte{0xff}, 80))
 	f.Fuzz(func(t *testing.T, b []byte) {
 		if len(b) < 4 {
@@ -304,6 +320,7 @@ func FuzzQuarantineApplication(f *testing.F) {
 		}
 		q := &Quarantine{Flags: flags, Agent: string(b[4:]), Identifier: string(b[4:]), Timestamp: 17}
 		ctx := QuarantineApplicationContext{Profile: profile, Process: &QuarantineProcess{Flags: pflags, Agent: string(b[4:])}, Timestamp: 23, Directory: b[3]&1 != 0}
+		ctx.Kind = QuarantineDestinationKind(b[3] >> 3)
 		if profile == QuarantineMacOS26 && b[3]&4 != 0 {
 			ctx.Process = &QuarantineProcess{Absent: true}
 		}
