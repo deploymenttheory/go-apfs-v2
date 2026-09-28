@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strconv"
 	"strings"
@@ -23,9 +24,17 @@ import (
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
 )
 
+type rawProcessInfo struct {
+	Code, Errno     int
+	Flags           uint64
+	Agent, Metadata string
+	TrackingLength  uint64
+}
+type rawProcessEvidence struct{ Self, PID, InvalidPID rawProcessInfo }
 type processSnapshot struct {
 	InitCode, InitErrno int
-	Serialized          string // Exact native bytes, hex encoded (including final NUL).
+	Raw                 *rawProcessEvidence `json:",omitempty"`
+	Serialized          string              // Exact native bytes, hex encoded (including final NUL).
 }
 type xattrSnapshot struct {
 	Present         bool
@@ -47,8 +56,9 @@ type runtimeCase struct {
 	Result                            runtimeResult
 }
 type runtimeFixture struct {
-	Host, Profile, HelperSHA256, SDKExportsSHA256 string
-	Records                                       []runtimeCase
+	Host, Profile, HelperSHA256, SDKExportsSHA256                 string
+	BaseHelperSHA256, CaptureHelperSHA256, KernelSDKExportsSHA256 string `json:",omitempty"`
+	Records                                                       []runtimeCase
 }
 type runtimeCommand struct {
 	Args          []string
@@ -84,12 +94,13 @@ func saveRuntime(path string, v any) {
 	writeRuntime(path, append(b, '\n'))
 }
 func main() {
+	contexts := flag.Bool("contexts", false, "qualify raw process capture and confirmed absent state")
 	processes := flag.Bool("processes", false, "qualify additional effective process flag combinations")
 	normalization := flag.Bool("normalization", false, "qualify extended destination normalization inputs")
 	fixtureOverride := flag.String("fixture", "", "explicit independently captured fixture for a qualified host preparation context")
 	capture := flag.Bool("capture", false, "record independent observations without claiming qualification")
 	flag.Parse()
-	if *processes && *normalization {
+	if (*processes && *normalization) || (*contexts && (*processes || *normalization)) {
 		panic("choose one extended matrix")
 	}
 	root := "artifacts/appledouble-quarantine-runtime"
@@ -98,6 +109,9 @@ func main() {
 	}
 	if *processes {
 		root += "-processes"
+	}
+	if *contexts {
+		root += "-contexts"
 	}
 	mustRuntime(os.MkdirAll(root, 0755))
 	qualified := false
@@ -141,7 +155,29 @@ func main() {
 		}
 	}
 	source := "testdata/appledouble/native/quarantine-runtime.c"
+	if *contexts {
+		base := readRuntime(source)
+		capture := readRuntime("testdata/appledouble/native/quarantine-process-capture.h")
+		observed.BaseHelperSHA256 = hashRuntime(base)
+		observed.CaptureHelperSHA256 = hashRuntime(capture)
+		marker := []byte("static void snapshot(void) {")
+		end := []byte("hex(data, length); putchar('}');")
+		if bytes.Count(base, marker) != 1 || bytes.Count(base, end) != 1 {
+			panic("native process capture injection points changed")
+		}
+		generated := bytes.Replace(base, marker, append(append(bytes.Clone(capture), '\n'), marker...), 1)
+		generated = bytes.Replace(generated, end, []byte("hex(data, length); raw_process_snapshot(); putchar('}');"), 1)
+		source = filepath.Join(root, "quarantine-runtime-context.c")
+		writeRuntime(source, generated)
+		kernel := readRuntime(filepath.Join(sdk, "usr/lib/system/libsystem_kernel.tbd"))
+		if !bytes.Contains(kernel, []byte("___mac_syscall")) {
+			panic("missing libSystem wrapper export")
+		}
+		observed.KernelSDKExportsSHA256 = hashRuntime(kernel)
+		writeRuntime(filepath.Join(root, "libsystem_kernel.tbd"), kernel)
+	}
 	observed.HelperSHA256 = hashRuntime(readRuntime(source))
+
 	helper := filepath.Join(root, "quarantine-runtime")
 	runRuntime("xcrun", "clang", "-Wall", "-Wextra", "-Werror", source, "-o", helper)
 	for _, arch := range []string{"arm64", "x86_64"} {
@@ -152,6 +188,9 @@ func main() {
 	cases := runtimeCases(*normalization, observed.Profile)
 	if *processes {
 		cases = processCases(observed.Profile)
+	}
+	if *contexts {
+		cases = contextCases(observed.Profile)
 	}
 	for _, tc := range cases {
 		dir, e := os.MkdirTemp(root, tc.Name+"-")
@@ -173,6 +212,23 @@ func main() {
 		validateRuntime(tc)
 		observed.Records = append(observed.Records, tc)
 	}
+	if *contexts {
+		absent, present := 0, 0
+		for _, tc := range observed.Records {
+			raw := tc.Result.Effective.Raw
+			if raw == nil {
+				panic("missing raw process evidence")
+			}
+			if raw.Self.Code == 0 {
+				present++
+			} else if raw.Self.Code == -1 && raw.Self.Errno == 93 {
+				absent++
+			}
+		}
+		if present == 0 || (observed.Profile == "macos26" && absent == 0) {
+			panic("required process presence/absence observations missing")
+		}
+	}
 	if *capture {
 		fmt.Printf("Captured %d native runtime observations (%s); not yet qualified\n", len(observed.Records), observed.Profile)
 		return
@@ -184,6 +240,9 @@ func main() {
 	}
 	if *processes {
 		fixturePath = "testdata/appledouble/native/quarantine-processes-" + observed.Profile + ".json.gz"
+	}
+	if *contexts {
+		fixturePath = "testdata/appledouble/native/quarantine-contexts-" + observed.Profile + ".json.gz"
 	}
 	if *fixtureOverride != "" {
 		fixturePath = *fixtureOverride
@@ -197,7 +256,7 @@ func main() {
 		mustRuntime(z.Close())
 	}
 	mustRuntime(json.Unmarshal(data, &fixture))
-	if fixture.Profile != observed.Profile || fixture.HelperSHA256 != observed.HelperSHA256 || len(fixture.Records) != len(observed.Records) {
+	if fixture.Profile != observed.Profile || fixture.HelperSHA256 != observed.HelperSHA256 || fixture.BaseHelperSHA256 != observed.BaseHelperSHA256 || fixture.CaptureHelperSHA256 != observed.CaptureHelperSHA256 || len(fixture.Records) != len(observed.Records) {
 		panic("runtime fixture provenance or case count")
 	}
 	for i, want := range fixture.Records {
@@ -221,6 +280,7 @@ func validateRuntime(tc runtimeCase) {
 		panic("missing requested process state: " + tc.Name)
 	}
 	for _, s := range []processSnapshot{r.Before, r.Effective} {
+		validateRawProcess(s)
 		b, e := hex.DecodeString(s.Serialized)
 		mustRuntime(e)
 		if len(b) < 9 || !bytes.HasPrefix(b, []byte("q/")) || b[len(b)-1] != 0 {
@@ -237,8 +297,47 @@ func validateRuntime(tc runtimeCase) {
 	// File application errors and denied process changes are observations, not
 	// harness setup failures. Their exact codes must still match the fixture.
 }
+func validateRawProcess(s processSnapshot) {
+	if s.Raw == nil {
+		return
+	}
+	for _, info := range []rawProcessInfo{s.Raw.Self, s.Raw.PID, s.Raw.InvalidPID} {
+		agent, e := hex.DecodeString(info.Agent)
+		mustRuntime(e)
+		metadata, e := hex.DecodeString(info.Metadata)
+		mustRuntime(e)
+		if len(agent) > 255 || len(metadata) > 64 || info.TrackingLength > 64 || info.Flags > 0xffffffff {
+			panic("raw process capture bounds")
+		}
+		if info.Code != 0 && (info.Code != -1 || info.Errno == 0) {
+			panic("raw process capture status")
+		}
+	}
+	if s.Raw.InvalidPID.Code != -1 || s.Raw.InvalidPID.Errno == 93 {
+		panic("invalid PID cannot confirm absent label")
+	}
+	self := s.Raw.Self
+	if self.Code == 0 {
+		if s.InitCode != 0 {
+			panic("library and raw process capture disagree")
+		}
+		b, e := hex.DecodeString(s.Serialized)
+		mustRuntime(e)
+		flags, e := strconv.ParseUint(string(b[2:6]), 16, 32)
+		mustRuntime(e)
+		if flags != self.Flags {
+			panic("raw and serialized process flags disagree")
+		}
+		if s.Raw.PID.Code == 0 && self != s.Raw.PID {
+			panic("self and explicit PID capture disagree")
+		}
+	} else if self.Errno == 93 && (s.InitCode != -1 || s.InitErrno != 93) {
+		panic("absence was not confirmed by both raw and library capture")
+	}
+}
+
 func compareRuntime(name string, want, got runtimeResult) {
-	if want.Before != got.Before || want.Effective != got.Effective || (want.Requested == nil) != (got.Requested == nil) {
+	if !reflect.DeepEqual(want.Before, got.Before) || !reflect.DeepEqual(want.Effective, got.Effective) || (want.Requested == nil) != (got.Requested == nil) {
 		panic("process capture differs: " + name)
 	}
 	if want.Requested != nil && *want.Requested != *got.Requested {
@@ -315,6 +414,102 @@ func runtimeCases(extended bool, profile string) []runtimeCase {
 	}
 	if len(cases) != 768 {
 		panic("incomplete base runtime matrix")
+	}
+	return cases
+}
+
+// contextCases records actual raw process state without deriving the agent from
+// a successful request or guessing absence from a failed library snapshot.
+func contextCases(profile string) []runtimeCase {
+	var cases []runtimeCase
+	add := func(name, process string, flags uint32, agent, id, baseline, kind string) {
+		tc := runtimeCase{Name: name, Kind: kind, CreationOrder: "before", FileInput: []byte(fmt.Sprintf("q/%04x;12345678;%s;%s\x00", flags, agent, id))}
+		if process != "" {
+			tc.ProcessInput = []byte(process)
+		}
+		if baseline != "" {
+			tc.Baseline = []byte(baseline)
+		}
+		cases = append(cases, tc)
+	}
+	for f := uint32(0); f < 256; f++ {
+		for _, high := range []uint32{0, 0x200} {
+			for _, kind := range []string{"file", "directory"} {
+				for _, existing := range []bool{false, true} {
+					baseline := ""
+					if existing {
+						baseline = "0006;23456789;ExistingAgent;ExistingID"
+					}
+					add(fmt.Sprintf("inherited-flags-%04x-%s-%t", f|high, kind, existing), "", f|high, "FileAgent", "FileID", baseline, kind)
+				}
+			}
+		}
+	}
+	high := []uint32{0x100, 0x400, 0x800, 0x1000, 0x1fff}
+	if profile == "macos27" {
+		high = append(high, 0x2000, 0x3fff)
+	}
+	for _, f := range high {
+		for _, kind := range []string{"file", "directory"} {
+			add(fmt.Sprintf("inherited-high-%04x-%s", f, kind), "", f, "FileAgent", "FileID", "", kind)
+		}
+	}
+	for b := 1; b < 256; b++ {
+		escaped := fmt.Sprintf("a\\x%02xb", b)
+		add(fmt.Sprintf("source-agent-byte-%02x", b), "", 1, escaped, "FileID", "", "file")
+		add(fmt.Sprintf("source-id-byte-%02x", b), "", 1, "FileAgent", escaped, "", "file")
+		for _, p := range []string{"0001", "0002"} {
+			add(fmt.Sprintf("captured-agent-byte-%s-%02x", p, b), "q/"+p+";"+escaped+";ContextID", 1, "FileAgent", "FileID", "", "file")
+		}
+	}
+	for _, p := range []string{"0000", "0001", "0002", "0003", "0004", "001f", "0200", "0201"} {
+		for _, f := range []uint32{1, 0x40, 0x60, 0x218} {
+			for _, kind := range []string{"file", "directory"} {
+				for _, existing := range []bool{false, true} {
+					baseline := ""
+					if existing {
+						baseline = "0081;23456789;ExistingAgent;ExistingID"
+					}
+					add(fmt.Sprintf("captured-%s-%04x-%s-%t", p, f, kind, existing), "q/"+p+";ContextAgent;ContextID", f, "FileAgent", "FileID", baseline, kind)
+				}
+			}
+		}
+	}
+	for n := 89; n <= 120; n++ {
+		for _, kind := range []string{"file", "directory"} {
+			add(fmt.Sprintf("inherited-size-%d-%s", n+271, kind), "", 1, strings.Repeat("A", n), strings.Repeat(`\x20`, 64), "", kind)
+		}
+	}
+	for _, n := range []int{0, 15, 16, 35, 36, 62, 63, 64} {
+		for _, escaped := range []bool{false, true} {
+			for _, kind := range []string{"file", "directory"} {
+				id := strings.Repeat("I", n)
+				if escaped {
+					id = strings.Repeat(`\x20`, n)
+				}
+				add(fmt.Sprintf("inherited-id-%d-%t-%s", n, escaped, kind), "", 1, "FileAgent", id, "", kind)
+			}
+		}
+	}
+	for _, n := range []int{0, 254, 255} {
+		for _, kind := range []string{"file", "directory"} {
+			add(fmt.Sprintf("inherited-agent-%d-%s", n, kind), "", 1, strings.Repeat("A", n), "FileID", "", kind)
+		}
+	}
+	for i, agent := range []string{"", strings.Repeat("P", 255), strings.Repeat(`\x5c`, 255), strings.Repeat(`\xff`, 255)} {
+		for _, p := range []string{"0001", "0002"} {
+			for _, f := range []uint32{1, 0x40} {
+				add(fmt.Sprintf("captured-agent-limit-%d-%s-%04x", i, p, f), "q/"+p+";"+agent+";ContextID", f, "FileAgent", "FileID", "", "file")
+			}
+		}
+	}
+	want := 3324
+	if profile == "macos27" {
+		want = 3328
+
+	}
+	if len(cases) != want {
+		panic(fmt.Sprintf("incomplete context matrix: %d", len(cases)))
 	}
 	return cases
 }
@@ -470,13 +665,15 @@ func normalizationCases(profile string) []runtimeCase {
 
 // Preserve binary agent bytes; encoding/json replaces invalid UTF-8 in strings.
 type applicationContextEvidence struct {
-	Profile         appledouble.QuarantineProfile
-	ProcessFlags    uint32
-	ProcessAgent    []byte
-	ExistingPresent bool
-	Existing        []byte
-	Directory       bool
-	Timestamp       uint32
+	Profile           appledouble.QuarantineProfile
+	ProcessFlags      uint32
+	ProcessAbsent     bool
+	RawProcessCapture bool
+	ProcessAgent      []byte
+	ExistingPresent   bool
+	Existing          []byte
+	Directory         bool
+	Timestamp         uint32
 }
 
 type applicationComparison struct {
@@ -509,13 +706,26 @@ func verifyApplicationPlan(tc runtimeCase, profileName string) applicationCompar
 		mustRuntime(e)
 		return q
 	}
-	if result.ContextKnown {
+	if result.ContextKnown && r.Effective.Raw == nil {
 		captured := processModel(r.Effective.Serialized)
 		ctx.Process = &appledouble.QuarantineProcess{Flags: captured.Flags, Agent: captured.Agent}
 		// Controlled successful requests establish the raw agent. init_with_self
 		// can lossy-decode backslashes; effective flags still come from that capture.
 		if r.Requested != nil && r.ProcessApplyCode == 0 {
 			ctx.Process.Agent = processModel(*r.Requested).Agent
+		}
+	}
+	if raw := r.Effective.Raw; raw != nil {
+		// No requested process data participates in this path. A successful raw
+		// query supplies bytes directly, avoiding the library's second unescape.
+		ctx.Process = nil
+		result.ContextKnown = false
+		if raw.Self.Code == 0 {
+			ctx.Process = &appledouble.QuarantineProcess{Flags: uint32(raw.Self.Flags), Agent: string(decode(raw.Self.Agent))}
+			result.ContextKnown = true
+		} else if raw.Self.Code == -1 && raw.Self.Errno == 93 && r.Effective.InitCode == -1 && r.Effective.InitErrno == 93 {
+			ctx.Process = &appledouble.QuarantineProcess{Absent: true}
+			result.ContextKnown = profile == appledouble.QuarantineMacOS26
 		}
 	}
 	before, after := decode(r.Prepared.Bytes), decode(r.Applied.Bytes)
@@ -528,6 +738,8 @@ func verifyApplicationPlan(tc runtimeCase, profileName string) applicationCompar
 	mustRuntime(e)
 	result.Context = applicationContextEvidence{Profile: profile, ExistingPresent: r.Prepared.Present, Existing: before, Directory: ctx.Directory, Timestamp: ctx.Timestamp}
 	if ctx.Process != nil {
+		result.Context.ProcessAbsent = ctx.Process.Absent
+		result.Context.RawProcessCapture = r.Effective.Raw != nil
 		result.Context.ProcessFlags = ctx.Process.Flags
 		result.Context.ProcessAgent = []byte(ctx.Process.Agent)
 	}

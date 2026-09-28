@@ -13,6 +13,11 @@ import (
 	"testing"
 )
 
+type applicationRawProcess struct {
+	Code, Errno int
+	Flags       uint64
+	Agent       string
+}
 type applicationSnapshot struct {
 	Present bool
 	Bytes   string
@@ -25,8 +30,9 @@ type applicationFixtureCase struct {
 		Requested        *string
 		ProcessApplyCode int
 		Effective        struct {
-			InitCode   int
-			Serialized string
+			InitCode, InitErrno int
+			Serialized          string
+			Raw                 *struct{ Self applicationRawProcess }
 		}
 		Prepared, Applied             applicationSnapshot
 		FileApplyCode, FileApplyErrno int
@@ -47,6 +53,8 @@ func TestNativeQuarantineApplication(t *testing.T) {
 		profile QuarantineProfile
 		count   int
 	}{
+		{"contexts-macos26.json.gz", QuarantineMacOS26, 3324},
+		{"contexts-macos27.json.gz", QuarantineMacOS27, 3328},
 		{"processes-macos26.json.gz", QuarantineMacOS26, 4388},
 		{"processes-macos27.json.gz", QuarantineMacOS27, 4396},
 		{"runtime-macos26.json", QuarantineMacOS26, 768},
@@ -94,7 +102,7 @@ func verifyApplicationFixture(t *testing.T, tc applicationFixtureCase, profile Q
 		t.Fatal(e)
 	}
 	ctx := QuarantineApplicationContext{Profile: profile, Timestamp: uint32(r.Start), Directory: tc.Kind == "directory"}
-	if r.Effective.InitCode == 0 {
+	if r.Effective.InitCode == 0 && r.Effective.Raw == nil {
 		// Captures use the canonical process envelope. Reuse the established field
 		// decoder by inserting a timestamp; no requested state supplies policy input.
 		p := applicationHex(t, r.Effective.Serialized)
@@ -118,6 +126,14 @@ func verifyApplicationFixture(t *testing.T, tc applicationFixtureCase, profile Q
 			ctx.Process.Agent = requested.Agent
 		}
 
+	}
+	if raw := r.Effective.Raw; raw != nil {
+		ctx.Process = nil
+		if raw.Self.Code == 0 {
+			ctx.Process = &QuarantineProcess{Flags: uint32(raw.Self.Flags), Agent: string(applicationHex(t, raw.Self.Agent))}
+		} else if raw.Self.Code == -1 && raw.Self.Errno == 93 && r.Effective.InitCode == -1 && r.Effective.InitErrno == 93 && profile == QuarantineMacOS26 {
+			ctx.Process = &QuarantineProcess{Absent: true}
+		}
 	}
 	before := applicationHex(t, r.Prepared.Bytes)
 	after := applicationHex(t, r.Applied.Bytes)
@@ -215,7 +231,7 @@ func TestQuarantineApplicationValidationAndOwnership(t *testing.T) {
 		t.Fatal(e)
 	}
 	ctx.Profile = QuarantineMacOS27
-	for _, bad := range []*QuarantineProcess{nil, {}, {Flags: 1}, {Flags: 0x220}, {Flags: 0x201, Agent: strings.Repeat("X", 256)}, {Flags: 0x201, Agent: "A\x00B"}} {
+	for _, bad := range []*QuarantineProcess{nil, {}, {Flags: 1}, {Flags: 0x220}, {Absent: true}, {Flags: 0x201, Agent: strings.Repeat("X", 256)}, {Flags: 0x201, Agent: "A\x00B"}} {
 		ctx.Process = bad
 		if p, e := q.PlanApplication(ctx); p != nil || !errors.Is(e, ErrQuarantineContext) {
 			t.Fatal("unqualified process", p, e)
@@ -226,6 +242,12 @@ func TestQuarantineApplicationValidationAndOwnership(t *testing.T) {
 		ctx.Process = &QuarantineProcess{Flags: flags}
 		if p, e := q.PlanApplication(ctx); p != nil || !errors.Is(e, ErrQuarantineContext) {
 			t.Fatal("unqualified macOS 26 process", flags, p, e)
+		}
+	}
+	for _, bad := range []*QuarantineProcess{{Absent: true, Flags: 1}, {Absent: true, Agent: "unproven"}} {
+		ctx.Process = bad
+		if p, e := q.PlanApplication(ctx); p != nil || !errors.Is(e, ErrQuarantineContext) {
+			t.Fatal("contradictory absent context", p, e)
 		}
 	}
 	ctx.Profile = QuarantineMacOS27
@@ -253,6 +275,7 @@ func TestQuarantineApplicationValidationAndOwnership(t *testing.T) {
 
 func FuzzQuarantineApplication(f *testing.F) {
 	f.Add([]byte{1, 0, 0, 0, 'A', 'B'})
+	f.Add([]byte{1, 0, 0, 4, 'A', 'B'})
 	f.Add([]byte{0x40, 0, 1, 6, ';', '\\'})
 	f.Add(bytes.Repeat([]byte{0xff}, 80))
 	f.Fuzz(func(t *testing.T, b []byte) {
@@ -270,6 +293,9 @@ func FuzzQuarantineApplication(f *testing.F) {
 		}
 		q := &Quarantine{Flags: flags, Agent: string(b[4:]), Identifier: string(b[4:]), Timestamp: 17}
 		ctx := QuarantineApplicationContext{Profile: profile, Process: &QuarantineProcess{Flags: pflags, Agent: string(b[4:])}, Timestamp: 23, Directory: b[3]&1 != 0}
+		if profile == QuarantineMacOS26 && b[3]&4 != 0 {
+			ctx.Process = &QuarantineProcess{Absent: true}
+		}
 		if b[3]&2 != 0 {
 			ctx.Existing = &Quarantine{Flags: uint32(b[3]), Agent: "Existing", Timestamp: 1}
 		}

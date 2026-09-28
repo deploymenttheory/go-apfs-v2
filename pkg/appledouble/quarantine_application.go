@@ -22,7 +22,8 @@ var ErrQuarantineMissing = errors.New("appledouble: quarantine application requi
 // before native application. This is distinct from MaxQuarantineXattrSize.
 const MaxQuarantineApplicationSize = 381
 
-// QuarantineProcess supplies known effective flags and the raw kernel agent.
+// QuarantineProcess supplies known effective flags and the raw kernel agent,
+// or explicitly confirmed label absence with Absent.
 // Agent is byte data, not an escaped field. Native process snapshots can lose
 // backslash bytes; callers must resolve the raw agent independently when that
 // happens. Requested flags cannot substitute for captured effective flags, and
@@ -30,12 +31,18 @@ const MaxQuarantineApplicationSize = 381
 type QuarantineProcess struct {
 	Flags uint32
 	Agent string
+	// Absent means a valid process-info query confirmed no quarantine label.
+	// It is distinct from unavailable capture (nil Process) or successful capture
+	// with zero flags. Flags and Agent must be empty. This context is currently
+	// qualified for the macOS 26 profile on every Go operating system.
+	Absent bool
 }
 
 // QuarantineApplicationContext supplies policy inputs independently of the Go
 // host. Process must be known; nil is unavailable, not unquarantined. Qualified
 // process flags are 0x001 through 0x01f for macOS 26 and 0x200 through 0x21f for macOS
-// 27. Other contexts require further native qualification.
+// 27. Confirmed Absent state is qualified for macOS 26. Other contexts require
+// further native qualification.
 //
 // Existing describes the actual prepared destination, after cleanup or baseline
 // writes; nil means confirmed attribute absence. Timestamp is an injected Unix
@@ -90,6 +97,12 @@ func (q *Quarantine) PlanApplication(ctx QuarantineApplicationContext) (*Quarant
 	if flags == 0 {
 		flags = 1
 	}
+	if ctx.Process.Absent {
+		// Without a process label, native preserves the encoded source fields,
+		// full identifier and original timestamp even for directories.
+		copy(raw[:4], fmt.Sprintf("%04x", normalizedQuarantineApplicationFlags(flags)))
+		return &QuarantineApplication{Write: true, Value: raw}, nil
+	}
 	sandbox := ctx.Process.Flags&2 != 0
 	if sandbox {
 		flags &^= 0x60
@@ -112,9 +125,7 @@ func (q *Quarantine) PlanApplication(ctx QuarantineApplicationContext) (*Quarant
 		}
 		return &QuarantineApplication{}, nil
 	}
-	if flags&3 != 0 && flags&0x40 == 0 {
-		flags |= 0x80
-	}
+	flags = normalizedQuarantineApplicationFlags(flags)
 	timestamp := ctx.Timestamp
 	if ctx.Directory {
 		timestamp = 0
@@ -132,6 +143,9 @@ func qualifiedQuarantineProcess(profile QuarantineProfile, p *QuarantineProcess)
 	if p == nil || len(p.Agent) > 255 || strings.IndexByte(p.Agent, 0) >= 0 {
 		return false
 	}
+	if p.Absent {
+		return profile == QuarantineMacOS26 && p.Flags == 0 && p.Agent == ""
+	}
 	switch profile {
 	case QuarantineMacOS26:
 		return p.Flags >= 1 && p.Flags <= 0x1f
@@ -140,4 +154,11 @@ func qualifiedQuarantineProcess(profile QuarantineProfile, p *QuarantineProcess)
 	default:
 		return false
 	}
+}
+
+func normalizedQuarantineApplicationFlags(flags uint32) uint32 {
+	if flags&3 != 0 && flags&0x40 == 0 {
+		flags |= 0x80
+	}
+	return flags
 }
