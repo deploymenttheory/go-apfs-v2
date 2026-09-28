@@ -43,6 +43,7 @@ type application struct {
 var commands []command
 var comparisons []comparison
 var applications []application
+var flagBoundaries []comparison
 var producers []string
 var nativeProfile = appledouble.QuarantineMacOS27
 var profileName = "macos27"
@@ -77,7 +78,7 @@ func main() {
 	passed := false
 	defer func() {
 		failure := recover()
-		report := map[string]any{"passed": passed, "goos": runtime.GOOS, "goarch": runtime.GOARCH, "commands": commands, "comparisons": comparisons, "applications": applications, "producers": producers, "profile": profileName}
+		report := map[string]any{"passed": passed, "goos": runtime.GOOS, "goarch": runtime.GOARCH, "commands": commands, "comparisons": comparisons, "applications": applications, "producers": producers, "profile": profileName, "flag_boundaries": flagBoundaries}
 		if failure != nil {
 			report["failure"] = fmt.Sprint(failure)
 		}
@@ -183,12 +184,13 @@ func main() {
 	if len(differences) != 0 {
 		panic(fmt.Sprintf("native quarantine differences: %v", differences))
 	}
+	verifyFlagBoundaries(root, helper)
 	unpack := filepath.Join(root, "copyfile")
 	run("xcrun", "clang", "-Wall", "-Wextra", "-Werror", "testdata/appledouble/native/probe.c", "-o", unpack)
 	verifyProducers(root, unpack)
 	verifyApplicationObservations(root, unpack)
 	passed = true
-	fmt.Printf("Quarantine: %d serialization cases, %d native producers, %d policy-only application observations passed\n", len(comparisons), len(producers), len(applications))
+	fmt.Printf("Quarantine (%s): %d serialization cases, %d flag boundaries, %d native producers, %d policy-only application observations passed\n", profileName, len(comparisons), len(flagBoundaries), len(producers), len(applications))
 }
 func verifyProducers(root, helper string) {
 	extraFlag := "2000"
@@ -234,7 +236,11 @@ func verifyApplicationObservations(root, helper string) {
 			Accepted, Present    bool
 		}
 	}
-	must(json.Unmarshal(read("testdata/appledouble/native/quarantine-application.json"), &fixture))
+	fixturePath := "testdata/appledouble/native/quarantine-application.json"
+	if nativeProfile == appledouble.QuarantineMacOS26 {
+		fixturePath = "testdata/appledouble/native/quarantine-application-macos26.json"
+	}
+	must(json.Unmarshal(read(fixturePath), &fixture))
 	if !fixture.PolicyOnly || len(fixture.Records) != 34 || hash(read("testdata/appledouble/native/probe.c")) != fixture.HelperSHA256 {
 		panic("application fixture provenance")
 	}
@@ -262,7 +268,8 @@ func verifyApplicationObservations(root, helper string) {
 		} else {
 			panic("fixture kind")
 		}
-		// Canonical bytes come from Go; application outcomes remain native observations.
+		// Accepted envelopes are canonicalized in Go. Rejected envelopes stay raw
+		// to observe native ignore behavior; all outcomes remain policy-only.
 		q, e := appledouble.ParseQuarantineWithProfile(tc.Input, nativeProfile)
 		payload := tc.Input
 		if e == nil {
@@ -299,7 +306,11 @@ func verifyApplicationObservations(root, helper string) {
 			}
 			timestamp, e := strconv.ParseUint(got[1], 16, 32)
 			must(e)
-			if tc.Kind == "directory" {
+			if nativeProfile == appledouble.QuarantineMacOS26 {
+				if !bytes.Equal(r.Restored, tc.Restored) {
+					differences = append(differences, tc.Kind+"-"+tc.Name+": preserved timestamp")
+				}
+			} else if tc.Kind == "directory" {
 				if got[1] != "00000000" {
 					differences = append(differences, tc.Kind+"-"+tc.Name+": directory timestamp")
 				}
@@ -311,5 +322,40 @@ func verifyApplicationObservations(root, helper string) {
 	}
 	if len(differences) != 0 {
 		panic(fmt.Sprintf("native application differences: %v", differences))
+	}
+}
+
+func verifyFlagBoundaries(root, helper string) {
+	for _, flags := range []uint32{0x1ffe, 0x1fff, 0x2000, 0x2001, 0x3ffe, 0x3fff, 0x4000, 0x4001, 0x7fff, 0xffff} {
+		name := fmt.Sprintf("%04x", flags)
+		dir := filepath.Join(root, "flag-boundaries", name)
+		must(os.MkdirAll(dir, 0700))
+		input, output := filepath.Join(dir, "input"), filepath.Join(dir, "native")
+		raw := []byte("q/" + name + ";12345678;Probe;ID\x00")
+		write(input, raw)
+		diagnostic, nativeErr := observe(helper, input, output)
+		if nativeErr != nil {
+			var exit *exec.ExitError
+			if !errors.As(nativeErr, &exit) || exit.ExitCode() != 1 || !strings.HasPrefix(string(diagnostic), "parse refused: code=") {
+				panic(fmt.Sprintf("flag boundary setup: %s %v %s", name, nativeErr, diagnostic))
+			}
+			commands[len(commands)-1].ExpectedFailure = true
+		}
+		q, err := appledouble.ParseQuarantineWithProfile(raw, nativeProfile)
+		v := comparison{Name: name, Accepted: err == nil, NativeAccepted: nativeErr == nil}
+		if v.Accepted != v.NativeAccepted {
+			panic("flag boundary acceptance: " + name)
+		}
+		if v.Accepted {
+			b, e := q.MarshalBinaryWithProfile(nativeProfile)
+			must(e)
+			write(filepath.Join(dir, "go"), b)
+			v.NativeSerialized = read(output)
+			v.BinaryEqual = bytes.Equal(b, v.NativeSerialized) && bytes.Equal(b, raw)
+			if !v.BinaryEqual {
+				panic("flag boundary serialization: " + name)
+			}
+		}
+		flagBoundaries = append(flagBoundaries, v)
 	}
 }

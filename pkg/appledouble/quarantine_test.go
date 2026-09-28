@@ -93,21 +93,23 @@ func FuzzQuarantine(f *testing.F) {
 		if len(b) > 1<<20 {
 			return
 		}
-		q, err := ParseQuarantine(b)
-		if err != nil {
-			return
-		}
-		encoded, err := q.MarshalBinary()
-		if err != nil || len(encoded) > 1294 {
-			t.Fatal(len(encoded), err)
-		}
-		again, err := ParseQuarantine(encoded)
-		if err != nil || *again != *q {
-			t.Fatal(again, q, err)
-		}
-		stable, err := again.MarshalBinary()
-		if err != nil || !bytes.Equal(encoded, stable) {
-			t.Fatal("unstable canonicalization", err)
+		for _, profile := range []QuarantineProfile{QuarantineMacOS26, QuarantineMacOS27} {
+			q, err := ParseQuarantineWithProfile(b, profile)
+			if err != nil {
+				continue
+			}
+			encoded, err := q.MarshalBinaryWithProfile(profile)
+			if err != nil || len(encoded) > 1294 {
+				t.Fatal(len(encoded), err)
+			}
+			again, err := ParseQuarantineWithProfile(encoded, profile)
+			if err != nil || *again != *q {
+				t.Fatal(again, q, err)
+			}
+			stable, err := again.MarshalBinaryWithProfile(profile)
+			if err != nil || !bytes.Equal(encoded, stable) {
+				t.Fatal("unstable canonicalization", err)
+			}
 		}
 	})
 }

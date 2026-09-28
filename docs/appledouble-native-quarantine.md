@@ -5,6 +5,13 @@ in an AppleDouble `com.apple.quarantine` record. They run in pure Go on Linux,
 macOS and Windows. They do not load libquarantine, read a host database, change a
 file's quarantine state or interpret the plain filesystem xattr as an envelope.
 
+The default API targets macOS 27. Use `ParseQuarantineWithProfile` and
+`MarshalBinaryWithProfile` with `QuarantineMacOS26` or `QuarantineMacOS27` to
+select a target explicitly. Selection is independent of the machine running Go.
+Unknown profiles return `ErrQuarantine`; flags unsupported by the selected
+profile are rejected, not removed. Compatibility with other macOS releases has
+not yet been qualified.
+
 Use these APIs when inspecting or constructing the serialized record. Ordinary
 `Decode`, `Encode` and `Xattrs` preserve its raw bytes, including malformed policy
 payloads. Parsing is an explicit operation and returns `ErrQuarantine` when the
@@ -24,19 +31,25 @@ Clang JSON ASTs of this helper for arm64 and x86_64 are retained. Those ASTs ver
 the helper's C interfaces, **not the proprietary library implementation**. Native
 execution is performed only on the runner's architecture.
 
-[`quarantine.json`](../testdata/appledouble/native/quarantine.json) records 434
+[`quarantine.json`](../testdata/appledouble/native/quarantine.json) records 434 macOS 27
 independently observed inputs (365 accepted, 69 rejected), canonical bytes, diagnostics,
 host identity and input/helper hashes. Cases cover envelope prefixes, numeric
 widths and signs, whitespace, missing separators, all non-NUL byte values,
 escapes, embedded NULs and decoded field boundaries. Portable unit tests replay
-all cases; the Mac harness repeats them against the host library and compares
+all cases. The corresponding [macOS 26 corpus](../testdata/appledouble/native/quarantine-macos26.json)
+records the same 434 inputs (363 accepted, 71 rejected), captured independently
+on the CI Mac. Both corpora run on every supported Go OS: 868 native fixture
+cases in total. The Mac harness selects its host's qualified corpus and repeats it against the host library and compares
 native, recorded and Go serialization byte for byte. Helper setup failures are
-fatal and cannot count as native parse rejections.
+fatal and cannot count as native parse rejections. Ten additional flag-boundary
+probes exercise both sides of the format limits on the native host.
 
 Six native producer cases additionally set real filesystem xattrs, pack them
 with `copyfile`, parse and serialize the resulting quarantine record in Go, and
 require byte equality for both the record and the re-encoded whole sidecar.
 These include escaped/UTF-8 bytes and maximum decoded agent/identifier lengths.
+The high-flag producer uses `0x2000` for macOS 27 and `0x1000` for macOS 26;
+unsupported flags remain covered by native rejection probes.
 
 ## Envelope behavior
 
@@ -49,7 +62,8 @@ q/0081;12345678;Probe;01234567-89AB-CDEF-0123-456789ABCDEF\0
 - Flags and timestamp are hexadecimal unsigned fields, scanned with widths four
   and eight respectively. Initial ASCII whitespace does not consume the width;
   signs and an optional hexadecimal prefix do. Negative values use unsigned
-  32-bit arithmetic. Flags greater than `0x3fff` are rejected; zero becomes one.
+  32-bit arithmetic. macOS 27 accepts flags through `0x3fff`; macOS 26 through
+  `0x1fff`. Larger values are rejected; zero becomes one.
 - The flag separator and a successful timestamp conversion are required. Native
   parsing has a compatibility quirk: if the separator after the timestamp is
   missing, its text-field offset stays at the start of the envelope. For example,
@@ -77,12 +91,14 @@ should leave identical flags or create an xattr at all.
 ## Application observations and remaining work
 
 [`quarantine-application.json`](../testdata/appledouble/native/quarantine-application.json)
-contains 34 observations: 17 flag values each on a fresh file and directory.
-They are explicitly `PolicyOnly`. The harness submits Go-canonicalized envelopes
+and its [macOS 26 counterpart](../testdata/appledouble/native/quarantine-application-macos26.json)
+each contain 34 observations: 17 flag values each on a fresh file and directory.
+They are explicitly `PolicyOnly`. The harness submits Go-canonicalized accepted
+envelopes (and raw rejected envelopes to observe native ignore behavior)
 to native `copyfile`, records actual filesystem readback and checks observations,
 but does **not** compare a Go implementation of destination policy.
 
-In the observed unquarantined command-line process context:
+On macOS 27, in the observed unquarantined command-line process context:
 
 - `0`/`1` flags become `0x81`; `2` becomes `0x82`.
 - Flag-only `0x8`, `0x10` and `0x200` produce no quarantine xattr.
@@ -90,6 +106,14 @@ In the observed unquarantined command-line process context:
 - Files receive the current Unix timestamp (checked within the operation's time
   interval); directories receive a zero timestamp. Agent is empty; the supplied
   identifier is retained.
+
+On the macOS 26 CI runner, timestamps and agents are preserved for both files and
+directories. Flags `0`/`1` become `0x81` and `2` becomes `0x82`; other accepted
+probed values are preserved, including `0x8`, `0x10` and `0x200`. The two flag
+values outside that format (`0x2000` and `0x3fff`) leave no quarantine xattr.
+Those readbacks are compared exactly, including timestamp. The reports retain
+the different native environments; the eventual application API must establish
+which differences depend on OS version and which depend on runtime context.
 
 These observations are deliberately narrower than a portable runtime policy.
 Remaining work must establish source-side quarantine override, process context,

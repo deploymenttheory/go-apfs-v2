@@ -58,6 +58,8 @@ full AppleDouble transport integration is on the roadmap below.
 - **Quarantine conversion:** `ParseQuarantine` reads the serialized `q/` envelope;
   `Quarantine.MarshalBinary` writes canonical bytes. These APIs handle escaping,
   field limits and native parsing quirks without applying destination policy.
+  The default targets macOS 27. The `WithProfile` variants explicitly select
+  macOS 26 or 27 behavior on any supported operating system.
 
 Always check encoding and decoding errors. FinderInfo must contain exactly 32
 bytes. `Sniff` is a format hint; `Decode` performs validation. Canonical encoding
