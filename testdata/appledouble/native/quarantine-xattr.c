@@ -1,5 +1,6 @@
 // Independent filesystem-xattr import and process-context oracle, test-only.
 #include <dlfcn.h>
+#include <errno.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -18,12 +19,20 @@ int main(int argc, char **argv) {
     void *(*proc_alloc)(void) = dlsym(lib, "_qtn_proc_alloc");
     void (*proc_free)(void *) = dlsym(lib, "_qtn_proc_free");
     int (*proc_init)(void *) = dlsym(lib, "_qtn_proc_init_with_self");
+    uint32_t (*proc_flags)(void *) = dlsym(lib, "_qtn_proc_get_flags");
     int (*proc_data)(void *, char *, size_t *) = dlsym(lib, "_qtn_proc_to_data");
-    if (!alloc || !release || !init || !serialize || !proc_alloc || !proc_free || !proc_init || !proc_data) { fprintf(stderr, "missing exports\n"); return 2; }
+    if (!alloc || !release || !init || !serialize || !proc_alloc || !proc_free || !proc_init || !proc_data || !proc_flags) { fprintf(stderr, "missing exports\n"); return 2; }
     void *p = proc_alloc();
     char context[4096] = {0}; size_t count = sizeof(context);
-    if (!p || proc_init(p) || proc_data(p, context, &count)) { fprintf(stderr, "process context\n"); return 2; }
-    fprintf(stderr, "process=%s\n", context); proc_free(p);
+if (!p) { fprintf(stderr, "allocate process context\n"); return 2; }
+    errno = 0; int init_rc = proc_init(p); int init_errno = errno;
+    uint32_t context_flags = proc_flags(p);
+    errno = 0; int data_rc = proc_data(p, context, &count); int data_errno = errno;
+    // A missing/unserializable context is an observation, never proof of an
+    // unquarantined process. Preserve both native statuses independently.
+    if (data_rc) context[0] = 0;
+    fprintf(stderr, "process: init=%d errno=%d flags=%08x serialize=%d errno=%d data=%s\n", init_rc, init_errno, context_flags, data_rc, data_errno, context);
+    proc_free(p);
     FILE *input = fopen(argv[1], "rb"); struct stat st;
     if (!input || fstat(fileno(input), &st) || st.st_size < 0) { fprintf(stderr, "input setup\n"); return 2; }
     size_t length = (size_t)st.st_size; char *b = calloc(length + 1, 1);

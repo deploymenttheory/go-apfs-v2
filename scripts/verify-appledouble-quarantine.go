@@ -610,7 +610,7 @@ func verifyQuarantineXattrs(root, xattrHelper string) {
 		write(input, tc.Input)
 		diagnostic, nativeErr := observe(helper, input, output, target)
 		context, _, ok := strings.Cut(string(diagnostic), "\n")
-		if !ok || !strings.HasPrefix(context, "process=q/") {
+		if !ok || !strings.HasPrefix(context, "process: init=") {
 			panic("missing native process context")
 		}
 		seen := false

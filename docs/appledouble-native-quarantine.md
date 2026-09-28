@@ -166,7 +166,9 @@ capture and exercise explicit profile selection and source-override integration.
 
 Every helper invocation also reads its process state using
 `qtn_proc_init_with_self`/`qtn_proc_to_data`. The native reports retain these
-snapshots instead of assuming a command-line process has no quarantine state.
+snapshots and exact initialization/serialization return codes instead of assuming
+a command-line process has no quarantine state. Failed context capture is retained
+as unavailable, never interpreted as absence or used to normalize metadata.
 A fresh file without a quarantine xattr does not imply an unquarantined process.
 The previous application observations must therefore remain scoped to their
 captured host/runtime context until controlled experiments separate OS-version,
