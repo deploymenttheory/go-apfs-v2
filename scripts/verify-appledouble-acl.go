@@ -5,7 +5,9 @@ package main
 
 import (
 	"bytes"
+	"compress/gzip"
 	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,6 +17,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -37,6 +40,19 @@ var roundTrips []string
 var externalResults []result
 var identityResults []string
 var updateResults []aclUpdateResult
+var snapshotResults []identitySnapshotCase
+
+type identitySnapshotCase struct {
+	Name                                string
+	Input, External, Canonical, Sidecar []byte
+	Snapshot                            appledouble.ACLIdentitySnapshot
+	RestoredKinds                       []string
+}
+
+type identitySnapshotFixture struct {
+	HelperSHA256, ACLHelperSHA256, SourceSHA256, Host, Revision string
+	Records                                                     []identitySnapshotCase
+}
 
 type aclUpdateResult struct {
 	Name, Kind                                     string
@@ -74,6 +90,7 @@ func main() {
 	defer func() {
 		failure := recover()
 		report := map[string]any{"passed": passed, "goos": runtime.GOOS, "goarch": runtime.GOARCH, "commands": commands, "comparisons": results, "round_trips": roundTrips, "external_comparisons": externalResults, "identity_comparisons": identityResults, "acl_updates": updateResults}
+		report["identity_snapshots"] = snapshotResults
 		if failure != nil {
 			report["failure"] = fmt.Sprint(failure)
 		}
@@ -193,6 +210,7 @@ func main() {
 	unpack := filepath.Join(root, "copyfile")
 	run("xcrun", "clang", "-Wall", "-Wextra", "-Werror", "testdata/appledouble/native/probe.c", "-o", unpack)
 	verifyACLUpdates(root, helper, unpack)
+	verifyIdentitySnapshots(root, helper, unpack)
 	for _, kind := range []string{"file", "directory"} {
 		dir, e := os.MkdirTemp(root, "roundtrip-"+kind+"-")
 		must(e)
@@ -239,6 +257,166 @@ func main() {
 	}
 	passed = true
 	fmt.Printf("ACL oracle: %d parser, %d external, %d identity cases, %d filesystem round trips and %d ACL updates passed\n", len(results), len(externalResults), len(identityResults), len(roundTrips), len(updateResults))
+	fmt.Printf("Source identity snapshots: %d live capture/replay cases and %d native restorations passed\n", len(snapshotResults), 2*len(snapshotResults))
+}
+
+func verifyIdentitySnapshots(root, aclHelper, unpack string) {
+	const source = "testdata/appledouble/native/acl-identity.c"
+	helper := filepath.Join(root, "acl-identity")
+	run("xcrun", "clang", "-Wall", "-Wextra", "-Werror", source, "-o", helper)
+	for _, arch := range []string{"arm64", "x86_64"} {
+		ast := run("xcrun", "clang", "-arch", arch, "-fsyntax-only", "-Xclang", "-ast-dump=json", source)
+		commands[len(commands)-1].Output = fmt.Sprintf("AST retained: %d bytes", len(ast))
+		write(filepath.Join(root, "acl-identity-"+arch+".ast.json"), ast)
+	}
+	decode := func(s string) []byte { b, e := hex.DecodeString(s); must(e); return b }
+	uuidText := func(u [16]byte) string { return fmt.Sprintf("%X-%X-%X-%X-%X", u[:4], u[4:6], u[6:8], u[8:10], u[10:]) }
+	type nativeLookup struct {
+		UUID, Name                   string
+		ID                           uint32
+		Group, Found                 bool
+		AccountErrno, MembershipCode int
+	}
+	query := func(args ...string) nativeLookup {
+		var result nativeLookup
+		must(json.Unmarshal(run(append([]string{helper}, args...)...), &result))
+		if result.AccountErrno != 0 || (result.MembershipCode != 0 && (args[0] != "reverse" || result.MembershipCode != 2)) {
+			panic(fmt.Sprintf("source identity service failure: %v: %+v", args, result))
+		}
+		return result
+	}
+	entry := func(fields string) string { return fields + ":allow:read,readattr\n" }
+	bodies := []string{
+		entry("user::root:"), entry("user:::0"), entry("group::wheel:"), entry("group:::0"),
+		entry("user::daemon:"), entry("group::daemon:"), entry("user::nobody:"), entry("group::nobody:"),
+		entry("user:::" + strconv.Itoa(os.Getuid())), entry("group:::" + strconv.Itoa(os.Getgid())),
+		entry("user::appledouble-no-such-account-01234567:"), entry("group::appledouble-no-such-account-01234567:"),
+		entry("user:::4294967295"), entry("group:::4294967295"),
+		entry("user:01234567-89AB-CDEF-0123-456789ABCDEF::"), entry("group:01234567-89AB-CDEF-0123-456789ABCDEF:wheel:0"),
+		entry("user:not-a-uuid:root:0"), entry("user::root:4294967295"), entry("group::wheel:4294967295"),
+		entry("user:::0trailing"), entry("group::: -0"), entry("user:::18446744073709551616"),
+		"user::root::,inherited:read\n",
+		entry("user::root:") + entry("user::root:") + entry("group::wheel:") + entry("user:::0"),
+		entry("user::root:") + entry("user::appledouble-no-such-account-01234567:") + entry("group::wheel:") + entry("group:::4294967295"),
+	}
+	for i, body := range bodies {
+		name := fmt.Sprintf("source-identities-%02d", i)
+		dir, e := os.MkdirTemp(root, name+"-")
+		must(e)
+		tc := identitySnapshotCase{Name: name, Input: []byte("!#acl 1\n" + body)}
+		input := filepath.Join(dir, "input.txt")
+		write(input, tc.Input)
+		run(aclHelper, "parse", input, filepath.Join(dir, "native.bin"), filepath.Join(dir, "native.txt"))
+		tc.External = read(filepath.Join(dir, "native.bin"))
+		tc.Canonical = read(filepath.Join(dir, "native.txt"))
+		capture := appledouble.NewACLIdentityCapture(func(id appledouble.ACLIdentity) ([16]byte, error) {
+			kind, mode, value := "user", "name", id.Name
+			if id.Group {
+				kind = "group"
+			}
+			if id.ID != nil {
+				mode = "id"
+				value = strconv.FormatUint(uint64(*id.ID), 10)
+			}
+			n := query(kind, mode, value)
+			var uuid [16]byte
+			b := decode(n.UUID)
+			if len(b) != len(uuid) {
+				panic("native UUID size")
+			}
+			copy(uuid[:], b)
+			return uuid, nil
+		}, func(uuid [16]byte) (appledouble.ACLPrincipal, bool, error) {
+			n := query("reverse", "uuid", uuidText(uuid))
+			if !n.Found {
+				return appledouble.ACLPrincipal{}, false, nil
+			}
+			return appledouble.ACLPrincipal{Group: n.Group, Name: string(decode(n.Name)), ID: n.ID}, true, nil
+		})
+		a, e := appledouble.ParseACLText(tc.Input, capture.Resolve)
+		must(e)
+		external, e := a.MarshalBinary()
+		must(e)
+		if !bytes.Equal(external, tc.External) {
+			panic("native source identity parse differs: " + name)
+		}
+		canonical, e := a.FormatText(capture.Lookup)
+		must(e)
+		if !bytes.Equal(canonical, tc.Canonical) {
+			panic("native source identity formatting differs: " + name)
+		}
+		// The superseded account record must not trigger a source lookup.
+		f := &appledouble.File{Attrs: []appledouble.Attr{
+			{Name: appledouble.ACLTextName, Value: []byte("!#acl 1\nuser::discarded-source-identity::deny:read\n")},
+			{Name: appledouble.ACLTextName, Value: tc.Input}, {Name: appledouble.ACLTextName},
+		}}
+		u, e := f.ACLUpdate(capture.Resolve)
+		must(e)
+		if u.RecordIndex != 1 || u.Invalid || u.ACL == nil {
+			panic("source ACL selection differs")
+		}
+		tc.Sidecar, e = f.Encode()
+		must(e)
+		write(filepath.Join(dir, "input.ad"), tc.Sidecar)
+		// Serialize before replay to exercise the transport boundary, then replay
+		// without any source callbacks or receiving-host account lookup.
+		snapshot, e := json.Marshal(capture.Snapshot())
+		must(e)
+		write(filepath.Join(dir, "snapshot.json"), snapshot)
+		must(json.Unmarshal(snapshot, &tc.Snapshot))
+		r, l, e := tc.Snapshot.Resolvers()
+		must(e)
+		decoded, e := appledouble.Decode(tc.Sidecar)
+		must(e)
+		update, e := decoded.ACLUpdate(r)
+		must(e)
+		external, e = update.ACL.MarshalBinary()
+		must(e)
+		canonical, e = update.ACL.FormatText(l)
+		must(e)
+		if !bytes.Equal(external, tc.External) || !bytes.Equal(canonical, tc.Canonical) {
+			panic("snapshot replay differs: " + name)
+		}
+		if _, e := r(appledouble.ACLIdentity{Name: "discarded-source-identity"}); !errors.Is(e, appledouble.ErrACLIdentityUncaptured) {
+			panic("discarded record resolved")
+		}
+		write(filepath.Join(dir, "go.bin"), external)
+		write(filepath.Join(dir, "go.txt"), canonical)
+		for _, kind := range []string{"file", "directory"} {
+			destination := filepath.Join(dir, kind)
+			if kind == "file" {
+				write(destination, nil)
+			} else {
+				must(os.Mkdir(destination, 0700))
+			}
+			run(unpack, "unpack", filepath.Join(dir, "input.ad"), destination)
+			run(aclHelper, "get", destination, filepath.Join(dir, kind+".bin"), filepath.Join(dir, kind+".txt"))
+			if !bytes.Equal(read(filepath.Join(dir, kind+".bin")), tc.External) || !bytes.Equal(read(filepath.Join(dir, kind+".txt")), tc.Canonical) {
+				panic("native source-identity restoration differs: " + name + "/" + kind)
+			}
+			tc.RestoredKinds = append(tc.RestoredKinds, kind)
+		}
+		snapshotResults = append(snapshotResults, tc)
+	}
+	f := identitySnapshotFixture{HelperSHA256: fmt.Sprintf("%x", sha256.Sum256(read(source))), ACLHelperSHA256: fmt.Sprintf("%x", sha256.Sum256(read("testdata/appledouble/native/acl.c"))), SourceSHA256: "929b16ba8d52527c1bb4812ed7ed25f3e43f315516898d1bd777a10ca690e4c2", Host: string(run("sw_vers")), Revision: strings.TrimSpace(string(run("git", "rev-parse", "HEAD"))), Records: snapshotResults}
+	b, e := json.MarshalIndent(f, "", "  ")
+	must(e)
+	write(filepath.Join(root, "observed-identities.json"), append(b, '\n'))
+	// Real account UUIDs, IDs and names may differ between hosts. The archived
+	// fixture is portable source evidence, not a receiving-host account baseline.
+	z, e := gzip.NewReader(bytes.NewReader(read("testdata/appledouble/native/acl-identities.json.gz")))
+	must(e)
+	var archived identitySnapshotFixture
+	must(json.NewDecoder(z).Decode(&archived))
+	must(z.Close())
+	if archived.HelperSHA256 != f.HelperSHA256 || archived.ACLHelperSHA256 != f.ACLHelperSHA256 || archived.SourceSHA256 != f.SourceSHA256 || len(archived.Records) != len(f.Records) {
+		panic("source identity fixture provenance differs")
+	}
+	for i, tc := range archived.Records {
+		if tc.Name != f.Records[i].Name {
+			panic("source identity fixture case missing")
+		}
+	}
 }
 
 func verifyExternal(root string, source []byte) {

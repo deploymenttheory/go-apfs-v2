@@ -82,7 +82,8 @@ The portable unit suite replays the same fixture on all three operating systems;
 ## Remaining ACL work
 
 This closes creation-inheritance calculation and qualifies replacement over
-inherited ACLs. Source identity capture, real filesystem restoration ordering,
+inherited ACLs. [Source query capture and replay](appledouble-acl-identities.md)
+are available; live source acquisition, real filesystem restoration ordering,
 ownership and restrictive BSD flags, permission/write failures and portable
 carriers remain shared transport work. Package PR #72 stays draft until the
 complete AppleDouble release gate is met; codesign remains paused.

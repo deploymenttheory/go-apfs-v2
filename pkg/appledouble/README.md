@@ -60,6 +60,10 @@ full AppleDouble transport integration is on the roadmap below.
   allocation limits. It runs on every supported OS without applying host
   permissions. A subsequent valid AppleDouble ACL update replaces this result;
   see [creation and restoration](../../docs/appledouble-acl-inheritance.md).
+- **Source identity capture and replay:** `NewACLIdentityCapture` records the
+  source callbacks used during parsing and formatting. Its serializable snapshot
+  supplies immutable resolvers on any supported OS, preserving confirmed absence
+  and rejecting uncaptured queries. See [source identities](../../docs/appledouble-acl-identities.md).
 - **Quarantine conversion:** `ParseQuarantine` reads the serialized `q/` envelope;
   `Quarantine.MarshalBinary` writes canonical bytes. These APIs handle escaping,
   field limits and native parsing quirks without applying destination policy.
@@ -117,8 +121,8 @@ The remaining work is ordered around completing metadata policy before integrati
 filesystem transport:
 
 1. **Complete ACL application and transport.** Integrate deferred replacement
-   decisions and qualified creation inheritance with source identity transport,
-   ownership, file flags and destination write-failure handling. Creation
+   decisions, qualified creation inheritance and captured identity replay with
+   source acquisition adapters, ownership, file flags and destination write-failure handling. Creation
    inheritance and replacement over inherited ACLs have native comparisons;
    shared filesystem execution remains outstanding.
 2. **Complete quarantine context and transport qualification.** Extend the
