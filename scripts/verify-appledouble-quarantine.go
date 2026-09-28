@@ -30,6 +30,8 @@ type command struct {
 type comparison struct {
 	Name                  string
 	Accepted, BinaryEqual bool
+	NativeAccepted        bool
+	NativeSerialized      []byte
 }
 type application struct {
 	Name, Kind          string
@@ -125,6 +127,7 @@ func main() {
 		commands[len(commands)-1].Output = fmt.Sprintf("AST retained: %d bytes", len(ast))
 		write(filepath.Join(root, "quarantine-"+arch+".ast.json"), ast)
 	}
+	var differences []string
 	for _, tc := range fixture.Records {
 		dir := filepath.Join(root, "serialization", tc.Name)
 		must(os.MkdirAll(dir, 0700))
@@ -136,26 +139,35 @@ func main() {
 		diagnostic, nativeErr := observe(helper, input, output)
 		if nativeErr != nil {
 			var exit *exec.ExitError
-			if tc.Accepted || !errors.As(nativeErr, &exit) || exit.ExitCode() != 1 || !strings.HasPrefix(string(diagnostic), "parse refused: code=") {
+			if !errors.As(nativeErr, &exit) || exit.ExitCode() != 1 || !strings.HasPrefix(string(diagnostic), "parse refused: code=") {
 				panic(fmt.Sprintf("unexpected native error %s: %v %s", tc.Name, nativeErr, diagnostic))
 			}
 			commands[len(commands)-1].ExpectedFailure = true
 		}
 		q, goErr := appledouble.ParseQuarantine(tc.Input)
-		if (nativeErr == nil) != tc.Accepted || (goErr == nil) != tc.Accepted {
-			panic("acceptance differs: " + tc.Name)
+		if (goErr == nil) != tc.Accepted {
+			panic("Go fixture acceptance differs: " + tc.Name)
 		}
-		r := comparison{Name: tc.Name, Accepted: tc.Accepted}
+		r := comparison{Name: tc.Name, Accepted: tc.Accepted, NativeAccepted: nativeErr == nil}
+		if nativeErr == nil {
+			r.NativeSerialized = read(output)
+		}
+		if r.NativeAccepted != tc.Accepted {
+			differences = append(differences, tc.Name+": acceptance")
+		}
 		if tc.Accepted {
 			b, e := q.MarshalBinary()
 			must(e)
 			write(filepath.Join(dir, "go"), b)
-			r.BinaryEqual = bytes.Equal(b, tc.Serialized) && bytes.Equal(b, read(output))
+			r.BinaryEqual = bytes.Equal(b, tc.Serialized) && bytes.Equal(b, r.NativeSerialized)
 			if !r.BinaryEqual {
-				panic("canonical bytes differ: " + tc.Name)
+				differences = append(differences, tc.Name+": canonical bytes")
 			}
 		}
 		comparisons = append(comparisons, r)
+	}
+	if len(differences) != 0 {
+		panic(fmt.Sprintf("native quarantine differences: %v", differences))
 	}
 	unpack := filepath.Join(root, "copyfile")
 	run("xcrun", "clang", "-Wall", "-Wextra", "-Werror", "testdata/appledouble/native/probe.c", "-o", unpack)
