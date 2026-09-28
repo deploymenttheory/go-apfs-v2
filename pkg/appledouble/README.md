@@ -115,7 +115,7 @@ filesystem transport:
    and destination write-failure handling.
 2. **Complete quarantine context and transport qualification.** Extend the
    [controlled runtime evidence](../../docs/appledouble-quarantine-runtime.md) and
-   application planner to additional/absent process contexts, reliable raw-agent
+   application planner to unresolved/absent process contexts, reliable raw-agent
    capture and destination kinds. Integrate ordered plans with destination cleanup,
    existing state, source-state capture and write-failure handling.
 3. **Resolve large-value and allocation behavior.** Qualify oversized attributes,

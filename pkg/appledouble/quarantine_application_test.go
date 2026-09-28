@@ -47,6 +47,7 @@ func TestNativeQuarantineApplication(t *testing.T) {
 		profile QuarantineProfile
 		count   int
 	}{
+		{"processes-macos26.json.gz", QuarantineMacOS26, 4388},
 		{"processes-macos27.json.gz", QuarantineMacOS27, 4396},
 		{"runtime-macos26.json", QuarantineMacOS26, 768},
 		{"runtime-macos27.json", QuarantineMacOS27, 768},
