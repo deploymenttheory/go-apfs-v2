@@ -175,6 +175,11 @@ captured host/runtime context until controlled experiments separate OS-version,
 process-state and privilege effects. No destination normalizer is inferred from
 those observations in this increment.
 
+The [controlled runtime matrix](appledouble-quarantine-runtime.md) now isolates
+requested versus effective process state, destination creation order, existing
+metadata and write failures. It supplies evidence for the pending normalizer; it
+is not a Go implementation of application policy.
+
 ## Ordered quarantine update decisions
 
 `File.QuarantineUpdates(profile, source)` returns one `QuarantineUpdate` for each
