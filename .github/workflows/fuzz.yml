@@ -23,6 +23,7 @@ jobs:
         include:
           - { pkg: ./pkg/appledouble, target: FuzzDecode }
           - { pkg: ./pkg/appledouble, target: FuzzACLText }
+          - { pkg: ./pkg/appledouble, target: FuzzACLBinary }
           - { pkg: ./pkg/apfs, target: FuzzOpenImage }
           - { pkg: ./pkg/apfs, target: FuzzBTreeNode }
           - { pkg: ./pkg/apfs, target: FuzzContainerSuperblock }

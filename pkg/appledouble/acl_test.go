@@ -16,9 +16,9 @@ func TestNativeACLText(t *testing.T) {
 	}
 	var f struct {
 		Records []struct {
-			Name           string
-			Text, External []byte
-			Accepted       bool
+			Name                      string
+			Text, External, Canonical []byte
+			Accepted                  bool
 		}
 	}
 	if err := json.Unmarshal(raw, &f); err != nil {
@@ -39,6 +39,10 @@ func TestNativeACLText(t *testing.T) {
 			raw, err := acl.MarshalBinary()
 			if err != nil {
 				t.Fatal(err)
+			}
+			text, err := acl.MarshalText()
+			if err != nil || !bytes.Equal(text, tc.Canonical) {
+				t.Fatalf("canonical text differs: %q / %q: %v", text, tc.Canonical, err)
 			}
 			if !bytes.Equal(raw, tc.External) {
 				t.Fatalf("security bytes differ: got %x want %x", raw, tc.External)

@@ -3,7 +3,8 @@
 `pkg/appledouble.ParseACLText` interprets the serialized `com.apple.acl.text`
 record on Linux, macOS and Windows without cgo or a host account database.
 `ACL.MarshalBinary` produces the portable, big-endian representation returned
-by Darwin's `acl_copy_ext`. This increment supplies a policy primitive; it does
+by Darwin's `acl_copy_ext`; `ParseACLBinary` imports it. `MarshalText` and
+`FormatText` provide native-style canonical formatting. This increment supplies a policy primitive; it does
 not yet apply ACLs during APFS/HFS+ extraction or packing.
 
 ## Independent source and native evidence
@@ -86,7 +87,7 @@ APFS on-disk security record has the same representation.
 Parsing is explicit: invalid ACL policy text does not invalidate an otherwise
 readable AppleDouble container. Applying deferred/duplicate ACL records, native
 inheritance, ownership/file flags and destination policy remains separate work.
-Canonical ACL text formatting and external-binary import are not yet supplied.
+Canonical text formatting and external-binary import are described below.
 
 ## Quarantine finding and remaining gate
 
@@ -98,7 +99,67 @@ host. These are preliminary observations, not a complete quarantine API or a
 portable fixture qualification claim. The next policy increment must retain
 independent envelope and runtime-context fixtures before implementing this.
 
-Remaining work includes ACL application/formatting and source identity transport,
+Remaining work includes ACL application and source identity transport,
 quarantine normalization, remaining size/allocation policy and shared host metadata
 transport. Package PR #72 remains draft and codesign remains paused. This parser
 increment alone does not satisfy the APFS release gate.
+
+## Binary import and canonical text
+
+Use `ParseACLBinary` to read a portable `acl_copy_ext` blob, and `MarshalBinary`
+to export it again. The importer checks the magic, maximum 128-entry count and
+available bytes before accessing entries. Native `acl_copy_int` has no length
+argument; the Go API explicitly rejects truncated buffers with `ErrACLBinary`.
+The native test helper refuses to submit truncated buffers for unsafe reads.
+Those truncation checks are Go safety tests, not native acceptance comparisons.
+
+Owner/group UUID header fields and trailing bytes are ignored by native import.
+Export consequently zeroes the owner/group fields and emits just the ACL extent.
+Entry order, unknown rights/flags and all entry kinds are retained in the model
+and binary export. Parsed principals do not alias the caller's input bytes.
+
+`MarshalText` emits native token order, uppercase UUIDs, a final newline and no
+NUL terminator. Like native `acl_to_text`, it omits entry kinds other than allow
+and deny, omits unknown bits, and omits the permission colon when there are no
+known permissions. Binary → text → binary is therefore not generally lossless.
+Retain binary/model data when those omitted details matter. Native AppleDouble
+packing appends a NUL to the text; the filesystem oracle verifies that payload
+including its terminator.
+
+`FormatText` accepts an `ACLPrincipalResolver` for source UUID-to-account lookups.
+A match supplies `ACLPrincipal{Group, Name, ID}`. Without a match, native syntax is
+`user:UUID:::` even when the original text used `group`. `MarshalText` uses that
+unknown-account form for every principal; it never queries the receiving host.
+The resolver's names are source data, emitted verbatim up to a C-string NUL.
+Numeric IDs use native signed 32-bit decimal formatting. Callback failures are
+surfaced to the caller rather than silently treated as an unknown account; a
+caller wanting fallback must explicitly return `found=false, err=nil`.
+
+The new `acl-external.json` fixture contains 34 independent macOS observations:
+31 accepted and three rejected. It covers every entry kind, known/unknown global
+and entry flags, rights ordering, ignored owner/group fields, trailing bytes,
+invalid magic and 0/128/129/0xffffffff counts. Accepted records retain exact
+native binary re-export and canonical text. The existing 59 text cases now also
+compare native canonical text, including omitted inert entries.
+
+The required native harness replays these fixtures and adds two identity cases:
+source `root` and `wheel` are resolved by the independent native helper, then
+Go formats their actual UUIDs using explicit source account details. The test
+does not assume a fixed UUID or make host lookups part of production code. File
+and directory checks now import the actual native external bytes, format them
+in Go, compare the native-packed ACL payload, and verify native application of
+the Go-produced sidecar.
+
+For Clang analysis, the harness downloads `aclvar.h` from the same pinned Libc
+revision (SHA-256
+`74711afda9818508af93ec472db57243ed45b13908a22e2bff35af9d6a8f7fd7`).
+The additional translation unit retains the complete unchanged `acl_copy_int`,
+`acl_to_text`, `acl_from_text`, token tables and formatting/lookup helper functions,
+with the pinned private declarations and public SDK includes. It records arm64
+and x86_64 ASTs for that unit and the independent external-import helper. These
+are syntax-analysis artifacts; live comparisons still call the host libSystem.
+Source licenses remain in the retained files.
+
+`FuzzACLBinary` checks bounded import and stable binary/text canonicalization.
+The portable unit suite exercises fixture agreement, every truncation of a
+single-entry blob, input ownership and source resolver success/failure paths.
