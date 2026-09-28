@@ -34,7 +34,7 @@ type QuarantineProcess struct {
 
 // QuarantineApplicationContext supplies policy inputs independently of the Go
 // host. Process must be known; nil is unavailable, not unquarantined. Qualified
-// process flags are 1, 2, 4 for macOS 26 and 0x200, 0x201, 0x202, 0x204 for macOS
+// process flags are 0x001 through 0x01f for macOS 26 and 0x200 through 0x21f for macOS
 // 27. Other contexts require further native qualification.
 //
 // Existing describes the actual prepared destination, after cleanup or baseline
@@ -134,9 +134,9 @@ func qualifiedQuarantineProcess(profile QuarantineProfile, p *QuarantineProcess)
 	}
 	switch profile {
 	case QuarantineMacOS26:
-		return p.Flags == 1 || p.Flags == 2 || p.Flags == 4
+		return p.Flags >= 1 && p.Flags <= 0x1f
 	case QuarantineMacOS27:
-		return p.Flags == 0x200 || p.Flags == 0x201 || p.Flags == 0x202 || p.Flags == 0x204
+		return p.Flags >= 0x200 && p.Flags <= 0x21f
 	default:
 		return false
 	}

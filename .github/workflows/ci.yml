@@ -184,6 +184,18 @@ jobs:
           name: appledouble-quarantine-normalization
           path: artifacts/appledouble-quarantine-runtime-normalization/
           if-no-files-found: error
+      - name: AppleDouble quarantine process flag combinations
+        if: runner.os == 'macOS'
+        env:
+          CGO_ENABLED: "0"
+        run: go run scripts/verify-appledouble-quarantine-runtime.go -processes
+      - name: Upload AppleDouble quarantine process evidence
+        if: always() && runner.os == 'macOS'
+        uses: actions/upload-artifact@v7
+        with:
+          name: appledouble-quarantine-processes
+          path: artifacts/appledouble-quarantine-runtime-processes/
+          if-no-files-found: error
       - name: Strict xattr API tests and coverage above 95%
         env:
           CGO_ENABLED: "0"

@@ -47,6 +47,7 @@ func TestNativeQuarantineApplication(t *testing.T) {
 		profile QuarantineProfile
 		count   int
 	}{
+		{"processes-macos27.json.gz", QuarantineMacOS27, 4396},
 		{"runtime-macos26.json", QuarantineMacOS26, 768},
 		{"runtime-macos27.json", QuarantineMacOS27, 768},
 		{"normalization-macos27.json.gz", QuarantineMacOS27, 2218},
@@ -212,12 +213,20 @@ func TestQuarantineApplicationValidationAndOwnership(t *testing.T) {
 		t.Fatal(e)
 	}
 	ctx.Profile = QuarantineMacOS27
-	for _, bad := range []*QuarantineProcess{nil, {}, {Flags: 1}, {Flags: 0x203}, {Flags: 0x201, Agent: strings.Repeat("X", 256)}, {Flags: 0x201, Agent: "A\x00B"}} {
+	for _, bad := range []*QuarantineProcess{nil, {}, {Flags: 1}, {Flags: 0x220}, {Flags: 0x201, Agent: strings.Repeat("X", 256)}, {Flags: 0x201, Agent: "A\x00B"}} {
 		ctx.Process = bad
 		if p, e := q.PlanApplication(ctx); p != nil || !errors.Is(e, ErrQuarantineContext) {
 			t.Fatal("unqualified process", p, e)
 		}
 	}
+	ctx.Profile = QuarantineMacOS26
+	for _, flags := range []uint32{0, 0x20, 0x200, 0x21f, 0xffffffff} {
+		ctx.Process = &QuarantineProcess{Flags: flags}
+		if p, e := q.PlanApplication(ctx); p != nil || !errors.Is(e, ErrQuarantineContext) {
+			t.Fatal("unqualified macOS 26 process", flags, p, e)
+		}
+	}
+	ctx.Profile = QuarantineMacOS27
 	ctx.Process = &QuarantineProcess{Flags: 0x201}
 	ctx.Existing = existing
 	q.Flags = 8
@@ -253,7 +262,7 @@ func FuzzQuarantineApplication(f *testing.F) {
 			profile = QuarantineMacOS27
 		}
 		flags := uint32(b[0]) | uint32(b[1]&0x1f)<<8
-		pflags := []uint32{1, 2, 4}[int(b[2])%3]
+		pflags := uint32(b[2])%31 + 1
 		if profile == QuarantineMacOS27 {
 			pflags |= 0x200
 		}
