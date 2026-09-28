@@ -50,13 +50,16 @@ full AppleDouble transport integration is on the roadmap below.
   canonical text using UUIDs. `FormatText` accepts a source UUID-to-account resolver
   when names and IDs are needed. Name/UID/GID-only text input requires an
   `ACLResolver` using source identity information.
+- **ACL update decisions:** `File.ACLUpdate` selects the last nonempty ACL record
+  and reports whether to preserve or replace the destination ACL. Malformed text
+  is explicitly marked as ignored; a valid zero-entry ACL requests clearing.
 
 Always check encoding and decoding errors. FinderInfo must contain exactly 32
 bytes. `Sniff` is a format hint; `Decode` performs validation. Canonical encoding
 can change padding or layout while preserving logical metadata.
 
 ACL parsing is explicit. The raw codec preserves ACL and quarantine payloads;
-turning those records into filesystem permissions or quarantine state is a
+executing ACL update decisions or restoring quarantine state is a
 separate operation. Binary ACL conversion retains unknown bits and entry kinds;
 text formatting follows macOS by emitting only known bits and allow/deny entries.
 Use the binary representation when those additional details must be preserved.
@@ -87,8 +90,9 @@ Use `File.Attrs` instead of the map when duplicate record order matters.
 The remaining work is ordered around completing metadata policy before integrating
 filesystem transport:
 
-1. **Complete ACL application policy.** Define deferred/duplicate ACL handling,
-   source identity transport, inheritance, ownership and file-flag behavior.
+1. **Complete ACL application and transport.** Integrate deferred replacement
+   decisions with source identity transport, inheritance, ownership, file flags
+   and destination write-failure handling.
 2. **Implement quarantine policy.** Validate the serialized envelope and reproduce
    native flag, timestamp and agent normalization using explicit runtime context.
 3. **Resolve large-value and allocation behavior.** Qualify oversized attributes,
