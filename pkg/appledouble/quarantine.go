@@ -13,6 +13,28 @@ const QuarantineName = "com.apple.quarantine"
 // ErrQuarantine identifies malformed or out-of-range serialized quarantine data.
 var ErrQuarantine = errors.New("appledouble: invalid serialized quarantine")
 
+// QuarantineProfile selects a target format independently of the operating
+// system running Go. Native macOS releases accept different quarantine flags.
+type QuarantineProfile uint8
+
+const (
+	// QuarantineMacOS27 accepts the flags observed on macOS 27 (through 0x3fff).
+	QuarantineMacOS27 QuarantineProfile = iota
+	// QuarantineMacOS26 accepts the flags observed on macOS 26 (through 0x1fff).
+	QuarantineMacOS26
+)
+
+func (p QuarantineProfile) maxFlags() (uint32, error) {
+	switch p {
+	case QuarantineMacOS27:
+		return 0x3fff, nil
+	case QuarantineMacOS26:
+		return 0x1fff, nil
+	default:
+		return 0, ErrQuarantine
+	}
+}
+
 // Quarantine is the logical content of libquarantine's q/ envelope. Agent and
 // Identifier contain decoded bytes, which need not be UTF-8. Timestamp is the
 // native 32-bit hexadecimal field. Applying this metadata can change flags,
@@ -26,8 +48,19 @@ type Quarantine struct {
 
 // ParseQuarantine interprets the native serialized envelope, including numeric
 // width, escape, NUL and missing-separator quirks. It does not parse the plain
-// filesystem xattr form. Decode retains the raw record without calling this API.
+// filesystem xattr form. It targets macOS 27; use ParseQuarantineWithProfile for
+// another supported format. Decode retains raw records without calling this API.
 func ParseQuarantine(data []byte) (*Quarantine, error) {
+	return ParseQuarantineWithProfile(data, QuarantineMacOS27)
+}
+
+// ParseQuarantineWithProfile interprets an envelope for the selected target
+// format. Unknown profiles return ErrQuarantine. No host version is consulted.
+func ParseQuarantineWithProfile(data []byte, profile QuarantineProfile) (*Quarantine, error) {
+	maxFlags, err := profile.maxFlags()
+	if err != nil {
+		return nil, err
+	}
 	if n := bytes.IndexByte(data, 0); n >= 0 {
 		data = data[:n]
 	}
@@ -36,7 +69,7 @@ func ParseQuarantine(data []byte) (*Quarantine, error) {
 		return nil, ErrQuarantine
 	}
 	flags, pos, ok := quarantineHex(s, 2, 4)
-	if !ok || flags > 0x3fff || pos >= len(s) || s[pos] != ';' {
+	if !ok || flags > maxFlags || pos >= len(s) || s[pos] != ';' {
 		return nil, ErrQuarantine
 	}
 	timestamp, pos, ok := quarantineHex(s, pos+1, 8)
@@ -53,7 +86,7 @@ func ParseQuarantine(data []byte) (*Quarantine, error) {
 	if !ok {
 		return nil, ErrQuarantine
 	}
-	agent, err := unescapeQuarantine(agent, 255)
+	agent, err = unescapeQuarantine(agent, 255)
 	if err != nil {
 		return nil, err
 	}
@@ -135,8 +168,19 @@ func unescapeQuarantine(s string, limit int) (string, error) {
 // MarshalBinary emits canonical q/ data with its terminating NUL. Zero flags
 // normalize to 1, as in native parsing. Model strings must fit the decoded field
 // limits and contain no NUL; other bytes are escaped using native lowercase hex.
+// It targets macOS 27; use MarshalBinaryWithProfile for another supported format.
 func (q *Quarantine) MarshalBinary() ([]byte, error) {
-	if q == nil || q.Flags > 0x3fff || len(q.Agent) > 255 || len(q.Identifier) > 64 || strings.IndexByte(q.Agent, 0) >= 0 || strings.IndexByte(q.Identifier, 0) >= 0 {
+	return q.MarshalBinaryWithProfile(QuarantineMacOS27)
+}
+
+// MarshalBinaryWithProfile emits canonical bytes for the selected target format.
+// Flags outside that format's range are rejected, never silently removed.
+func (q *Quarantine) MarshalBinaryWithProfile(profile QuarantineProfile) ([]byte, error) {
+	maxFlags, err := profile.maxFlags()
+	if err != nil {
+		return nil, err
+	}
+	if q == nil || q.Flags > maxFlags || len(q.Agent) > 255 || len(q.Identifier) > 64 || strings.IndexByte(q.Agent, 0) >= 0 || strings.IndexByte(q.Identifier, 0) >= 0 {
 		return nil, ErrQuarantine
 	}
 	flags := q.Flags

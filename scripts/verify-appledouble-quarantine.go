@@ -44,6 +44,8 @@ var commands []command
 var comparisons []comparison
 var applications []application
 var producers []string
+var nativeProfile = appledouble.QuarantineMacOS27
+var profileName = "macos27"
 
 func must(e error) {
 	if e != nil {
@@ -75,7 +77,7 @@ func main() {
 	passed := false
 	defer func() {
 		failure := recover()
-		report := map[string]any{"passed": passed, "goos": runtime.GOOS, "goarch": runtime.GOARCH, "commands": commands, "comparisons": comparisons, "applications": applications, "producers": producers}
+		report := map[string]any{"passed": passed, "goos": runtime.GOOS, "goarch": runtime.GOARCH, "commands": commands, "comparisons": comparisons, "applications": applications, "producers": producers, "profile": profileName}
 		if failure != nil {
 			report["failure"] = fmt.Sprint(failure)
 		}
@@ -92,7 +94,15 @@ func main() {
 		panic("native quarantine oracle requires macOS")
 	}
 	run("git", "rev-parse", "HEAD")
-	run("sw_vers")
+	version := string(run("sw_vers"))
+	switch {
+	case strings.Contains(version, "ProductVersion:\t\t27."):
+	case strings.Contains(version, "ProductVersion:\t\t26."):
+		nativeProfile = appledouble.QuarantineMacOS26
+		profileName = "macos26"
+	default:
+		panic("unqualified quarantine host version: " + version)
+	}
 	run("uname", "-a")
 	run("xcrun", "clang", "--version")
 	run("xcrun", "--show-sdk-version")
@@ -112,7 +122,11 @@ func main() {
 			Accepted          bool
 		}
 	}
-	must(json.Unmarshal(read("testdata/appledouble/native/quarantine.json"), &fixture))
+	fixturePath := "testdata/appledouble/native/quarantine.json"
+	if nativeProfile == appledouble.QuarantineMacOS26 {
+		fixturePath = "testdata/appledouble/native/quarantine-macos26.json"
+	}
+	must(json.Unmarshal(read(fixturePath), &fixture))
 	if len(fixture.Records) != 434 {
 		panic("missing quarantine cases")
 	}
@@ -144,7 +158,7 @@ func main() {
 			}
 			commands[len(commands)-1].ExpectedFailure = true
 		}
-		q, goErr := appledouble.ParseQuarantine(tc.Input)
+		q, goErr := appledouble.ParseQuarantineWithProfile(tc.Input, nativeProfile)
 		if (goErr == nil) != tc.Accepted {
 			panic("Go fixture acceptance differs: " + tc.Name)
 		}
@@ -156,7 +170,7 @@ func main() {
 			differences = append(differences, tc.Name+": acceptance")
 		}
 		if tc.Accepted {
-			b, e := q.MarshalBinary()
+			b, e := q.MarshalBinaryWithProfile(nativeProfile)
 			must(e)
 			write(filepath.Join(dir, "go"), b)
 			r.BinaryEqual = bytes.Equal(b, tc.Serialized) && bytes.Equal(b, r.NativeSerialized)
@@ -177,7 +191,11 @@ func main() {
 	fmt.Printf("Quarantine: %d serialization cases, %d native producers, %d policy-only application observations passed\n", len(comparisons), len(producers), len(applications))
 }
 func verifyProducers(root, helper string) {
-	for i, value := range []string{"0081;12345678;Probe;01234567-89AB-CDEF-0123-456789ABCDEF", "0000;00000000;;", "0001;12345678;A\\x20B;ID", "0081;12345678;é;ID", "2000;12345678;com.example;event", "0081;ffffffff;" + strings.Repeat("A", 255) + ";" + strings.Repeat("I", 64)} {
+	extraFlag := "2000"
+	if nativeProfile == appledouble.QuarantineMacOS26 {
+		extraFlag = "1000"
+	}
+	for i, value := range []string{"0081;12345678;Probe;01234567-89AB-CDEF-0123-456789ABCDEF", "0000;00000000;;", "0001;12345678;A\\x20B;ID", "0081;12345678;é;ID", extraFlag + ";12345678;com.example;event", "0081;ffffffff;" + strings.Repeat("A", 255) + ";" + strings.Repeat("I", 64)} {
 		dir, e := os.MkdirTemp(root, fmt.Sprintf("producer-%d-", i))
 		must(e)
 		src := filepath.Join(dir, "source")
@@ -189,9 +207,9 @@ func verifyProducers(root, helper string) {
 		f, e := appledouble.Decode(read(filepath.Join(dir, "native.ad")))
 		must(e)
 		payload := f.Xattrs()[appledouble.QuarantineName]
-		q, e := appledouble.ParseQuarantine(payload)
+		q, e := appledouble.ParseQuarantineWithProfile(payload, nativeProfile)
 		must(e)
-		b, e := q.MarshalBinary()
+		b, e := q.MarshalBinaryWithProfile(nativeProfile)
 		must(e)
 		if !bytes.Equal(b, payload) {
 			panic("native producer serialization differs")
@@ -230,6 +248,7 @@ func verifyApplicationObservations(root, helper string) {
 		panic("copyfile source hash")
 	}
 	write(filepath.Join(root, "copyfile.c"), source)
+	var differences []string
 	for _, tc := range fixture.Records {
 		dir := filepath.Join(root, "application", tc.Kind+"-"+tc.Name)
 		must(os.MkdirAll(dir, 0700))
@@ -244,10 +263,12 @@ func verifyApplicationObservations(root, helper string) {
 			panic("fixture kind")
 		}
 		// Canonical bytes come from Go; application outcomes remain native observations.
-		q, e := appledouble.ParseQuarantine(tc.Input)
-		must(e)
-		payload, e := q.MarshalBinary()
-		must(e)
+		q, e := appledouble.ParseQuarantineWithProfile(tc.Input, nativeProfile)
+		payload := tc.Input
+		if e == nil {
+			payload, e = q.MarshalBinaryWithProfile(nativeProfile)
+			must(e)
+		}
 		raw, e := appledouble.FromXattrs(map[string][]byte{appledouble.QuarantineName: payload}).Encode()
 		must(e)
 		write(filepath.Join(dir, "go.ad"), raw)
@@ -259,7 +280,7 @@ func verifyApplicationObservations(root, helper string) {
 		present := getErr == nil
 		if getErr != nil {
 			var exit *exec.ExitError
-			if tc.Present || !errors.As(getErr, &exit) || exit.ExitCode() != 1 || !strings.HasPrefix(string(out), "get size: Attribute not found") {
+			if !errors.As(getErr, &exit) || exit.ExitCode() != 1 || !strings.HasPrefix(string(out), "get size: Attribute not found") {
 				panic(fmt.Sprintf("unexpected quarantine read error: %v %s", getErr, out))
 			}
 			commands[len(commands)-1].ExpectedFailure = true
@@ -267,25 +288,28 @@ func verifyApplicationObservations(root, helper string) {
 			must(e)
 		}
 		if !tc.Accepted || present != tc.Present {
-			panic("quarantine application presence differs")
+			differences = append(differences, tc.Kind+"-"+tc.Name+": presence")
 		}
 		r := application{Name: tc.Name, Kind: tc.Kind, Present: present, PolicyOnly: true, Start: start, End: end}
 		if present {
 			r.Restored = read(filepath.Join(dir, "restored"))
 			got, want := strings.SplitN(string(r.Restored), ";", 4), strings.SplitN(string(tc.Restored), ";", 4)
 			if len(got) != 4 || len(want) != 4 || got[0] != want[0] || got[2] != want[2] || got[3] != want[3] {
-				panic("quarantine context fields differ")
+				differences = append(differences, tc.Kind+"-"+tc.Name+": fields")
 			}
 			timestamp, e := strconv.ParseUint(got[1], 16, 32)
 			must(e)
 			if tc.Kind == "directory" {
 				if got[1] != "00000000" {
-					panic("directory timestamp differs")
+					differences = append(differences, tc.Kind+"-"+tc.Name+": directory timestamp")
 				}
 			} else if int64(timestamp) < start || int64(timestamp) > end {
-				panic("file timestamp outside observed interval")
+				differences = append(differences, tc.Kind+"-"+tc.Name+": file timestamp")
 			}
 		}
 		applications = append(applications, r)
+	}
+	if len(differences) != 0 {
+		panic(fmt.Sprintf("native application differences: %v", differences))
 	}
 }

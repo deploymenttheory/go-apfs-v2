@@ -10,35 +10,42 @@ import (
 )
 
 func TestNativeQuarantine(t *testing.T) {
-	raw, err := os.ReadFile("../../testdata/appledouble/native/quarantine.json")
-	if err != nil {
-		t.Fatal(err)
-	}
-	var f struct {
-		Records []struct {
-			Name              string
-			Input, Serialized []byte
-			Accepted          bool
-		}
-	}
-	if err := json.Unmarshal(raw, &f); err != nil {
-		t.Fatal(err)
-	}
-	if len(f.Records) != 434 {
-		t.Fatal("missing native cases", len(f.Records))
-	}
-	for _, tc := range f.Records {
-		t.Run(tc.Name, func(t *testing.T) {
-			q, err := ParseQuarantine(tc.Input)
-			if (err == nil) != tc.Accepted {
-				t.Fatalf("native accepted=%t, Go=%v", tc.Accepted, err)
-			}
+	for _, profile := range []struct {
+		name, file string
+		value      QuarantineProfile
+	}{{"macos27", "quarantine.json", QuarantineMacOS27}, {"macos26", "quarantine-macos26.json", QuarantineMacOS26}} {
+		t.Run(profile.name, func(t *testing.T) {
+			raw, err := os.ReadFile("../../testdata/appledouble/native/" + profile.file)
 			if err != nil {
-				return
+				t.Fatal(err)
 			}
-			b, err := q.MarshalBinary()
-			if err != nil || !bytes.Equal(b, tc.Serialized) {
-				t.Fatalf("got %q, want %q: %v", b, tc.Serialized, err)
+			var f struct {
+				Records []struct {
+					Name              string
+					Input, Serialized []byte
+					Accepted          bool
+				}
+			}
+			if err := json.Unmarshal(raw, &f); err != nil {
+				t.Fatal(err)
+			}
+			if len(f.Records) != 434 {
+				t.Fatal("missing native cases", len(f.Records))
+			}
+			for _, tc := range f.Records {
+				t.Run(tc.Name, func(t *testing.T) {
+					q, err := ParseQuarantineWithProfile(tc.Input, profile.value)
+					if (err == nil) != tc.Accepted {
+						t.Fatalf("native accepted=%t, Go=%v", tc.Accepted, err)
+					}
+					if err != nil {
+						return
+					}
+					b, err := q.MarshalBinaryWithProfile(profile.value)
+					if err != nil || !bytes.Equal(b, tc.Serialized) {
+						t.Fatalf("got %q, want %q: %v", b, tc.Serialized, err)
+					}
+				})
 			}
 		})
 	}
@@ -103,4 +110,37 @@ func FuzzQuarantine(f *testing.F) {
 			t.Fatal("unstable canonicalization", err)
 		}
 	})
+}
+
+func TestQuarantineProfiles(t *testing.T) {
+	if _, err := ParseQuarantineWithProfile([]byte("q/81;1;;"), 255); !errors.Is(err, ErrQuarantine) {
+		t.Fatal(err)
+	}
+	if _, err := (&Quarantine{}).MarshalBinaryWithProfile(255); !errors.Is(err, ErrQuarantine) {
+		t.Fatal(err)
+	}
+	for _, p := range []QuarantineProfile{QuarantineMacOS26, QuarantineMacOS27} {
+		if _, err := (*Quarantine)(nil).MarshalBinaryWithProfile(p); !errors.Is(err, ErrQuarantine) {
+			t.Fatal(err)
+		}
+		for _, flags := range []uint32{0, 0x1fff, 0x2000, 0x3fff, 0x4000} {
+			q := &Quarantine{Flags: flags}
+			b, err := q.MarshalBinaryWithProfile(p)
+			accepted := flags <= 0x1fff || (p == QuarantineMacOS27 && flags <= 0x3fff)
+			if (err == nil) != accepted {
+				t.Fatal(p, flags, err)
+			}
+			if err != nil {
+				continue
+			}
+			got, err := ParseQuarantineWithProfile(b, p)
+			want := flags
+			if want == 0 {
+				want = 1
+			}
+			if err != nil || got.Flags != want {
+				t.Fatal(got, err)
+			}
+		}
+	}
 }
