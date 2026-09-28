@@ -25,6 +25,7 @@ jobs:
           - { pkg: ./pkg/appledouble, target: FuzzACLText }
           - { pkg: ./pkg/appledouble, target: FuzzACLBinary }
           - { pkg: ./pkg/appledouble, target: FuzzQuarantine }
+          - { pkg: ./pkg/appledouble, target: FuzzQuarantineXattr }
           - { pkg: ./pkg/apfs, target: FuzzOpenImage }
           - { pkg: ./pkg/apfs, target: FuzzBTreeNode }
           - { pkg: ./pkg/apfs, target: FuzzContainerSuperblock }
