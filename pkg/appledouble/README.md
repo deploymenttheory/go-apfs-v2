@@ -55,6 +55,11 @@ full AppleDouble transport integration is on the roadmap below.
 - **ACL update decisions:** `File.ACLUpdate` selects the last nonempty ACL record
   and reports whether to preserve or replace the destination ACL. Malformed text
   is explicitly marked as ignored; a valid zero-entry ACL requests clearing.
+- **ACL creation inheritance:** `InheritACL` computes a new file or directory's
+  ACL from captured parent and initial ACLs, including propagation flags and
+  allocation limits. It runs on every supported OS without applying host
+  permissions. A subsequent valid AppleDouble ACL update replaces this result;
+  see [creation and restoration](../../docs/appledouble-acl-inheritance.md).
 - **Quarantine conversion:** `ParseQuarantine` reads the serialized `q/` envelope;
   `Quarantine.MarshalBinary` writes canonical bytes. These APIs handle escaping,
   field limits and native parsing quirks without applying destination policy.
@@ -112,8 +117,10 @@ The remaining work is ordered around completing metadata policy before integrati
 filesystem transport:
 
 1. **Complete ACL application and transport.** Integrate deferred replacement
-   decisions with source identity transport, inheritance, ownership, file flags
-   and destination write-failure handling.
+   decisions and qualified creation inheritance with source identity transport,
+   ownership, file flags and destination write-failure handling. Creation
+   inheritance and replacement over inherited ACLs have native comparisons;
+   shared filesystem execution remains outstanding.
 2. **Complete quarantine context and transport qualification.** Extend the
    [controlled runtime evidence](../../docs/appledouble-quarantine-runtime.md) and
    application planner to unresolved process contexts (including absence on macOS

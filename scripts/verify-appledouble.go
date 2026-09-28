@@ -97,6 +97,7 @@ func verify() error {
 	files = append(files, "testdata/appledouble/native/quarantine-runtime.c", "testdata/appledouble/native/quarantine-runtime-macos27.json", "testdata/appledouble/native/quarantine-runtime-macos26.json", "scripts/verify-appledouble-quarantine-runtime.go")
 	files = append(files, "testdata/appledouble/native/quarantine-contexts-macos26.json.gz", "testdata/appledouble/native/quarantine-process-capture.h", "testdata/appledouble/native/quarantine-contexts-macos27.json.gz", "testdata/appledouble/native/quarantine-runtime-macos27-no-creation.json.gz", "testdata/appledouble/native/quarantine-processes-macos26.json.gz", "testdata/appledouble/native/quarantine-processes-macos27.json.gz", "testdata/appledouble/native/quarantine-normalization-macos27.json.gz", "testdata/appledouble/native/quarantine-normalization-macos26.json.gz")
 	sources := map[string]string{}
+	files = append(files, "testdata/appledouble/native/acl-inherit.c", "testdata/appledouble/native/acl-inherit.json.gz", "scripts/verify-appledouble-acl-inherit.go")
 	files = append(files, "testdata/appledouble/native/quarantine-destination-capture.h", "testdata/appledouble/native/quarantine-destinations-macos26.json.gz", "testdata/appledouble/native/quarantine-destinations-macos27.json.gz")
 	files = append(files, "testdata/appledouble/native/quarantine-existing-capture.h", "testdata/appledouble/native/quarantine-existing-macos26.json.gz", "testdata/appledouble/native/quarantine-existing-macos27.json.gz")
 	for _, name := range files {

@@ -148,6 +148,18 @@ jobs:
           name: appledouble-acl
           path: artifacts/appledouble-acl/
           if-no-files-found: error
+      - name: AppleDouble native ACL inheritance and restoration
+        if: runner.os == 'macOS'
+        env:
+          CGO_ENABLED: "0"
+        run: go run scripts/verify-appledouble-acl-inherit.go
+      - name: Upload AppleDouble ACL inheritance evidence
+        if: always() && runner.os == 'macOS'
+        uses: actions/upload-artifact@v7
+        with:
+          name: appledouble-acl-inherit
+          path: artifacts/appledouble-acl-inherit/
+          if-no-files-found: error
       - name: AppleDouble native quarantine comparisons
         if: runner.os == 'macOS'
         env:
