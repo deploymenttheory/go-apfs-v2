@@ -18,7 +18,9 @@ fixes FinderInfo lengths, zero/absent handling and ordered fork writes. Reserved
 ACL conversion, source-resolved formatting and deferred replacement decisions are covered by the
 [ACL interpretation increment](appledouble-native-acl.md). Serialized quarantine
 envelope conversion, filesystem-xattr import and ordered/source-overridden decisions are
-covered by the [quarantine codec](appledouble-native-quarantine.md). ACL application,
+covered by the [quarantine codec](appledouble-native-quarantine.md). ACL creation
+inheritance and replacement over inherited destinations are qualified through
+[the portable inheritance policy](appledouble-acl-inheritance.md). ACL application,
 remaining [quarantine application contexts](appledouble-quarantine-application.md),
 size policy and shared transport remain
 outstanding, in that order. The allocation guard's stricter alias policy is
