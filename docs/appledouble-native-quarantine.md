@@ -3,7 +3,8 @@
 `ParseQuarantine` and `Quarantine.MarshalBinary` convert the `q/` envelope stored
 in an AppleDouble `com.apple.quarantine` record. They run in pure Go on Linux,
 macOS and Windows. They do not load libquarantine, read a host database, change a
-file's quarantine state or interpret the plain filesystem xattr as an envelope.
+file's quarantine state. `ParseQuarantineXattr` explicitly imports the different
+plain filesystem representation.
 
 The default API targets macOS 27. Use `ParseQuarantineWithProfile` and
 `MarshalBinaryWithProfile` with `QuarantineMacOS26` or `QuarantineMacOS27` to
@@ -99,7 +100,7 @@ envelopes (and raw rejected envelopes to observe native ignore behavior)
 to native `copyfile`, records actual filesystem readback and checks observations,
 but does **not** compare a Go implementation of destination policy.
 
-On macOS 27, in the observed unquarantined command-line process context:
+On the observed macOS 27 host, whose captured process state is `q/0200;;`:
 
 - `0`/`1` flags become `0x81`; `2` becomes `0x82`.
 - Flag-only `0x8`, `0x10` and `0x200` produce no quarantine xattr.
@@ -123,6 +124,54 @@ existing-state normalization and write failures. It must
 then expose explicit context to pure-Go policy and integrate application through
 shared host metadata transport without an OS-dependent feature gap. Neither
 these observations nor serialization support completes that release gate.
+
+## Importing a filesystem quarantine value
+
+`ParseQuarantineXattr` converts a captured `com.apple.quarantine` filesystem value
+into the same `Quarantine` model used by serialized envelopes. The default targets
+macOS 27; `ParseQuarantineXattrWithProfile` explicitly selects macOS 26 or 27.
+The caller reads the xattr and must distinguish absence from a read failure.
+A successful import can supply the `source` argument to `File.QuarantineUpdates`.
+
+Native filesystem import accepts **at most 382 stored bytes**. The limit is
+checked before NUL termination or escape decoding, so even unused bytes following
+a NUL can cause rejection. It is a distinct boundary from the larger serialized
+AppleDouble envelope. For example, 100 escaped agent bytes can fit the logical
+agent limit while making the raw xattr too large for native import.
+
+After the size check, native import interprets the value as a `q/` envelope.
+Go reuses the established envelope parser for flags, timestamp, separators,
+escapes and decoded field limits. The raw input is not retained. Malformed or
+oversized values and unknown profiles return `ErrQuarantine`.
+
+This API does not generate destination xattrs. `MarshalBinary` still exports an
+AppleDouble envelope; its output is not a destination-normalized filesystem
+value. Destination preparation, process policy, privilege checks and write errors
+remain separate work.
+
+### Native import and context evidence
+
+[`quarantine-xattr.json`](../testdata/appledouble/native/quarantine-xattr.json)
+records 522 independently captured macOS 27 inputs: 440 accepted and 82 rejected.
+The corpus includes all byte/escape/numeric cases from the envelope investigation,
+stored-size probes through the 382/383-byte boundary, and oversized NUL tails.
+
+The native helper sets a real file xattr, verifies its exact bytes, imports with
+`qtn_file_init_with_fd`, and exports through `qtn_file_to_data`. Setup/readback
+failures cannot count as parser refusals. CI compares recorded, native and Go
+values, preserves another raw readback, and retains helper ASTs for both Mac
+architectures. macOS 26 additionally rejects the two inputs carrying flags outside
+its independently qualified range. Portable unit tests retain the original
+capture and exercise explicit profile selection and source-override integration.
+
+Every helper invocation also reads its process state using
+`qtn_proc_init_with_self`/`qtn_proc_to_data`. The native reports retain these
+snapshots instead of assuming a command-line process has no quarantine state.
+A fresh file without a quarantine xattr does not imply an unquarantined process.
+The previous application observations must therefore remain scoped to their
+captured host/runtime context until controlled experiments separate OS-version,
+process-state and privilege effects. No destination normalizer is inferred from
+those observations in this increment.
 
 ## Ordered quarantine update decisions
 

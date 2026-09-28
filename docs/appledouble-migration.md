@@ -17,7 +17,7 @@ bounds. The [FinderInfo/resource-fork increment](appledouble-native-special.md)
 fixes FinderInfo lengths, zero/absent handling and ordered fork writes. Reserved
 ACL conversion, source-resolved formatting and deferred replacement decisions are covered by the
 [ACL interpretation increment](appledouble-native-acl.md). Serialized quarantine
-envelope conversion and ordered/source-overridden application decisions are
+envelope conversion, filesystem-xattr import and ordered/source-overridden decisions are
 covered by the [quarantine codec](appledouble-native-quarantine.md). ACL application,
 quarantine policy, remaining size policy and shared transport remain
 outstanding, in that order. The allocation guard's stricter alias policy is

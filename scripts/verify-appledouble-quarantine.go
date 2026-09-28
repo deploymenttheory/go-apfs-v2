@@ -54,6 +54,8 @@ type quarantineUpdateResult struct {
 }
 
 var quarantineUpdates []quarantineUpdateResult
+var quarantineXattrs []comparison
+var processContexts []string
 var producers []string
 var nativeProfile = appledouble.QuarantineMacOS27
 var profileName = "macos27"
@@ -88,7 +90,7 @@ func main() {
 	passed := false
 	defer func() {
 		failure := recover()
-		report := map[string]any{"passed": passed, "goos": runtime.GOOS, "goarch": runtime.GOARCH, "commands": commands, "comparisons": comparisons, "applications": applications, "producers": producers, "profile": profileName, "flag_boundaries": flagBoundaries, "quarantine_updates": quarantineUpdates}
+		report := map[string]any{"passed": passed, "goos": runtime.GOOS, "goarch": runtime.GOARCH, "commands": commands, "comparisons": comparisons, "applications": applications, "producers": producers, "profile": profileName, "flag_boundaries": flagBoundaries, "quarantine_updates": quarantineUpdates, "xattrs": quarantineXattrs, "process_contexts": processContexts}
 		if failure != nil {
 			report["failure"] = fmt.Sprint(failure)
 		}
@@ -200,9 +202,10 @@ func main() {
 	verifyProducers(root, unpack)
 	verifyApplicationObservations(root, unpack)
 	verifyQuarantineUpdates(root, unpack)
+	verifyQuarantineXattrs(root, unpack)
 	passed = true
 	fmt.Printf("Quarantine (%s): %d serialization cases, %d flag boundaries, %d native producers, %d policy-only application observations passed\n", profileName, len(comparisons), len(flagBoundaries), len(producers), len(applications))
-	fmt.Printf("Quarantine: %d ordered update comparisons passed\n", len(quarantineUpdates))
+	fmt.Printf("Quarantine: %d ordered update comparisons, %d filesystem imports; contexts=%v\n", len(quarantineUpdates), len(quarantineXattrs), processContexts)
 }
 func verifyProducers(root, helper string) {
 	extraFlag := "2000"
@@ -449,6 +452,16 @@ func verifyQuarantineUpdates(root, xattrHelper string) {
 		case "state":
 			override = filepath.Join(dir, "source")
 		case "carrier", "invalid-carrier":
+			captured, err := appledouble.ParseQuarantineXattrWithProfile(tc.Carrier, nativeProfile)
+			if tc.SourceMode == "carrier" {
+				must(err)
+				if source == nil || *captured != *source {
+					panic("captured source differs")
+				}
+			} else if !errors.Is(err, appledouble.ErrQuarantine) {
+				panic("malformed carrier import")
+			}
+			source = captured
 			write(filepath.Join(dir, "carrier"), tc.Carrier)
 			run(xattrHelper, "set", side, appledouble.QuarantineName, filepath.Join(dir, "carrier"))
 			actual, present := get(side, filepath.Join(dir, "carrier-readback"))
@@ -560,5 +573,93 @@ void copyfile_warn(const char *,...);
 			commands[len(commands)-1].Output = fmt.Sprintf("AST retained: %d bytes", len(ast))
 			write(filepath.Join(root, item.name+"-"+arch+".ast.json"), ast)
 		}
+	}
+}
+
+func verifyQuarantineXattrs(root, xattrHelper string) {
+	var fixture struct {
+		HelperSHA256 string
+		Records      []struct {
+			Name, InputSHA256 string
+			Input, Serialized []byte
+			Accepted          bool
+		}
+	}
+	must(json.Unmarshal(read("testdata/appledouble/native/quarantine-xattr.json"), &fixture))
+	source := "testdata/appledouble/native/quarantine-xattr.c"
+	if len(fixture.Records) != 522 || hash(read(source)) != fixture.HelperSHA256 {
+		panic("quarantine xattr provenance")
+	}
+	helper := filepath.Join(root, "quarantine-xattr")
+	run("xcrun", "clang", "-Wall", "-Wextra", "-Werror", source, "-o", helper)
+	for _, arch := range []string{"arm64", "x86_64"} {
+		ast := run("xcrun", "clang", "-arch", arch, "-fsyntax-only", "-Xclang", "-ast-dump=json", source)
+		commands[len(commands)-1].Output = fmt.Sprintf("AST retained: %d bytes", len(ast))
+		write(filepath.Join(root, "quarantine-xattr-"+arch+".ast.json"), ast)
+	}
+	var differences []string
+	for _, tc := range fixture.Records {
+		dir := filepath.Join(root, "xattrs", tc.Name)
+		must(os.MkdirAll(dir, 0700))
+		work, e := os.MkdirTemp(dir, "capture-")
+		must(e)
+		input, output, target := filepath.Join(dir, "input"), filepath.Join(dir, "native"), filepath.Join(work, "source")
+		if hash(tc.Input) != tc.InputSHA256 {
+			panic("xattr input hash")
+		}
+		write(input, tc.Input)
+		diagnostic, nativeErr := observe(helper, input, output, target)
+		context, _, ok := strings.Cut(string(diagnostic), "\n")
+		if !ok || !strings.HasPrefix(context, "process=q/") {
+			panic("missing native process context")
+		}
+		seen := false
+		for _, previous := range processContexts {
+			if previous == context {
+				seen = true
+			}
+		}
+		if !seen {
+			processContexts = append(processContexts, context)
+		}
+		if nativeErr != nil {
+			var exit *exec.ExitError
+			if !errors.As(nativeErr, &exit) || exit.ExitCode() != 1 || !strings.Contains(string(diagnostic), "\nimport refused: code=") {
+				panic(fmt.Sprintf("xattr setup failure %s: %v %s", tc.Name, nativeErr, diagnostic))
+			}
+			commands[len(commands)-1].ExpectedFailure = true
+		}
+		// Preserve an independent raw readback even for parser refusals.
+		run(xattrHelper, "get", target, appledouble.QuarantineName, filepath.Join(dir, "stored"))
+		if !bytes.Equal(read(filepath.Join(dir, "stored")), tc.Input) {
+			panic("xattr setup bytes: " + tc.Name)
+		}
+		q, goErr := appledouble.ParseQuarantineXattrWithProfile(tc.Input, nativeProfile)
+		expected := tc.Accepted
+		// These two inputs use flags independently qualified as macOS-27-only by
+		// the existing envelope corpora. All other stored-byte expectations agree.
+		if nativeProfile == appledouble.QuarantineMacOS26 && (tc.Name == "0-flags-37" || tc.Name == "1-flagmore-0") {
+			expected = false
+		}
+		v := comparison{Name: tc.Name, Accepted: expected, NativeAccepted: nativeErr == nil}
+		if nativeErr == nil {
+			v.NativeSerialized = read(output)
+		}
+		if (goErr == nil) != expected || v.NativeAccepted != expected {
+			differences = append(differences, tc.Name+": acceptance")
+		}
+		if goErr == nil {
+			b, e := q.MarshalBinaryWithProfile(nativeProfile)
+			must(e)
+			write(filepath.Join(dir, "go"), b)
+			v.BinaryEqual = bytes.Equal(b, v.NativeSerialized) && bytes.Equal(b, tc.Serialized)
+			if !v.BinaryEqual {
+				differences = append(differences, tc.Name+": canonical bytes")
+			}
+		}
+		quarantineXattrs = append(quarantineXattrs, v)
+	}
+	if len(differences) != 0 {
+		panic(fmt.Sprintf("quarantine xattr differences: %v", differences))
 	}
 }

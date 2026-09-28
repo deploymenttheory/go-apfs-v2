@@ -60,6 +60,9 @@ full AppleDouble transport integration is on the roadmap below.
   field limits and native parsing quirks without applying destination policy.
   The default targets macOS 27. The `WithProfile` variants explicitly select
   macOS 26 or 27 behavior on any supported operating system.
+- **Filesystem quarantine import:** `ParseQuarantineXattr` and its `WithProfile`
+  variant interpret a captured filesystem xattr, including its separate stored
+  size limit. The caller supplies the bytes and handles filesystem read errors.
 - **Quarantine update decisions:** `File.QuarantineUpdates` preserves record order
   and reports ignored malformed records. Optional resolved source quarantine
   state overrides each matching record, including empty records.
