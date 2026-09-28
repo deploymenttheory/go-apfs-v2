@@ -30,6 +30,11 @@ const MaxQuarantineApplicationSize = 381
 type QuarantineProcess struct {
 	Flags uint32
 	Agent string
+	// Absent means a valid process-info query confirmed no quarantine label.
+	// It is distinct from unavailable capture (nil Process) or successful capture
+	// with zero flags. Flags and Agent must be empty. This context is currently
+	// qualified for the macOS 26 profile on every Go operating system.
+	Absent bool
 }
 
 // QuarantineApplicationContext supplies policy inputs independently of the Go
@@ -90,6 +95,12 @@ func (q *Quarantine) PlanApplication(ctx QuarantineApplicationContext) (*Quarant
 	if flags == 0 {
 		flags = 1
 	}
+	if ctx.Process.Absent {
+		// Without a process label, native preserves the encoded source fields,
+		// full identifier and original timestamp even for directories.
+		copy(raw[:4], fmt.Sprintf("%04x", approvedQuarantineFlags(flags)))
+		return &QuarantineApplication{Write: true, Value: raw}, nil
+	}
 	sandbox := ctx.Process.Flags&2 != 0
 	if sandbox {
 		flags &^= 0x60
@@ -112,9 +123,7 @@ func (q *Quarantine) PlanApplication(ctx QuarantineApplicationContext) (*Quarant
 		}
 		return &QuarantineApplication{}, nil
 	}
-	if flags&3 != 0 && flags&0x40 == 0 {
-		flags |= 0x80
-	}
+	flags = approvedQuarantineFlags(flags)
 	timestamp := ctx.Timestamp
 	if ctx.Directory {
 		timestamp = 0
@@ -132,6 +141,9 @@ func qualifiedQuarantineProcess(profile QuarantineProfile, p *QuarantineProcess)
 	if p == nil || len(p.Agent) > 255 || strings.IndexByte(p.Agent, 0) >= 0 {
 		return false
 	}
+	if p.Absent {
+		return profile == QuarantineMacOS26 && p.Flags == 0 && p.Agent == ""
+	}
 	switch profile {
 	case QuarantineMacOS26:
 		return p.Flags >= 1 && p.Flags <= 0x1f
@@ -140,4 +152,11 @@ func qualifiedQuarantineProcess(profile QuarantineProfile, p *QuarantineProcess)
 	default:
 		return false
 	}
+}
+
+func approvedQuarantineFlags(flags uint32) uint32 {
+	if flags&3 != 0 && flags&0x40 == 0 {
+		flags |= 0x80
+	}
+	return flags
 }

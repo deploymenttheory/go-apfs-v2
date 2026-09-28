@@ -196,6 +196,18 @@ jobs:
           name: appledouble-quarantine-processes
           path: artifacts/appledouble-quarantine-runtime-processes/
           if-no-files-found: error
+      - name: AppleDouble raw process capture and absent contexts
+        if: runner.os == 'macOS'
+        env:
+          CGO_ENABLED: "0"
+        run: go run scripts/verify-appledouble-quarantine-runtime.go -contexts
+      - name: Upload AppleDouble raw context evidence
+        if: always() && runner.os == 'macOS'
+        uses: actions/upload-artifact@v7
+        with:
+          name: appledouble-quarantine-contexts
+          path: artifacts/appledouble-quarantine-runtime-contexts/
+          if-no-files-found: error
       - name: Strict xattr API tests and coverage above 95%
         env:
           CGO_ENABLED: "0"
