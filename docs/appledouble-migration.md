@@ -20,7 +20,9 @@ ACL conversion, source-resolved formatting and deferred replacement decisions ar
 envelope conversion, filesystem-xattr import and ordered/source-overridden decisions are
 covered by the [quarantine codec](appledouble-native-quarantine.md). ACL creation
 inheritance and replacement over inherited destinations are qualified through
-[the portable inheritance policy](appledouble-acl-inheritance.md). ACL application,
+[the portable inheritance policy](appledouble-acl-inheritance.md). Source identity
+queries can be [captured and replayed](appledouble-acl-identities.md) portably;
+live acquisition adapters remain transport work. ACL application,
 remaining [quarantine application contexts](appledouble-quarantine-application.md),
 size policy and shared transport remain
 outstanding, in that order. The allocation guard's stricter alias policy is
