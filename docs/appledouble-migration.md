@@ -19,7 +19,8 @@ ACL conversion, source-resolved formatting and deferred replacement decisions ar
 [ACL interpretation increment](appledouble-native-acl.md). Serialized quarantine
 envelope conversion, filesystem-xattr import and ordered/source-overridden decisions are
 covered by the [quarantine codec](appledouble-native-quarantine.md). ACL application,
-quarantine policy, remaining size policy and shared transport remain
+remaining [quarantine application contexts](appledouble-quarantine-application.md),
+size policy and shared transport remain
 outstanding, in that order. The allocation guard's stricter alias policy is
 documented explicitly rather than counted as native parity.
 

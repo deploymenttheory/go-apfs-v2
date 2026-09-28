@@ -1,21 +1,26 @@
 //go:build ignore
 
-// Controlled native research, not a Go implementation of quarantine policy.
+// Independent native oracle for portable quarantine application policy.
 package main
 
 import (
 	"bytes"
+	"compress/gzip"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
+
+	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
 )
 
 type processSnapshot struct {
@@ -51,6 +56,7 @@ type runtimeCommand struct {
 }
 
 var runtimeCommands []runtimeCommand
+var applicationComparisons []applicationComparison
 
 func mustRuntime(err error) {
 	if err != nil {
@@ -78,16 +84,20 @@ func saveRuntime(path string, v any) {
 	writeRuntime(path, append(b, '\n'))
 }
 func main() {
+	normalization := flag.Bool("normalization", false, "qualify extended destination normalization inputs")
 	capture := flag.Bool("capture", false, "record independent observations without claiming qualification")
 	flag.Parse()
-	const root = "artifacts/appledouble-quarantine-runtime"
+	root := "artifacts/appledouble-quarantine-runtime"
+	if *normalization {
+		root += "-normalization"
+	}
 	mustRuntime(os.MkdirAll(root, 0755))
 	qualified := false
 	var observed runtimeFixture
 	defer func() {
 		failure := recover()
 		saveRuntime(filepath.Join(root, "observed.json"), observed)
-		report := map[string]any{"qualified": qualified, "capture_only": *capture, "commands": runtimeCommands, "goos": runtime.GOOS, "goarch": runtime.GOARCH, "cases": len(observed.Records)}
+		report := map[string]any{"qualified": qualified, "capture_only": *capture, "commands": runtimeCommands, "goos": runtime.GOOS, "goarch": runtime.GOARCH, "cases": len(observed.Records), "application_comparisons": applicationComparisons}
 		if failure != nil {
 			report["failure"] = fmt.Sprint(failure)
 		}
@@ -131,50 +141,45 @@ func main() {
 		runtimeCommands[len(runtimeCommands)-1].Output = fmt.Sprintf("AST retained: %d bytes", len(ast))
 		writeRuntime(filepath.Join(root, "quarantine-runtime-"+arch+".ast.json"), ast)
 	}
-	for _, context := range []string{"inherited", "0000", "0001", "0002", "0004", "0040", "0200", "0201"} {
-		for _, flags := range []uint32{0, 1, 2, 3, 4, 8, 0x10, 0x40, 0x41, 0x80, 0x200, 0x1fff} {
-			for _, kind := range []string{"file", "directory"} {
-				for _, order := range []string{"before", "after"} {
-					for _, baseline := range []string{"absent", "existing"} {
-						tc := runtimeCase{Name: fmt.Sprintf("%s-%04x-%s-%s-%s", context, flags, kind, order, baseline), Kind: kind, CreationOrder: order, FileInput: []byte(fmt.Sprintf("q/%04x;12345678;FileAgent;FileID\x00", flags))}
-						if context != "inherited" {
-							tc.ProcessInput = []byte("q/" + context + ";ContextAgent;ContextID")
-						}
-						if baseline == "existing" {
-							tc.Baseline = []byte("0081;23456789;ExistingAgent;ExistingID")
-						}
-						dir, e := os.MkdirTemp(root, tc.Name+"-")
-						mustRuntime(e)
-						process, initial := "-", "-"
-						if tc.ProcessInput != nil {
-							process = filepath.Join(dir, "process-input")
-							writeRuntime(process, tc.ProcessInput)
-						}
-						if tc.Baseline != nil {
-							initial = filepath.Join(dir, "baseline-input")
-							writeRuntime(initial, tc.Baseline)
-						}
-						input := filepath.Join(dir, "file-input")
-						writeRuntime(input, tc.FileInput)
-						b := runRuntime(helper, process, filepath.Join(dir, "destination"), input, kind, order, initial)
-						writeRuntime(filepath.Join(dir, "native.json"), b)
-						mustRuntime(json.Unmarshal(b, &tc.Result))
-						validateRuntime(tc)
-						observed.Records = append(observed.Records, tc)
-					}
-				}
-			}
+	cases := runtimeCases(*normalization, observed.Profile)
+	for _, tc := range cases {
+		dir, e := os.MkdirTemp(root, tc.Name+"-")
+		mustRuntime(e)
+		process, initial := "-", "-"
+		if tc.ProcessInput != nil {
+			process = filepath.Join(dir, "process-input")
+			writeRuntime(process, tc.ProcessInput)
 		}
-	}
-	if len(observed.Records) != 768 {
-		panic("incomplete runtime matrix")
+		if tc.Baseline != nil {
+			initial = filepath.Join(dir, "baseline-input")
+			writeRuntime(initial, tc.Baseline)
+		}
+		input := filepath.Join(dir, "file-input")
+		writeRuntime(input, tc.FileInput)
+		b := runRuntime(helper, process, filepath.Join(dir, "destination"), input, tc.Kind, tc.CreationOrder, initial)
+		writeRuntime(filepath.Join(dir, "native.json"), b)
+		mustRuntime(json.Unmarshal(b, &tc.Result))
+		validateRuntime(tc)
+		observed.Records = append(observed.Records, tc)
 	}
 	if *capture {
 		fmt.Printf("Captured %d native runtime observations (%s); not yet qualified\n", len(observed.Records), observed.Profile)
 		return
 	}
 	var fixture runtimeFixture
-	mustRuntime(json.Unmarshal(readRuntime("testdata/appledouble/native/quarantine-runtime-"+observed.Profile+".json"), &fixture))
+	fixturePath := "testdata/appledouble/native/quarantine-runtime-" + observed.Profile + ".json"
+	if *normalization {
+		fixturePath = "testdata/appledouble/native/quarantine-normalization-" + observed.Profile + ".json.gz"
+	}
+	data := readRuntime(fixturePath)
+	if *normalization {
+		z, e := gzip.NewReader(bytes.NewReader(data))
+		mustRuntime(e)
+		data, e = io.ReadAll(z)
+		mustRuntime(e)
+		mustRuntime(z.Close())
+	}
+	mustRuntime(json.Unmarshal(data, &fixture))
 	if fixture.Profile != observed.Profile || fixture.HelperSHA256 != observed.HelperSHA256 || len(fixture.Records) != len(observed.Records) {
 		panic("runtime fixture provenance or case count")
 	}
@@ -185,9 +190,10 @@ func main() {
 			panic("runtime inputs changed: " + want.Name)
 		}
 		compareRuntime(want.Name, want.Result, got.Result)
+		applicationComparisons = append(applicationComparisons, verifyApplicationPlan(got, observed.Profile))
 	}
 	qualified = true
-	fmt.Printf("Quarantine runtime (%s): %d controlled observations matched; no Go policy parity claimed\n", observed.Profile, len(observed.Records))
+	fmt.Printf("Quarantine runtime (%s): %d native observations and explicit Go application outcomes verified\n", observed.Profile, len(observed.Records))
 }
 func validateRuntime(tc runtimeCase) {
 	r := tc.Result
@@ -247,7 +253,7 @@ func compareRuntimeXattr(name string, want, got xattrSnapshot, oldInterval, newI
 	mustRuntime(e)
 	b, e := hex.DecodeString(got.Bytes)
 	mustRuntime(e)
-	x, y := bytes.Split(a, []byte{';'}), bytes.Split(b, []byte{';'})
+	x, y := bytes.SplitN(a, []byte{';'}, 4), bytes.SplitN(b, []byte{';'}, 4)
 	if len(x) != 4 || len(y) != 4 {
 		panic("unexpected runtime xattr form: " + name)
 	}
@@ -264,4 +270,238 @@ func compareRuntimeXattr(name string, want, got xattrSnapshot, oldInterval, newI
 	if !bytes.Equal(bytes.Join(x, []byte{';'}), bytes.Join(y, []byte{';'})) {
 		panic(fmt.Sprintf("xattr bytes differ %s: want %q got %q", name, a, b))
 	}
+}
+
+func runtimeCases(extended bool, profile string) []runtimeCase {
+	if extended {
+		return normalizationCases(profile)
+	}
+	var cases []runtimeCase
+	for _, context := range []string{"inherited", "0000", "0001", "0002", "0004", "0040", "0200", "0201"} {
+		for _, flags := range []uint32{0, 1, 2, 3, 4, 8, 0x10, 0x40, 0x41, 0x80, 0x200, 0x1fff} {
+			for _, kind := range []string{"file", "directory"} {
+				for _, order := range []string{"before", "after"} {
+					for _, baseline := range []string{"absent", "existing"} {
+						tc := runtimeCase{Name: fmt.Sprintf("%s-%04x-%s-%s-%s", context, flags, kind, order, baseline), Kind: kind, CreationOrder: order, FileInput: []byte(fmt.Sprintf("q/%04x;12345678;FileAgent;FileID\x00", flags))}
+						if context != "inherited" {
+							tc.ProcessInput = []byte("q/" + context + ";ContextAgent;ContextID")
+						}
+						if baseline == "existing" {
+							tc.Baseline = []byte("0081;23456789;ExistingAgent;ExistingID")
+						}
+						cases = append(cases, tc)
+
+					}
+				}
+			}
+		}
+	}
+	if len(cases) != 768 {
+		panic("incomplete base runtime matrix")
+	}
+	return cases
+}
+
+func normalizationCases(profile string) []runtimeCase {
+	var cases []runtimeCase
+	add := func(name, process string, flags uint32, agent, id, baseline, kind string) {
+		tc := runtimeCase{Name: name, Kind: kind, CreationOrder: "before", FileInput: []byte(fmt.Sprintf("q/%04x;12345678;%s;%s\x00", flags, agent, id))}
+		if process != "" {
+			tc.ProcessInput = []byte(process)
+		}
+		if baseline != "" {
+			tc.Baseline = []byte(baseline)
+		}
+		cases = append(cases, tc)
+	}
+	proc := func(flags, agent string) string { return "q/" + flags + ";" + agent + ";ContextID" }
+	// Every combination of the low-byte bits, both with and without bit 0x200.
+	for _, p := range []string{"0001", "0002"} {
+		for f := uint32(0); f < 256; f++ {
+			for _, high := range []uint32{0, 0x200} {
+				add(fmt.Sprintf("flags-%s-%04x", p, f|high), proc(p, "ContextAgent"), f|high, "FileAgent", "FileID", "", "file")
+			}
+		}
+	}
+	highFlags := []uint32{0x100, 0x400, 0x800, 0x1000, 0x1fff}
+	if profile == "macos27" {
+		highFlags = append(highFlags, 0x2000, 0x3fff)
+	}
+	for _, p := range []string{"0001", "0002"} {
+		for _, f := range highFlags {
+			for _, kind := range []string{"file", "directory"} {
+				add(fmt.Sprintf("high-%s-%04x-%s", p, f, kind), proc(p, "ContextAgent"), f, "FileAgent", "FileID", "", kind)
+			}
+		}
+	}
+	// Independent existing-state combinations, including protected flag bits.
+	for _, p := range []string{"inherited", "0001", "0002", "0004"} {
+		for _, old := range []uint32{1, 2, 4, 6, 0x40, 0x60, 0x80, 0x81, 0x82, 0x84, 0x86, 0x200, 0x1fff} {
+			for _, f := range []uint32{1, 4, 8, 0x20, 0x40, 0x60, 0x218, 0x1fff} {
+				process := ""
+				if p != "inherited" {
+					process = proc(p, "ContextAgent")
+				}
+				add(fmt.Sprintf("existing-%s-%04x-%04x", p, old, f), process, f, "FileAgent", "FileID", fmt.Sprintf("%04x;23456789;ExistingAgent;ExistingID", old), "file")
+			}
+		}
+	}
+	for b := 1; b < 256; b++ {
+		escaped := fmt.Sprintf("a\\x%02xb", b)
+		add(fmt.Sprintf("agent-byte-%02x", b), proc("0001", escaped), 1, "FileAgent", "FileID", "", "file")
+		add(fmt.Sprintf("id-byte-%02x", b), proc("0001", "ContextAgent"), 1, "FileAgent", escaped, "", "file")
+	}
+	for i, agent := range []string{"", "A B", `A\x20B`, `A\x3bB`, "é", strings.Repeat("A", 255), strings.Repeat(`\x20`, 100), strings.Repeat(`\xff`, 90)} {
+		for _, p := range []string{"0001", "0002"} {
+			for _, f := range []uint32{1, 0x40} {
+				for _, kind := range []string{"file", "directory"} {
+					add(fmt.Sprintf("agent-field-%d-%s-%04x-%s", i, p, f, kind), proc(p, agent), f, `File\x20Agent`, `File\x3bID`, "", kind)
+				}
+			}
+		}
+	}
+	for _, n := range []int{0, 1, 15, 16, 31, 32, 35, 36, 62, 63, 64} {
+		for _, escaped := range []bool{false, true} {
+			for _, f := range []uint32{1, 0x40} {
+				id := strings.Repeat("I", n)
+				if escaped {
+					id = strings.Repeat(`\x20`, n)
+				}
+				add(fmt.Sprintf("id-length-%d-%t-%04x", n, escaped, f), proc("0002", "ContextAgent"), f, "FileAgent", id, "", "file")
+			}
+		}
+	}
+	// Plain canonical size, not logical length, gates application before substitution.
+	for n := 89; n <= 120; n++ {
+		for _, f := range []uint32{1, 0x40} {
+			for _, kind := range []string{"file", "directory"} {
+				add(fmt.Sprintf("size-%d-%04x-%s", n+271, f, kind), proc("0002", "ContextAgent"), f, strings.Repeat("A", n), strings.Repeat(`\x20`, 64), "", kind)
+			}
+		}
+	}
+	for _, f := range []uint32{1, 0x40} {
+		for _, p := range []string{"0001", "0002"} {
+			add(fmt.Sprintf("max-fields-%s-%04x", p, f), proc(p, strings.Repeat("P", 255)), f, strings.Repeat("A", 255), strings.Repeat("I", 64), "", "file")
+		}
+	}
+	want := 2210
+	if profile == "macos27" {
+		want = 2218
+	}
+	if len(cases) != want {
+		panic("incomplete normalization matrix")
+	}
+	return cases
+}
+
+type applicationComparison struct {
+	Name                    string
+	ContextKnown            bool
+	Context                 appledouble.QuarantineApplicationContext
+	Plan                    *appledouble.QuarantineApplication
+	ErrorKind               string
+	NativeCode, NativeErrno int
+	BinaryEqual, Preserved  bool
+}
+
+func verifyApplicationPlan(tc runtimeCase, profileName string) applicationComparison {
+	profile := appledouble.QuarantineMacOS27
+	if profileName == "macos26" {
+		profile = appledouble.QuarantineMacOS26
+	}
+	r := tc.Result
+	result := applicationComparison{Name: tc.Name, ContextKnown: r.Effective.InitCode == 0, NativeCode: r.FileApplyCode, NativeErrno: r.FileApplyErrno}
+	ctx := appledouble.QuarantineApplicationContext{Profile: profile, Directory: tc.Kind == "directory", Timestamp: uint32(r.Start)}
+	decode := func(s string) []byte { b, e := hex.DecodeString(s); mustRuntime(e); return b }
+	processModel := func(s string) *appledouble.Quarantine {
+		p := decode(s)
+		if len(p) < 9 {
+			panic("short canonical process snapshot")
+		}
+		b := append(bytes.Clone(p[:7]), []byte("00000000;")...)
+		b = append(b, p[7:]...)
+		q, e := appledouble.ParseQuarantineWithProfile(b, profile)
+		mustRuntime(e)
+		return q
+	}
+	if result.ContextKnown {
+		captured := processModel(r.Effective.Serialized)
+		ctx.Process = &appledouble.QuarantineProcess{Flags: captured.Flags, Agent: captured.Agent}
+		// Controlled successful requests establish the raw agent. init_with_self
+		// can lossy-decode backslashes; effective flags still come from that capture.
+		if r.Requested != nil && r.ProcessApplyCode == 0 {
+			ctx.Process.Agent = processModel(*r.Requested).Agent
+		}
+	}
+	before, after := decode(r.Prepared.Bytes), decode(r.Applied.Bytes)
+	if r.Prepared.Present {
+		q, e := appledouble.ParseQuarantineXattrWithProfile(before, profile)
+		mustRuntime(e)
+		ctx.Existing = q
+	}
+	source, e := appledouble.ParseQuarantineWithProfile(tc.FileInput, profile)
+	mustRuntime(e)
+	result.Context = ctx
+	plan, e := source.PlanApplication(ctx)
+	result.Plan = plan
+	if !result.ContextKnown {
+		if !errors.Is(e, appledouble.ErrQuarantineContext) || plan != nil {
+			panic("unavailable context accepted: " + tc.Name)
+		}
+		result.ErrorKind = "unavailable-context"
+		return result
+	}
+	if e != nil {
+		switch {
+		case errors.Is(e, appledouble.ErrQuarantineApplicationSize):
+			result.ErrorKind = "application-size"
+			if r.FileApplyCode != 34 {
+				panic("native size outcome differs: " + tc.Name)
+			}
+		case errors.Is(e, appledouble.ErrQuarantineMissing):
+			result.ErrorKind = "missing-attribute"
+			if r.FileApplyCode != -1 || r.FileApplyErrno != 93 {
+				panic("native missing attribute differs: " + tc.Name)
+			}
+		default:
+			panic(fmt.Sprintf("unexpected Go application error %s: %v", tc.Name, e))
+		}
+		if plan != nil {
+			panic("error returned a write: " + tc.Name)
+		}
+	} else {
+		if r.FileApplyCode != 0 || plan == nil {
+			panic("native application result differs: " + tc.Name)
+		}
+		if plan.Write {
+			if !r.Applied.Present {
+				panic("Go write/native absence: " + tc.Name)
+			}
+			actual := bytes.Clone(after)
+			if len(plan.Value) >= 13 && string(plan.Value[5:13]) == fmt.Sprintf("%08x", ctx.Timestamp) {
+				if len(actual) < 13 {
+					panic("short native xattr: " + tc.Name)
+				}
+				stamp, err := strconv.ParseInt(string(actual[5:13]), 16, 64)
+				mustRuntime(err)
+				if stamp < r.Start || stamp > r.End {
+					panic("native timestamp outside operation: " + tc.Name)
+				}
+				copy(actual[5:13], plan.Value[5:13])
+			}
+			result.BinaryEqual = bytes.Equal(plan.Value, actual)
+			if !result.BinaryEqual {
+				panic(fmt.Sprintf("Go application bytes differ %s: Go %q native %q", tc.Name, plan.Value, after))
+			}
+			return result
+		}
+		if plan.Value != nil {
+			panic("preservation carries write bytes: " + tc.Name)
+		}
+	}
+	result.Preserved = r.Prepared.Present == r.Applied.Present && bytes.Equal(before, after)
+	if !result.Preserved {
+		panic("native destination changed on preservation/error: " + tc.Name)
+	}
+	return result
 }

@@ -1,0 +1,144 @@
+# Portable quarantine application planning
+
+`Quarantine.PlanApplication` calculates the exact filesystem quarantine value for
+qualified process and destination contexts. It runs in pure Go on Linux, macOS
+and Windows. It can request a write, preserve the current attribute, or report a
+specific native-policy error. It does not mutate a filesystem or consult the
+machine running Go.
+
+Use it after `File.QuarantineUpdates` selects a valid record, at that record's
+position in the metadata stream. The caller supplies the actual prepared
+state, rather than assuming destination cleanup or an attempted write succeeded.
+A later record must use the destination state resulting from earlier operations.
+This is direct application planning; `copyfile` cleanup, callbacks and host
+transport remain separate responsibilities.
+
+```go
+source, err := appledouble.ParseQuarantine(
+    []byte("q/0081;12345678;FileAgent;FileID"),
+)
+if err != nil {
+    return err
+}
+plan, err := source.PlanApplication(appledouble.QuarantineApplicationContext{
+    Profile: appledouble.QuarantineMacOS27,
+    Process: &appledouble.QuarantineProcess{
+        Flags: 0x201, // Known effective flags, not a requested change.
+        Agent: "Browser", // Known raw kernel agent bytes.
+    },
+    Timestamp: 1700000000, // Injected operation time; no hidden clock read.
+    // Existing: nil means confirmed absence after destination preparation.
+})
+if err != nil {
+    return err
+}
+if plan.Write {
+    // Transport writes plan.Value exactly as supplied.
+    // Here: 0081;6553f100;Browser;FileID
+}
+```
+
+## Context and supported behavior
+
+The caller selects the target profile independently of its operating system.
+Qualified effective process flags are `0001`, `0002`, `0004` for macOS 26 and
+`0200`, `0201`, `0202`, `0204` for macOS 27. Other combinations return
+`ErrQuarantineContext`. A nil process is unavailable state and returns that error;
+it never becomes an unquarantined context. This restriction applies identically
+on all three Go operating systems.
+
+The process agent must be known raw byte data. Native process snapshots can be
+lossy: a raw kernel backslash can be decoded again during `init_with_self`, so
+blindly importing a snapshot can change `a\b` into `a?b`. In controlled tests,
+only a successful process request supplies the independently known agent; actual
+flags still come from the effective capture. A refused request supplies neither.
+Resolving arbitrary host process context remains transport work. The SDK does
+not claim to reconstruct lost bytes from a snapshot.
+
+`Existing` is a valid imported destination model, or nil for confirmed absence.
+`Directory` selects the qualified directory behavior; regular files use the
+injected `Timestamp`. Symlinks and other object kinds still require qualification.
+Input models and process state are not mutated, and every write result owns its
+bytes.
+
+The qualified rules include:
+
+- Canonicalize zero source flags to one. Validate the profile and logical model
+  using the shared envelope codec.
+- Reject a canonical plain source value larger than **381 bytes** before process
+  substitution. This native application limit differs from the **382-byte**
+  filesystem-import limit. A large agent can therefore cause failure even when
+  application would replace that agent with a shorter process name.
+- Sandbox process policy removes source bits `0x60` and retains existing
+  destination bits `0x6`. Its zero-flags fallback writes `0081` with the original
+  encoded fields and input timestamp.
+- The qualified contexts carrying process bit `0x200` remove file bits `0x218`.
+  A zero result can preserve the original attribute or produce the native
+  missing-attribute error. Preservation leaves the original raw bytes untouched.
+- Add `0x80` when either low quarantine bit is set without `0x40` approval.
+  Ordinary writes use the current process agent and injected timestamp; directory
+  timestamps become zero. The sandbox fallback retains source fields instead.
+- Ordinary writes insert the **raw** process agent and truncate the **escaped**
+  source identifier to 63 bytes, even in the middle of an escape sequence. The
+  fallback preserves the entire encoded identifier.
+
+`Value` is deliberately a byte slice rather than another `Quarantine` model.
+A raw agent containing a semicolon or backslash, or a partially truncated escape,
+can be interpreted differently on subsequent import. Re-encoding a logical
+model would silently change the bytes native application writes.
+
+## Errors and transport
+
+| Result | Caller action |
+| --- | --- |
+| `Write: true` | Write `Value` exactly, then handle actual transport errors. |
+| `Write: false` | Preserve the existing raw value or its absence; `Value` is nil. |
+| `ErrQuarantine` | Reject an invalid source/existing model or profile. |
+| `ErrQuarantineContext` | Resolve a known, qualified process context before planning. |
+| `ErrQuarantineApplicationSize` | Preserve the destination; native application rejects the source buffer (code 34). |
+| `ErrQuarantineMissing` | Preserve absence; the qualified native application returns `-1` with errno 93. |
+
+An error returns no plan. A write plan is not a promise that a real host permits
+that write. Ownership, filesystem protection, actual I/O errors and `copyfile`
+error callbacks must be handled by shared metadata transport.
+
+## Native qualification
+
+The [runtime matrix](appledouble-quarantine-runtime.md) and an extended matrix
+exercise process states, existing flags, every low-byte flag combination with
+and without `0x200`, high flags, individual non-NUL agent/identifier byte values,
+escaping, field limits, truncation and the application buffer boundary.
+The native helper is reused unchanged; no Go result supplies native input or an
+expected fixture value. Compressed extended fixtures retain all independent raw
+observations without inflating the repository with repetitive JSON.
+
+Portable tests replay both profiles. The Mac harness additionally compares Go
+write bytes directly with native filesystem readback, verifies preservation and
+specific error outcomes, and asserts rejection of unavailable contexts. It does
+not count unavailable-context rejection as native policy parity. Current-time
+bytes may vary only within the independently recorded operation interval; all
+other bytes are exact comparisons.
+
+```sh
+CGO_ENABLED=0 go run scripts/verify-appledouble.go
+CGO_ENABLED=0 go run scripts/verify-appledouble-quarantine-runtime.go
+CGO_ENABLED=0 go run scripts/verify-appledouble-quarantine-runtime.go -normalization
+```
+
+Native runs require macOS and Command Line Tools; portable production and tests
+have no native dependency. CI retains raw inputs/readbacks, Go plans and explicit
+contexts, statuses, source/SDK provenance and helper Clang ASTs for both Mac
+architectures. `-capture` remains an unqualified native-only recording mode.
+
+## Remaining work
+
+1. Qualify absent and additional process contexts, reliable raw-agent capture,
+   additional privilege/entitlement combinations, malformed existing values,
+   links and destination protection.
+2. Integrate ordered plans with real source capture, destination preparation,
+   actual write/readback and `copyfile` callback/error handling in shared transport.
+3. Close the remaining size/allocation gaps, qualify APFS/HFS+ preservation across
+   all operating systems, release APFS and validate downstream package adoption.
+
+The [migration gate](appledouble-migration.md) remains open. These APIs do not
+complete host metadata transport or authorize resuming codesign.
