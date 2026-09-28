@@ -3,7 +3,9 @@
 Quarantine restoration depends on the process applying metadata and the state of
 its destination. The serialized envelope alone does not determine the bytes
 written to disk. This investigation supplies independent native evidence for the
-portable application policy that still needs implementing.
+[portable application planner](appledouble-quarantine-application.md). The planner
+now covers qualified captured-process contexts; unresolved contexts and transport
+remain explicit work.
 
 Use `ParseQuarantineXattr` to import captured filesystem values and
 `File.QuarantineUpdates` to select ordered records. Neither API changes process
@@ -117,17 +119,16 @@ fixture fails qualification after retaining the complete observation matrix.
 
 Portable unit tests replay actual prepared/final filesystem imports against the
 independent native envelopes on every supported Go OS. This verifies the existing
-codec on process-dependent output. It does **not** count native-versus-native
-application comparison as Go policy parity.
+codec on process-dependent output. The harness also compares Go application plans directly with native write bytes,
+preservation and error outcomes for qualified contexts. Unavailable context is
+explicitly rejected and is not counted as policy parity.
 
 ## Remaining implementation
 
-1. Separate process, privilege and destination inputs into an explicit portable
-   policy context. Reject unavailable or unqualified context instead of choosing
-   policy from the host OS or assuming absence.
-2. Implement destination normalization using that context, including no-op/error
-   behavior, current-time injection, file/directory differences, existing values
-   and field precedence. Compare Go results directly against native application.
+1. Extend the explicit application context to absent and additional process
+   states, raw-agent resolution and privilege/destination combinations.
+2. Build on qualified Go write/preserve/error planning, including buffer limits
+   and native field truncation, to cover the remaining normalization cases.
 3. Extend the matrix for additional agents/tracking data, flag combinations,
    destination protection and permissions, and `copyfile` error callbacks. Preserve
    the distinction between direct library application and full unpack preparation.

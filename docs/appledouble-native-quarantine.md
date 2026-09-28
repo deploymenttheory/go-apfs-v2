@@ -118,11 +118,10 @@ the different native environments; the eventual application API must establish
 which differences depend on OS version and which depend on runtime context.
 
 These observations are deliberately narrower than a portable runtime policy.
-Ordered record selection and source override are covered below. Remaining work
-must establish process context, source-state capture, destination preparation,
-existing-state normalization and write failures. It must
-then expose explicit context to pure-Go policy and integrate application through
-shared host metadata transport without an OS-dependent feature gap. Neither
+Ordered record selection and source override are covered below. The [application planner](appledouble-quarantine-application.md) now exposes
+explicit context and implements qualified normalization. Remaining work must
+resolve additional process contexts, source-state capture, destination preparation
+and real write failures through shared host metadata transport. Neither
 these observations nor serialization support completes that release gate.
 
 ## Importing a filesystem quarantine value
@@ -146,8 +145,9 @@ oversized values and unknown profiles return `ErrQuarantine`.
 
 This API does not generate destination xattrs. `MarshalBinary` still exports an
 AppleDouble envelope; its output is not a destination-normalized filesystem
-value. Destination preparation, process policy, privilege checks and write errors
-remain separate work.
+value. Use `PlanApplication` for qualified destination bytes. Destination
+preparation, remaining process/privilege contexts and actual write errors remain
+separate transport work.
 
 ### Native import and context evidence
 
@@ -172,13 +172,15 @@ as unavailable, never interpreted as absence or used to normalize metadata.
 A fresh file without a quarantine xattr does not imply an unquarantined process.
 The previous application observations must therefore remain scoped to their
 captured host/runtime context until controlled experiments separate OS-version,
-process-state and privilege effects. No destination normalizer is inferred from
-those observations in this increment.
+process-state and privilege effects. The controlled runtime matrix, rather than
+these snapshots alone, qualifies the application planner's supported contexts.
 
 The [controlled runtime matrix](appledouble-quarantine-runtime.md) now isolates
 requested versus effective process state, destination creation order, existing
-metadata and write failures. It supplies evidence for the pending normalizer; it
-is not a Go implementation of application policy.
+metadata and write failures. It underpins the
+[Go application planner](appledouble-quarantine-application.md), which now
+compares qualified write, preservation and error outcomes directly with native
+readback. Unavailable contexts and shared transport remain outstanding.
 
 ## Ordered quarantine update decisions
 
@@ -241,9 +243,9 @@ candidate bytes, resulting xattrs, diagnostics and commands are retained. Missin
 attributes count as absence only after the expected native error and an existing
 destination have been verified.
 
-This comparison qualifies dispatch and source override. It deliberately uses
-native application on both sides to avoid claiming an unimplemented portable
-normalizer. The fresh-destination policy-only observations above remain separate.
+This comparison qualifies dispatch and source override using native application
+on both sides. Direct Go-versus-native normalization checks belong to the separate
+application harness. The fresh-destination policy-only observations above remain separate.
 
 The harness also extracts the unchanged `copyfile_unpack_quarantine` function and
 complete `attr_entry_t` declaration from the hash-pinned Apple source, preserving
