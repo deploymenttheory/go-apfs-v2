@@ -67,8 +67,10 @@ The size correction does not establish full native parity. Outstanding items:
 - FinderInfo now requires exactly 32 bytes; invalid constructor input is retained
   until Encode reports an error. Zero FinderInfo, absent/empty forks and ordered
   fork writes are covered by [native special-attribute probes](../../docs/appledouble-native-special.md).
-  ACL/quarantine handling, associated file flags and destination-type policy
-  remain outstanding. The codec retains serialized policy records for consumers.
+  [ACL text parsing and portable external bytes](../../docs/appledouble-native-acl.md)
+  are available through an explicit pure-Go policy API. ACL application/formatting,
+  quarantine handling, associated file flags and destination-type policy remain
+  outstanding. The codec retains serialized policy records for consumers.
 - Decode now follows the native two-entry profile, fixed ATTR position, duplicate
   name ordering and overlap/read-bound behavior; see
   [record validation](../../docs/appledouble-native-records.md). It no longer

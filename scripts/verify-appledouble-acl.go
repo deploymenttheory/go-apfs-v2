@@ -1,0 +1,215 @@
+//go:build ignore
+
+// Independent macOS ACL oracle; production code remains pure Go on every OS.
+package main
+
+import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"time"
+
+	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
+)
+
+type command struct {
+	Args            []string
+	Output, Error   string
+	ExpectedFailure bool
+}
+type result struct {
+	Name                  string
+	Accepted, BinaryEqual bool
+}
+
+var commands []command
+var results []result
+var roundTrips []string
+
+func must(err error) {
+	if err != nil {
+		panic(err)
+	}
+}
+func read(p string) []byte     { b, e := os.ReadFile(p); must(e); return b }
+func write(p string, b []byte) { must(os.WriteFile(p, b, 0600)) }
+func observe(args ...string) ([]byte, error) {
+	b, e := exec.Command(args[0], args[1:]...).CombinedOutput()
+	c := command{Args: args, Output: string(b)}
+	if e != nil {
+		c.Error = e.Error()
+	}
+	commands = append(commands, c)
+	return b, e
+}
+func run(args ...string) []byte {
+	b, e := observe(args...)
+	if e != nil {
+		panic(fmt.Sprintf("%v: %v: %s", args, e, b))
+	}
+	return b
+}
+func main() {
+	const root = "artifacts/appledouble-acl"
+	must(os.MkdirAll(root, 0755))
+	passed := false
+	defer func() {
+		failure := recover()
+		report := map[string]any{"passed": passed, "goos": runtime.GOOS, "goarch": runtime.GOARCH, "commands": commands, "comparisons": results, "round_trips": roundTrips}
+		if failure != nil {
+			report["failure"] = fmt.Sprint(failure)
+		}
+		b, e := json.MarshalIndent(report, "", "  ")
+		if e == nil {
+			e = os.WriteFile(filepath.Join(root, "report.json"), append(b, '\n'), 0644)
+		}
+		if failure != nil || e != nil {
+			fmt.Fprintln(os.Stderr, failure, e)
+			os.Exit(1)
+		}
+	}()
+	if runtime.GOOS != "darwin" {
+		panic("native ACL oracle requires macOS")
+	}
+	run("git", "rev-parse", "HEAD")
+	run("sw_vers")
+	run("uname", "-a")
+	run("xcrun", "clang", "--version")
+	run("xcrun", "--show-sdk-version")
+	var fixture struct {
+		SourceSHA256, HelperSHA256 string
+		Records                    []struct {
+			Name           string
+			Text, External []byte
+			Accepted       bool
+		}
+	}
+	must(json.Unmarshal(read("testdata/appledouble/native/acl.json"), &fixture))
+	if len(fixture.Records) != 59 {
+		panic("missing ACL fixture cases")
+	}
+	helperSource := "testdata/appledouble/native/acl.c"
+	if fmt.Sprintf("%x", sha256.Sum256(read(helperSource))) != fixture.HelperSHA256 {
+		panic("ACL helper hash mismatch")
+	}
+	const sourceURL = "https://raw.githubusercontent.com/apple-oss-distributions/Libc/71bbe350ab79eef58113991d817ccc6165061a64/posix1e/acl_translate.c"
+	client := http.Client{Timeout: 30 * time.Second}
+	response, e := client.Get(sourceURL)
+	must(e)
+	source, e := io.ReadAll(io.LimitReader(response.Body, 2<<20))
+	must(e)
+	must(response.Body.Close())
+	if response.StatusCode != http.StatusOK || fmt.Sprintf("%x", sha256.Sum256(source)) != fixture.SourceSHA256 {
+		panic("pinned Libc source hash mismatch")
+	}
+	write(filepath.Join(root, "acl_translate.c"), source)
+	// Extract the complete native parser and its token tables unchanged. Only
+	// public SDK includes are supplied; do not compile a reimplementation.
+	licenseEnd := bytes.Index(source, []byte("#include <sys/appleapiopts.h>"))
+	tablesStart := bytes.Index(source, []byte("#define ACL_TYPE_DIR"))
+	tablesEnd := bytes.Index(source, []byte("/*\n * reallocing snprintf"))
+	parserStart := bytes.Index(source, []byte("acl_t\nacl_from_text("))
+	parserEnd := bytes.Index(source, []byte("\nchar *\nacl_to_text("))
+	if licenseEnd < 0 || tablesStart < 0 || tablesEnd <= tablesStart || parserStart < 0 || parserEnd <= parserStart {
+		panic("Libc parser extraction boundaries changed")
+	}
+	parserSource := append(bytes.Clone(source[:licenseEnd]), []byte("#include <sys/types.h>\n#include <sys/acl.h>\n#include <errno.h>\n#include <stdlib.h>\n#include <string.h>\n#include <strings.h>\n#include <membership.h>\n#include <uuid/uuid.h>\n#include <pwd.h>\n#include <grp.h>\n")...)
+	parserSource = append(parserSource, source[tablesStart:tablesEnd]...)
+	parserSource = append(parserSource, source[parserStart:parserEnd]...)
+	parserPath := filepath.Join(root, "acl_from_text.c")
+	write(parserPath, parserSource)
+
+	helper := filepath.Join(root, "acl")
+	run("xcrun", "clang", "-Wall", "-Wextra", "-Werror", helperSource, "-o", helper)
+	for _, arch := range []string{"arm64", "x86_64"} {
+		ast := run("xcrun", "clang", "-arch", arch, "-fsyntax-only", "-Xclang", "-ast-dump=json", helperSource)
+		commands[len(commands)-1].Output = fmt.Sprintf("AST retained: %d bytes", len(ast))
+		write(filepath.Join(root, "acl-"+arch+".ast.json"), ast)
+		parserAST := run("xcrun", "clang", "-arch", arch, "-fsyntax-only", "-Xclang", "-ast-dump=json", parserPath)
+		commands[len(commands)-1].Output = fmt.Sprintf("AST retained: %d bytes", len(parserAST))
+		write(filepath.Join(root, "acl_from_text-"+arch+".ast.json"), parserAST)
+
+		layout := run("xcrun", "clang", "-arch", arch, "-fsyntax-only", "-Xclang", "-fdump-record-layouts", helperSource)
+		write(filepath.Join(root, "acl-"+arch+".layout.txt"), layout)
+	}
+	for _, tc := range fixture.Records {
+		dir := filepath.Join(root, tc.Name)
+		must(os.MkdirAll(dir, 0700))
+		input, external, canonical := filepath.Join(dir, "input.txt"), filepath.Join(dir, "native.bin"), filepath.Join(dir, "canonical.txt")
+		write(input, tc.Text)
+		output, nativeErr := observe(helper, "parse", input, external, canonical)
+		if nativeErr != nil {
+			var exit *exec.ExitError
+			if tc.Accepted || !errors.As(nativeErr, &exit) || exit.ExitCode() != 1 || !strings.HasPrefix(string(output), "parse failed: errno=") {
+				panic(fmt.Sprintf("unexpected native failure %s: %v %s", tc.Name, nativeErr, output))
+			}
+			commands[len(commands)-1].ExpectedFailure = true
+		}
+		a, goErr := appledouble.ParseACLText(tc.Text, nil)
+		if (nativeErr == nil) != tc.Accepted || (goErr == nil) != tc.Accepted {
+			panic("ACL acceptance differs: " + tc.Name)
+		}
+		r := result{Name: tc.Name, Accepted: tc.Accepted}
+		if tc.Accepted {
+			b, e := a.MarshalBinary()
+			must(e)
+			write(filepath.Join(dir, "go.bin"), b)
+			r.BinaryEqual = bytes.Equal(b, read(external)) && bytes.Equal(b, tc.External)
+			if !r.BinaryEqual {
+				panic("ACL binary differs: " + tc.Name)
+			}
+		}
+		results = append(results, r)
+	}
+	// Exercise ACL application in both directions with an explicit, unknown UUID:
+	// no account database or host-specific principal mapping can affect the result.
+	unpack := filepath.Join(root, "copyfile")
+	run("xcrun", "clang", "-Wall", "-Wextra", "-Werror", "testdata/appledouble/native/probe.c", "-o", unpack)
+	for _, kind := range []string{"file", "directory"} {
+		dir, e := os.MkdirTemp(root, "roundtrip-"+kind+"-")
+		must(e)
+		text := []byte("!#acl 1\nuser:01234567-89AB-CDEF-0123-456789ABCDEF:::allow:read,readattr,readsecurity\n")
+		input, src, dst := filepath.Join(dir, "input.txt"), filepath.Join(dir, "source"), filepath.Join(dir, "restored")
+		write(input, text)
+		if kind == "directory" {
+			must(os.Mkdir(src, 0700))
+			must(os.Mkdir(dst, 0700))
+		} else {
+			write(src, nil)
+			write(dst, nil)
+		}
+		run(helper, "set", input, src)
+		run(helper, "get", src, filepath.Join(dir, "source.bin"), filepath.Join(dir, "source.txt"))
+		run(helper, "pack", src, filepath.Join(dir, "native.ad"))
+		f, e := appledouble.Decode(read(filepath.Join(dir, "native.ad")))
+		must(e)
+		a, e := appledouble.ParseACLText(f.Xattrs()[appledouble.ACLTextName], nil)
+		must(e)
+		b, e := a.MarshalBinary()
+		must(e)
+		if !bytes.Equal(b, read(filepath.Join(dir, "source.bin"))) {
+			panic("native packed ACL differs: " + kind)
+		}
+		// Use the original text, not native canonical output, in the Go-produced sidecar.
+		encoded, e := appledouble.FromXattrs(map[string][]byte{appledouble.ACLTextName: text}).Encode()
+		must(e)
+		write(filepath.Join(dir, "go.ad"), encoded)
+		run(unpack, "unpack", filepath.Join(dir, "go.ad"), dst)
+		run(helper, "get", dst, filepath.Join(dir, "restored.bin"), filepath.Join(dir, "restored.txt"))
+		if !bytes.Equal(b, read(filepath.Join(dir, "restored.bin"))) {
+			panic("Go ACL native application differs: " + kind)
+		}
+		roundTrips = append(roundTrips, kind)
+	}
+	passed = true
+	fmt.Printf("ACL oracle: %d parser cases and %d filesystem round trips passed\n", len(results), len(roundTrips))
+}
