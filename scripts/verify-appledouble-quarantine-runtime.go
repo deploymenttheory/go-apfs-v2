@@ -84,12 +84,20 @@ func saveRuntime(path string, v any) {
 	writeRuntime(path, append(b, '\n'))
 }
 func main() {
+	processes := flag.Bool("processes", false, "qualify additional effective process flag combinations")
 	normalization := flag.Bool("normalization", false, "qualify extended destination normalization inputs")
+	fixtureOverride := flag.String("fixture", "", "explicit independently captured fixture for a qualified host preparation context")
 	capture := flag.Bool("capture", false, "record independent observations without claiming qualification")
 	flag.Parse()
+	if *processes && *normalization {
+		panic("choose one extended matrix")
+	}
 	root := "artifacts/appledouble-quarantine-runtime"
 	if *normalization {
 		root += "-normalization"
+	}
+	if *processes {
+		root += "-processes"
 	}
 	mustRuntime(os.MkdirAll(root, 0755))
 	qualified := false
@@ -97,7 +105,7 @@ func main() {
 	defer func() {
 		failure := recover()
 		saveRuntime(filepath.Join(root, "observed.json"), observed)
-		report := map[string]any{"qualified": qualified, "capture_only": *capture, "commands": runtimeCommands, "goos": runtime.GOOS, "goarch": runtime.GOARCH, "cases": len(observed.Records), "application_comparisons": applicationComparisons}
+		report := map[string]any{"qualified": qualified, "capture_only": *capture, "commands": runtimeCommands, "goos": runtime.GOOS, "goarch": runtime.GOARCH, "cases": len(observed.Records), "application_comparisons": applicationComparisons, "fixture_override": *fixtureOverride}
 		if failure != nil {
 			report["failure"] = fmt.Sprint(failure)
 		}
@@ -142,6 +150,9 @@ func main() {
 		writeRuntime(filepath.Join(root, "quarantine-runtime-"+arch+".ast.json"), ast)
 	}
 	cases := runtimeCases(*normalization, observed.Profile)
+	if *processes {
+		cases = processCases(observed.Profile)
+	}
 	for _, tc := range cases {
 		dir, e := os.MkdirTemp(root, tc.Name+"-")
 		mustRuntime(e)
@@ -171,8 +182,14 @@ func main() {
 	if *normalization {
 		fixturePath = "testdata/appledouble/native/quarantine-normalization-" + observed.Profile + ".json.gz"
 	}
+	if *processes {
+		fixturePath = "testdata/appledouble/native/quarantine-processes-" + observed.Profile + ".json.gz"
+	}
+	if *fixtureOverride != "" {
+		fixturePath = *fixtureOverride
+	}
 	data := readRuntime(fixturePath)
-	if *normalization {
+	if strings.HasSuffix(fixturePath, ".gz") {
 		z, e := gzip.NewReader(bytes.NewReader(data))
 		mustRuntime(e)
 		data, e = io.ReadAll(z)
@@ -298,6 +315,63 @@ func runtimeCases(extended bool, profile string) []runtimeCase {
 	}
 	if len(cases) != 768 {
 		panic("incomplete base runtime matrix")
+	}
+	return cases
+}
+
+// processCases separates requested process changes from effective captured state.
+// Every low-five-bit combination is exercised; denied high-bit requests remain
+// observations of the inherited state, never evidence for the requested flags.
+func processCases(profile string) []runtimeCase {
+	var cases []runtimeCase
+	add := func(name string, p, f uint32, agent, kind, order, baseline string) {
+		tc := runtimeCase{Name: name, Kind: kind, CreationOrder: order,
+			ProcessInput: []byte(fmt.Sprintf("q/%04x;%s;ContextID", p, agent)),
+			FileInput:    []byte(fmt.Sprintf("q/%04x;12345678;FileAgent;FileID\x00", f))}
+		if baseline != "" {
+			tc.Baseline = []byte(baseline)
+		}
+		cases = append(cases, tc)
+	}
+	for p := uint32(0); p < 32; p++ {
+		for _, f := range []uint32{0, 1, 2, 3, 4, 6, 8, 0x10, 0x18, 0x20, 0x40, 0x60, 0x80, 0x200, 0x218, 0x1fff} {
+			for _, kind := range []string{"file", "directory"} {
+				for _, order := range []string{"before", "after"} {
+					for _, existing := range []bool{false, true} {
+						baseline := ""
+						if existing {
+							baseline = "0006;23456789;ExistingAgent;ExistingID"
+						}
+						add(fmt.Sprintf("process-%04x-%04x-%s-%s-%t", p, f, kind, order, existing), p, f, "ContextAgent", kind, order, baseline)
+					}
+				}
+			}
+		}
+	}
+	high := []uint32{0x20, 0x40, 0x80, 0x100, 0x200, 0x201, 0x21f, 0x400, 0x800, 0x1000, 0x1fff}
+	if profile == "macos27" {
+		high = append(high, 0x2000, 0x3fff)
+	}
+	for _, p := range high {
+		for _, f := range []uint32{1, 0x218} {
+			for _, kind := range []string{"file", "directory"} {
+				add(fmt.Sprintf("request-%04x-%04x-%s", p, f, kind), p, f, "ContextAgent", kind, "before", "")
+			}
+		}
+	}
+	for p := uint32(1); p < 32; p++ {
+		for i, agent := range []string{"", `A\x3bB\x5cC`, `\xff`, strings.Repeat("A", 255)} {
+			for _, f := range []uint32{1, 0x40} {
+				add(fmt.Sprintf("process-agent-%04x-%d-%04x", p, i, f), p, f, agent, "file", "before", "")
+			}
+		}
+	}
+	want := 4388
+	if profile == "macos27" {
+		want = 4396
+	}
+	if len(cases) != want {
+		panic("incomplete process context matrix")
 	}
 	return cases
 }

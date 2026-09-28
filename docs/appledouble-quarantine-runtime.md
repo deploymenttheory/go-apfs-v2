@@ -19,7 +19,7 @@ uses the SDK's libquarantine exports. Every invocation runs in a separate child
 process and changes only its own quarantine state. It never targets another
 process, requests elevated privileges, or changes system security settings.
 
-Each host matrix has 768 cases:
+The base matrix has 768 cases per host:
 
 | Dimension | Values |
 | --- | --- |
@@ -97,15 +97,65 @@ unavailable state must not be replaced with an invented zero-flags context.
 Successful context changes do not establish whether all privilege, entitlement,
 filesystem or kernel-policy combinations behave identically.
 
+## Additional effective process flags
+
+The `-processes` matrix exercises all requests from `0000` through `001f`.
+It crosses sixteen file flag values with files/directories, before/after creation,
+and absent/existing baselines. Separate cases probe high-bit requests and empty,
+escaped, binary and 255-byte process agents. As in the base matrix, policy input
+comes from effective capture and actual prepared state, never nominal requests.
+
+The planner supports effective `0001..001f` for the macOS 26 profile and
+`0200..021f` for macOS 27. Combined process bits follow the same qualified
+write/preserve/error rules as the original individual-bit contexts. The added
+scope does not infer absent process state or qualify privilege combinations that
+these isolated child processes cannot establish.
+
+High-bit request probes distinguish discarded bits from refused requests. Their
+successful file writes do not qualify the requested high bits: the actual captured
+process still has one of the supported effective masks, or capture is unavailable.
+See [application planning](appledouble-quarantine-application.md) for caller inputs,
+byte substitution, errors and the boundary between policy and transport.
+
+## Destination creation is a separate input
+
+Two macOS 27 captures have identical effective process snapshots but different
+prepared destinations: in one, process `0202` automatically quarantines objects
+created after the process change; in the other, the attribute remains absent.
+The baseline setter still refuses the same writes. This changes 48 prepared
+states in the base matrix and consequently some file-application results.
+The cause is not established by the captured flags or library interface.
+
+Both independent corpora are retained and replayed against the planner on every
+Go operating system. The planner uses the actual `Existing` state and matches
+both; it does not predict automatic metadata creation from process flags.
+Qualification keeps fixture matching strict. For the captured host context with
+no automatic creation, explicitly select its fixture:
+
+```sh
+CGO_ENABLED=0 go run scripts/verify-appledouble-quarantine-runtime.go \
+  -fixture testdata/appledouble/native/quarantine-runtime-macos27-no-creation.json.gz
+```
+
+The override still requires matching profile, helper source hash, case count,
+exact matrix inputs, process statuses, destination snapshots and Go/native
+outcomes. It is recorded in the report and does not suppress mismatches or replace
+native inputs. The default fixture and its portable tests remain intact. This
+variation reinforces the need to capture real prepared state in shared transport.
+
 ## Qualification
 
 Run the native matrix on a qualified Mac with Command Line Tools:
 
 ```sh
 CGO_ENABLED=0 go run scripts/verify-appledouble-quarantine-runtime.go
+CGO_ENABLED=0 go run scripts/verify-appledouble-quarantine-runtime.go -normalization
+CGO_ENABLED=0 go run scripts/verify-appledouble-quarantine-runtime.go -processes
 ```
 
-CI retains `appledouble-quarantine-runtime`, containing every raw input, native
+CI retains separate `appledouble-quarantine-runtime`,
+`appledouble-quarantine-normalization` and `appledouble-quarantine-processes`
+artifacts containing every raw input, native
 JSON result, command, AST and SDK export manifest. The helper hash and exact
 matrix inputs must match the fixture. Process snapshots, statuses, xattr
 presence, flags, agent and identifier must match exactly. A timestamp is allowed
@@ -125,7 +175,7 @@ explicitly rejected and is not counted as policy parity.
 
 ## Remaining implementation
 
-1. Extend the explicit application context to absent and additional process
+1. Extend the explicit application context to absent and other effective process
    states, raw-agent resolution and privilege/destination combinations.
 2. Build on qualified Go write/preserve/error planning, including buffer limits
    and native field truncation, to cover the remaining normalization cases.

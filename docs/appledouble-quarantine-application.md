@@ -41,11 +41,18 @@ if plan.Write {
 ## Context and supported behavior
 
 The caller selects the target profile independently of its operating system.
-Qualified effective process flags are `0001`, `0002`, `0004` for macOS 26 and
-`0200`, `0201`, `0202`, `0204` for macOS 27. Other combinations return
+Qualified effective process flags are `0001` through `001f` for macOS 26 and
+`0200` through `021f` for macOS 27. These include every combination of the five
+low process bits; other combinations return
 `ErrQuarantineContext`. A nil process is unavailable state and returns that error;
 it never becomes an unquarantined context. This restriction applies identically
 on all three Go operating systems.
+
+The planner accepts **effective** flags only. In the native matrix, requesting
+zero becomes one, some high requested bits are discarded, and requests carrying
+`0x200` can be denied. A denied request leaves the inherited context in effect.
+These observations do not authorize converting an arbitrary requested mask into
+a context; capture success and the actual resulting state must be checked.
 
 The process agent must be known raw byte data. Native process snapshots can be
 lossy: a raw kernel backslash can be decoded again during `init_with_self`, so
@@ -107,7 +114,12 @@ error callbacks must be handled by shared metadata transport.
 The [runtime matrix](appledouble-quarantine-runtime.md) and an extended matrix
 exercise process states, existing flags, every low-byte flag combination with
 and without `0x200`, high flags, individual non-NUL agent/identifier byte values,
-escaping, field limits, truncation and the application buffer boundary.
+escaping, field limits, truncation and the application buffer boundary. A process
+matrix adds every low-five-bit process combination with sixteen source flag
+values, both object kinds, both creation orders, and absent/existing destinations.
+It also exercises discarded/refused high-bit requests and empty, escaped, binary
+and maximum-length process agents. The same write rules apply across all of
+these qualified effective flags; the planner does not emulate process mutation.
 The native helper is reused unchanged; no Go result supplies native input or an
 expected fixture value. Compressed extended fixtures retain all independent raw
 observations without inflating the repository with repetitive JSON.
@@ -123,6 +135,7 @@ other bytes are exact comparisons.
 CGO_ENABLED=0 go run scripts/verify-appledouble.go
 CGO_ENABLED=0 go run scripts/verify-appledouble-quarantine-runtime.go
 CGO_ENABLED=0 go run scripts/verify-appledouble-quarantine-runtime.go -normalization
+CGO_ENABLED=0 go run scripts/verify-appledouble-quarantine-runtime.go -processes
 ```
 
 Native runs require macOS and Command Line Tools; portable production and tests
@@ -132,7 +145,7 @@ architectures. `-capture` remains an unqualified native-only recording mode.
 
 ## Remaining work
 
-1. Qualify absent and additional process contexts, reliable raw-agent capture,
+1. Qualify absent and other effective process contexts, reliable raw-agent capture,
    additional privilege/entitlement combinations, malformed existing values,
    links and destination protection.
 2. Integrate ordered plans with real source capture, destination preparation,
