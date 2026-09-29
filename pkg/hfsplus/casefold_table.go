@@ -12,7 +12,10 @@ package hfsplus
 // U+10A0..U+10C5 to Nuskhuri at U+2D00+ while HFS+ maps it to Mkhedruli at
 // U+10D0+, and U+1E9E folds to itself here rather than to U+00DF. A table
 // built from current Unicode would mis-order every Georgian name.
+// NUL cannot be probed through POSIX names; its internal catalog mapping is
+// pinned to Apple's FastUnicodeCompare and qualified by native hard-link reads.
 var caseFold = map[uint16]uint16{
+	0x0000: 0xFFFF,
 	0x0041: 0x0061,
 	0x0042: 0x0062,
 	0x0043: 0x0063,

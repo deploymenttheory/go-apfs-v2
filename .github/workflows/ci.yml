@@ -122,6 +122,17 @@ jobs:
           name: acl-restore-${{ matrix.os }}
           path: artifacts/acl-restore/
           if-no-files-found: error
+      - name: Portable APFS/HFS image security capture and coverage above 95%
+        env:
+          CGO_ENABLED: "0"
+        run: go run scripts/verify-image-security-coverage.go
+      - name: Upload image security capture coverage
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: image-security-coverage-${{ matrix.os }}
+          path: artifacts/image-security-coverage/
+          if-no-files-found: error
       - name: AppleDouble 32-bit address-space regressions
 
         if: runner.os == 'Linux'
@@ -195,6 +206,18 @@ jobs:
         with:
           name: security-copy
           path: artifacts/security-copy/
+          if-no-files-found: error
+      - name: Native APFS/HFS image security capture comparisons
+        if: runner.os == 'macOS'
+        env:
+          CGO_ENABLED: "0"
+        run: go run scripts/verify-image-security.go
+      - name: Upload native image security capture evidence
+        if: always() && runner.os == 'macOS'
+        uses: actions/upload-artifact@v7
+        with:
+          name: image-security
+          path: artifacts/image-security/
           if-no-files-found: error
       - name: AppleDouble native security records and ACL application
         if: runner.os == 'macOS'

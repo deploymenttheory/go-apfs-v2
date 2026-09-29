@@ -307,6 +307,10 @@ func reproduces(fold map[uint16]uint16, order []uint16) bool {
 }
 
 func emit(fold map[uint16]uint16) {
+	// POSIX names cannot probe NUL. Apple's FastUnicodeCompare maps it to
+	// FFFF; the native image-security hard-link test qualifies this ordering
+	// using the four-NUL private catalog directory.
+	fold[0] = 0xffff
 	var moved []uint16
 	for u, f := range fold {
 		if f != u {
@@ -329,6 +333,8 @@ package hfsplus
 // U+10A0..U+10C5 to Nuskhuri at U+2D00+ while HFS+ maps it to Mkhedruli at
 // U+10D0+, and U+1E9E folds to itself here rather than to U+00DF. A table
 // built from current Unicode would mis-order every Georgian name.
+// NUL cannot be probed through POSIX names; its internal catalog mapping is
+// pinned to Apple's FastUnicodeCompare and qualified by native hard-link reads.
 var caseFold = map[uint16]uint16{`)
 	for _, u := range moved {
 		fmt.Printf("\t0x%04X: 0x%04X,\n", u, fold[u])

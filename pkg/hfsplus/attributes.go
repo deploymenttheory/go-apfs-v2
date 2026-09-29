@@ -59,12 +59,19 @@ type attrRecord struct {
 // loadAttributes walks the attributes B-tree once and caches every record,
 // keyed by (file id, attribute name). It is a no-op after the first call, and
 // on a volume with no attributes file.
-func (v *Volume) loadAttributes() error {
+func (v *Volume) loadAttributes() (err error) {
 	if v.attributes != nil {
 		return nil
 	}
 	v.attributes = make(map[attrKey]*attrRecord)
 	v.attrNames = make(map[CatalogNodeID][]string)
+	// Do not cache a partial/empty result after a failed read. A later security
+	// capture must see the same failure, not report the ACL as absent.
+	defer func() {
+		if err != nil {
+			v.attributes, v.attrNames = nil, nil
+		}
+	}()
 
 	if v.hdr.AttributesFile.LogicalSize == 0 {
 		return nil

@@ -33,6 +33,7 @@ jobs:
           - { pkg: ./pkg/hostmeta, target: FuzzDarwinChmodRequest }
           - { pkg: ./pkg/hostmeta, target: FuzzDarwinChmodProperties }
           - { pkg: ./pkg/hostmeta, target: FuzzSecurityCopy }
+          - { pkg: ./pkg/hostmeta, target: FuzzImageSecurity }
           - { pkg: ./pkg/appledouble, target: FuzzQuarantine }
           - { pkg: ./pkg/appledouble, target: FuzzQuarantineXattr }
           - { pkg: ./pkg/appledouble, target: FuzzQuarantineApplication }
