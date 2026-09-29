@@ -147,7 +147,7 @@ of this roadmap delivered. These phases are not estimates of remaining PR count.
 
 | Phase | Current state | Completion gate |
 | --- | --- | --- |
-| 1. ACL application | Source acquisition/fallbacks, image-reader copying and lazy volume policy integrated; native host bindings and ordered restoration remain | Source acquisition, authorization, actual writes and restoration ordering qualified together |
+| 1. ACL application | Source acquisition, image copying, volume policy and independent image timestamps integrated; host bindings and ordered restoration remain | Source acquisition, authorization, actual writes and restoration ordering qualified together |
 | 2. Quarantine | Conversion and much of application policy implemented; context/integration gaps open | Remaining process contexts and ordered restoration qualify against native behavior |
 | 3. Large values and allocation | Known native differences remain | Oversized values, aggregates, forks and allocation policy have explicit, tested behavior |
 | 4. Shared filesystem transport | Host primitives and exact image permissions available; complete metadata transport outstanding | APFS/HFS+ extract-and-repack preserves logical metadata on all three OSes |
@@ -191,6 +191,11 @@ of this roadmap delivered. These phases are not estimates of remaining PR count.
    writers without a host-dependent capture path; all 16 filesystem combinations
    reproduce manually captured output. This is the shared acquisition coordinator
    and image binding; live native host read/write providers remain outstanding.
+   [Independent image timestamps](../../docs/appledouble-image-times.md) now preserve
+   birth, modification, change and access fields in both writers/readers, including
+   roots, resolved hard links and APFS snapshot rebuilding. Explicit epoch zero
+   remains a timestamp; HFS keeps its whole-second precision. Native comparisons
+   qualify eight images and 296 entries; existing layout controls remain stable.
    **Remaining:** native host write
    adapters, live host source acquisition,
    privileged/sandbox authorization contexts and full restoration ordering.

@@ -153,3 +153,9 @@ both image readers to both writers through the shared descriptor-style capture
 coordinator. Native fallback read errors stay visible, and all 16 source/target
 filesystem combinations reproduce the manually captured path. Live host providers
 and full restoration sequencing still gate release; this does not ready PR72.
+
+Independent image timestamp storage and acquisition now support all three OSes.
+Both image writers/readers retain separate birth/modification/change/access
+fields; snapshot rebuilding retains root and child times. See
+[image timestamps](appledouble-image-times.md). Live host timestamp acquisition
+and the ordered stat/flags/restoration stage remain outstanding.

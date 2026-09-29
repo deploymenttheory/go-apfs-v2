@@ -174,9 +174,9 @@ func runSnapshotCreate(cmd *cobra.Command, args []string) error {
 }
 
 // entryTreeFromVolume walks an APFS volume and builds an apfswrite.Entry tree
-// (files, directories, symlinks with their modes and modification times) that
+// (files, directories, symlinks with their modes and independent times) that
 // the writer can rebuild, along with an account of what the rebuild drops.
-// Only the root's children are used by the writer.
+// Root timestamps are captured separately; other root metadata remains synthetic.
 //
 // This is the volume-to-volume counterpart of the writers' EntryTreeFromDir,
 // and it loses the same things for the same reasons — plus the volume's own
@@ -188,7 +188,11 @@ func entryTreeFromVolume(vol *apfs.Volume, warn func(string, fidelity.Kind, stri
 		return nil, w.report, err
 	}
 	w.noteVolumeIdentity()
-	return &apfswrite.Entry{Children: children}, w.report, nil
+	times, err := vol.FileTimes(".")
+	if err != nil {
+		return nil, w.report, err
+	}
+	return &apfswrite.Entry{Children: children, Times: &times}, w.report, nil
 }
 
 type volumeWalker struct {
@@ -234,7 +238,11 @@ func (w *volumeWalker) readDir(dir string) ([]*apfswrite.Entry, error) {
 			return nil, fmt.Errorf("%s: %w", full, err)
 		}
 		mode := info.Mode()
-		e := &apfswrite.Entry{Name: name, Mode: mode, ModeExplicit: true, ModTime: info.ModTime()}
+		times, err := w.vol.FileTimes(full)
+		if err != nil {
+			return nil, err
+		}
+		e := &apfswrite.Entry{Name: name, Mode: mode, ModeExplicit: true, ModTime: info.ModTime(), Times: &times}
 		if inode, ok := info.Sys().(*apfs.Inode); ok {
 			e.UID, e.GID = inode.OwnerIdentifier, inode.GroupIdentifier
 			// A link count above one means the source had several names for

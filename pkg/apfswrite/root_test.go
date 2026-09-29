@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -17,6 +18,7 @@ import (
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/securitycopy"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfswrite"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
 )
 
 func TestRootMetadataImages(t *testing.T) {
@@ -252,5 +254,21 @@ func TestRootMetadataMultipleVolumes(t *testing.T) {
 		if e != nil || !reflect.DeepEqual(attrs, root.Xattrs) {
 			t.Fatalf("volume %d metadata crossed volumes: %v", i, e)
 		}
+	}
+}
+
+func TestRootMetadataInvalidTimes(t *testing.T) {
+	file, e := os.Create(filepath.Join(t.TempDir(), "invalid.img"))
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer file.Close()
+	root := &apfswrite.Entry{Times: &hostmeta.FileTimes{}}
+	if e = apfswrite.CreateContainer(file, 64<<20, &apfswrite.CreateOptions{Root: root}); !errors.Is(e, fs.ErrInvalid) {
+		t.Fatal(e)
+	}
+	info, e := file.Stat()
+	if e != nil || info.Size() != 0 {
+		t.Fatal("wrote before validation", e)
 	}
 }

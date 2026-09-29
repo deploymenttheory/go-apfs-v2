@@ -25,6 +25,8 @@ import (
 	"os"
 	"sort"
 	"time"
+
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
 )
 
 // Entry is one node of the directory tree to be written. A directory has
@@ -38,9 +40,13 @@ type Entry struct {
 	// Hard-link groups use the first entry's inode metadata.
 	ModeExplicit bool
 	ModTime      time.Time
-	UID, GID     uint32
-	Data         []byte   // file content, or symlink target bytes
-	Children     []*Entry // directory children (writer sorts them)
+	// Times overrides ModTime for all four inode times. Nil keeps legacy
+	// defaults; HFS stores whole seconds in its 1904–2040 range. Only Modify
+	// is clamped by ClampModTimes. Explicit out-of-range values fail.
+	Times    *hostmeta.FileTimes
+	UID, GID uint32
+	Data     []byte   // file content, or symlink target bytes
+	Children []*Entry // directory children (writer sorts them)
 
 	// Open supplies a regular file's content lazily. It is the alternative to
 	// Data for content too large to hold in memory; setting both is an error.
@@ -116,6 +122,7 @@ var DefaultTime = time.Date(2024, time.January, 1, 0, 0, 0, 0, time.UTC)
 
 // internal per-node bookkeeping built from the Entry tree.
 type fileNode struct {
+	times     [4]hfsTime
 	entry     *Entry
 	name      string
 	cnid      CatalogNodeID
@@ -222,6 +229,9 @@ func CreateImage(w io.WriterAt, sizeBytes int64, volumeName string, root *Entry,
 	// 1b. Turn groups of names sharing an inode into hard links, which adds
 	// the private directory and one indirect node per group.
 	b.buildHardLinks()
+	if err := b.prepareTimes(); err != nil {
+		return err
+	}
 
 	// 2. Determine node counts. Both are independent of the fork values the
 	// records will eventually carry -- only the record count and sizes matter,
@@ -696,7 +706,7 @@ func (b *builder) nodeTime(n *fileNode) hfsTime {
 // normalRecord builds the folder or file record keyed by (parent, name).
 func (b *builder) normalRecord(n *fileNode) btRecord {
 	key := encodeCatalogKey(n.parent, n.name)
-	ht := b.nodeTime(n)
+	ht := n.times
 	bsd := BSDInfo{
 		OwnerID:    n.entry.UID,
 		GroupID:    n.entry.GID,
@@ -719,10 +729,10 @@ func (b *builder) normalRecord(n *fileNode) btRecord {
 				Flags:            HFSHasFolderCountMask,
 				Valence:          uint32(len(n.children)),
 				FolderID:         n.cnid,
-				CreateDate:       ht,
-				ContentModDate:   ht,
-				AttributeModDate: ht,
-				AccessDate:       ht,
+				CreateDate:       ht[0],
+				ContentModDate:   ht[1],
+				AttributeModDate: ht[2],
+				AccessDate:       ht[3],
 				BSDInfo:          BSDInfo{FileMode: sIFDIR},
 				FolderCount:      subFolders,
 			}
@@ -741,10 +751,10 @@ func (b *builder) normalRecord(n *fileNode) btRecord {
 			Flags:            HFSHasFolderCountMask | attrFlag(n),
 			Valence:          uint32(len(n.children)),
 			FolderID:         n.cnid,
-			CreateDate:       ht,
-			ContentModDate:   ht,
-			AttributeModDate: ht,
-			AccessDate:       ht,
+			CreateDate:       ht[0],
+			ContentModDate:   ht[1],
+			AttributeModDate: ht[2],
+			AccessDate:       ht[3],
 			BSDInfo:          bsd,
 			FolderCount:      subFolders,
 		}
@@ -755,10 +765,10 @@ func (b *builder) normalRecord(n *fileNode) btRecord {
 		RecordType:       HFSPlusFileRecord,
 		Flags:            HFSThreadExistsMask | attrFlag(n),
 		FileID:           n.cnid,
-		CreateDate:       ht,
-		ContentModDate:   ht,
-		AttributeModDate: ht,
-		AccessDate:       ht,
+		CreateDate:       ht[0],
+		ContentModDate:   ht[1],
+		AttributeModDate: ht[2],
+		AccessDate:       ht[3],
 		BSDInfo:          bsd,
 		DataFork:         b.forkFor(n),
 		ResourceFork:     b.rsrcForkFor(n),

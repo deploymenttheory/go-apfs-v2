@@ -73,7 +73,10 @@ func (b volCtx) setTree(spec VolumeSpec) error {
 				continue
 			}
 
-			mtime := b.entryTime(e.ModTime)
+			times, err := b.inodeTimes(e)
+			if err != nil {
+				return 0, fmt.Errorf("apfswrite: %s: %w", e.Name, err)
+			}
 			xattrs, xattrFlags, bsdFlags, err := validateXattrs(e)
 			if err != nil {
 				return 0, err
@@ -87,7 +90,8 @@ func (b volCtx) setTree(spec VolumeSpec) error {
 				mode:       e.resolvedMode(),
 				uid:        e.UID,
 				gid:        e.GID,
-				mtime:      mtime,
+				times:      times,
+				timeSet:    true,
 				xattrs:     embedded,
 				xattrFlags: xattrFlags,
 				bsdFlags:   bsdFlags,
@@ -620,17 +624,14 @@ func (b *builder) inodeValue(e *builderEntry) []byte {
 			mode = sIFREG | 0o644
 		}
 	}
-	// Synthetic special inodes use the default. A prepared root carries an
-	// explicit time marker so Unix epoch zero is not mistaken for a default.
-	mtime := e.mtime
-	if mtime == 0 && !e.timeSet {
-		mtime = b.timestamp
+	// Synthetic inodes use the default; prepared entries retain epoch zero.
+	times := e.times
+	if !e.timeSet {
+		times = [4]uint64{b.timestamp, b.timestamp, b.timestamp, b.timestamp}
 	}
-
-	binary.LittleEndian.PutUint64(val[16:], mtime) // create_time
-	binary.LittleEndian.PutUint64(val[24:], mtime) // mod_time
-	binary.LittleEndian.PutUint64(val[32:], mtime) // change_time
-	binary.LittleEndian.PutUint64(val[40:], mtime) // access_time
+	for i, value := range times {
+		binary.LittleEndian.PutUint64(val[16+i*8:], value)
+	}
 
 	binary.LittleEndian.PutUint64(val[48:], e.internalFlags()) // internal_flags
 

@@ -51,6 +51,7 @@ func Profiles() []Profile {
 }
 
 type Case struct {
+	Times               *[4]int64 `json:",omitempty"`
 	Name, Profile, Kind string
 	UID, GID            uint32
 	Mode                uint16
@@ -125,7 +126,7 @@ func Tree(uid, gid uint32) (*apfswrite.Entry, []Case) {
 	return root, cases
 }
 func HFSTree(s *apfswrite.Entry) *hfsplus.Entry {
-	d := &hfsplus.Entry{Name: s.Name, Mode: s.Mode, ModeExplicit: s.ModeExplicit, ModTime: s.ModTime, UID: s.UID, GID: s.GID, Data: s.Data, LinkGroup: s.LinkGroup, Xattrs: s.Xattrs}
+	d := &hfsplus.Entry{Name: s.Name, Mode: s.Mode, ModeExplicit: s.ModeExplicit, ModTime: s.ModTime, Times: s.Times, UID: s.UID, GID: s.GID, Data: s.Data, LinkGroup: s.LinkGroup, Xattrs: s.Xattrs}
 	if s.Mode == 0 && len(s.Children) > 0 {
 		d.Mode = os.ModeDir
 	}
@@ -136,6 +137,7 @@ func HFSTree(s *apfswrite.Entry) *hfsplus.Entry {
 }
 
 type Volume interface {
+	FileTimes(string) (hostmeta.FileTimes, error)
 	fs.FS
 	Security(string) (hostmeta.ImageSecurity, error)
 	Xattrs(string) (map[string][]byte, error)
