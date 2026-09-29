@@ -41,3 +41,12 @@ different checksum span than the writer sealed.
 
 Created containers are checked three ways: by our own reader in
 `pkg/apfs`, Apple's `fsck_apfs` and `hdiutil` (macOS), and `apfsck` (Linux).
+
+## Volume-root metadata
+
+`CreateOptions.Root` and `VolumeSpec.Root` retain root ownership, mode, time and
+extended attributes, including ACLs and streamed values, even with no children.
+The root name, payload and link group are ignored; explicit non-directory types
+fail. Zero mode defaults to directory 0755; explicit `os.ModeDir` permits 0000.
+See [root metadata and native qualification](../../docs/appledouble-root-metadata.md)
+for defaults, native attribute visibility and compatibility details.

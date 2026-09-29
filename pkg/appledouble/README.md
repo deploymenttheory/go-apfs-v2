@@ -152,6 +152,9 @@ of this roadmap delivered. These phases are not estimates of remaining PR count.
    including [optional properties and removal](../../docs/appledouble-acl-chmod-properties.md),
    plus [ordinary security execution and fallbacks](../../docs/appledouble-security-copy.md)
    and [APFS/HFS+ image source capture](../../docs/appledouble-image-security.md).
+   [APFS root metadata writing](../../docs/appledouble-root-metadata.md) retains
+   supplied ownership, permissions, timestamps and security/attribute storage,
+   including root-only volumes and snapshots.
    Native extended chmod comparisons resolve the measured attribute/copyfile
    refusal and empty-ACL flag differences for the qualified owner-operated cases.
    **Remaining:** production write adapters, live host source acquisition,

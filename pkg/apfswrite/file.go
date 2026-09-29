@@ -27,7 +27,7 @@ func (b volCtx) setTree(spec VolumeSpec) error {
 	for _, f := range spec.RootFiles {
 		topLevel = append(topLevel, &Entry{Name: f.Name, Data: f.Data})
 	}
-	if len(topLevel) == 0 {
+	if len(topLevel) == 0 && spec.Root == nil {
 		return nil // empty volume
 	}
 
@@ -100,30 +100,7 @@ func (b volCtx) setTree(spec VolumeSpec) error {
 				be.siblings = append(be.siblings, siblingName{parent: parent, name: e.Name})
 			}
 
-			// Each streamed attribute owns an object of its own: a data stream
-			// with its own oid, extent and refcount, referenced by the
-			// attribute record. It carries no inode and no directory entry —
-			// it is not a file, only somewhere for the bytes to live.
-			for _, name := range sortedNames(streamed) {
-				value := streamed[name]
-				stream := &builderEntry{
-					name:        e.Name + ":" + name,
-					oid:         nextOID,
-					data:        value,
-					hasStream:   true,
-					blocks:      divRoundUp(uint64(len(value)), uint64(b.blocksize)),
-					allocedSize: 0,
-				}
-				stream.allocedSize = stream.blocks * uint64(b.blocksize)
-				nextOID++
-
-				if be.streamedXattrs == nil {
-					be.streamedXattrs = map[string]*builderEntry{}
-				}
-				be.streamedXattrs[name] = stream
-				b.streamFiles = append(b.streamFiles, stream)
-				b.xattrStreams = append(b.xattrStreams, stream)
-			}
+			nextOID = b.addXattrStreams(be, streamed, nextOID)
 
 			switch {
 			case e.isSymlinkEntry():
@@ -159,6 +136,11 @@ func (b volCtx) setTree(spec VolumeSpec) error {
 	}
 
 	if _, err := walk(rootDirInoNum, topLevel); err != nil {
+		return err
+	}
+
+	var err error
+	if nextOID, err = b.setRoot(spec.Root, nextOID); err != nil {
 		return err
 	}
 
@@ -303,9 +285,8 @@ func sortedNames[V any](m map[string]V) []string {
 // returns the inode flags their presence requires: the internal_flags several
 // attributes must agree with, and the bsd_flags a compressed file needs.
 //
-// A value too large to embed is refused rather than truncated: this writer does
-// not yet store an attribute in a data stream of its own, and silently dropping
-// content is exactly the failure this project has been removing.
+// Values too large to embed are split into separately allocated streams after
+// validation, using the same rules for the root and ordinary entries.
 func validateXattrs(e *Entry) (map[string][]byte, uint64, uint32, error) {
 	// An inode with no resource fork must say so. The flag is not optional:
 	// a checker treats its absence as a claim that a fork exists.
@@ -455,11 +436,13 @@ func (b volCtx) buildFSTreeRecords() []fsTreeRecord {
 	// Special directory dentries live under the virtual root parent (id 1).
 	recs = append(recs, b.dentryRecord(rootDirParent, "root", rootDirInoNum, dtDir, 0))
 	recs = append(recs, b.dentryRecord(rootDirParent, "private-dir", privDirInoNum, dtDir, 0))
-	// Root inode (id 2): nchildren = number of top-level entries.
-	recs = append(recs, b.inodeRecord(&builderEntry{
-		name: "root", isDir: true, oid: rootDirInoNum, parent: rootDirParent,
-		nchildren: b.rootChildCount(),
-	}))
+	root := b.root
+	if root == nil {
+		root = &builderEntry{name: "root", isDir: true, oid: rootDirInoNum, parent: rootDirParent}
+	}
+	root.nchildren = b.rootChildCount()
+	recs = append(recs, b.inodeRecord(root))
+	recs = append(recs, b.attributeRecords(root)...)
 	// Private-dir inode (id 3).
 	recs = append(recs, b.inodeRecord(&builderEntry{
 		name: "private-dir", isDir: true, oid: privDirInoNum, parent: rootDirParent,
@@ -490,18 +473,7 @@ func (b volCtx) buildFSTreeRecords() []fsTreeRecord {
 			// The symlink target lives in a com.apple.fs.symlink xattr record.
 			recs = append(recs, b.symlinkXattrRecord(e))
 		}
-		recs = append(recs, b.userXattrRecords(e)...)
-		for _, name := range sortedNames(e.streamedXattrs) {
-			stream := e.streamedXattrs[name]
-			recs = append(recs, b.streamedXattrRecord(e.oid, name, stream))
-			// No DSTREAM_ID record here, unlike a file's data stream. That
-			// record carries a reference count, and an attribute's stream
-			// cannot be cloned, so it has exactly one reference and no count
-			// to keep. apfsck reports one as "xattrs can't be cloned".
-			if stream.blocks > 0 {
-				recs = append(recs, b.fileExtentRecord(stream))
-			}
-		}
+		recs = append(recs, b.attributeRecords(e)...)
 		if e.hasStream {
 			recs = append(recs, b.dstreamIDRecord(e))
 			// A 0-byte file has a data stream but no physical extent, so no
@@ -648,10 +620,10 @@ func (b *builder) inodeValue(e *builderEntry) []byte {
 			mode = sIFREG | 0o644
 		}
 	}
-	// The synthetic root and private-dir inodes are built inline and never go
-	// through setTree, so they carry no time of their own.
+	// Synthetic special inodes use the default. A prepared root carries an
+	// explicit time marker so Unix epoch zero is not mistaken for a default.
 	mtime := e.mtime
-	if mtime == 0 {
+	if mtime == 0 && !e.timeSet {
 		mtime = b.timestamp
 	}
 

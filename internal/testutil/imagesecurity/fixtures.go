@@ -57,6 +57,7 @@ type Case struct {
 	Disposition         hostmeta.SecurityRecordDisposition
 }
 type Observation struct {
+	Times                                      [4]int64
 	Code, Errno, ReferenceCode, ReferenceErrno int
 	Properties, ReferenceProperties            securitycopy.Properties
 	UID, GID, Mode, Flags                      uint32
@@ -69,11 +70,18 @@ type NativeCase struct {
 	Native     Observation
 }
 type Fixture struct {
+	NativeXattrs                                                                                    map[string]map[string]XattrObservation `json:",omitempty"`
 	HFSSources                                                                                      map[string]string
 	Revision, Host, HelperSHA256, ParentSHA256, CopyfileSHA256, ChmodSHA256, StatxSHA256, XNUSHA256 string
 	ActorUID, ActorGID                                                                              uint32
 	Cases                                                                                           []NativeCase
 	Images                                                                                          map[string]string
+}
+
+type XattrObservation struct {
+	Length int
+	Errno  int
+	Value  *string
 }
 
 func Tree(uid, gid uint32) (*apfswrite.Entry, []Case) {
