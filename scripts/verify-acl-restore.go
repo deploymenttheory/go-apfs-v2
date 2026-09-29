@@ -1,0 +1,115 @@
+//go:build ignore
+
+// Verify portable ACL restoration separately from unrelated host-specific code.
+package main
+
+import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"io"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+	"strconv"
+	"strings"
+)
+
+func main() {
+	if e := verify(); e != nil {
+		fmt.Fprintln(os.Stderr, e)
+		os.Exit(1)
+	}
+}
+func verify() error {
+	const dir = "artifacts/acl-restore"
+	if e := os.MkdirAll(dir, 0755); e != nil {
+		return e
+	}
+	log, e := os.Create(filepath.Join(dir, "tests.jsonl"))
+	if e != nil {
+		return e
+	}
+	defer log.Close()
+	var transcript bytes.Buffer
+	profile := filepath.Join(dir, "coverage.out")
+	cmd := exec.Command("go", "test", "-count=1", "-json", "-run", "^(Test.*RestoreACL|FuzzRestoreACL)", "-covermode=atomic", "-coverprofile="+profile, "./pkg/hostmeta")
+	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
+	cmd.Stdout = io.MultiWriter(os.Stdout, log, &transcript)
+	cmd.Stderr = io.MultiWriter(os.Stderr, log)
+	if e := cmd.Run(); e != nil {
+		return e
+	}
+	passed := 0
+	for _, line := range bytes.Split(transcript.Bytes(), []byte{'\n'}) {
+		if len(line) == 0 {
+			continue
+		}
+		var event struct{ Action, Test string }
+		if e := json.Unmarshal(line, &event); e != nil {
+			return e
+		}
+		if event.Action == "skip" {
+			return fmt.Errorf("ACL restoration test skipped: %s", event.Test)
+		}
+		if event.Action == "pass" && event.Test != "" {
+			passed++
+		}
+	}
+	b, e := os.ReadFile(profile)
+	if e != nil {
+		return e
+	}
+	covered, total := 0, 0
+	for _, line := range strings.Split(string(b), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) != 3 {
+			continue
+		}
+		if !strings.HasPrefix(fields[0], "github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta/acl_restore.go:") {
+			continue
+		}
+		n, e := strconv.Atoi(fields[1])
+		if e != nil {
+			return e
+		}
+		hits, e := strconv.Atoi(fields[2])
+		if e != nil {
+			return e
+		}
+		total += n
+		if hits > 0 {
+			covered += n
+		}
+	}
+	if total == 0 || covered*100 <= total*95 {
+		return fmt.Errorf("ACL restoration coverage must exceed 95%%: %d/%d", covered, total)
+	}
+	files := []string{"go.mod", "go.sum", "pkg/hostmeta/acl_restore.go", "pkg/hostmeta/acl_restore_test.go", "pkg/hostmeta/acl_restore_native_test.go", "pkg/appledouble/acl.go", "pkg/appledouble/acl_external.go", "pkg/appledouble/acl_update.go", "pkg/appledouble/filesec.go", "testdata/appledouble/native/acl-restore.c", "testdata/appledouble/native/filesec.c", "testdata/appledouble/native/acl-restore.json.gz", "scripts/verify-acl-restore.go", "scripts/verify-appledouble-filesec.go"}
+	hashes := map[string]string{}
+	for _, path := range files {
+		b, e := os.ReadFile(path)
+		if e != nil {
+			return e
+		}
+		h := sha256.Sum256(b)
+		hashes[path] = hex.EncodeToString(h[:])
+	}
+	revision, e := exec.Command("git", "rev-parse", "HEAD").Output()
+	if e != nil {
+		return e
+	}
+	report := map[string]any{"coverage_file": "pkg/hostmeta/acl_restore.go", "covered": covered, "statements": total, "passed_tests": passed, "source_sha256": hashes, "revision": strings.TrimSpace(string(revision)), "goos": runtime.GOOS, "goarch": runtime.GOARCH, "go": runtime.Version()}
+	b, e = json.MarshalIndent(report, "", "  ")
+	if e != nil {
+		return e
+	}
+	if e = os.WriteFile(filepath.Join(dir, "coverage.json"), append(b, '\n'), 0600); e != nil {
+		return e
+	}
+	fmt.Printf("ACL restoration: %d/%d covered statements; %d passing test records on %s/%s\n", covered, total, passed, runtime.GOOS, runtime.GOARCH)
+	return nil
+}

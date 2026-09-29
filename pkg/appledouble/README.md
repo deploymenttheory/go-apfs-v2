@@ -128,10 +128,12 @@ filesystem transport:
    decisions, qualified creation inheritance and captured identity replay with
    source acquisition adapters and actual filesystem writes. Ownership-preserving
    security requests and owner-operated restrictive-flag failures have native
-   comparisons; non-owner authorization, retry contexts and full restoration
+   comparisons; non-owner authorization and full restoration
    ordering still need qualification. Creation
    inheritance and replacement over inherited ACLs have native comparisons;
-   shared filesystem execution remains outstanding.
+   `hostmeta.RestoreACL` now supplies the [portable write/retry protocol](../../docs/appledouble-acl-restoration.md),
+   with real APFS/FAT comparisons. Shared native/carrier adapters and full
+   lifecycle integration remain outstanding.
 2. **Complete quarantine context and transport qualification.** Extend the
    [controlled runtime evidence](../../docs/appledouble-quarantine-runtime.md) and
    application planner to unresolved process contexts (including absence on macOS

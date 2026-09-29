@@ -71,8 +71,9 @@ approve the fixture or report a qualified run.
 This codec prepares records; it neither grants permission nor applies filesystem
 metadata. Shared transport still needs source acquisition, ordered restoration,
 actual write-error propagation, and metadata carriers where native storage cannot
-represent a value. Non-owner authorization and the source's ENOTSUP retry path
-are not qualified by the owner-operated APFS matrix. Nonzero ownership UUIDs are
+represent a value. The [shared restoration executor](appledouble-acl-restoration.md) qualifies the
+source-cache reset and bounded ENOTSUP retry with a real FAT volume. Non-owner
+authorization remains outside the owner-operated matrices. Nonzero ownership UUIDs are
 qualified as bytes, not as live ownership reassignment. Full copyfile lifecycle
 ordering and APFS/HFS+ extraction/repacking remain separate acceptance work.
 

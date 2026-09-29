@@ -24,8 +24,11 @@ inheritance and replacement over inherited destinations are qualified through
 queries can be [captured and replayed](appledouble-acl-identities.md) portably;
 live acquisition adapters remain transport work. [Full security records and
 owner-preserving replacement requests](appledouble-filesec.md) have native byte
-conversion and restrictive-flag application comparisons. Non-owner authorization,
-retry contexts and full ACL restoration ordering remain unqualified. ACL application,
+conversion and restrictive-flag application comparisons. The shared
+[ACL restoration protocol](appledouble-acl-restoration.md) now propagates write
+errors and qualifies source-cache reset/retry against real APFS and FAT outcomes.
+Non-owner authorization, production native/carrier adapters and full restoration
+ordering remain outstanding. ACL application integration,
 remaining [quarantine application contexts](appledouble-quarantine-application.md),
 size policy and shared transport remain
 outstanding, in that order. The allocation guard's stricter alias policy is
