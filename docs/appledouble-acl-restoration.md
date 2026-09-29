@@ -104,7 +104,9 @@ boundary remains to be implemented.
 
 This implements the deferred ACL write protocol, not the entire copyfile
 lifecycle. Shared native/carrier adapters, live source identity acquisition,
-non-owner authorization contexts and full restoration ordering remain. Quarantine
+privileged/sandbox authorization contexts and full restoration ordering remain.
+[Controlled owner/non-owner cases](appledouble-acl-nonowner.md) now qualify
+ordinary-user grants and denials on SDK-written APFS/HFSX images. Quarantine
 integration, size/allocation policy and APFS/HFS+ extraction/repacking must also
 pass the [migration gates](appledouble-migration.md) before release, package PR
 #72 readiness or resumed codesign implementation.

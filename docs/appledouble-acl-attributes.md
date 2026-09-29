@@ -117,8 +117,11 @@ correct native operation, resolves the measured owner-operated APFS differences.
 A production native backend must still integrate that call path, use supported
 system-call wrappers, and preserve held object identity. Foreign-host carriers must retain the same metadata without
 pretending Linux or Windows permissions implement Darwin authorization. Live
-identity acquisition, non-owner contexts and full metadata ordering still need
+identity acquisition, privileged/sandbox contexts and full metadata ordering still need
 qualification. Quarantine, size/allocation policy, shared carriers and APFS/HFS+
 roundtrip gates remain in the [migration plan](appledouble-migration.md).
 Package PR #72 stays draft and codesign remains paused until those gates and the
 qualified APFS release are complete.
+
+[Controlled owner/non-owner tests](appledouble-acl-nonowner.md) qualify ordinary-user
+APFS/HFSX authorization through the matching extended chmod operation.

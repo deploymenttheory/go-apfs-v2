@@ -32,7 +32,9 @@ ownership, but native attribute/copyfile differences in empty ACL flags and
 restrictive-flag errors rule out substituting attribute writes.
 [Extended chmod requests](appledouble-acl-chmod.md) qualify the matching native
 operation for those measured cases; the production call boundary remains open.
-Non-owner authorization, production native/carrier adapters and full restoration
+[Controlled owner/non-owner image tests](appledouble-acl-nonowner.md) qualify
+ordinary-user APFS/HFSX authorization and fix missing HFS security catalog flags.
+Privileged/sandbox contexts, production native/carrier adapters and full restoration
 ordering remain outstanding. ACL application integration,
 remaining [quarantine application contexts](appledouble-quarantine-application.md),
 size policy and shared transport remain

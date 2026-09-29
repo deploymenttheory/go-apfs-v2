@@ -100,9 +100,10 @@ claim whole-hostmeta coverage or native Darwin syscalls on Windows/Linux.
 
 The request-level compatibility gap is resolved for the qualified owner-operated
 APFS cases. A production adapter still needs a supported pure-Go libSystem call
-boundary, stable destination capture and real error propagation. Non-owner
-contexts, live source identity acquisition and full restoration ordering remain
-unqualified. Shared carriers must preserve foreign metadata on every supported
+boundary, stable destination capture and real error propagation.
+[Controlled owner/non-owner contexts](appledouble-acl-nonowner.md) are qualified
+on SDK-written APFS/HFSX images. Privileged/sandbox contexts, live source identity
+acquisition and full restoration ordering remain unqualified. Shared carriers must preserve foreign metadata on every supported
 OS. Quarantine, large-value/allocation behavior and APFS/HFS+ roundtrip gates
 also remain; see the [roadmap](../pkg/appledouble/README.md#roadmap).
 
