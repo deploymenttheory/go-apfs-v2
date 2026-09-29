@@ -36,7 +36,7 @@ func verify() error {
 	defer log.Close()
 	var transcript bytes.Buffer
 	profile := filepath.Join(dir, "coverage.out")
-	cmd := exec.Command("go", "test", "-count=1", "-json", "-run", "^(Test.*RestoreACL|FuzzRestoreACL)", "-covermode=atomic", "-coverprofile="+profile, "./pkg/hostmeta")
+	cmd := exec.Command("go", "test", "-count=1", "-json", "-run", "^(Test.*RestoreACL|Test.*ACLAttributes|FuzzRestoreACL|FuzzACLAttributes)", "-covermode=atomic", "-coverprofile="+profile, "./pkg/hostmeta")
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 	cmd.Stdout = io.MultiWriter(os.Stdout, log, &transcript)
 	cmd.Stderr = io.MultiWriter(os.Stderr, log)
@@ -64,12 +64,15 @@ func verify() error {
 		return e
 	}
 	covered, total := 0, 0
+	coverageFiles := map[string][2]int{"pkg/hostmeta/acl_restore.go": {}, "pkg/hostmeta/acl_attributes.go": {}}
 	for _, line := range strings.Split(string(b), "\n") {
 		fields := strings.Fields(line)
 		if len(fields) != 3 {
 			continue
 		}
-		if !strings.HasPrefix(fields[0], "github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta/acl_restore.go:") {
+		file := strings.TrimPrefix(strings.SplitN(fields[0], ":", 2)[0], "github.com/deploymenttheory/go-apfs-v2/")
+		counts, tracked := coverageFiles[file]
+		if !tracked {
 			continue
 		}
 		n, e := strconv.Atoi(fields[1])
@@ -81,14 +84,22 @@ func verify() error {
 			return e
 		}
 		total += n
+		counts[1] += n
 		if hits > 0 {
 			covered += n
+			counts[0] += n
+		}
+		coverageFiles[file] = counts
+	}
+	for file, counts := range coverageFiles {
+		if counts[1] == 0 || counts[0]*100 <= counts[1]*95 {
+			return fmt.Errorf("%s coverage must exceed 95%%: %d/%d", file, counts[0], counts[1])
 		}
 	}
 	if total == 0 || covered*100 <= total*95 {
 		return fmt.Errorf("ACL restoration coverage must exceed 95%%: %d/%d", covered, total)
 	}
-	files := []string{"go.mod", "go.sum", "pkg/hostmeta/acl_restore.go", "pkg/hostmeta/acl_restore_test.go", "pkg/hostmeta/acl_restore_native_test.go", "pkg/appledouble/acl.go", "pkg/appledouble/acl_external.go", "pkg/appledouble/acl_update.go", "pkg/appledouble/filesec.go", "testdata/appledouble/native/acl-restore.c", "testdata/appledouble/native/filesec.c", "testdata/appledouble/native/acl-restore.json.gz", "scripts/verify-acl-restore.go", "scripts/verify-appledouble-filesec.go"}
+	files := []string{"pkg/hostmeta/acl_attributes.go", "pkg/hostmeta/acl_attributes_test.go", "testdata/appledouble/native/acl-attributes.c", "testdata/appledouble/native/acl-attributes.json.gz", "go.mod", "go.sum", "pkg/hostmeta/acl_restore.go", "pkg/hostmeta/acl_restore_test.go", "pkg/hostmeta/acl_restore_native_test.go", "pkg/appledouble/acl.go", "pkg/appledouble/acl_external.go", "pkg/appledouble/acl_update.go", "pkg/appledouble/filesec.go", "testdata/appledouble/native/acl-restore.c", "testdata/appledouble/native/filesec.c", "testdata/appledouble/native/acl-restore.json.gz", "scripts/verify-acl-restore.go", "scripts/verify-appledouble-filesec.go"}
 	hashes := map[string]string{}
 	for _, path := range files {
 		b, e := os.ReadFile(path)
@@ -102,7 +113,7 @@ func verify() error {
 	if e != nil {
 		return e
 	}
-	report := map[string]any{"coverage_file": "pkg/hostmeta/acl_restore.go", "covered": covered, "statements": total, "passed_tests": passed, "source_sha256": hashes, "revision": strings.TrimSpace(string(revision)), "goos": runtime.GOOS, "goarch": runtime.GOARCH, "go": runtime.Version()}
+	report := map[string]any{"coverage_files": coverageFiles, "covered": covered, "statements": total, "passed_tests": passed, "source_sha256": hashes, "revision": strings.TrimSpace(string(revision)), "goos": runtime.GOOS, "goarch": runtime.GOARCH, "go": runtime.Version()}
 	b, e = json.MarshalIndent(report, "", "  ")
 	if e != nil {
 		return e

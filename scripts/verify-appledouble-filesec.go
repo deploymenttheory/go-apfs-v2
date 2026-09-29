@@ -51,6 +51,7 @@ type application struct {
 	Native      result
 }
 type fixture struct {
+	Attributes                                              *attributeFixture
 	Restoration                                             *restorationFixture
 	HelperSHA256, CopyfileSHA256, XNUSHA256, Host, Revision string
 	Conversions                                             []conversion
@@ -208,6 +209,8 @@ func main() {
 	}
 	f.Restoration = &restorationFixture{Revision: f.Revision, Host: f.Host, HelperSHA256: sum(read("testdata/appledouble/native/acl-restore.c")), ParentHelperSHA256: f.HelperSHA256, CopyfileSHA256: f.CopyfileSHA256, XNUSHA256: f.XNUSHA256}
 	verifyRestoration(root, f.Restoration, *capture)
+	f.Attributes = &attributeFixture{Revision: f.Revision, Host: f.Host, HelperSHA256: sum(read("testdata/appledouble/native/acl-attributes.c")), ParentHelperSHA256: f.HelperSHA256}
+	verifyAttributes(root, f.Attributes, *capture)
 	b, e := json.MarshalIndent(f, "", "  ")
 	must(e)
 	write(filepath.Join(root, "observed.json"), b)
@@ -574,4 +577,273 @@ func restoreRun(helper, dir, destination, input string, tc restorationCase, kind
 		panic("restoration error lost native cause")
 	}
 	return before.Before, observed, result
+}
+
+type attributeConversion struct {
+	Name                     string
+	Input, Response, Request []byte
+	Expected                 metadata
+}
+type attributeApplication struct {
+	Reference                        result
+	ReferenceAfterResponse           []byte
+	Name, Kind                       string
+	Initial                          int
+	Mode, Flags                      uint32
+	Text                             []byte
+	Before                           metadata
+	Response, Request, AfterResponse []byte
+	Native                           result
+}
+type attributeFixture struct {
+	Revision, Host, HelperSHA256, ParentHelperSHA256, SourceSHA256 string
+	Conversions                                                    []attributeConversion
+	Applications                                                   []attributeApplication
+}
+
+func verifyAttributes(root string, f *attributeFixture, capture bool) {
+	const helperSource = "testdata/appledouble/native/acl-attributes.c"
+	f.SourceSHA256 = "3fcbca58e2d63963115ecd4aa1e27c3d1f7dc21f124897c8bdfdf9916b503c06"
+	source := download("https://raw.githubusercontent.com/apple-oss-distributions/xnu/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/bsd/vfs/vfs_attrlist.c", f.SourceSHA256, filepath.Join(root, "vfs_attrlist.c"))
+	header := bytes.Clone(source[:bytes.Index(source, []byte("#include"))])
+	for _, part := range [][2]string{{"struct _attrlist_buf {", "\n#define _ATTRLIST_BUF_INIT"}, {"static void\nattrlist_pack_fixed(", "\n/*\n * Attempt to pack one"}, {"static void\nattrlist_pack_variable2(", "\n/*\n * Packing a single"}, {"static void\nattrlist_pack_variable(", "\n/*\n * Attempt to pack a string"}} {
+		header = append(header, extract(source, part[0], part[1])...)
+	}
+	write(filepath.Join(root, "acl-attributes-source.h"), header)
+	helper := filepath.Join(root, "acl-attributes")
+	run("xcrun", "clang", "-Wall", "-Wextra", "-Werror", "-I", root, helperSource, "-o", helper)
+	for _, arch := range []string{"arm64", "x86_64"} {
+		ast := run("xcrun", "clang", "-arch", arch, "-I", root, "-fsyntax-only", "-Xclang", "-ast-dump=json", helperSource)
+		commands[len(commands)-1].Output = fmt.Sprintf("AST retained: %d bytes", len(ast))
+		write(filepath.Join(root, "acl-attributes-"+arch+".ast.json"), ast)
+	}
+	for pattern := 0; pattern < 3; pattern++ {
+		for _, count := range []int{-2, -1, 0, 1, 2, 127, 128} {
+			for _, flags := range []uint32{0, 1, 0x20000, 0xffffffff} {
+				name := fmt.Sprintf("attributes-pack-%d-%d-%08x", pattern, count, flags)
+				dir := filepath.Join(root, name)
+				must(os.MkdirAll(dir, 0700))
+				sec := &appledouble.FileSecurity{}
+				if pattern != 0 {
+					for i := range sec.OwnerUUID {
+						sec.OwnerUUID[i] = byte(pattern*17 + i)
+						sec.GroupUUID[i] = byte(255 - i - pattern)
+					}
+				}
+				if count < 0 {
+					sec.NoACLFlags = [4]byte{byte(flags), byte(flags >> 8), byte(flags >> 16), byte(flags >> 24)}
+				} else {
+					sec.ACL = &appledouble.ACL{Flags: flags}
+					for i := 0; i < count; i++ {
+						sec.ACL.Entries = append(sec.ACL.Entries, appledouble.ACLEntry{Principal: [16]byte{byte(i), byte(i + 1)}, Flags: uint32(i%4+1) | 0x80000000, Rights: 0xff000001 | uint32(i<<1)})
+					}
+				}
+				input, e := sec.MarshalDarwinBinary()
+				must(e)
+				in, get, set := filepath.Join(dir, "input.bin"), filepath.Join(dir, "get.bin"), filepath.Join(dir, "set.bin")
+				write(in, input)
+				ids := [][3]uint32{{0, 0, 0}, {501, 20, 0106755}, {0xffffffff, 0xfffffffe, 0xffffffff}}
+				values := ids[pattern]
+				absent := "0"
+				if count == -2 {
+					absent = "1"
+				}
+				out := run(helper, "pack", in, get, set, fmt.Sprint(values[0]), fmt.Sprint(values[1]), fmt.Sprint(values[2]), absent)
+				var expected metadata
+				must(json.Unmarshal(out, &expected))
+				tc := attributeConversion{Name: name, Input: input, Response: read(get), Request: read(set), Expected: expected}
+				m, e := hostmeta.ParseDarwinACLAttributes(tc.Response)
+				must(e)
+				verifyAttributeMetadata(m, expected)
+				encoded, e := m.MarshalDarwinACLAttributes()
+				must(e)
+				if !bytes.Equal(encoded, tc.Request) {
+					panic("native attribute packing differs: " + name)
+				}
+				f.Conversions = append(f.Conversions, tc)
+			}
+		}
+	}
+	texts := [][]byte{nil, []byte("invalid ACL"), []byte("!#acl 1\n"), []byte("!#acl 1\nuser:21234567-89AB-CDEF-0123-456789ABCDEF:::allow:read,write\n")}
+	for _, kind := range []string{"file", "directory"} {
+		for _, initial := range []int{-1, 0, 1, 128} {
+			for _, mode := range []uint32{0, 06755} {
+				for _, flags := range []uint32{0, 2, 4} {
+					for i, text := range texts {
+						tc := attributeApplication{Name: fmt.Sprintf("attributes-%s-%d-%04o-%d-%d", kind, initial, mode, flags, i), Kind: kind, Initial: initial, Mode: mode, Flags: flags, Text: text}
+						dir, e := os.MkdirTemp(root, tc.Name+"-")
+						must(e)
+						input := filepath.Join(dir, "acl.txt")
+						write(input, text)
+						before, nativeResponse, native, nativeAfter, _ := attributeRun(helper, dir, input, tc, "native")
+						referenceBefore, referenceResponse, reference, referenceAfter, _ := attributeRun(helper, dir, input, tc, "reference")
+						if referenceBefore != before || !bytes.Equal(referenceResponse, nativeResponse) || !reference.IdentityUnchanged {
+							panic("reference setup differs")
+						}
+						tc.Reference = reference
+						tc.ReferenceAfterResponse = referenceAfter
+						if reference.Code != 0 && (reference.After != before || !bytes.Equal(referenceResponse, referenceAfter)) {
+							panic("failed reference write changed metadata")
+						}
+						goBefore, goResponse, goNative, goAfter, request := attributeRun(helper, dir, input, tc, "go")
+						if before != goBefore || native != goNative || !bytes.Equal(nativeResponse, goResponse) || !bytes.Equal(nativeAfter, goAfter) || !native.IdentityUnchanged {
+							panic("native attribute write differs: " + tc.Name)
+						}
+						if before.Mode&07777 != mode || before.Flags != flags {
+							panic("attribute setup differs: " + tc.Name)
+						}
+						after := native.After
+						if before.UID != after.UID || before.GID != after.GID || before.Mode != after.Mode || before.Flags != after.Flags {
+							panic("attribute write lost metadata: " + tc.Name)
+						}
+						if native.Code != 0 && (after != before || !bytes.Equal(nativeResponse, nativeAfter)) {
+							panic("failed attribute write changed metadata")
+						}
+						tc.Before = before
+						tc.Response = goResponse
+						tc.Request = request
+						tc.Native = native
+						tc.AfterResponse = goAfter
+						f.Applications = append(f.Applications, tc)
+					}
+				}
+			}
+		}
+	}
+	b, e := json.MarshalIndent(f, "", "  ")
+	must(e)
+	write(filepath.Join(root, "observed-attributes.json"), b)
+	if capture {
+		fmt.Printf("Captured %d attribute conversions and %d actual write pairs; fixture NOT approved\n", len(f.Conversions), len(f.Applications))
+		return
+	}
+	z, e := gzip.NewReader(bytes.NewReader(read("testdata/appledouble/native/acl-attributes.json.gz")))
+	must(e)
+	var archived attributeFixture
+	must(json.NewDecoder(z).Decode(&archived))
+	must(z.Close())
+	if archived.HelperSHA256 != f.HelperSHA256 || archived.ParentHelperSHA256 != f.ParentHelperSHA256 || archived.SourceSHA256 != f.SourceSHA256 || !reflect.DeepEqual(archived.Conversions, f.Conversions) || len(archived.Applications) != len(f.Applications) {
+		panic("attribute fixture provenance/conversions differ")
+	}
+	for i, a := range archived.Applications {
+		b := f.Applications[i]
+		// Numeric account IDs belong to the observation host. All three attribute
+		// frames must agree after only those two fields are adjusted.
+		a.Before.UID = b.Before.UID
+		a.Before.GID = b.Before.GID
+		a.Native.After.UID = b.Native.After.UID
+		a.Native.After.GID = b.Native.After.GID
+		a.Reference.After.UID = b.Reference.After.UID
+		a.Reference.After.GID = b.Reference.After.GID
+		for _, pair := range [][2][]byte{{a.Response, b.Response}, {a.AfterResponse, b.AfterResponse}, {a.ReferenceAfterResponse, b.ReferenceAfterResponse}} {
+			if len(pair[0]) < 12 || len(pair[1]) < 12 {
+				panic("short captured frame")
+			}
+			copy(pair[0][4:12], pair[1][4:12])
+		}
+		if len(a.Request) != 0 {
+			if len(b.Request) < 8 {
+				panic("short write request")
+			}
+			copy(a.Request[:8], b.Request[:8])
+		}
+		if !reflect.DeepEqual(a, b) {
+			panic("attribute observations differ: " + b.Name)
+		}
+	}
+	fmt.Printf("Qualified %d attribute conversions and %d native write pairs\n", len(f.Conversions), len(f.Applications))
+}
+func verifyAttributeMetadata(m hostmeta.ACLMetadata, want metadata) {
+	// fgetattrlist may return a present empty ACL where fstatx_np reports NOACL.
+	// fstatx_np also hides no_inherit on an empty ACL. This comparison only
+	// checks the common view; raw attribute frames (including flags) are compared
+	// separately and retained. The two responses are not losslessly equivalent.
+	expectedBytes, e := hex.DecodeString(want.Security)
+	must(e)
+	expected, e := appledouble.ParseDarwinFileSecurity(expectedBytes)
+	must(e)
+	if expected.ACL == nil && expected.NoACLFlags == [4]byte{} && m.Security.ACL != nil && (m.Security.ACL.Flags == 0 || m.Security.ACL.Flags == 0x20000) && len(m.Security.ACL.Entries) == 0 {
+		copySecurity := *m.Security
+		copySecurity.ACL = nil
+		m.Security = &copySecurity
+	}
+
+	b, e := m.Security.MarshalDarwinBinary()
+	must(e)
+	if hex.EncodeToString(b) != want.Security || m.UID != want.UID || m.GID != want.GID || m.Mode != want.Mode {
+		panic(fmt.Sprintf("attribute capture differs: %+v vs %+v security=%x", m, want, b))
+	}
+}
+func attributeRun(helper, dir, input string, tc attributeApplication, kind string) (metadata, []byte, result, []byte, []byte) {
+	args := []string{filepath.Join(dir, kind), tc.Kind, fmt.Sprintf("%o", tc.Mode), fmt.Sprint(tc.Flags), input, kind, fmt.Sprint(tc.Initial)}
+	cmd := exec.Command(helper, args...)
+	stdin, e := cmd.StdinPipe()
+	must(e)
+	stdout, e := cmd.StdoutPipe()
+	must(e)
+	defer stdin.Close()
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	must(cmd.Start())
+	scan := bufio.NewScanner(stdout)
+	var raw bytes.Buffer
+	if !scan.Scan() {
+		_ = cmd.Wait()
+		panic("attributes before: " + stderr.String())
+	}
+	raw.Write(scan.Bytes())
+	raw.WriteByte('\n')
+	var before struct {
+		Before     metadata
+		Attributes string
+	}
+	must(json.Unmarshal(scan.Bytes(), &before))
+	response, e := hex.DecodeString(before.Attributes)
+	must(e)
+	m, e := hostmeta.ParseDarwinACLAttributes(response)
+	must(e)
+	verifyAttributeMetadata(m, before.Before)
+	var request []byte
+	line := ""
+	if kind == "go" {
+		file := appledouble.File{Attrs: []appledouble.Attr{{Name: appledouble.ACLTextName, Value: tc.Text}}}
+		u, e := file.ACLUpdate(nil)
+		must(e)
+		m.Security, e = u.FileSecurity(m.Security)
+		must(e)
+		line = "-"
+		if m.Security != nil {
+			request, e = m.MarshalDarwinACLAttributes()
+			must(e)
+			line = hex.EncodeToString(request)
+		}
+		_, e = io.WriteString(stdin, line+"\n")
+		must(e)
+	}
+	must(stdin.Close())
+	if !scan.Scan() {
+		_ = cmd.Wait()
+		panic("attributes after: " + stderr.String())
+	}
+	raw.Write(scan.Bytes())
+	raw.WriteByte('\n')
+	var after struct {
+		result
+		Attributes string
+	}
+	must(json.Unmarshal(scan.Bytes(), &after))
+	if scan.Scan() {
+		panic("extra attribute output")
+	}
+	must(scan.Err())
+	must(cmd.Wait())
+	afterResponse, e := hex.DecodeString(after.Attributes)
+	must(e)
+	decoded, e := hostmeta.ParseDarwinACLAttributes(afterResponse)
+	must(e)
+	verifyAttributeMetadata(decoded, after.After)
+	commands = append(commands, command{Args: append([]string{helper}, args...), Input: line, Output: raw.String(), Error: stderr.String()})
+	write(filepath.Join(dir, kind+"-attributes.jsonl"), raw.Bytes())
+	write(filepath.Join(dir, kind+"-attributes.stdin"), []byte(line))
+	return before.Before, response, after.result, afterResponse, request
 }
