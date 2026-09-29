@@ -276,3 +276,17 @@ The routine is pure Go on Linux, macOS and Windows; native/carrier adapters rema
 separate transport work. Native APFS and FAT comparisons include real permission
 and unsupported-operation failures. See [the backend contract, coverage and
 remaining work](../../docs/appledouble-acl-restoration.md).
+
+## Portable Darwin ACL attribute records
+
+`ParseDarwinACLAttributes` decodes successful Darwin attribute-list responses;
+`ACLMetadata.MarshalDarwinACLAttributes` encodes set requests for the explicit
+`DarwinACLCommonAttributes` profile. Both operate identically on every OS and
+retain numeric ownership, raw mode, UUID ownership and ACL bytes without native
+calls. Ownership UUIDs use their separate attribute fields because Darwin ignores
+the embedded blob ownership slots. See the [wire profile and native evidence](../../docs/appledouble-acl-attributes.md).
+
+This codec is a transport building block. Native tests show that the attribute
+API and copyfile differ on empty ACL flags and immutable/append-only failures;
+it is not yet a compatible built-in `RestoreACL` backend. Shared native/carrier
+integration remains outstanding.

@@ -27,6 +27,9 @@ owner-preserving replacement requests](appledouble-filesec.md) have native byte
 conversion and restrictive-flag application comparisons. The shared
 [ACL restoration protocol](appledouble-acl-restoration.md) now propagates write
 errors and qualifies source-cache reset/retry against real APFS and FAT outcomes.
+[Darwin attribute records](appledouble-acl-attributes.md) preserve separate UUID
+ownership, but native attribute/copyfile differences in empty ACL flags and
+restrictive-flag errors remain an explicit backend integration blocker.
 Non-owner authorization, production native/carrier adapters and full restoration
 ordering remain outstanding. ACL application integration,
 remaining [quarantine application contexts](appledouble-quarantine-application.md),

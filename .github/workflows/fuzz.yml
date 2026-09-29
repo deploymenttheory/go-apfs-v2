@@ -28,6 +28,7 @@ jobs:
           - { pkg: ./pkg/appledouble, target: FuzzACLIdentitySnapshot }
           - { pkg: ./pkg/appledouble, target: FuzzFileSecurity }
           - { pkg: ./pkg/hostmeta, target: FuzzRestoreACL }
+          - { pkg: ./pkg/hostmeta, target: FuzzACLAttributes }
           - { pkg: ./pkg/appledouble, target: FuzzQuarantine }
           - { pkg: ./pkg/appledouble, target: FuzzQuarantineXattr }
           - { pkg: ./pkg/appledouble, target: FuzzQuarantineApplication }

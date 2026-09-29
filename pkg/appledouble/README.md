@@ -132,7 +132,10 @@ filesystem transport:
    ordering still need qualification. Creation
    inheritance and replacement over inherited ACLs have native comparisons;
    `hostmeta.RestoreACL` now supplies the [portable write/retry protocol](../../docs/appledouble-acl-restoration.md),
-   with real APFS/FAT comparisons. Shared native/carrier adapters and full
+   with real APFS/FAT comparisons. [Darwin attribute records](../../docs/appledouble-acl-attributes.md)
+   now preserve separate UUID ownership; measured attribute/copyfile differences
+   in empty ACL flags and restrictive-flag errors still block backend substitution.
+   Shared native/carrier adapters and full
    lifecycle integration remain outstanding.
 2. **Complete quarantine context and transport qualification.** Extend the
    [controlled runtime evidence](../../docs/appledouble-quarantine-runtime.md) and

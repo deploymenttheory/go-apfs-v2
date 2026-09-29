@@ -111,7 +111,7 @@ jobs:
         env:
           CGO_ENABLED: "0"
         run: go run scripts/verify-appledouble.go
-      - name: Portable ACL restoration and coverage above 95%
+      - name: Portable ACL restoration/attributes and coverage above 95%
         env:
           CGO_ENABLED: "0"
         run: go run scripts/verify-acl-restore.go
