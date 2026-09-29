@@ -23,7 +23,7 @@ ordinary-copy ACL.
 ACL-only copies **retain owner/group UUID properties**. Apple's POSIX-clearing
 helper removes numeric IDs and mode only. Omitted UUIDs and explicit zero UUIDs
 remain distinct, as described in [optional chmod properties](appledouble-acl-chmod-properties.md).
-Confirmed absent ACLs are nil; a failed capture is an error. Selection retains
+Confirmed absent ACLs are nil; a failed capture is an error. A present raw NOACL source cannot be materialized as an ACL by Libc: when ACL copying is selected, it returns `appledouble.ErrFileSecurity` before destination capture, matching native EINVAL. Stat-only execution still accepts that separate raw source property. Selection retains
 explicit source entries followed by inherited destination entries and discards
 global ACL flags. If both ACLs are absent, the source cache remains unchanged.
 A present empty selection remains present in the request.
@@ -129,8 +129,9 @@ validity, write bounds, diagnostics and input preservation.
 
 ## Remaining work
 
-This adds the ordinary security-stage executor, not production native/carrier
-adapters or full restoration ordering. Live source and identity acquisition,
+The executor is now connected to both [image writer trees](appledouble-image-security-copy.md),
+including inherited ACL selection, omitted properties, UUID-only removal and set-ID
+side effects. Native host/carrier adapters and full restoration ordering remain open. Live source and identity acquisition,
 privileged/sandbox contexts, volume-query diagnostics, libSystem allocation and
 property-setter failures, and integration with stat/flags/times/xattr and final
 AppleDouble stages remain open. The [five roadmap gates](../pkg/appledouble/README.md#roadmap)

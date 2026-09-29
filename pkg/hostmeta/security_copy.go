@@ -87,6 +87,11 @@ func CopySecurity(source SecurityCopySource, options SecurityCopyOptions, backen
 		return result, fmt.Errorf("security copy backend: %w", os.ErrInvalid)
 	}
 	if options.ACL {
+		// Libc cannot materialize FILESEC_ACL from a present NOACL raw record.
+		// This differs from an omitted property and fails before destination capture.
+		if raw := result.Source.Properties.RawSecurity; raw != nil && raw.ACL == nil {
+			return result, fmt.Errorf("capture source ACL: %w", appledouble.ErrFileSecurity)
+		}
 		destination, captureErr := backend.CaptureDestinationACL()
 		if captureErr != nil {
 			return result, fmt.Errorf("capture destination ACL: %w", captureErr)

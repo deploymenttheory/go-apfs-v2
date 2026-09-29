@@ -177,8 +177,18 @@ jobs:
           name: image-acl-coverage-${{ matrix.os }}
           path: artifacts/image-acl-coverage/
           if-no-files-found: error
+      - name: Portable image security copy and coverage above 95%
+        env:
+          CGO_ENABLED: "0"
+        run: go run scripts/verify-image-copy-coverage.go
+      - name: Upload image security copy coverage
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: image-copy-coverage-${{ matrix.os }}
+          path: artifacts/image-copy-coverage/
+          if-no-files-found: error
       - name: AppleDouble 32-bit address-space regressions
-
         if: runner.os == 'Linux'
         env:
           CGO_ENABLED: "0"
@@ -298,6 +308,18 @@ jobs:
         with:
           name: image-acl-restore
           path: artifacts/image-acl-restore/
+          if-no-files-found: error
+      - name: Native image security copy and filesystem qualification
+        if: runner.os == 'macOS'
+        env:
+          CGO_ENABLED: "0"
+        run: go run scripts/verify-image-security-copy.go
+      - name: Upload native image security copy evidence
+        if: always() && runner.os == 'macOS'
+        uses: actions/upload-artifact@v7
+        with:
+          name: image-security-copy
+          path: artifacts/image-security-copy/
           if-no-files-found: error
       - name: AppleDouble native security records and ACL application
         if: runner.os == 'macOS'

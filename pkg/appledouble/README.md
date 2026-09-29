@@ -77,6 +77,11 @@ full AppleDouble transport integration is on the roadmap below.
   preserving ownership and exact permissions and updating hard-link aliases
   together. It works on every OS; writing the resulting image is a separate step.
   See [image ACL restoration](../../docs/appledouble-image-acl-restoration.md).
+- **Ordinary image security copying:** APFS/HFS+ writers expose
+  `root.CopySecurity(destinationEntry, source, options)` for ACL inheritance
+  merging, selected numeric properties, removal and set-ID policy. Source
+  validation and all alias updates precede image serialization on every OS.
+  See [image security copying](../../docs/appledouble-image-security-copy.md).
 - **Source identity capture and replay:** `NewACLIdentityCapture` records the
   source callbacks used during parsing and formatting. Its serializable snapshot
   supplies immutable resolvers on any supported OS, preserving confirmed absence
@@ -142,7 +147,7 @@ of this roadmap delivered. These phases are not estimates of remaining PR count.
 
 | Phase | Current state | Completion gate |
 | --- | --- | --- |
-| 1. ACL application | Deferred APFS/HFS+ image replacement integrated; ordinary copy and native host integration remain | Source acquisition, authorization, actual writes and restoration ordering qualified together |
+| 1. ACL application | Deferred and ordinary APFS/HFS+ image security copying integrated; host acquisition and ordered restoration remain | Source acquisition, authorization, actual writes and restoration ordering qualified together |
 | 2. Quarantine | Conversion and much of application policy implemented; context/integration gaps open | Remaining process contexts and ordered restoration qualify against native behavior |
 | 3. Large values and allocation | Known native differences remain | Oversized values, aggregates, forks and allocation policy have explicit, tested behavior |
 | 4. Shared filesystem transport | Host primitives and exact image permissions available; complete metadata transport outstanding | APFS/HFS+ extract-and-repack preserves logical metadata on all three OSes |
@@ -172,7 +177,11 @@ of this roadmap delivered. These phases are not estimates of remaining PR count.
    and unrelated metadata while updating hard-link aliases together. Written
    images qualify against real native writes; all three OSes replay the corpus
    and reproduce the image hashes.
-   **Remaining:** ordinary security-copy image integration, native host write
+   [Ordinary image security copying](../../docs/appledouble-image-security-copy.md)
+   now merges explicit/inherited ACL entries, applies selected numeric properties,
+   handles UUID-only removal and retains native set-ID side effects. Raw NOACL
+   source properties produce the native pre-write refusal.
+   **Remaining:** native host write
    adapters, live host source acquisition,
    privileged/sandbox authorization contexts and full restoration ordering.
    [Owner/non-owner image tests](../../docs/appledouble-acl-nonowner.md) qualify
@@ -180,10 +189,10 @@ of this roadmap delivered. These phases are not estimates of remaining PR count.
    The request builder is not a completed native backend; foreign metadata carriers are integrated
    in phase 4.
 
-   **Next implementation:** connect ordinary security copying to the image
-   writers, including inherited destination entries, selected numeric properties,
-   ACL removal and set-ID policy. Then integrate source acquisition and ordered
-   restoration. Keep one pure-Go implementation on Linux, macOS and Windows.
+   **Next implementation:** connect source and volume-policy acquisition to
+   ordered restoration, including creation inheritance, ordinary security copying,
+   stat/flags/times/xattrs, deferred AppleDouble replacement and cleanup. Keep one
+   pure-Go implementation on Linux, macOS and Windows.
 2. **Quarantine context and transport qualification.** Implemented: serialized
    and filesystem conversion, ordered updates, application planning, raw
    destination-state handling and file/directory/symlink destination policy.

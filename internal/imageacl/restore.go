@@ -3,8 +3,6 @@ package imageacl
 
 import (
 	"bytes"
-	"fmt"
-	"io/fs"
 	"maps"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
@@ -33,42 +31,9 @@ func Restore[T comparable](root, target T, update appledouble.ACLUpdate, read fu
 	if _, err := update.FileSecurity(&appledouble.FileSecurity{}); err != nil {
 		return hostmeta.ACLRestoreResult{}, err
 	}
-	var zero T
-	if root == zero || target == zero {
-		return hostmeta.ACLRestoreResult{}, fs.ErrInvalid
-	}
-	nodes := map[T]Node[T]{}
-	stack := []T{root}
-	for len(stack) > 0 {
-		entry := stack[len(stack)-1]
-		stack = stack[:len(stack)-1]
-		if _, exists := nodes[entry]; entry == zero || exists {
-			return hostmeta.ACLRestoreResult{}, fmt.Errorf("image ACL: nil, repeated or cyclic entry: %w", fs.ErrInvalid)
-		}
-		node, err := read(entry, entry == root)
-		if err != nil {
-			return hostmeta.ACLRestoreResult{}, err
-		}
-		nodes[entry] = node
-		stack = append(stack, node.Children...)
-	}
-	destination, found := nodes[target]
-	if !found {
-		return hostmeta.ACLRestoreResult{}, fs.ErrNotExist
-	}
-	aliases := []T{target}
-	if destination.LinkGroup != 0 && destination.Mode&0170000 == 0100000 {
-		for entry, node := range nodes {
-			if entry == target || node.Mode&0170000 != 0100000 || node.LinkGroup != destination.LinkGroup {
-				continue
-			}
-			a, ap := destination.Xattrs[hostmeta.SecurityName]
-			b, bp := node.Xattrs[hostmeta.SecurityName]
-			if node.UID != destination.UID || node.GID != destination.GID || node.Mode != destination.Mode || ap != bp || !bytes.Equal(a, b) {
-				return hostmeta.ACLRestoreResult{}, fmt.Errorf("image ACL: conflicting hard-link security: %w", fs.ErrInvalid)
-			}
-			aliases = append(aliases, entry)
-		}
+	aliases, nodes, destination, err := bind(root, target, read)
+	if err != nil {
+		return hostmeta.ACLRestoreResult{}, err
 	}
 	backend := &restorer{uid: destination.UID, gid: destination.GID, mode: destination.Mode}
 	if raw, present := destination.Xattrs[hostmeta.SecurityName]; present {
