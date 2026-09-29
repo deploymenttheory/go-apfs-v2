@@ -14,6 +14,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"os/exec"
@@ -24,7 +25,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/apfswrite"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hfsplus"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
 )
 
@@ -51,6 +55,7 @@ type application struct {
 	Native      result
 }
 type fixture struct {
+	NonOwner                                                *nonOwnerFixture
 	Chmod                                                   *chmodFixture
 	Attributes                                              *attributeFixture
 	Restoration                                             *restorationFixture
@@ -214,6 +219,8 @@ func main() {
 	verifyAttributes(root, f.Attributes, *capture)
 	f.Chmod = &chmodFixture{Revision: f.Revision, Host: f.Host, HelperSHA256: sum(read("testdata/appledouble/native/acl-chmod.c")), ParentHelperSHA256: f.HelperSHA256}
 	verifyChmod(root, f.Chmod, f.Attributes, *capture)
+	f.NonOwner = &nonOwnerFixture{Revision: f.Revision, Host: f.Host, HelperSHA256: sum(read("testdata/appledouble/native/acl-nonowner.c")), ParentHelperSHA256: f.HelperSHA256, CopyfileSHA256: f.CopyfileSHA256}
+	verifyNonOwner(root, f.NonOwner, *capture)
 	b, e := json.MarshalIndent(f, "", "  ")
 	must(e)
 	write(filepath.Join(root, "observed.json"), b)
@@ -976,4 +983,370 @@ func verifyChmod(root string, f *chmodFixture, attributes *attributeFixture, cap
 		}
 	}
 	fmt.Printf("Qualified %d Libc requests and %d actual extended chmod pairs\n", len(f.Conversions), len(f.Applications))
+}
+
+type principalIdentity struct {
+	UID, GID uint32
+	Groups   []uint32
+}
+type principalSeed struct {
+	Name       string
+	Text, Disk []byte
+}
+type principalRead struct {
+	Metadata                      metadata
+	SecurityErrno, AttributeErrno int
+	Attributes                    *string
+}
+type principalObservation struct {
+	Code, Errno, Captures, Writes, Resets int
+	Applied, IdentityUnchanged            bool
+	After                                 principalRead
+}
+type principalCase struct {
+	Name, Filesystem, Kind, Seed string
+	Owner, Group                 bool
+	Mode, UID, GID               uint32
+	Text, AfterDisk              []byte
+	Before                       principalRead
+	Native                       principalObservation
+	Request                      *hostmeta.DarwinChmodRequest
+	GoResult                     hostmeta.ACLRestoreResult
+}
+type principalImage struct{ Filesystem, BeforeSHA256, AfterSHA256 string }
+type nonOwnerFixture struct {
+	HFSSourceSHA256                                                  map[string]string
+	Revision, Host, HelperSHA256, ParentHelperSHA256, CopyfileSHA256 string
+	Actor                                                            principalIdentity
+	Seeds                                                            []principalSeed
+	Images                                                           []principalImage
+	Cases                                                            []principalCase
+}
+type principalPipe struct {
+	restorePipe
+	request **hostmeta.DarwinChmodRequest
+}
+
+func (p principalPipe) CaptureACL() (hostmeta.ACLMetadata, error) {
+	b := p.exchange("C")
+	if e := nativeRestoreError(b); e != nil {
+		return hostmeta.ACLMetadata{}, e
+	}
+	var r struct{ Captured metadata }
+	must(json.Unmarshal(b, &r))
+	raw, e := hex.DecodeString(r.Captured.Security)
+	must(e)
+	sec, e := appledouble.ParseDarwinFileSecurity(raw)
+	return hostmeta.ACLMetadata{Security: sec, UID: r.Captured.UID, GID: r.Captured.GID, Mode: r.Captured.Mode}, e
+}
+func (p principalPipe) WriteACL(m hostmeta.ACLMetadata) error {
+	r, e := m.DarwinChmodRequest()
+	if e != nil {
+		return e
+	}
+	*p.request = &r
+	return nativeRestoreError(p.exchange(fmt.Sprintf("W %d %d %d %x", r.UID, r.GID, r.Mode, r.Security)))
+}
+func principalRun(helper, dir, destination, input string, tc principalCase, kind string) (principalRead, principalObservation, *hostmeta.DarwinChmodRequest, hostmeta.ACLRestoreResult) {
+	args := []string{destination, input, kind, fmt.Sprint(tc.UID), fmt.Sprint(tc.GID), tc.Filesystem}
+	cmd := exec.Command(helper, args...)
+	stdin, e := cmd.StdinPipe()
+	must(e)
+	defer stdin.Close()
+	stdout, e := cmd.StdoutPipe()
+	must(e)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	must(cmd.Start())
+	scan := bufio.NewScanner(stdout)
+	var output, requests bytes.Buffer
+	if !scan.Scan() {
+		_ = cmd.Wait()
+		panic("principal before: " + stderr.String())
+	}
+	output.Write(scan.Bytes())
+	output.WriteByte('\n')
+	var before struct{ Before principalRead }
+	must(json.Unmarshal(scan.Bytes(), &before))
+	var result hostmeta.ACLRestoreResult
+	var request *hostmeta.DarwinChmodRequest
+	var restoreErr error
+	if kind == "go" {
+		file := appledouble.File{Attrs: []appledouble.Attr{{Name: appledouble.ACLTextName, Value: tc.Text}}}
+		update, e := file.ACLUpdate(nil)
+		must(e)
+		result, restoreErr = hostmeta.RestoreACL(update, principalPipe{restorePipe{stdin, scan, &requests, &output}, &request})
+		requests.WriteString("D\n")
+		_, e = io.WriteString(stdin, "D\n")
+		must(e)
+	}
+	must(stdin.Close())
+	if !scan.Scan() {
+		_ = cmd.Wait()
+		panic("principal after: " + stderr.String())
+	}
+	output.Write(scan.Bytes())
+	output.WriteByte('\n')
+	var observed principalObservation
+	must(json.Unmarshal(scan.Bytes(), &observed))
+	if scan.Scan() {
+		panic("extra principal output")
+	}
+	must(scan.Err())
+	must(cmd.Wait())
+	commands = append(commands, command{Args: append([]string{helper}, args...), Input: requests.String(), Output: output.String(), Error: stderr.String()})
+	write(filepath.Join(dir, kind+"-principal.jsonl"), output.Bytes())
+	write(filepath.Join(dir, kind+"-principal.stdin"), requests.Bytes())
+	if kind == "go" && ((observed.Errno == 0 && restoreErr != nil) || (observed.Errno != 0 && !errors.Is(restoreErr, syscall.Errno(observed.Errno)))) {
+		panic("principal native cause lost")
+	}
+	return before.Before, observed, request, result
+}
+func verifyNonOwner(root string, f *nonOwnerFixture, capture bool) {
+	const helperSource = "testdata/appledouble/native/acl-nonowner.c"
+	helper := filepath.Join(root, "acl-nonowner")
+	run("xcrun", "clang", "-Wall", "-Wextra", "-Werror", "-I", root, helperSource, "-o", helper)
+	for _, arch := range []string{"arm64", "x86_64"} {
+		ast := run("xcrun", "clang", "-arch", arch, "-I", root, "-fsyntax-only", "-Xclang", "-ast-dump=json", helperSource)
+		commands[len(commands)-1].Output = fmt.Sprintf("AST retained: %d bytes", len(ast))
+		write(filepath.Join(root, "acl-nonowner-"+arch+".ast.json"), ast)
+	}
+	f.HFSSourceSHA256 = map[string]string{"hfs_vnops.c": "a07a8cd9bad0e485a6c7248facac3edcf66736727777715f8cf6a86fb77f3f44", "hfs_xattr.c": "22413ad83654198946ad26797c074fc9c64500a9fe75abbfcff426731ddce117"}
+	for _, name := range []string{"hfs_vnops.c", "hfs_xattr.c"} {
+		download("https://raw.githubusercontent.com/apple-oss-distributions/hfs/d1bac2f062e6e9c0dfcce302d9aacb10173d0eea/core/"+name, f.HFSSourceSHA256[name], filepath.Join(root, name))
+	}
+	must(json.Unmarshal(run(helper, "identity"), &f.Actor))
+	const everyone = "group:ABCDEFAB-CDEF-ABCD-EFAB-CDEF0000000C:::"
+	f.Seeds = []principalSeed{{Name: "none"}, {Name: "empty", Text: []byte("!#acl 1 no_inherit\n")}, {Name: "allow-write", Text: []byte("!#acl 1\n" + everyone + "allow:writesecurity\n")}, {Name: "deny-write", Text: []byte("!#acl 1\n" + everyone + "deny:writesecurity\n")}, {Name: "deny-read", Text: []byte("!#acl 1\n" + everyone + "deny:readsecurity\n")}, {Name: "allow-deny", Text: []byte("!#acl 1\n" + everyone + "allow:writesecurity\n" + everyone + "deny:writesecurity\n")}, {Name: "deny-allow", Text: []byte("!#acl 1\n" + everyone + "deny:writesecurity\n" + everyone + "allow:writesecurity\n")}, {Name: "inherit-only", Text: []byte("!#acl 1\n" + everyone + "allow,only_inherit:writesecurity\n")}, {Name: "unrelated", Text: []byte("!#acl 1\nuser:11234567-89AB-CDEF-0123-456789ABCDEF:::allow:writesecurity\n")}}
+	for i := range f.Seeds {
+		s := &f.Seeds[i]
+		if s.Text == nil {
+			continue
+		}
+		input, output := filepath.Join(root, "principal-seed-"+s.Name+".txt"), filepath.Join(root, "principal-seed-"+s.Name+".bin")
+		write(input, s.Text)
+		var encoded string
+		must(json.Unmarshal(run(helper, "seed", input, output), &encoded))
+		s.Disk = read(output)
+		if hex.EncodeToString(s.Disk) != encoded {
+			panic("seed export differs")
+		}
+	}
+	texts := [][]byte{nil, []byte("invalid ACL"), []byte("!#acl 1\n"), []byte("!#acl 1\nuser:21234567-89AB-CDEF-0123-456789ABCDEF:::allow:read,write\n")}
+	for _, filesystem := range []string{"apfs", "hfs"} {
+		var cases []principalCase
+		tree := &apfswrite.Entry{Name: "root", Mode: os.ModeDir | 0755, UID: f.Actor.UID, GID: f.Actor.GID}
+		for _, kind := range []string{"file", "directory"} {
+			for _, owner := range []bool{false, true} {
+				for _, group := range []bool{false, true} {
+					for _, writable := range []bool{false, true} {
+						for _, seed := range f.Seeds {
+							for index, text := range texts {
+								mode := uint32(0444)
+								if writable {
+									mode = 0666
+								}
+								if kind == "directory" {
+									mode |= 0111
+								}
+								uid, gid := uint32(60000), uint32(60000)
+								if owner {
+									uid = f.Actor.UID
+								}
+								if group {
+									gid = f.Actor.GID
+								}
+								name := fmt.Sprintf("%s-%s-o%t-g%t-%04o-%s-%d", filesystem, kind, owner, group, mode, seed.Name, index)
+								tc := principalCase{Name: name, Filesystem: filesystem, Kind: kind, Seed: seed.Name, Owner: owner, Group: group, Mode: mode, UID: uid, GID: gid, Text: text}
+								cases = append(cases, tc)
+								for _, variant := range []string{"native", "go"} {
+									entry := &apfswrite.Entry{Name: name + "-" + variant, Mode: os.FileMode(mode), UID: uid, GID: gid}
+									if kind == "directory" {
+										entry.Mode |= os.ModeDir
+									} else {
+										entry.Data = []byte("ACL authorization fixture\n")
+									}
+									if seed.Disk != nil {
+										entry.Xattrs = map[string][]byte{"com.apple.system.Security": seed.Disk}
+									}
+									tree.Children = append(tree.Children, entry)
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+		imagePath := filepath.Join(root, "acl-principal-"+filesystem+".img")
+		file, e := os.Create(imagePath)
+		must(e)
+		const size = 128 << 20
+		must(file.Truncate(size))
+		if filesystem == "apfs" {
+			e = apfswrite.CreateContainer(file, size, &apfswrite.CreateOptions{VolumeName: "ACLPRINCIPAL", Root: tree})
+		} else {
+			e = hfsplus.CreateImage(file, size, "ACLPRINCIPAL", principalHFSTree(tree), nil)
+		}
+		closeErr := file.Close()
+		must(e)
+		must(closeErr)
+		imageInfo := principalImage{Filesystem: filesystem, BeforeSHA256: sum(read(imagePath))}
+		volume, e := os.MkdirTemp("", "acl-principal-")
+		must(e)
+		run("hdiutil", "attach", imagePath, "-owners", "on", "-nobrowse", "-mountpoint", volume)
+		attached := true
+		func() {
+			defer func() {
+				if attached {
+					run("hdiutil", "detach", volume)
+				}
+			}()
+			for _, tc := range cases {
+				dir := filepath.Join(root, tc.Name)
+				must(os.MkdirAll(dir, 0700))
+				input := filepath.Join(dir, "acl.txt")
+				write(input, tc.Text)
+				before, native, _, _ := principalRun(helper, dir, filepath.Join(volume, tc.Name+"-native"), input, tc, "native")
+				goBefore, goNative, request, result := principalRun(helper, dir, filepath.Join(volume, tc.Name+"-go"), input, tc, "go")
+				if !reflect.DeepEqual(before, goBefore) || !reflect.DeepEqual(native, goNative) || !native.IdentityUnchanged {
+					panic("principal parity differs: " + tc.Name)
+				}
+				m := before.Metadata
+				if m.UID != tc.UID || m.GID != tc.GID || m.Mode&07777 != tc.Mode || m.Flags != 0 {
+					panic("principal metadata setup: " + tc.Name)
+				}
+				after := native.After.Metadata
+				if after.UID != m.UID || after.GID != m.GID || after.Mode != m.Mode || after.Flags != m.Flags {
+					panic("principal write lost metadata: " + tc.Name)
+				}
+				if (!native.Applied || native.Code != 0) && !reflect.DeepEqual(before, native.After) {
+					panic("principal failed/no-op write changed state: " + tc.Name)
+				}
+				if native.Applied != result.Applied || native.Writes != result.Attempts || native.Resets != 0 || result.Retried {
+					panic("principal operation sequence differs: " + tc.Name)
+				}
+				tc.Before = before
+				tc.Native = native
+				tc.Request = request
+				tc.GoResult = result
+				f.Cases = append(f.Cases, tc)
+			}
+			run("hdiutil", "detach", volume)
+			attached = false
+		}()
+		must(os.Remove(volume))
+		imageInfo.AfterSHA256 = sum(read(imagePath))
+		f.Images = append(f.Images, imageInfo)
+		principalReadback(imagePath, filesystem, f)
+	}
+	b, e := json.MarshalIndent(f, "", "  ")
+	must(e)
+	write(filepath.Join(root, "observed-nonowner.json"), b)
+	if capture {
+		fmt.Printf("Captured %d owner/non-owner filesystem pairs; fixture NOT approved\n", len(f.Cases))
+		return
+	}
+	z, e := gzip.NewReader(bytes.NewReader(read("testdata/appledouble/native/acl-nonowner.json.gz")))
+	must(e)
+	var archived nonOwnerFixture
+	must(json.NewDecoder(z).Decode(&archived))
+	must(z.Close())
+	if archived.HelperSHA256 != f.HelperSHA256 || archived.ParentHelperSHA256 != f.ParentHelperSHA256 || archived.CopyfileSHA256 != f.CopyfileSHA256 || !reflect.DeepEqual(archived.HFSSourceSHA256, f.HFSSourceSHA256) || !reflect.DeepEqual(archived.Seeds, f.Seeds) || len(archived.Cases) != len(f.Cases) {
+		panic("principal fixture provenance differs")
+	}
+	for i, a := range archived.Cases {
+		b := f.Cases[i]
+		a.UID = b.UID
+		a.GID = b.GID
+		a.Before.Metadata.UID = b.Before.Metadata.UID
+		a.Before.Metadata.GID = b.Before.Metadata.GID
+		a.Native.After.Metadata.UID = b.Native.After.Metadata.UID
+		a.Native.After.Metadata.GID = b.Native.After.Metadata.GID
+		for _, pair := range [][2]*string{{a.Before.Attributes, b.Before.Attributes}, {a.Native.After.Attributes, b.Native.After.Attributes}} {
+			if pair[0] != nil && pair[1] != nil {
+				left, e := hex.DecodeString(*pair[0])
+				must(e)
+				right, e := hex.DecodeString(*pair[1])
+				must(e)
+				if len(left) < 12 || len(right) < 12 {
+					panic("short principal frame")
+				}
+				copy(left[4:12], right[4:12])
+				*pair[0] = hex.EncodeToString(left)
+			}
+		}
+		if a.Request != nil && b.Request != nil {
+			a.Request.UID = b.Request.UID
+			a.Request.GID = b.Request.GID
+		}
+		if !reflect.DeepEqual(a, b) {
+			panic("principal observations differ: " + b.Name)
+		}
+	}
+	fmt.Printf("Qualified %d owner/non-owner APFS/HFS+ pairs\n", len(f.Cases))
+}
+func principalHFSTree(e *apfswrite.Entry) *hfsplus.Entry {
+	out := &hfsplus.Entry{Name: e.Name, Mode: e.Mode, UID: e.UID, GID: e.GID, Data: e.Data, Xattrs: e.Xattrs}
+	for _, c := range e.Children {
+		out.Children = append(out.Children, principalHFSTree(c))
+	}
+	return out
+}
+
+type principalVolume interface {
+	fs.FS
+	Xattrs(string) (map[string][]byte, error)
+}
+
+func principalReadback(path, filesystem string, f *nonOwnerFixture) {
+	var volume principalVolume
+	file, e := os.Open(path)
+	must(e)
+	defer file.Close()
+	if filesystem == "apfs" {
+		container, e := apfs.Open(file, nil)
+		must(e)
+		volumes, e := container.Volumes()
+		must(e)
+		if len(volumes) != 1 {
+			panic("principal volume count")
+		}
+		volume = volumes[0]
+	} else {
+		v, e := hfsplus.New(file)
+		must(e)
+		volume = v
+	}
+	seeds := map[string][]byte{}
+	for _, s := range f.Seeds {
+		seeds[s.Name] = s.Disk
+	}
+	for i := range f.Cases {
+		tc := &f.Cases[i]
+		if tc.Filesystem != filesystem {
+			continue
+		}
+		var nativeAttrs map[string][]byte
+		for _, variant := range []string{"native", "go"} {
+			name := tc.Name + "-" + variant
+			attrs, e := volume.Xattrs(name)
+			must(e)
+			if variant == "native" {
+				nativeAttrs = attrs
+			} else if !reflect.DeepEqual(attrs, nativeAttrs) {
+				panic("offline ACL bytes differ: " + name)
+			}
+			if tc.Kind == "file" {
+				content, e := fs.ReadFile(volume, name)
+				must(e)
+				if string(content) != "ACL authorization fixture\n" {
+					panic("file contents changed")
+				}
+			}
+			if !tc.Native.Applied && !bytes.Equal(attrs["com.apple.system.Security"], seeds[tc.Seed]) {
+				panic("refused/no-op operation changed inaccessible ACL bytes: " + name)
+			}
+		}
+		tc.AfterDisk = nativeAttrs["com.apple.system.Security"]
+	}
 }

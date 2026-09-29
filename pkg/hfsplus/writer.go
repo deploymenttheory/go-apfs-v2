@@ -797,17 +797,6 @@ func (b *builder) normalRecord(n *fileNode) btRecord {
 	return btRecord{key: key, payload: marshalBE(&file)}
 }
 
-// attrFlag is kHFSHasAttributesMask when the node carries any extended
-// attribute, and zero otherwise. fsck_hfs compares the flag against the
-// attributes file in both directions, so setting it optimistically is as wrong
-// as omitting it.
-func attrFlag(n *fileNode) CatalogFlags {
-	if len(n.attrs) > 0 {
-		return HFSHasAttributesMask
-	}
-	return 0
-}
-
 // compressedFlag is UF_COMPRESSED when the node's content is held by a
 // com.apple.decmpfs attribute rather than by its data fork.
 //

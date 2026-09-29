@@ -129,7 +129,7 @@ of this roadmap delivered. These phases are not estimates of remaining PR count.
 
 | Phase | Current state | Completion gate |
 | --- | --- | --- |
-| 1. ACL application | Policy and request preparation qualified; production integration in progress | Source acquisition, authorization, actual writes and restoration ordering qualified together |
+| 1. ACL application | Policy, requests and controlled owner/non-owner cases qualified; production integration open | Source acquisition, authorization, actual writes and restoration ordering qualified together |
 | 2. Quarantine | Conversion and much of application policy implemented; context/integration gaps open | Remaining process contexts and ordered restoration qualify against native behavior |
 | 3. Large values and allocation | Known native differences remain | Oversized values, aggregates, forks and allocation policy have explicit, tested behavior |
 | 4. Shared filesystem transport | Host metadata primitives available; preservation integration outstanding | APFS/HFS+ extract-and-repack preserves logical metadata on all three OSes |
@@ -143,7 +143,10 @@ of this roadmap delivered. These phases are not estimates of remaining PR count.
    Native extended chmod comparisons resolve the measured attribute/copyfile
    refusal and empty-ACL flag differences for the qualified owner-operated cases.
    **Remaining:** production call/capture adapters, live source acquisition,
-   non-owner authorization and full restoration ordering. The request builder
+   privileged/sandbox authorization contexts and full restoration ordering.
+   [Owner/non-owner image tests](../../docs/appledouble-acl-nonowner.md) qualify
+   ordinary-user APFS/HFSX grants and denials and fix HFS security catalog flags.
+   The request builder
    is not a completed native backend; foreign metadata carriers are integrated
    in phase 4.
 2. **Quarantine context and transport qualification.** Implemented: serialized

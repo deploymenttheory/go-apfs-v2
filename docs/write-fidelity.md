@@ -111,6 +111,17 @@ identically — produces *"Resource compressed file: block metadata is too big"*
 Fork-based types therefore cannot be gated on `apfsck`; they are checked against
 a real mount instead.
 
+### Security attributes supplied directly to the HFS writer
+
+When callers supply `com.apple.system.Security` in an `hfsplus.Entry`, the
+writer preserves its bytes and sets the HFS security catalog flag so macOS
+enforces the stored ACL. This applies to HFS+ and HFSX, including attributes on
+hard-link indirect inodes. Images with this attribute intentionally gain the
+security flag; ordinary-attribute serialization is unchanged.
+[Native authorization tests](appledouble-acl-nonowner.md) explain the fix and
+its scope. It does not complete directory-walk ACL acquisition or shared
+extract/repack transport; the loss reporting above still applies to those paths.
+
 ## How losses are reported
 
 As they are found, one note per occurrence on stderr, capped at ten per
