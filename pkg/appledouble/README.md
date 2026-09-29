@@ -68,6 +68,10 @@ full AppleDouble transport integration is on the roadmap below.
   inherited destination entries, preserving entry order and bits while dropping
   global flags. It is distinct from creation inheritance and AppleDouble
   replacement. See [ordinary ACL copies](../../docs/appledouble-acl-copy.md).
+- **Image security capture:** APFS/HFS+ readers expose ownership, mode, UUID and
+  ACL snapshots for portable security copying, with malformed/empty/absent
+  records distinguished and native comparisons on four filesystem variants.
+  See [image security capture](../../docs/appledouble-image-security.md).
 - **Source identity capture and replay:** `NewACLIdentityCapture` records the
   source callbacks used during parsing and formatting. Its serializable snapshot
   supplies immutable resolvers on any supported OS, preserving confirmed absence
@@ -133,7 +137,7 @@ of this roadmap delivered. These phases are not estimates of remaining PR count.
 
 | Phase | Current state | Completion gate |
 | --- | --- | --- |
-| 1. ACL application | Policy, requests and controlled owner/non-owner cases qualified; production integration open | Source acquisition, authorization, actual writes and restoration ordering qualified together |
+| 1. ACL application | Policy, requests, image source capture and controlled owner/non-owner cases qualified; write integration open | Source acquisition, authorization, actual writes and restoration ordering qualified together |
 | 2. Quarantine | Conversion and much of application policy implemented; context/integration gaps open | Remaining process contexts and ordered restoration qualify against native behavior |
 | 3. Large values and allocation | Known native differences remain | Oversized values, aggregates, forks and allocation policy have explicit, tested behavior |
 | 4. Shared filesystem transport | Host metadata primitives available; preservation integration outstanding | APFS/HFS+ extract-and-repack preserves logical metadata on all three OSes |
@@ -146,10 +150,11 @@ of this roadmap delivered. These phases are not estimates of remaining PR count.
    [attribute records](../../docs/appledouble-acl-attributes.md) and
    [extended chmod request preparation](../../docs/appledouble-acl-chmod.md),
    including [optional properties and removal](../../docs/appledouble-acl-chmod-properties.md),
-   plus [ordinary security execution and fallbacks](../../docs/appledouble-security-copy.md).
+   plus [ordinary security execution and fallbacks](../../docs/appledouble-security-copy.md)
+   and [APFS/HFS+ image source capture](../../docs/appledouble-image-security.md).
    Native extended chmod comparisons resolve the measured attribute/copyfile
    refusal and empty-ACL flag differences for the qualified owner-operated cases.
-   **Remaining:** production call/capture adapters, live source acquisition,
+   **Remaining:** production write adapters, live host source acquisition,
    privileged/sandbox authorization contexts and full restoration ordering.
    [Owner/non-owner image tests](../../docs/appledouble-acl-nonowner.md) qualify
    ordinary-user APFS/HFSX grants and denials and fix HFS security catalog flags.
