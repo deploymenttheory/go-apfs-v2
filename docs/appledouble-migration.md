@@ -158,4 +158,7 @@ Independent image timestamp storage and acquisition now support all three OSes.
 Both image writers/readers retain separate birth/modification/change/access
 fields; snapshot rebuilding retains root and child times. See
 [image timestamps](appledouble-image-times.md). Live host timestamp acquisition
-and the ordered stat/flags/restoration stage remain outstanding.
+and the complete restoration lifecycle remain outstanding. The portable
+[stat stage](appledouble-stat-copy.md) now executes ordered timestamp, ownership,
+mode and BSD-flag restoration with native-qualified retries and retained errors;
+live host bindings and integration with xattrs, deferred ACLs and cleanup remain.

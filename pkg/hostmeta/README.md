@@ -347,3 +347,16 @@ every OS. See [source acquisition and qualification](../../docs/appledouble-secu
 on every OS. Both image volumes expose `FileTimes(name)`, and both writer entries
 accept `Times`. See [image timestamps](../../docs/appledouble-image-times.md) for
 selection, epoch, clamping and format precision rules. It is not a host setter.
+
+## Ordered stat restoration
+
+`CopyStat` executes the final stat stage through `StatCopyBackend`: times,
+ownership, permissions, then BSD flags. It uses the same pure-Go implementation
+on Linux, macOS and Windows. It retains protected destination flags, retries
+compare-and-swap contention at most four times, and records errors that native
+copyfile ignores. `Completed` is sequence completion, not proof of preservation;
+inspect `Failures`, `VolumeQueries` and `FlagsApplied`.
+
+Use this after ordinary security copying in an explicitly bound restoration
+pipeline. It neither acquires source state nor creates a live host adapter.
+See [the contract, usage and native qualification](../../docs/appledouble-stat-copy.md).

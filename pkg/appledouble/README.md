@@ -147,7 +147,7 @@ of this roadmap delivered. These phases are not estimates of remaining PR count.
 
 | Phase | Current state | Completion gate |
 | --- | --- | --- |
-| 1. ACL application | Source acquisition, image copying, volume policy and independent image timestamps integrated; host bindings and ordered restoration remain | Source acquisition, authorization, actual writes and restoration ordering qualified together |
+| 1. ACL application | Source acquisition, image copying, volume policy, independent image timestamps and stat-stage execution implemented; host bindings and lifecycle integration remain | Source acquisition, authorization, actual writes and restoration ordering qualified together |
 | 2. Quarantine | Conversion and much of application policy implemented; context/integration gaps open | Remaining process contexts and ordered restoration qualify against native behavior |
 | 3. Large values and allocation | Known native differences remain | Oversized values, aggregates, forks and allocation policy have explicit, tested behavior |
 | 4. Shared filesystem transport | Host primitives and exact image permissions available; complete metadata transport outstanding | APFS/HFS+ extract-and-repack preserves logical metadata on all three OSes |
@@ -196,6 +196,12 @@ of this roadmap delivered. These phases are not estimates of remaining PR count.
    roots, resolved hard links and APFS snapshot rebuilding. Explicit epoch zero
    remains a timestamp; HFS keeps its whole-second precision. Native comparisons
    qualify eight images and 296 entries; existing layout controls remain stable.
+   [Ordered stat restoration](../../docs/appledouble-stat-copy.md) now executes
+   times, ownership, permissions and BSD flags through a shared portable backend.
+   It preserves protected destination flags, bounds compare-and-swap retries and
+   retains ignored native failures. Native APFS file/directory comparisons and
+   controlled race/failure cases replay on Linux, macOS and Windows. This is the
+   final stat stage, not a completed host backend or restoration lifecycle.
    **Remaining:** native host write
    adapters, live host source acquisition,
    privileged/sandbox authorization contexts and full restoration ordering.
@@ -206,7 +212,7 @@ of this roadmap delivered. These phases are not estimates of remaining PR count.
 
    **Next implementation:** bind held native/foreign host metadata and destination
    write adapters to ordered restoration, including creation inheritance, ordinary security copying,
-   stat/flags/times/xattrs, deferred AppleDouble replacement and cleanup. Keep one
+   the implemented stat stage, xattrs, deferred AppleDouble replacement and cleanup. Keep one
    pure-Go implementation on Linux, macOS and Windows.
 2. **Quarantine context and transport qualification.** Implemented: serialized
    and filesystem conversion, ordered updates, application planning, raw
