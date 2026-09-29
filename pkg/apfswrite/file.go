@@ -66,7 +66,7 @@ func (b volCtx) setTree(spec VolumeSpec) error {
 			// hard link: a directory entry pointing at the existing inode, with
 			// no inode, content or attributes of its own. Its attributes are
 			// that same inode's, so there is nothing separate to validate.
-			if primary := linkGroups[e.LinkGroup]; primary != nil && e.LinkGroup != 0 && e.Mode.IsRegular() {
+			if primary := linkGroups[e.LinkGroup]; primary != nil && e.LinkGroup != 0 && e.Mode.IsRegular() && !e.isDirEntry() {
 				extra := &builderEntry{name: e.Name, parent: parent, primary: primary}
 				b.entries = append(b.entries, extra)
 				primary.siblings = append(primary.siblings, siblingName{parent: parent, name: e.Name})
@@ -95,7 +95,7 @@ func (b volCtx) setTree(spec VolumeSpec) error {
 			nextOID++
 			b.entries = append(b.entries, be)
 
-			if e.LinkGroup != 0 && e.Mode.IsRegular() {
+			if e.LinkGroup != 0 && e.Mode.IsRegular() && !e.isDirEntry() {
 				linkGroups[e.LinkGroup] = be
 				be.siblings = append(be.siblings, siblingName{parent: parent, name: e.Name})
 			}

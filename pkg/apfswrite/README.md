@@ -24,6 +24,16 @@ when it mounts a volume (for example the space manager free-queue node limits),
 those values are reproduced as functional interoperability requirements of the
 format, verified against Apple's `fsck_apfs`/`hdiutil` and the Linux `apfsck`.
 
+## Deferred AppleDouble ACL restoration
+
+Use `root.RestoreACL(destinationEntry, update)` with the result of
+`appledouble.File.ACLUpdate`. It stages an ACL replacement while preserving
+ownership, permissions and unrelated metadata, and updates regular hard-link
+aliases together. `hfsplus.Entry` exposes the same API. The operation runs in
+pure Go on all platforms; serialize the resulting tree separately. See
+[image ACL restoration](../../docs/appledouble-image-acl-restoration.md) for
+validation, native qualification and the remaining integration work.
+
 ## Exact permissions
 
 Set `Entry.ModeExplicit` when `Mode` contains captured or explicitly requested

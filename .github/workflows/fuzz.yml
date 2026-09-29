@@ -29,6 +29,7 @@ jobs:
           - { pkg: ./pkg/appledouble, target: FuzzACLIdentitySnapshot }
           - { pkg: ./pkg/appledouble, target: FuzzFileSecurity }
           - { pkg: ./pkg/hostmeta, target: FuzzRestoreACL }
+          - { pkg: ./internal/imageacl, target: FuzzImageACLRestore }
           - { pkg: ./pkg/hostmeta, target: FuzzACLAttributes }
           - { pkg: ./pkg/hostmeta, target: FuzzDarwinChmodRequest }
           - { pkg: ./pkg/hostmeta, target: FuzzDarwinChmodProperties }
