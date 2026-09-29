@@ -31,6 +31,10 @@ func (b volCtx) setRoot(source *Entry, nextOID uint64) (uint64, error) {
 	}
 	embedded, streamed := splitXattrs(xattrs)
 	mode := uint16(sIFDIR) | unixmode.Permissions(source.Mode, 0755, source.ModeExplicit || source.Mode != 0)
-	b.root = &builderEntry{name: "root", oid: rootDirInoNum, parent: rootDirParent, isDir: true, mode: mode, uid: root.UID, gid: root.GID, mtime: b.entryTime(root.ModTime), timeSet: true, xattrs: embedded, xattrFlags: flags, bsdFlags: bsdFlags}
+	times, err := b.inodeTimes(&root)
+	if err != nil {
+		return nextOID, fmt.Errorf("apfswrite: root timestamps: %w", err)
+	}
+	b.root = &builderEntry{name: "root", oid: rootDirInoNum, parent: rootDirParent, isDir: true, mode: mode, uid: root.UID, gid: root.GID, times: times, timeSet: true, xattrs: embedded, xattrFlags: flags, bsdFlags: bsdFlags}
 	return b.addXattrStreams(b.root, streamed, nextOID), nil
 }

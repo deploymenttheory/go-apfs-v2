@@ -210,6 +210,17 @@ jobs:
           name: security-source-coverage-${{ matrix.os }}
           path: artifacts/security-source-coverage/
           if-no-files-found: error
+      - name: Independent image timestamps and coverage above 95%
+        env:
+          CGO_ENABLED: "0"
+        run: go run scripts/verify-image-times-coverage.go
+      - name: Upload image timestamp coverage
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: image-times-coverage-${{ matrix.os }}
+          path: artifacts/image-times-coverage/
+          if-no-files-found: error
       - name: AppleDouble 32-bit address-space regressions
         if: runner.os == 'Linux'
         env:
@@ -342,6 +353,18 @@ jobs:
         with:
           name: image-mode-security
           path: artifacts/image-mode-security/
+          if-no-files-found: error
+      - name: Native image timestamp and filesystem qualification
+        if: runner.os == 'macOS'
+        env:
+          CGO_ENABLED: "0"
+        run: go run scripts/verify-image-security.go -times
+      - name: Upload native image timestamp evidence
+        if: always() && runner.os == 'macOS'
+        uses: actions/upload-artifact@v7
+        with:
+          name: image-times
+          path: artifacts/image-times/
           if-no-files-found: error
       - name: Native image ACL restoration and filesystem qualification
         if: runner.os == 'macOS'

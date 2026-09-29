@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
 )
 
 // CreateOptions configures CreateContainer. The zero value is valid: it formats
@@ -56,7 +57,7 @@ type CreateOptions struct {
 	// nil Root (and empty RootFiles) formats an empty volume, exactly as before.
 	//
 	// Root itself represents the volume root directory. Its Mode, UID, GID,
-	// ModTime and Xattrs are retained; Name, Data and LinkGroup are ignored.
+	// ModTime/Times and Xattrs are retained; Name, Data and LinkGroup are ignored.
 	// A zero mode defaults to directory 0755 unless ModeExplicit is true;
 	// os.ModeDir alone also preserves 0000 on the root.
 	// Explicit non-directory types fail.
@@ -163,9 +164,13 @@ type Entry struct {
 	// Mode still selects the entry type; set-ID and sticky bits are always retained.
 	// For a hard-link group the first entry supplies the shared inode metadata.
 	ModeExplicit bool
-	// ModTime is written to the inode's create/mod/change/access times. When
+	// ModTime supplies create/mod/change/access times when Times is nil. When
 	// zero, a fixed deterministic timestamp is used.
 	ModTime time.Time
+	// Times overrides ModTime with four independently supplied inode timestamps.
+	// Nil retains the legacy ModTime/default behavior. ClampModTimes changes
+	// only Times.Modify. Explicit times retain nanoseconds and Unix epoch zero.
+	Times *hostmeta.FileTimes
 	// UID and GID are the inode's owner and group ids.
 	UID, GID uint32
 	// Data is the file content for a regular file (any size, may be empty), or
@@ -225,11 +230,11 @@ type builderEntry struct {
 	nchildren uint32 // directories: number of direct children
 
 	// Inode metadata.
-	mode    uint16 // S_IFMT | permission bits
-	uid     uint32 // owner id
-	gid     uint32 // group id
-	mtime   uint64 // create/mod/change/access time (ns since 1970 UTC)
-	timeSet bool   // a prepared root may explicitly carry Unix epoch zero
+	mode    uint16    // S_IFMT | permission bits
+	uid     uint32    // owner id
+	gid     uint32    // group id
+	timeSet bool      // prepared entries include explicit Unix epoch zero
+	times   [4]uint64 // birth, modification, change, access
 
 	// Symbolic links: the target path bytes (stored in a com.apple.fs.symlink
 	// extended attribute, not in a data stream).

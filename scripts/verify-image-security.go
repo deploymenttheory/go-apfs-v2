@@ -94,10 +94,11 @@ func extract(b []byte, start, end string) []byte {
 func main() {
 	capture := flag.Bool("capture", false, "record unapproved observations")
 	modes := flag.Bool("modes", false, "qualify explicit permissions and special bits on both image writers")
+	times := flag.Bool("times", false, "qualify independent inode timestamps and epoch preservation")
 	roots := flag.Bool("roots", false, "qualify root writer metadata and storage")
 	flag.Parse()
-	if *roots && *modes {
-		panic("choose roots or modes")
+	if (*roots && *modes) || (*times && (*roots || *modes)) {
+		panic("choose one of roots, modes or times")
 	}
 	root := "artifacts/image-security"
 	const helperSource = "testdata/appledouble/native/image-security.c"
@@ -109,6 +110,10 @@ func main() {
 	if *modes {
 		root = "artifacts/image-mode-security"
 		corpus = "testdata/appledouble/native/image-mode-security.json.gz"
+	}
+	if *times {
+		root = "artifacts/image-times"
+		corpus = "testdata/appledouble/native/image-times.json.gz"
 	}
 	must(os.MkdirAll(root, 0700))
 	var f imagesecurity.Fixture
@@ -194,7 +199,22 @@ func main() {
 		snapshots  []apfswrite.SnapshotSpec
 	}
 	var scenarios []scenario
-	if *roots {
+	if *times {
+		for _, kind := range []string{"apfs", "apfs-sensitive", "hfsx", "hfsplus"} {
+			for _, clamp := range []bool{false, true} {
+				tree, cases := imagesecurity.TimeTree(clamp)
+				name := kind + "-times"
+				if clamp {
+					name += "-clamp"
+				}
+				var snaps []apfswrite.SnapshotSpec
+				if strings.HasPrefix(kind, "apfs") {
+					snaps = []apfswrite.SnapshotSpec{{Name: "times"}}
+				}
+				scenarios = append(scenarios, scenario{kind, name, tree, cases, snaps})
+			}
+		}
+	} else if *roots {
 		for _, kind := range []string{"apfs", "apfs-sensitive"} {
 			for _, r := range imagesecurity.Roots(f.ActorUID, f.ActorGID) {
 				scenarios = append(scenarios, scenario{kind, kind + "-" + r.Name, r.Root, []imagesecurity.Case{r.Case}, r.Snapshots})
@@ -217,12 +237,12 @@ func main() {
 		file, e := os.Create(image)
 		must(e)
 		if strings.HasPrefix(kind, "apfs") {
-			must(apfswrite.CreateContainer(file, 64<<20, &apfswrite.CreateOptions{Root: tree, VolumeName: "SECURITY", CaseSensitive: kind == "apfs-sensitive", Snapshots: scene.snapshots}))
+			must(apfswrite.CreateContainer(file, 64<<20, &apfswrite.CreateOptions{Root: tree, VolumeName: "SECURITY", CaseSensitive: kind == "apfs-sensitive", Snapshots: scene.snapshots, ClampModTimes: strings.HasSuffix(scene.name, "-clamp")}))
 		} else {
-			must(hfsplus.CreateImage(file, 64<<20, "SECURITY", imagesecurity.HFSTree(tree), &hfsplus.CreateOptions{CaseInsensitive: kind == "hfsplus"}))
+			must(hfsplus.CreateImage(file, 64<<20, "SECURITY", imagesecurity.HFSTree(tree), &hfsplus.CreateOptions{CaseInsensitive: kind == "hfsplus", ClampModTimes: strings.HasSuffix(scene.name, "-clamp")}))
 		}
 		must(file.Close())
-		if *roots || *modes {
+		if *roots || *modes || *times {
 			if strings.HasPrefix(kind, "apfs") {
 				run("/sbin/fsck_apfs", "-n", image)
 			} else {
@@ -326,6 +346,23 @@ func main() {
 				must(json.Unmarshal(run(helper, path), &n.Native))
 				f.Cases = append(f.Cases, n)
 				native := n.Native
+				if *times {
+					want := *tc.Times
+					if !strings.HasPrefix(kind, "apfs") {
+						for i, v := range want {
+							want[i] = time.Unix(0, v).Unix() * 1e9
+						}
+					}
+					if native.Times != want {
+						panic(fmt.Sprintf("native timestamp %s/%s: %v != %v", scene.name, tc.Name, native.Times, want))
+					}
+					got, e := volume.FileTimes(tc.Name)
+					must(e)
+					actual := [4]int64{got.Birth.UnixNano(), got.Modify.UnixNano(), got.Change.UnixNano(), got.Access.UnixNano()}
+					if actual != want {
+						panic("reader timestamp mismatch")
+					}
+				}
 				if *modes && (native.Mode != uint32(tc.Mode) || native.UID != tc.UID || native.GID != tc.GID) {
 					panic(fmt.Sprintf("native mode/ownership %s/%s: got %#o want %#o", scene.name, tc.Name, native.Mode, tc.Mode))
 				}
@@ -439,6 +476,9 @@ func main() {
 	}
 	oldUID, oldGID := archived.ActorUID, archived.ActorGID
 	for i := range archived.Cases {
+		if *times {
+			continue
+		} // Timestamp fixtures deliberately use fixed foreign IDs.
 		c := &archived.Cases[i]
 		if c.Case.UID == oldUID {
 			c.Case.UID = f.ActorUID

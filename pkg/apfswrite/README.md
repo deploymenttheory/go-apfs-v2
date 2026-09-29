@@ -77,3 +77,11 @@ for defaults, native attribute visibility and compatibility details.
 copy, including inherited ACL selection and numeric permission/ownership policy.
 The equivalent API exists in HFS+. See [image security copying](../../docs/appledouble-image-security-copy.md)
 for its completion contract, native qualification and remaining host integration.
+
+### Independent timestamps
+
+Set `Entry.Times` to a `hostmeta.FileTimes` value to retain separate birth,
+modification, change and access times. Nil keeps existing `ModTime` defaults.
+Both image readers expose `Volume.FileTimes(name)` without following symlinks. See
+[image timestamps](../../docs/appledouble-image-times.md) for clamping, precision,
+validation and native qualification.

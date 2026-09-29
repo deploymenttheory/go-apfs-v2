@@ -342,3 +342,8 @@ pre-selection source separately from the copy cache. `ImageSecurityCapture`
 binds existing APFS/HFS+ readers without loading file payloads or resource forks.
 Both image writers expose `root.CopySecurityFrom(target, capture, options)` on
 every OS. See [source acquisition and qualification](../../docs/appledouble-security-source.md).
+
+`FileTimes` carries four independent inode times for APFS/HFS+ image preservation
+on every OS. Both image volumes expose `FileTimes(name)`, and both writer entries
+accept `Times`. See [image timestamps](../../docs/appledouble-image-times.md) for
+selection, epoch, clamping and format precision rules. It is not a host setter.
