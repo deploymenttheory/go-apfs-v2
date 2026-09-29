@@ -25,6 +25,7 @@ jobs:
           - { pkg: ./pkg/appledouble, target: FuzzACLText }
           - { pkg: ./pkg/appledouble, target: FuzzACLBinary }
           - { pkg: ./pkg/appledouble, target: FuzzACLInheritance }
+          - { pkg: ./pkg/appledouble, target: FuzzCopyACL }
           - { pkg: ./pkg/appledouble, target: FuzzACLIdentitySnapshot }
           - { pkg: ./pkg/appledouble, target: FuzzFileSecurity }
           - { pkg: ./pkg/hostmeta, target: FuzzRestoreACL }

@@ -87,3 +87,8 @@ are available; live source acquisition, real filesystem restoration ordering,
 ownership and restrictive BSD flags, permission/write failures and portable
 carriers remain shared transport work. Package PR #72 stays draft until the
 complete AppleDouble release gate is met; codesign remains paused.
+
+Ordinary copying uses a separate [ACL copy policy](appledouble-acl-copy.md): it
+retains explicit source and already-inherited destination entries. It does not
+derive inheritance from a parent, and AppleDouble restoration still replaces
+the resulting ACL.

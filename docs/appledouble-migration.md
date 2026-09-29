@@ -34,6 +34,8 @@ restrictive-flag errors rule out substituting attribute writes.
 operation for those measured cases; the production call boundary remains open.
 [Controlled owner/non-owner image tests](appledouble-acl-nonowner.md) qualify
 ordinary-user APFS/HFSX authorization and fix missing HFS security catalog flags.
+[Ordinary ACL copy policy](appledouble-acl-copy.md) selects explicit source and
+inherited destination entries, separately from creation and deferred replacement.
 Privileged/sandbox contexts, production native/carrier adapters and full restoration
 ordering remain outstanding. ACL application integration,
 remaining [quarantine application contexts](appledouble-quarantine-application.md),

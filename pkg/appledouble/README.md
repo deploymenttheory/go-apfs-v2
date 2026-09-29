@@ -64,6 +64,10 @@ full AppleDouble transport integration is on the roadmap below.
   allocation limits. It runs on every supported OS without applying host
   permissions. A subsequent valid AppleDouble ACL update replaces this result;
   see [creation and restoration](../../docs/appledouble-acl-inheritance.md).
+- **ACL copy policy:** `CopyACL` keeps explicit source entries followed by
+  inherited destination entries, preserving entry order and bits while dropping
+  global flags. It is distinct from creation inheritance and AppleDouble
+  replacement. See [ordinary ACL copies](../../docs/appledouble-acl-copy.md).
 - **Source identity capture and replay:** `NewACLIdentityCapture` records the
   source callbacks used during parsing and formatting. Its serializable snapshot
   supplies immutable resolvers on any supported OS, preserving confirmed absence
@@ -136,7 +140,8 @@ of this roadmap delivered. These phases are not estimates of remaining PR count.
 | 5. Consumers and release | Component CI and downstream checks exist; final gate blocked by phases 1–4 | Qualified APFS release adopted by package tooling before codesign resumes |
 
 1. **ACL application and transport.** Implemented: deferred replacement,
-   creation inheritance, captured identity replay, full security records,
+   creation inheritance, [ordinary copy selection](../../docs/appledouble-acl-copy.md),
+   captured identity replay, full security records,
    [write/retry execution](../../docs/appledouble-acl-restoration.md),
    [attribute records](../../docs/appledouble-acl-attributes.md) and
    [extended chmod request preparation](../../docs/appledouble-acl-chmod.md).
@@ -146,8 +151,7 @@ of this roadmap delivered. These phases are not estimates of remaining PR count.
    privileged/sandbox authorization contexts and full restoration ordering.
    [Owner/non-owner image tests](../../docs/appledouble-acl-nonowner.md) qualify
    ordinary-user APFS/HFSX grants and denials and fix HFS security catalog flags.
-   The request builder
-   is not a completed native backend; foreign metadata carriers are integrated
+   The request builder is not a completed native backend; foreign metadata carriers are integrated
    in phase 4.
 2. **Quarantine context and transport qualification.** Implemented: serialized
    and filesystem conversion, ordered updates, application planning, raw

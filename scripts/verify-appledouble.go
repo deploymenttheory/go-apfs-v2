@@ -64,6 +64,7 @@ func verify() error {
 		return err
 	}
 	covered, total := 0, 0
+	copyCovered, copyTotal := 0, 0
 	for _, line := range strings.Split(string(data), "\n") {
 		fields := strings.Fields(line)
 		if len(fields) != 3 {
@@ -80,10 +81,19 @@ func verify() error {
 		if err != nil {
 			return err
 		}
+		if strings.Contains(fields[0], "/pkg/appledouble/acl_copy.go:") {
+			copyTotal += n
+			if hits > 0 {
+				copyCovered += n
+			}
+		}
 		total += n
 		if hits > 0 {
 			covered += n
 		}
+	}
+	if copyTotal == 0 || copyCovered*100 <= copyTotal*95 {
+		return fmt.Errorf("ACL copy coverage must exceed 95%%: %d/%d", copyCovered, copyTotal)
 	}
 	files, err := filepath.Glob("pkg/appledouble/*")
 	if err != nil {
@@ -97,6 +107,7 @@ func verify() error {
 	files = append(files, "testdata/appledouble/native/quarantine-runtime.c", "testdata/appledouble/native/quarantine-runtime-macos27.json", "testdata/appledouble/native/quarantine-runtime-macos26.json", "scripts/verify-appledouble-quarantine-runtime.go")
 	files = append(files, "testdata/appledouble/native/quarantine-contexts-macos26.json.gz", "testdata/appledouble/native/quarantine-process-capture.h", "testdata/appledouble/native/quarantine-contexts-macos27.json.gz", "testdata/appledouble/native/quarantine-runtime-macos27-no-creation.json.gz", "testdata/appledouble/native/quarantine-processes-macos26.json.gz", "testdata/appledouble/native/quarantine-processes-macos27.json.gz", "testdata/appledouble/native/quarantine-normalization-macos27.json.gz", "testdata/appledouble/native/quarantine-normalization-macos26.json.gz")
 	files = append(files, "testdata/appledouble/native/filesec.c", "testdata/appledouble/native/filesec.json.gz", "scripts/verify-appledouble-filesec.go")
+	files = append(files, "testdata/appledouble/native/acl-copy.c", "testdata/appledouble/native/acl-copy.json.gz", "scripts/verify-appledouble-acl-copy.go")
 	sources := map[string]string{}
 	files = append(files, "testdata/appledouble/native/acl-identity.c", "testdata/appledouble/native/acl-identities.json.gz")
 	files = append(files, "testdata/appledouble/native/acl-inherit.c", "testdata/appledouble/native/acl-inherit.json.gz", "scripts/verify-appledouble-acl-inherit.go")
@@ -117,7 +128,7 @@ func verify() error {
 	if err != nil {
 		return err
 	}
-	report := map[string]any{"goos": runtime.GOOS, "goarch": runtime.GOARCH, "go": runtime.Version(), "revision": strings.TrimSpace(string(revision)), "covered": covered, "statements": total, "passed_tests": passed, "source_sha256": sources}
+	report := map[string]any{"coverage_files": map[string][2]int{"pkg/appledouble/acl_copy.go": {copyCovered, copyTotal}}, "goos": runtime.GOOS, "goarch": runtime.GOARCH, "go": runtime.Version(), "revision": strings.TrimSpace(string(revision)), "covered": covered, "statements": total, "passed_tests": passed, "source_sha256": sources}
 	b, err := json.MarshalIndent(report, "", "  ")
 	if err != nil {
 		return err

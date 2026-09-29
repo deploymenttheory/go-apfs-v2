@@ -302,4 +302,8 @@ by submitting the request to the correct operation. See the [contract and eviden
 
 This prepares request data, not a production native call or foreign-host carrier.
 Do not substitute `fsetattrlist` or add a permission-changing preflight. Adapters,
-non-owner contexts and complete lifecycle integration remain outstanding.
+privileged/sandbox contexts and complete lifecycle integration remain outstanding.
+Controlled owner/non-owner APFS/HFSX contexts are qualified; see
+[authorization evidence](../../docs/appledouble-acl-nonowner.md). Ordinary
+copy selection uses [`appledouble.CopyACL`](../../docs/appledouble-acl-copy.md),
+separately from this package's deferred replacement protocol.
