@@ -170,3 +170,10 @@ four images. IDs identify the new volume; original document identity, general
 FinderInfo restoration and special object semantics remain separate work. The
 next step is binding these metadata fields to ordered restoration, not releasing
 APFS or changing package PR72's dependency.
+
+[Ordered image stat staging](appledouble-image-stat.md) now binds the shared
+executor to both writer trees, with explicit destination times, alias agreement
+and publication only after all staged operations succeed. Native model requests
+and 580 mounted-image observations qualify the stored output on all three OSes.
+Live authorization/timestamp effects, source/host bindings and the complete
+restoration lifecycle remain open; this does not ready package PR72.

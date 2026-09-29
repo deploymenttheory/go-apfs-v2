@@ -364,3 +364,9 @@ See [the contract, usage and native qualification](../../docs/appledouble-stat-c
 Both APFS/HFS+ image readers also expose `BSDFlags(name)` and both writer entries
 accept `BSDFlags`. These are portable image metadata APIs, not live host flag
 setters or an automatic binding to `CopyStat`. See [image BSD flags](../../docs/appledouble-image-flags.md).
+
+APFS/HFS+ writer entries bind `CopyStat` to offline trees.
+`ImageStatCopyResult.Applied` distinguishes publication into all aliases from
+private executor completion. Explicit destination times are required; failed
+staging leaves entries untouched. See [image stat staging](../../docs/appledouble-image-stat.md)
+for validation, diagnostics and the remaining live-host/lifecycle work.

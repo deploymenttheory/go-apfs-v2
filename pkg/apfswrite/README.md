@@ -93,3 +93,11 @@ Nil keeps legacy compression inference. Both readers expose `Volume.BSDFlags`;
 HFS+ has the same entry field. Tracked entries receive new-volume document IDs.
 See [image BSD flags](../../docs/appledouble-image-flags.md) for compression
 validation, HFS catalog mapping, native evidence and limits.
+
+### Ordered stat restoration
+
+`root.CopyStat(target, source, options)` stages modification/access times,
+ownership, permissions and selected BSD flags into target and its hard-link
+aliases. Destination `Times` must be explicit. Inspect `Applied` and executor
+diagnostics before serializing. HFS+ exposes the same API; see
+[image stat staging](../../docs/appledouble-image-stat.md).

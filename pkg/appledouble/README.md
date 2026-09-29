@@ -82,6 +82,10 @@ full AppleDouble transport integration is on the roadmap below.
   merging, selected numeric properties, removal and set-ID policy. Source
   validation and all alias updates precede image serialization on every OS.
   See [image security copying](../../docs/appledouble-image-security-copy.md).
+- **Ordered image stat staging:** both writer trees expose `root.CopyStat` for
+  modification/access times, ownership, permissions and BSD flags. All aliases
+  publish together after validation; failed staging leaves the tree unchanged.
+  See [image stat staging](../../docs/appledouble-image-stat.md).
 - **Source identity capture and replay:** `NewACLIdentityCapture` records the
   source callbacks used during parsing and formatting. Its serializable snapshot
   supplies immutable resolvers on any supported OS, preserving confirmed absence
@@ -147,7 +151,7 @@ of this roadmap delivered. These phases are not estimates of remaining PR count.
 
 | Phase | Current state | Completion gate |
 | --- | --- | --- |
-| 1. ACL application | Source acquisition, image copying, volume policy, independent image timestamps/flags and stat-stage execution implemented; host bindings and lifecycle integration remain | Source acquisition, authorization, actual writes and restoration ordering qualified together |
+| 1. ACL application | Source acquisition, image copying, volume policy, independent image timestamps/flags and ordered stat staging implemented; host bindings and lifecycle integration remain | Source acquisition, authorization, actual writes and restoration ordering qualified together |
 | 2. Quarantine | Conversion and much of application policy implemented; context/integration gaps open | Remaining process contexts and ordered restoration qualify against native behavior |
 | 3. Large values and allocation | Known native differences remain | Oversized values, aggregates, forks and allocation policy have explicit, tested behavior |
 | 4. Shared filesystem transport | Host primitives and exact image permissions available; complete metadata transport outstanding | APFS/HFS+ extract-and-repack preserves logical metadata on all three OSes |
@@ -208,6 +212,11 @@ of this roadmap delivered. These phases are not estimates of remaining PR count.
    Native comparisons qualify 276 entries across four images. Host flag setters,
    general FinderInfo restoration, special object flags and original document
    identity preservation remain outside this increment.
+   [Ordered image stat staging](../../docs/appledouble-image-stat.md) connects
+   that executor to both writer trees. Explicit destination times, alias agreement
+   and format validation prevent ambiguous or partially published metadata. Native
+   policy requests and 580 image observations qualify the stored result; live
+   kernel authorization and timestamp side effects remain separate work.
    **Remaining:** native host write
    adapters, live host source acquisition,
    privileged/sandbox authorization contexts and full restoration ordering.

@@ -97,7 +97,8 @@ hashes remain regression controls.
 
 ## Remaining integration
 
-Image flag storage removes a prerequisite for binding the portable stat stage.
+[Ordered image stat staging](appledouble-image-stat.md) now binds these fields to
+the portable stat stage in both writer trees.
 Held host acquisition, destination write adapters, creation inheritance, ordered
 security/stat/xattr restoration, deferred AppleDouble ACL replacement and cleanup
 remain. Carrier transport, general FinderInfo restoration, special object flags

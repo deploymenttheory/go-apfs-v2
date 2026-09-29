@@ -81,8 +81,9 @@ reclassified as contention.
 
 This does not emulate Darwin flags using unrelated Windows attributes or Linux
 inode bits. A foreign-host backend must preserve the Darwin metadata explicitly.
-There are no OS-specific feature stubs in this executor. Built-in native and
-foreign-carrier bindings remain outstanding.
+There are no OS-specific feature stubs in this executor.
+[Offline writer-tree bindings](appledouble-image-stat.md) are available; live native
+and foreign-carrier bindings remain outstanding.
 
 ## Qualification
 
@@ -119,7 +120,8 @@ Live qualification here is ordinary-user APFS files/directories. It does not
 establish live compressed-file, symlink, HFS+, privileged/sandbox, or concurrent
 kernel-race behavior. Compression and contention paths have controlled native
 function evidence. Metadata-change time is kernel-owned and not part of the
-stable comparison record. Host bindings, image write integration, xattr ordering,
+stable comparison record. [Image stat staging](appledouble-image-stat.md) is
+available. Host bindings, xattr ordering,
 deferred ACL replacement and lifecycle cleanup still need qualification together.
 All five AppleDouble completion gates remain open.
 
