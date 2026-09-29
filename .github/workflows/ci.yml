@@ -184,6 +184,18 @@ jobs:
           name: appledouble-acl-copy
           path: artifacts/appledouble-acl-copy/
           if-no-files-found: error
+      - name: Ordinary security copy execution and native fallback comparisons
+        if: runner.os == 'macOS'
+        env:
+          CGO_ENABLED: "0"
+        run: go run scripts/verify-security-copy.go
+      - name: Upload security copy execution evidence
+        if: always() && runner.os == 'macOS'
+        uses: actions/upload-artifact@v7
+        with:
+          name: security-copy
+          path: artifacts/security-copy/
+          if-no-files-found: error
       - name: AppleDouble native security records and ACL application
         if: runner.os == 'macOS'
         env:

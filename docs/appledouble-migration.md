@@ -122,3 +122,9 @@ provenance. Only then may codesign resume, using the released shared APIs rather
 than duplicating the codec or host transport.
 
 Relocation coverage alone is not permission to release or resume codesign.
+
+The ordinary security-copy executor is now available as `hostmeta.CopySecurity`.
+It separates native sequence completion from write-failure diagnostics and keeps
+source-cache changes explicit. Production adapters and lifecycle integration
+remain required; see [security-copy execution](appledouble-security-copy.md).
+This increment does not unblock package PR72 or the final release gate.

@@ -86,9 +86,10 @@ round-trips, input immutability and discarded-entry behavior.
 
 ## Remaining work
 
-This provides selection policy, not a complete `COPYFILE_SECURITY` backend. It
-does not copy numeric/UUID ownership, implement copyfile's fallback writes or
-coordinate source-cache mutation, stat changes and final AppleDouble restoration.
+This provides selection policy. [`hostmeta.CopySecurity`](appledouble-security-copy.md)
+now coordinates ordinary security properties, source-cache changes, set-ID
+filtering and fallback writes with explicit failure diagnostics. It is not a
+complete `COPYFILE_SECURITY` backend or final AppleDouble restoration ordering.
 Production capture/write adapters, live source identities, privileged/sandbox
 contexts and full restoration ordering remain open. So do the other
 [roadmap gates](../pkg/appledouble/README.md#roadmap). Package PR #72 stays draft,
