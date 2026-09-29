@@ -121,42 +121,56 @@ Use `File.Attrs` instead of the map when duplicate record order matters.
 
 ## Roadmap
 
-The remaining work is ordered around completing metadata policy before integrating
-filesystem transport:
+**Five completion gates remain open: four implementation areas and final
+qualification/release.** Work is currently in ACL application. The codec and
+many policy components are implemented; end-to-end filesystem preservation is
+not complete. Code coverage measures the implemented code, not the percentage
+of this roadmap delivered. These phases are not estimates of remaining PR count.
 
-1. **Complete ACL application and transport.** Integrate deferred replacement
-   decisions, qualified creation inheritance and captured identity replay with
-   source acquisition adapters and actual filesystem writes. Ownership-preserving
-   security requests and owner-operated restrictive-flag failures have native
-   comparisons; non-owner authorization and full restoration
-   ordering still need qualification. Creation
-   inheritance and replacement over inherited ACLs have native comparisons;
-   `hostmeta.RestoreACL` now supplies the [portable write/retry protocol](../../docs/appledouble-acl-restoration.md),
-   with real APFS/FAT comparisons. [Darwin attribute records](../../docs/appledouble-acl-attributes.md)
-   now preserve separate UUID ownership; measured attribute/copyfile differences
-   in empty ACL flags and restrictive-flag errors still block backend substitution.
-   Shared native/carrier adapters and full
-   lifecycle integration remain outstanding.
-2. **Complete quarantine context and transport qualification.** Extend the
-   [controlled runtime evidence](../../docs/appledouble-quarantine-runtime.md) and
-   application planner to unresolved process contexts (including absence on macOS
-   27), production raw-agent capture and destination protection. Regular files,
-   directories and symlinks have qualified [destination-kind policy](../../docs/appledouble-quarantine-destinations.md).
-   Integrate ordered plans with destination cleanup,
-   source-state capture and write-failure handling. Raw existing values, including
-   malformed metadata, are handled by `ExistingXattr`; see
-   [destination-state policy](../../docs/appledouble-quarantine-existing.md).
-3. **Resolve large-value and allocation behavior.** Qualify oversized attributes,
-   aggregates and resource forks. Resolve the difference between native packing
-   of values above 16 MiB and the codec's preservation behavior, and between
-   native sequential handling and the decoder's cumulative alias-allocation guard.
-4. **Integrate shared filesystem transport.** Preserve metadata for files,
-   directories, roots and links through `pkg/hostmeta`. Handle native write refusal,
-   normalization, carrier conflicts and path safety without losing metadata on
-   Linux, macOS or Windows. Prove APFS/HFS+ extract-and-repack preservation.
-5. **Qualify consumers and release.** Require native macOS comparisons, more than
-   95% codec unit coverage on all three operating systems, and downstream package
-   validation before adopting the completed APIs in codesign.
+| Phase | Current state | Completion gate |
+| --- | --- | --- |
+| 1. ACL application | Policy and request preparation qualified; production integration in progress | Source acquisition, authorization, actual writes and restoration ordering qualified together |
+| 2. Quarantine | Conversion and much of application policy implemented; context/integration gaps open | Remaining process contexts and ordered restoration qualify against native behavior |
+| 3. Large values and allocation | Known native differences remain | Oversized values, aggregates, forks and allocation policy have explicit, tested behavior |
+| 4. Shared filesystem transport | Host metadata primitives available; preservation integration outstanding | APFS/HFS+ extract-and-repack preserves logical metadata on all three OSes |
+| 5. Consumers and release | Component CI and downstream checks exist; final gate blocked by phases 1–4 | Qualified APFS release adopted by package tooling before codesign resumes |
+
+1. **ACL application and transport.** Implemented: deferred replacement,
+   creation inheritance, captured identity replay, full security records,
+   [write/retry execution](../../docs/appledouble-acl-restoration.md),
+   [attribute records](../../docs/appledouble-acl-attributes.md) and
+   [extended chmod request preparation](../../docs/appledouble-acl-chmod.md).
+   Native extended chmod comparisons resolve the measured attribute/copyfile
+   refusal and empty-ACL flag differences for the qualified owner-operated cases.
+   **Remaining:** production call/capture adapters, live source acquisition,
+   non-owner authorization and full restoration ordering. The request builder
+   is not a completed native backend; foreign metadata carriers are integrated
+   in phase 4.
+2. **Quarantine context and transport qualification.** Implemented: serialized
+   and filesystem conversion, ordered updates, application planning, raw
+   destination-state handling and file/directory/symlink destination policy.
+   **Remaining:** unresolved process contexts (including absence on macOS 27),
+   production raw-agent capture, destination protection, source-state capture,
+   cleanup and write-failure integration. See [runtime evidence](../../docs/appledouble-quarantine-runtime.md),
+   [application planning](../../docs/appledouble-quarantine-application.md) and
+   [destination state](../../docs/appledouble-quarantine-existing.md).
+3. **Large-value and allocation behavior.** Basic native size boundaries have
+   tests. **Remaining:** values above 16 MiB, aggregate and resource-fork limits,
+   the native packing versus lossless-codec difference, and native sequential
+   handling versus the decoder's cumulative alias-allocation guard. Each
+   difference needs a qualified policy, not an implicit metadata-loss success.
+4. **Shared filesystem transport.** Strict native xattr primitives are available
+   in `pkg/hostmeta`. **Remaining:** integrated preservation for files,
+   directories, roots and links; native write refusal/normalization; empty values,
+   logical names and large forks; carrier conflicts and path safety. Prove
+   logical name/value preservation through APFS/HFS+ extraction and repacking on
+   Linux, macOS and Windows, with independent Mac validation of foreign-host output.
+5. **Consumers and release.** Component native comparisons, greater than 95%
+   codec unit coverage and downstream package tests are ongoing gates.
+   **Remaining:** qualify the completed integration, release APFS through the
+   repository release process, update draft package PR #72 to that published
+   version and rerun downstream validation. Keep PR #72 draft until then.
+   Resume codesign only after the qualified APFS release and downstream adoption.
 
 For implementation detail, see the [migration and implementation plan](../../docs/appledouble-migration.md).
 The native investigations document [sizes](../../docs/appledouble-native-sizes.md),

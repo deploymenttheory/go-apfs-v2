@@ -83,8 +83,8 @@ hashes, source files, ASTs, host/tool/revision information and the disk image.
 security conversion and application matrices.
 
 All three OS jobs replay the required archived corpus and enforce greater than
-95% statement coverage independently of `pkg/hostmeta/acl_restore.go` and
-`pkg/hostmeta/acl_attributes.go` using
+95% statement coverage independently of `pkg/hostmeta/acl_restore.go`,
+`pkg/hostmeta/acl_attributes.go` and `pkg/hostmeta/acl_chmod.go` using
 `scripts/verify-acl-restore.go`. This is a focused restoration coverage gate, not
 a claim of whole-package `hostmeta` coverage. The existing independent AppleDouble
 coverage gate remains. Unit tests additionally cover capture failure, reset
@@ -98,7 +98,9 @@ and retention of destination metadata and error causes.
 The [attribute-record codec](appledouble-acl-attributes.md) provides portable
 Darwin request bytes. Native attribute calls differ from copyfile on empty ACL
 flags and restrictive-flag failures, so they are not a qualified replacement
-backend yet.
+backend yet. The [extended chmod request builder](appledouble-acl-chmod.md)
+qualifies the correct operation for the measured cases; its production call
+boundary remains to be implemented.
 
 This implements the deferred ACL write protocol, not the entire copyfile
 lifecycle. Shared native/carrier adapters, live source identity acquisition,
