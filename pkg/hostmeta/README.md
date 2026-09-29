@@ -325,3 +325,11 @@ filtering and copyfile-compatible fallback ordering through a portable backend.
 It retains write failures even where native copyfile reports success. Callers
 must inspect `SecurityCopyResult.Failures`; `Completed` alone does not prove
 metadata preservation. See [execution and qualification](../../docs/appledouble-security-copy.md).
+
+`SecurityCopyOptions.VolumePolicy` optionally acquires source/destination mount
+policy after ACL selection and before writes. `SecurityCopyResult.VolumeQueries`
+distinguishes observed negatives, positive `MNT_NOSUID` results, failed queries
+and unqueried endpoints. The executor preserves native short-circuit order and
+continues after lookup failures. Both image writers accept the same provider on
+Linux, macOS and Windows; the provider must supply actual host or captured foreign
+mount state. See [volume policy and native comparisons](../../docs/appledouble-security-copy-volume.md).

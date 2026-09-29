@@ -57,6 +57,8 @@ Neither absence of a returned stage error nor `Completed` proves preservation.
 - `Writes` counts attempted backend writes, including unsuccessful ones.
 - `Failures` retains each failed write's operation and original error, in order.
   It includes the failed combined operation even if later operations recover.
+- `VolumeQueries` retains optional lazy volume lookups and their errors, in
+  execution order. Queries do not count as writes or write failures.
 - `Source` owns the resulting cache, including the selected ACL even when later
   writes fail. It is populated after successful input validation for a selected
   stage. A no-op returns no source snapshot. The source filesystem is not written.
@@ -69,8 +71,10 @@ not roll back partial writes or infer the final filesystem state.
 
 ## Backend and storage contract
 
-The caller captures source properties, stat metadata and volume policy before
-execution. Failed reads must not become omitted properties or absent ACLs.
+The caller captures source properties and stat metadata before execution.
+Volume policy can be precaptured or supplied through the optional
+[`VolumePolicy` provider](appledouble-security-copy-volume.md). Failed reads must
+not become omitted properties or absent ACLs.
 Every backend operation must refer to the same held target and exclude concurrent
 mutation. No callback opens a path on behalf of the executor.
 
@@ -132,7 +136,7 @@ validity, write bounds, diagnostics and input preservation.
 The executor is now connected to both [image writer trees](appledouble-image-security-copy.md),
 including inherited ACL selection, omitted properties, UUID-only removal and set-ID
 side effects. Native host/carrier adapters and full restoration ordering remain open. Live source and identity acquisition,
-privileged/sandbox contexts, volume-query diagnostics, libSystem allocation and
+privileged/sandbox contexts, native volume-provider bindings, libSystem allocation and
 property-setter failures, and integration with stat/flags/times/xattr and final
 AppleDouble stages remain open. The [five roadmap gates](../pkg/appledouble/README.md#roadmap)
 remain open; package PR72 stays draft and codesign stays paused.

@@ -16,14 +16,17 @@ type SecurityCopySource struct {
 	UID, GID, Mode uint32
 }
 
-// SecurityCopyOptions selects copyfile's security stage and its already
-// captured set-ID policy. NoSetID means the corresponding volume was positively
+// SecurityCopyOptions selects copyfile's security stage and its set-ID policy.
+// With VolumePolicy nil, NoSetID means the corresponding volume was positively
 // identified as MNT_NOSUID. Volume lookup failures must remain distinguishable
 // in the capture layer; they do not establish this capability.
 type SecurityCopyOptions struct {
 	ACL, Stat                         bool
 	AlwaysCopySetID, ForbidCopySetID  bool
 	SourceNoSetID, DestinationNoSetID bool
+	// VolumePolicy acquires policy lazily in native order. When supplied, both
+	// precaptured NoSetID fields must be false. See SecurityCopyVolumePolicy.
+	VolumePolicy SecurityCopyVolumePolicy
 }
 
 // SecurityCopyBackend binds every operation to the same held destination.
@@ -59,6 +62,9 @@ type SecurityCopyResult struct {
 	Completed, Fallback bool
 	Writes              int
 	Failures            []SecurityCopyFailure
+	// VolumeQueries retains attempted lookups in order, including failures.
+	// Failed queries do not count as writes or make Completed false.
+	VolumeQueries []SecurityCopyVolumeQuery
 }
 
 // CopySecurity executes the ordinary copyfile_security stage. It merges ACLs
@@ -85,6 +91,9 @@ func CopySecurity(source SecurityCopySource, options SecurityCopyOptions, backen
 	}
 	if backend == nil {
 		return result, fmt.Errorf("security copy backend: %w", os.ErrInvalid)
+	}
+	if options.VolumePolicy != nil && (options.SourceNoSetID || options.DestinationNoSetID) {
+		return result, fmt.Errorf("mixed captured and queried volume policy: %w", os.ErrInvalid)
 	}
 	if options.ACL {
 		// Libc cannot materialize FILESEC_ACL from a present NOACL raw record.
@@ -116,7 +125,7 @@ func CopySecurity(source SecurityCopySource, options SecurityCopyOptions, backen
 	}
 	properties := working.Properties
 	mode := uint16(source.Mode)
-	if options.Stat && !options.AlwaysCopySetID && (options.ForbidCopySetID || options.SourceNoSetID || options.DestinationNoSetID) {
+	if securityCopyNoSetID(options, &result) {
 		mode &^= 06000
 		if properties.Mode != nil {
 			*properties.Mode &^= 06000

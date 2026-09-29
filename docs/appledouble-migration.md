@@ -142,3 +142,8 @@ These close the measured root-loss gap but do not close the integration gate.
 Ordinary security copying is now connected to both image writer trees; see
 [image security-copy integration](appledouble-image-security-copy.md) for selected
 properties, native refusals, qualification and the remaining ordered lifecycle.
+
+The same executor and image writers support [lazy volume-policy acquisition](appledouble-security-copy-volume.md),
+including native query order and retained lookup errors. Providers bind runtime
+mount state to the copy endpoints; native host/carrier binding and complete
+restoration ordering still gate release.

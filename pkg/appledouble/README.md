@@ -147,7 +147,7 @@ of this roadmap delivered. These phases are not estimates of remaining PR count.
 
 | Phase | Current state | Completion gate |
 | --- | --- | --- |
-| 1. ACL application | Deferred and ordinary APFS/HFS+ image security copying integrated; host acquisition and ordered restoration remain | Source acquisition, authorization, actual writes and restoration ordering qualified together |
+| 1. ACL application | Deferred/ordinary image security copying and lazy volume-policy acquisition integrated; host adapters and ordered restoration remain | Source acquisition, authorization, actual writes and restoration ordering qualified together |
 | 2. Quarantine | Conversion and much of application policy implemented; context/integration gaps open | Remaining process contexts and ordered restoration qualify against native behavior |
 | 3. Large values and allocation | Known native differences remain | Oversized values, aggregates, forks and allocation policy have explicit, tested behavior |
 | 4. Shared filesystem transport | Host primitives and exact image permissions available; complete metadata transport outstanding | APFS/HFS+ extract-and-repack preserves logical metadata on all three OSes |
@@ -181,6 +181,10 @@ of this roadmap delivered. These phases are not estimates of remaining PR count.
    now merges explicit/inherited ACL entries, applies selected numeric properties,
    handles UUID-only removal and retains native set-ID side effects. Raw NOACL
    source properties produce the native pre-write refusal.
+   [Volume-policy acquisition](../../docs/appledouble-security-copy-volume.md)
+   queries source and destination policy lazily in native order, retains lookup
+   failures separately from write failures, and works through both image writers
+   on all three OSes. Image bytes alone do not establish mount policy.
    **Remaining:** native host write
    adapters, live host source acquisition,
    privileged/sandbox authorization contexts and full restoration ordering.
@@ -189,8 +193,8 @@ of this roadmap delivered. These phases are not estimates of remaining PR count.
    The request builder is not a completed native backend; foreign metadata carriers are integrated
    in phase 4.
 
-   **Next implementation:** connect source and volume-policy acquisition to
-   ordered restoration, including creation inheritance, ordinary security copying,
+   **Next implementation:** connect live source acquisition and host/carrier
+   adapters to ordered restoration, including creation inheritance, ordinary security copying,
    stat/flags/times/xattrs, deferred AppleDouble replacement and cleanup. Keep one
    pure-Go implementation on Linux, macOS and Windows.
 2. **Quarantine context and transport qualification.** Implemented: serialized
