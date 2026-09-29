@@ -221,6 +221,17 @@ jobs:
           name: image-times-coverage-${{ matrix.os }}
           path: artifacts/image-times-coverage/
           if-no-files-found: error
+      - name: Portable ordered stat restoration and coverage above 95%
+        env:
+          CGO_ENABLED: "0"
+        run: go run scripts/verify-stat-copy-coverage.go
+      - name: Upload ordered stat restoration coverage
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: stat-copy-coverage-${{ matrix.os }}
+          path: artifacts/stat-copy-coverage/
+          if-no-files-found: error
       - name: AppleDouble 32-bit address-space regressions
         if: runner.os == 'Linux'
         env:
@@ -317,6 +328,18 @@ jobs:
         with:
           name: security-source
           path: artifacts/security-source/
+          if-no-files-found: error
+      - name: Native ordered stat restoration comparisons
+        if: runner.os == 'macOS'
+        env:
+          CGO_ENABLED: "0"
+        run: go run scripts/verify-stat-copy.go
+      - name: Upload native stat restoration evidence
+        if: always() && runner.os == 'macOS'
+        uses: actions/upload-artifact@v7
+        with:
+          name: stat-copy
+          path: artifacts/stat-copy/
           if-no-files-found: error
       - name: Native APFS/HFS image security capture comparisons
         if: runner.os == 'macOS'
