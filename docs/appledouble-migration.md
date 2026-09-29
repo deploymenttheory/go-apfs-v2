@@ -29,7 +29,9 @@ conversion and restrictive-flag application comparisons. The shared
 errors and qualifies source-cache reset/retry against real APFS and FAT outcomes.
 [Darwin attribute records](appledouble-acl-attributes.md) preserve separate UUID
 ownership, but native attribute/copyfile differences in empty ACL flags and
-restrictive-flag errors remain an explicit backend integration blocker.
+restrictive-flag errors rule out substituting attribute writes.
+[Extended chmod requests](appledouble-acl-chmod.md) qualify the matching native
+operation for those measured cases; the production call boundary remains open.
 Non-owner authorization, production native/carrier adapters and full restoration
 ordering remain outstanding. ACL application integration,
 remaining [quarantine application contexts](appledouble-quarantine-application.md),

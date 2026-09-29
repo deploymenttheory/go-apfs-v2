@@ -51,6 +51,7 @@ type application struct {
 	Native      result
 }
 type fixture struct {
+	Chmod                                                   *chmodFixture
 	Attributes                                              *attributeFixture
 	Restoration                                             *restorationFixture
 	HelperSHA256, CopyfileSHA256, XNUSHA256, Host, Revision string
@@ -211,6 +212,8 @@ func main() {
 	verifyRestoration(root, f.Restoration, *capture)
 	f.Attributes = &attributeFixture{Revision: f.Revision, Host: f.Host, HelperSHA256: sum(read("testdata/appledouble/native/acl-attributes.c")), ParentHelperSHA256: f.HelperSHA256}
 	verifyAttributes(root, f.Attributes, *capture)
+	f.Chmod = &chmodFixture{Revision: f.Revision, Host: f.Host, HelperSHA256: sum(read("testdata/appledouble/native/acl-chmod.c")), ParentHelperSHA256: f.HelperSHA256}
+	verifyChmod(root, f.Chmod, f.Attributes, *capture)
 	b, e := json.MarshalIndent(f, "", "  ")
 	must(e)
 	write(filepath.Join(root, "observed.json"), b)
@@ -675,8 +678,8 @@ func verifyAttributes(root string, f *attributeFixture, capture bool) {
 						must(e)
 						input := filepath.Join(dir, "acl.txt")
 						write(input, text)
-						before, nativeResponse, native, nativeAfter, _ := attributeRun(helper, dir, input, tc, "native")
-						referenceBefore, referenceResponse, reference, referenceAfter, _ := attributeRun(helper, dir, input, tc, "reference")
+						before, nativeResponse, native, nativeAfter, _ := attributeRun(helper, dir, input, tc, "native", attributeWriteRequest)
+						referenceBefore, referenceResponse, reference, referenceAfter, _ := attributeRun(helper, dir, input, tc, "reference", attributeWriteRequest)
 						if referenceBefore != before || !bytes.Equal(referenceResponse, nativeResponse) || !reference.IdentityUnchanged {
 							panic("reference setup differs")
 						}
@@ -685,7 +688,7 @@ func verifyAttributes(root string, f *attributeFixture, capture bool) {
 						if reference.Code != 0 && (reference.After != before || !bytes.Equal(referenceResponse, referenceAfter)) {
 							panic("failed reference write changed metadata")
 						}
-						goBefore, goResponse, goNative, goAfter, request := attributeRun(helper, dir, input, tc, "go")
+						goBefore, goResponse, goNative, goAfter, request := attributeRun(helper, dir, input, tc, "go", attributeWriteRequest)
 						if before != goBefore || native != goNative || !bytes.Equal(nativeResponse, goResponse) || !bytes.Equal(nativeAfter, goAfter) || !native.IdentityUnchanged {
 							panic("native attribute write differs: " + tc.Name)
 						}
@@ -774,7 +777,7 @@ func verifyAttributeMetadata(m hostmeta.ACLMetadata, want metadata) {
 		panic(fmt.Sprintf("attribute capture differs: %+v vs %+v security=%x", m, want, b))
 	}
 }
-func attributeRun(helper, dir, input string, tc attributeApplication, kind string) (metadata, []byte, result, []byte, []byte) {
+func attributeRun(helper, dir, input string, tc attributeApplication, kind string, encode func(hostmeta.ACLMetadata) ([]byte, string, error)) (metadata, []byte, result, []byte, []byte) {
 	args := []string{filepath.Join(dir, kind), tc.Kind, fmt.Sprintf("%o", tc.Mode), fmt.Sprint(tc.Flags), input, kind, fmt.Sprint(tc.Initial)}
 	cmd := exec.Command(helper, args...)
 	stdin, e := cmd.StdinPipe()
@@ -813,9 +816,8 @@ func attributeRun(helper, dir, input string, tc attributeApplication, kind strin
 		must(e)
 		line = "-"
 		if m.Security != nil {
-			request, e = m.MarshalDarwinACLAttributes()
+			request, line, e = encode(m)
 			must(e)
-			line = hex.EncodeToString(request)
 		}
 		_, e = io.WriteString(stdin, line+"\n")
 		must(e)
@@ -846,4 +848,132 @@ func attributeRun(helper, dir, input string, tc attributeApplication, kind strin
 	write(filepath.Join(dir, kind+"-attributes.jsonl"), raw.Bytes())
 	write(filepath.Join(dir, kind+"-attributes.stdin"), []byte(line))
 	return before.Before, response, after.result, afterResponse, request
+}
+
+func attributeWriteRequest(m hostmeta.ACLMetadata) ([]byte, string, error) {
+	b, e := m.MarshalDarwinACLAttributes()
+	return b, hex.EncodeToString(b), e
+}
+func chmodWriteRequest(m hostmeta.ACLMetadata) ([]byte, string, error) {
+	r, e := m.DarwinChmodRequest()
+	if e != nil {
+		return nil, "", e
+	}
+	return r.Security, fmt.Sprintf("%d %d %d %x", r.UID, r.GID, r.Mode, r.Security), nil
+}
+
+type chmodConversion struct {
+	Name    string
+	Input   metadata
+	Request hostmeta.DarwinChmodRequest
+}
+type chmodApplication struct {
+	Name, Kind              string
+	Initial                 int
+	Mode, Flags             uint32
+	Text                    []byte
+	Before                  metadata
+	Response, AfterResponse []byte
+	Request                 *hostmeta.DarwinChmodRequest
+	Native                  result
+}
+type chmodFixture struct {
+	Revision, Host, HelperSHA256, ParentHelperSHA256, LibcSHA256, XNUSHA256 string
+	Conversions                                                             []chmodConversion
+	Applications                                                            []chmodApplication
+}
+
+func verifyChmod(root string, f *chmodFixture, attributes *attributeFixture, capture bool) {
+	const helperSource = "testdata/appledouble/native/acl-chmod.c"
+	f.LibcSHA256 = "31c8a6c3729759582796700827583b17639ed0324f44dafb4927f1332bc040ff"
+	f.XNUSHA256 = "b30d68fb85f34b864b5e71e3127541c2674e0fb52e59d6ee072c8b0ecbb46a4f"
+	source := download("https://raw.githubusercontent.com/apple-oss-distributions/Libc/71bbe350ab79eef58113991d817ccc6165061a64/sys/chmodx_np.c", f.LibcSHA256, filepath.Join(root, "chmodx_np.c"))
+	download("https://raw.githubusercontent.com/apple-oss-distributions/xnu/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/bsd/vfs/vfs_syscalls.c", f.XNUSHA256, filepath.Join(root, "vfs_syscalls.c"))
+	header := bytes.Clone(source[:bytes.Index(source, []byte("#include"))])
+	start := bytes.Index(source, []byte("static int\nchmodx1("))
+	if start < 0 {
+		panic("missing chmodx1")
+	}
+	header = append(header, source[start:]...)
+	write(filepath.Join(root, "acl-chmod-source.h"), header)
+	helper := filepath.Join(root, "acl-chmod")
+	run("xcrun", "clang", "-Wall", "-Wextra", "-Werror", "-I", root, helperSource, "-o", helper)
+	for _, arch := range []string{"arm64", "x86_64"} {
+		ast := run("xcrun", "clang", "-arch", arch, "-I", root, "-fsyntax-only", "-Xclang", "-ast-dump=json", helperSource)
+		commands[len(commands)-1].Output = fmt.Sprintf("AST retained: %d bytes", len(ast))
+		write(filepath.Join(root, "acl-chmod-"+arch+".ast.json"), ast)
+	}
+	for _, tc := range attributes.Conversions {
+		dir := filepath.Join(root, "chmod-"+tc.Name)
+		must(os.MkdirAll(dir, 0700))
+		input, output := filepath.Join(dir, "input.bin"), filepath.Join(dir, "request.bin")
+		write(input, tc.Input)
+		expected := tc.Expected
+		expected.Security = hex.EncodeToString(tc.Input)
+		out := run(helper, "pack", input, output, fmt.Sprint(expected.UID), fmt.Sprint(expected.GID), fmt.Sprint(expected.Mode))
+		var native hostmeta.DarwinChmodRequest
+		must(json.Unmarshal(out, &native))
+		native.Security = read(output)
+		sec, e := appledouble.ParseDarwinFileSecurity(tc.Input)
+		must(e)
+		m := hostmeta.ACLMetadata{Security: sec, UID: expected.UID, GID: expected.GID, Mode: expected.Mode}
+		request, e := m.DarwinChmodRequest()
+		must(e)
+		if !reflect.DeepEqual(request, native) {
+			panic("Libc request differs: " + tc.Name)
+		}
+		f.Conversions = append(f.Conversions, chmodConversion{Name: tc.Name, Input: expected, Request: native})
+	}
+	for _, tc := range attributes.Applications {
+		dir, e := os.MkdirTemp(root, "chmod-"+tc.Name+"-")
+		must(e)
+		input := filepath.Join(dir, "acl.txt")
+		write(input, tc.Text)
+		before, response, native, after, _ := attributeRun(helper, dir, input, tc, "native", chmodWriteRequest)
+		goBefore, goResponse, goNative, goAfter, request := attributeRun(helper, dir, input, tc, "go", chmodWriteRequest)
+		if before != goBefore || before != tc.Before || !bytes.Equal(response, goResponse) || !bytes.Equal(response, tc.Response) || native != goNative || native != tc.Reference || !bytes.Equal(after, goAfter) || !bytes.Equal(after, tc.ReferenceAfterResponse) || !native.IdentityUnchanged {
+			panic("copyfile chmod mismatch: " + tc.Name)
+		}
+		var prepared *hostmeta.DarwinChmodRequest
+		if len(request) > 0 {
+			prepared = &hostmeta.DarwinChmodRequest{UID: goBefore.UID, GID: goBefore.GID, Mode: uint16(goBefore.Mode), Security: request}
+		}
+		f.Applications = append(f.Applications, chmodApplication{Name: tc.Name, Kind: tc.Kind, Initial: tc.Initial, Mode: tc.Mode, Flags: tc.Flags, Text: tc.Text, Before: before, Response: response, AfterResponse: after, Request: prepared, Native: native})
+	}
+	b, e := json.MarshalIndent(f, "", "  ")
+	must(e)
+	write(filepath.Join(root, "observed-chmod.json"), b)
+	if capture {
+		fmt.Printf("Captured %d Libc requests and %d extended chmod pairs; fixture NOT approved\n", len(f.Conversions), len(f.Applications))
+		return
+	}
+	z, e := gzip.NewReader(bytes.NewReader(read("testdata/appledouble/native/acl-chmod.json.gz")))
+	must(e)
+	var archived chmodFixture
+	must(json.NewDecoder(z).Decode(&archived))
+	must(z.Close())
+	if archived.HelperSHA256 != f.HelperSHA256 || archived.ParentHelperSHA256 != f.ParentHelperSHA256 || archived.LibcSHA256 != f.LibcSHA256 || archived.XNUSHA256 != f.XNUSHA256 || !reflect.DeepEqual(archived.Conversions, f.Conversions) || len(archived.Applications) != len(f.Applications) {
+		panic("chmod provenance/conversions differ")
+	}
+	for i, a := range archived.Applications {
+		b := f.Applications[i]
+		a.Before.UID = b.Before.UID
+		a.Before.GID = b.Before.GID
+		a.Native.After.UID = b.Native.After.UID
+		a.Native.After.GID = b.Native.After.GID
+		for _, pair := range [][2][]byte{{a.Response, b.Response}, {a.AfterResponse, b.AfterResponse}} {
+			if len(pair[0]) < 12 || len(pair[1]) < 12 {
+				panic("short chmod attribute frame")
+			}
+			copy(pair[0][4:12], pair[1][4:12])
+		}
+		if a.Request != nil && b.Request != nil {
+			a.Request.UID = b.Request.UID
+			a.Request.GID = b.Request.GID
+		}
+		if !reflect.DeepEqual(a, b) {
+			panic("chmod observations differ: " + b.Name)
+		}
+	}
+	fmt.Printf("Qualified %d Libc requests and %d actual extended chmod pairs\n", len(f.Conversions), len(f.Applications))
 }

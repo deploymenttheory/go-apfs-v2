@@ -112,9 +112,10 @@ hashes. This is not a whole-package coverage claim.
 
 ## Outstanding integration
 
-A production native backend must resolve the observed copyfile authorization and
-empty-ACL differences, use supported system-call wrappers, and preserve held
-object identity. Foreign-host carriers must retain the same metadata without
+The [extended chmod request builder](appledouble-acl-chmod.md), consumed by the
+correct native operation, resolves the measured owner-operated APFS differences.
+A production native backend must still integrate that call path, use supported
+system-call wrappers, and preserve held object identity. Foreign-host carriers must retain the same metadata without
 pretending Linux or Windows permissions implement Darwin authorization. Live
 identity acquisition, non-owner contexts and full metadata ordering still need
 qualification. Quarantine, size/allocation policy, shared carriers and APFS/HFS+

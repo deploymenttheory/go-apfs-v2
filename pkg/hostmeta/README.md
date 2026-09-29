@@ -290,3 +290,16 @@ This codec is a transport building block. Native tests show that the attribute
 API and copyfile differ on empty ACL flags and immutable/append-only failures;
 it is not yet a compatible built-in `RestoreACL` backend. Shared native/carrier
 integration remains outstanding.
+
+## Extended chmod requests
+
+`ACLMetadata.DarwinChmodRequest` builds the numeric arguments and owned security
+blob for the extended chmod operation used by copyfile. Ownership UUIDs remain
+embedded; mode narrows to Darwin's 16-bit `mode_t`. It uses the same pure-Go
+implementation on Linux, macOS and Windows. Native comparisons resolve all 16
+measured attribute/copyfile error differences and eight empty-ACL flag differences
+by submitting the request to the correct operation. See the [contract and evidence](../../docs/appledouble-acl-chmod.md).
+
+This prepares request data, not a production native call or foreign-host carrier.
+Do not substitute `fsetattrlist` or add a permission-changing preflight. Adapters,
+non-owner contexts and complete lifecycle integration remain outstanding.
