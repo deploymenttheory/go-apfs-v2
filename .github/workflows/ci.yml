@@ -133,6 +133,28 @@ jobs:
           name: image-security-coverage-${{ matrix.os }}
           path: artifacts/image-security-coverage/
           if-no-files-found: error
+      - name: Portable APFS root metadata and coverage above 95%
+        env:
+          CGO_ENABLED: "0"
+        run: go run scripts/verify-root-security-coverage.go
+      - name: Root writer legacy layout hashes
+        env:
+          CGO_ENABLED: "0"
+        run: go run scripts/verify-root-layout.go
+      - name: Upload root layout hashes
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: root-layout-${{ matrix.os }}
+          path: artifacts/root-layout/
+          if-no-files-found: error
+      - name: Upload root metadata coverage
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: root-security-coverage-${{ matrix.os }}
+          path: artifacts/root-security-coverage/
+          if-no-files-found: error
       - name: AppleDouble 32-bit address-space regressions
 
         if: runner.os == 'Linux'
@@ -218,6 +240,18 @@ jobs:
         with:
           name: image-security
           path: artifacts/image-security/
+          if-no-files-found: error
+      - name: Native APFS root metadata and fsck qualification
+        if: runner.os == 'macOS'
+        env:
+          CGO_ENABLED: "0"
+        run: go run scripts/verify-image-security.go -roots
+      - name: Upload native root metadata evidence
+        if: always() && runner.os == 'macOS'
+        uses: actions/upload-artifact@v7
+        with:
+          name: image-root-security
+          path: artifacts/image-root-security/
           if-no-files-found: error
       - name: AppleDouble native security records and ACL application
         if: runner.os == 'macOS'

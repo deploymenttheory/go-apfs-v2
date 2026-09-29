@@ -90,10 +90,15 @@ func extract(b []byte, start, end string) []byte {
 }
 func main() {
 	capture := flag.Bool("capture", false, "record unapproved observations")
+	roots := flag.Bool("roots", false, "qualify root writer metadata and storage")
 	flag.Parse()
-	const root = "artifacts/image-security"
+	root := "artifacts/image-security"
 	const helperSource = "testdata/appledouble/native/image-security.c"
-	const corpus = "testdata/appledouble/native/image-security.json.gz"
+	corpus := "testdata/appledouble/native/image-security.json.gz"
+	if *roots {
+		root = "artifacts/image-root-security"
+		corpus = "testdata/appledouble/native/image-root-security.json.gz"
+	}
 	must(os.MkdirAll(root, 0700))
 	var f imagesecurity.Fixture
 	passed := false
@@ -168,16 +173,38 @@ func main() {
 		write(filepath.Join(root, arch+".ast.json"), b)
 	}
 	tree, cases := imagesecurity.Tree(f.ActorUID, f.ActorGID)
-	for _, kind := range []string{"apfs", "apfs-sensitive", "hfsx", "hfsplus"} {
-		image := filepath.Join(root, kind+".img")
+	type scenario struct {
+		kind, name string
+		tree       *apfswrite.Entry
+		cases      []imagesecurity.Case
+		snapshots  []apfswrite.SnapshotSpec
+	}
+	var scenarios []scenario
+	if *roots {
+		for _, kind := range []string{"apfs", "apfs-sensitive"} {
+			for _, r := range imagesecurity.Roots(f.ActorUID, f.ActorGID) {
+				scenarios = append(scenarios, scenario{kind, kind + "-" + r.Name, r.Root, []imagesecurity.Case{r.Case}, r.Snapshots})
+			}
+		}
+	} else {
+		for _, kind := range []string{"apfs", "apfs-sensitive", "hfsx", "hfsplus"} {
+			scenarios = append(scenarios, scenario{kind, kind, tree, cases, nil})
+		}
+	}
+	for _, scene := range scenarios {
+		kind, tree, cases := scene.kind, scene.tree, scene.cases
+		image := filepath.Join(root, scene.name+".img")
 		file, e := os.Create(image)
 		must(e)
 		if strings.HasPrefix(kind, "apfs") {
-			must(apfswrite.CreateContainer(file, 64<<20, &apfswrite.CreateOptions{Root: tree, VolumeName: "SECURITY", CaseSensitive: kind == "apfs-sensitive"}))
+			must(apfswrite.CreateContainer(file, 64<<20, &apfswrite.CreateOptions{Root: tree, VolumeName: "SECURITY", CaseSensitive: kind == "apfs-sensitive", Snapshots: scene.snapshots}))
 		} else {
 			must(hfsplus.CreateImage(file, 64<<20, "SECURITY", imagesecurity.HFSTree(tree), &hfsplus.CreateOptions{CaseInsensitive: kind == "hfsplus"}))
 		}
 		must(file.Close())
+		if *roots {
+			run("/sbin/fsck_apfs", "-n", image)
+		}
 		beforeHash := fileSum(image)
 		file, e = os.Open(image)
 		must(e)
@@ -201,13 +228,53 @@ func main() {
 		run("hdiutil", "attach", image, "-readonly", "-owners", "on", "-nobrowse", "-mountpoint", mount)
 		func() {
 			defer func() { run("hdiutil", "detach", mount); must(os.Remove(mount)); must(file.Close()) }()
-			for _, tc := range cases {
-				if tc.Name == "." && strings.HasPrefix(kind, "apfs") {
-					// The APFS writer creates its own root inode and does not
-					// currently consume Root ownership or extended attributes.
-					tc.UID, tc.GID, tc.Profile, tc.Disposition = 0, 0, "absent", 0
+			if *roots {
+				attrs, e := volume.Xattrs(".")
+				must(e)
+				if len(attrs) != len(tree.Xattrs) {
+					panic("root attribute count")
 				}
-				n := imagesecurity.NativeCase{Filesystem: kind, Case: tc}
+				if f.NativeXattrs == nil {
+					f.NativeXattrs = map[string]map[string]imagesecurity.XattrObservation{}
+				}
+				f.NativeXattrs[scene.name] = map[string]imagesecurity.XattrObservation{}
+				for name, want := range tree.Xattrs {
+					if !bytes.Equal(attrs[name], want) {
+						panic("root attribute bytes: " + name)
+					}
+					var native imagesecurity.XattrObservation
+					must(json.Unmarshal(run(helper, "--xattr", mount, name), &native))
+					f.NativeXattrs[scene.name][name] = native
+					if scene.name == kind+"-owner-mode" {
+						if native.Errno != 13 || native.Length != -1 || native.Value != nil {
+							panic("expected native permission denial")
+						}
+						continue
+					}
+					if name == "com.apple.system.Security" {
+						if native.Errno != 1 || native.Length != -1 || native.Value != nil {
+							panic("expected protected security xattr denial")
+						}
+						continue
+					}
+					if name == "com.apple.ResourceFork" {
+						if native.Errno != 93 || native.Length != -1 || native.Value != nil {
+							panic(fmt.Sprintf("directory root fork result: %+v", native))
+						}
+						continue
+					}
+					if native.Errno != 0 {
+						panic(fmt.Sprintf("native xattr %s/%s: %+v", scene.name, name, native))
+					}
+					if native.Length != len(want) || native.Value == nil || !strings.EqualFold(*native.Value, fmt.Sprintf("%x", want)) {
+						panic("native root attribute bytes: " + name)
+					}
+				}
+
+			}
+			for _, tc := range cases {
+
+				n := imagesecurity.NativeCase{Filesystem: scene.name, Case: tc}
 				path := mount
 				if tc.Name != "." {
 					path = filepath.Join(mount, tc.Name)
@@ -215,6 +282,17 @@ func main() {
 				must(json.Unmarshal(run(helper, path), &n.Native))
 				f.Cases = append(f.Cases, n)
 				native := n.Native
+				if *roots {
+					stamp := tree.ModTime
+					if stamp.IsZero() {
+						stamp = apfswrite.DefaultTime
+					}
+					for _, got := range native.Times {
+						if got != stamp.UnixNano() {
+							panic(fmt.Sprintf("native root timestamp %s: %d/%d", scene.name, got, stamp.UnixNano()))
+						}
+					}
+				}
 				if native.Code != 0 || native.ReferenceCode != 0 || native.Errno != 0 || native.ReferenceErrno != 0 || !native.SameIdentity || !reflect.DeepEqual(native.Properties, native.ReferenceProperties) {
 					panic("native capture mismatch: " + kind + "/" + tc.Name)
 				}
@@ -268,13 +346,13 @@ func main() {
 		if fileSum(image) != beforeHash {
 			panic("read-only image changed")
 		}
-		f.Images[kind] = beforeHash
+		f.Images[scene.name] = beforeHash
 	}
 	b, e := json.MarshalIndent(f, "", "  ")
 	must(e)
 	write(filepath.Join(root, "observed.json"), b)
 	if *capture {
-		fmt.Printf("Captured %d image entries across four filesystems; NOT approved\n", len(f.Cases))
+		fmt.Printf("Captured %d image entries; NOT approved\n", len(f.Cases))
 		return
 	}
 	z, e := gzip.NewReader(bytes.NewReader(read(corpus)))
@@ -320,5 +398,5 @@ func main() {
 		panic("archived observations differ")
 	}
 	passed = true
-	fmt.Printf("Qualified %d image entries across APFS/APFS-sensitive/HFSX/HFS+, public and unchanged Libc capture, source identity and read-only hashes\n", len(f.Cases))
+	fmt.Printf("Qualified %d image entries, public and unchanged Libc capture, source identity and read-only hashes\n", len(f.Cases))
 }

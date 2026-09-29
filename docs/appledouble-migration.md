@@ -128,3 +128,7 @@ It separates native sequence completion from write-failure diagnostics and keeps
 source-cache changes explicit. Production adapters and lifecycle integration
 remain required; see [security-copy execution](appledouble-security-copy.md).
 This increment does not unblock package PR72 or the final release gate.
+
+APFS/HFS+ image security source capture and APFS root metadata writing are
+available, with [root layout qualification](appledouble-root-metadata.md).
+These close the measured root-loss gap but do not close the integration gate.

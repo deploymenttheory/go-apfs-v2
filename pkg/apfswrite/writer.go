@@ -55,8 +55,10 @@ type CreateOptions struct {
 	// and regular files of arbitrary depth and size (including empty files). A
 	// nil Root (and empty RootFiles) formats an empty volume, exactly as before.
 	//
-	// Root itself represents the volume root directory; only its Children are
-	// used (any Name/Data on Root is ignored).
+	// Root itself represents the volume root directory. Its Mode, UID, GID,
+	// ModTime and Xattrs are retained; Name, Data and LinkGroup are ignored.
+	// A zero mode defaults to directory 0755; os.ModeDir alone preserves 0000.
+	// Explicit non-directory types fail.
 	Root *Entry
 
 	// Snapshots are APFS snapshots to create on the volume, each capturing the
@@ -241,10 +243,11 @@ type builderEntry struct {
 	nchildren uint32 // directories: number of direct children
 
 	// Inode metadata.
-	mode  uint16 // S_IFMT | permission bits
-	uid   uint32 // owner id
-	gid   uint32 // group id
-	mtime uint64 // create/mod/change/access time (ns since 1970 UTC)
+	mode    uint16 // S_IFMT | permission bits
+	uid     uint32 // owner id
+	gid     uint32 // group id
+	mtime   uint64 // create/mod/change/access time (ns since 1970 UTC)
+	timeSet bool   // a prepared root may explicitly carry Unix epoch zero
 
 	// Symbolic links: the target path bytes (stored in a com.apple.fs.symlink
 	// extended attribute, not in a data stream).
@@ -532,6 +535,7 @@ type volBuild struct {
 
 	// The user directory tree, flattened into file-system tree entries in oid order,
 	// plus the subset that are regular files with a data extent.
+	root        *builderEntry // special inode 2, excluded from user counts
 	entries     []*builderEntry
 	streamFiles []*builderEntry
 	// xattrStreams are the synthetic stream entries backing extended

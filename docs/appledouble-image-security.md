@@ -69,10 +69,9 @@ The matrix covers 24 stored-record profiles, three ownership pairs, files,
 directories, symlinks and pairs of hard-link names, plus each root. Profiles
 include absence, empty storage, NOACL, empty ACLs, unknown bits, 127/128 entries,
 aligned padding, invalid magic/count/extent, and an oversized streamed record.
-APFS's current writer synthesizes a root owned by 0:0 with no security record;
-it does not consume `Root` ownership/xattrs. That actual root is qualified here,
-not claimed to preserve the supplied root metadata. HFS roots retain the supplied
-metadata. Valid fork-backed/extent-backed records and failing reads are also
+APFS and HFS roots retain the supplied metadata; the APFS root writer is
+separately [qualified across root layouts](appledouble-root-metadata.md).
+Valid fork-backed/extent-backed records and failing reads are also
 covered by portable unit fixtures.
 
 All three OS CI jobs regenerate and read the same four image variants, comparing
@@ -121,7 +120,7 @@ failures, partial index population and recovery.
 This completes image-based source acquisition for the qualified cases, not the
 ACL application or filesystem-transport roadmap gate. Live host capture,
 production write/authorization adapters, privileged/sandbox contexts, full
-restoration ordering, identity resolution, APFS root writer fidelity and
+restoration ordering, identity resolution and
 end-to-end AppleDouble extraction/repacking remain separate work. Consumers
 must not infer native authorization or byte-for-byte preservation from this
 statx-compatible projection.
