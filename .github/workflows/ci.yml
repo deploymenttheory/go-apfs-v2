@@ -199,6 +199,17 @@ jobs:
           name: security-volume-coverage-${{ matrix.os }}
           path: artifacts/security-volume-coverage/
           if-no-files-found: error
+      - name: Portable source acquisition and coverage above 95%
+        env:
+          CGO_ENABLED: "0"
+        run: go run scripts/verify-security-source-coverage.go
+      - name: Upload source acquisition coverage
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: security-source-coverage-${{ matrix.os }}
+          path: artifacts/security-source-coverage/
+          if-no-files-found: error
       - name: AppleDouble 32-bit address-space regressions
         if: runner.os == 'Linux'
         env:
@@ -283,6 +294,18 @@ jobs:
         with:
           name: security-copy-volume
           path: artifacts/security-copy-volume/
+          if-no-files-found: error
+      - name: Native descriptor source acquisition and copy comparisons
+        if: runner.os == 'macOS'
+        env:
+          CGO_ENABLED: "0"
+        run: go run scripts/verify-security-source.go
+      - name: Upload native source acquisition evidence
+        if: always() && runner.os == 'macOS'
+        uses: actions/upload-artifact@v7
+        with:
+          name: security-source
+          path: artifacts/security-source/
           if-no-files-found: error
       - name: Native APFS/HFS image security capture comparisons
         if: runner.os == 'macOS'

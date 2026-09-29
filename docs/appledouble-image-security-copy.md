@@ -17,7 +17,7 @@ if err != nil {
     return err
 }
 // Check Completed and Failures before serializing with CreateContainer or
-// CreateImage. Volume policy must be captured and supplied by the caller.
+// CreateImage. Supply precaptured volume policy or options.VolumePolicy.
 _ = result
 ```
 
@@ -123,6 +123,12 @@ reproduce the initial/final image hashes. Focused code coverage must exceed
 layout controls and deferred-restoration evidence remain required.
 
 ## Next integration
+
+For direct reader-to-writer acquisition, use
+[`root.CopySecurityFrom`](appledouble-security-source.md) with
+`hostmeta.ImageSecurityCapture(sourceVolume, name)`. The shared acquisition stage
+retains read/fallback diagnostics and refuses unsupported source types before
+ordinary copying. Native host bindings remain separate from this image binding.
 
 Connect live source and volume-policy acquisition to ordered restoration:
 creation inheritance, ordinary security copying, stat/flags/times/xattrs, then

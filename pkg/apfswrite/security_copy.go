@@ -20,14 +20,16 @@ import (
 // Providers must not mutate the tree. Exclude concurrent tree mutation.
 // A subsequent deferred RestoreACL replaces the merged ACL.
 func (root *Entry) CopySecurity(target *Entry, source hostmeta.SecurityCopySource, options hostmeta.SecurityCopyOptions) (hostmeta.SecurityCopyResult, error) {
-	return imageacl.Copy(root, target, source, options, (*Entry).imageSecurityNode, func(e *Entry, change imageacl.Change) {
-		e.UID, e.GID, e.Xattrs = change.UID, change.GID, change.Xattrs
-		if change.ModeSelected {
-			e.Mode = e.Mode&^(os.ModePerm|os.ModeSetuid|os.ModeSetgid|os.ModeSticky) | unixmode.FilePermissions(change.Mode)
-			if change.Mode&0170000 == 0040000 {
-				e.Mode |= os.ModeDir
-			}
-			e.ModeExplicit = true
+	return imageacl.Copy(root, target, source, options, (*Entry).imageSecurityNode, applySecurityCopy)
+}
+
+func applySecurityCopy(e *Entry, change imageacl.Change) {
+	e.UID, e.GID, e.Xattrs = change.UID, change.GID, change.Xattrs
+	if change.ModeSelected {
+		e.Mode = e.Mode&^(os.ModePerm|os.ModeSetuid|os.ModeSetgid|os.ModeSticky) | unixmode.FilePermissions(change.Mode)
+		if change.Mode&0170000 == 0040000 {
+			e.Mode |= os.ModeDir
 		}
-	})
+		e.ModeExplicit = true
+	}
 }

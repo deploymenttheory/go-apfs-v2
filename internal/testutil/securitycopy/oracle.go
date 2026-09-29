@@ -141,6 +141,12 @@ type backend struct {
 	mismatch  error
 }
 
+// NewBackend reuses the exact request/error recorder for source-acquisition
+// integration qualification. It is test support, never a production adapter.
+func NewBackend(want []Event) *backend { return &backend{want: want} }
+func (b *backend) Events() []Event     { return b.got }
+func (b *backend) Mismatch() error     { return b.mismatch }
+
 func (b *backend) record(e Event) error {
 	i := len(b.got)
 	if i >= len(b.want) {

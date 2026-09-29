@@ -147,3 +147,9 @@ The same executor and image writers support [lazy volume-policy acquisition](app
 including native query order and retained lookup errors. Providers bind runtime
 mount state to the copy endpoints; native host/carrier binding and complete
 restoration ordering still gate release.
+
+[Source acquisition and image bindings](appledouble-security-source.md) connect
+both image readers to both writers through the shared descriptor-style capture
+coordinator. Native fallback read errors stay visible, and all 16 source/target
+filesystem combinations reproduce the manually captured path. Live host providers
+and full restoration sequencing still gate release; this does not ready PR72.
