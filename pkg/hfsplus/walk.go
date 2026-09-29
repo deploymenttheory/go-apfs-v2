@@ -92,6 +92,7 @@ func newEntry(n hostwalk.Node, children []*Entry) *Entry {
 	return &Entry{
 		Name:         n.Name,
 		Mode:         n.Mode,
+		ModeExplicit: n.Name != "", // The anonymous root is synthetic, not captured metadata.
 		ModTime:      n.ModTime,
 		UID:          n.UID,
 		GID:          n.GID,

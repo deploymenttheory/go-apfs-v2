@@ -1,6 +1,6 @@
 //go:build ignore
 
-// Verify portable image security capture independently of unrelated image code.
+// Verify image permission preservation independently of unrelated image code.
 package main
 
 import (
@@ -25,7 +25,7 @@ func main() {
 	}
 }
 func verify() error {
-	const dir = "artifacts/root-security-coverage"
+	const dir = "artifacts/mode-security-coverage"
 	if e := os.MkdirAll(dir, 0755); e != nil {
 		return e
 	}
@@ -36,7 +36,7 @@ func verify() error {
 	defer log.Close()
 	var transcript bytes.Buffer
 	profile := filepath.Join(dir, "coverage.out")
-	cmd := exec.Command("go", "test", "-count=1", "-json", "-run", "^TestRootMetadata", "-covermode=atomic", "-coverprofile="+profile, "./pkg/apfswrite")
+	cmd := exec.Command("go", "test", "-count=1", "-json", "-run", "^TestImageMode", "-covermode=atomic", "-coverprofile="+profile, "-coverpkg=./internal/unixmode,./pkg/apfswrite,./pkg/hfsplus,./pkg/apfs", "./internal/unixmode", "./pkg/apfswrite", "./pkg/hfsplus", "./internal/testutil/imagesecurity", "./internal/cli")
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 	cmd.Stdout = io.MultiWriter(os.Stdout, log, &transcript)
 	cmd.Stderr = io.MultiWriter(os.Stderr, log)
@@ -53,7 +53,7 @@ func verify() error {
 			return e
 		}
 		if event.Action == "skip" {
-			return fmt.Errorf("Root metadata writing test skipped: %s", event.Test)
+			return fmt.Errorf("Image mode preservation test skipped: %s", event.Test)
 		}
 		if event.Action == "pass" && event.Test != "" {
 			passed++
@@ -64,7 +64,7 @@ func verify() error {
 		return e
 	}
 	covered, total := 0, 0
-	coverageFiles := map[string][2]int{"pkg/apfswrite/root.go": {}, "pkg/apfswrite/xattr_streams.go": {}}
+	coverageFiles := map[string][2]int{"internal/unixmode/mode.go": {}, "pkg/apfswrite/mode.go": {}, "pkg/hfsplus/writer_mode.go": {}}
 	blocks := map[string][2]int{}
 	for _, line := range strings.Split(string(b), "\n") {
 		fields := strings.Fields(line)
@@ -105,9 +105,12 @@ func verify() error {
 		}
 	}
 	if total == 0 || covered*100 <= total*95 {
-		return fmt.Errorf("Root metadata writing coverage must exceed 95%%: %d/%d", covered, total)
+		return fmt.Errorf("Image mode preservation coverage must exceed 95%%: %d/%d", covered, total)
 	}
-	files := []string{"internal/unixmode/mode.go", "pkg/apfswrite/mode.go", "pkg/hfsplus/writer_mode.go", "pkg/apfs/fs.go", "pkg/hfsplus/fs.go", "pkg/apfswrite/root.go", "pkg/apfswrite/xattr_streams.go", "pkg/apfswrite/root_test.go", "pkg/apfswrite/file.go", "pkg/apfswrite/writer.go", "internal/testutil/imagesecurity/roots.go", "internal/testutil/imagesecurity/fixtures.go", "scripts/verify-image-security.go", "scripts/verify-root-security-coverage.go", "testdata/appledouble/native/image-security.c", "testdata/appledouble/native/security-copy.c", "testdata/appledouble/native/image-root-security.json.gz", "scripts/verify-root-layout.go", "testdata/appledouble/native/root-layout.json", "go.mod", "go.sum"}
+	if passed < 677 {
+		return fmt.Errorf("incomplete mode tests: %d", passed)
+	}
+	files := []string{"internal/unixmode/mode.go", "internal/unixmode/mode_test.go", "pkg/apfswrite/mode.go", "pkg/apfswrite/mode_test.go", "pkg/apfswrite/root.go", "pkg/apfswrite/writer.go", "pkg/apfswrite/walk.go", "pkg/hfsplus/writer_mode.go", "pkg/hfsplus/writer_mode_test.go", "pkg/hfsplus/writer.go", "pkg/hfsplus/walk.go", "pkg/apfs/fs.go", "pkg/hfsplus/fs.go", "internal/cli/snapshot.go", "internal/cli/snapshot_mode_test.go", "internal/testutil/imagesecurity/modes.go", "internal/testutil/imagesecurity/modes_test.go", "internal/testutil/imagesecurity/fixtures.go", "scripts/verify-image-security.go", "scripts/verify-mode-security-coverage.go", "testdata/appledouble/native/image-security.c", "testdata/appledouble/native/security-copy.c", "testdata/appledouble/native/image-mode-security.json.gz", "go.mod", "go.sum"}
 	hashes := map[string]string{}
 	for _, path := range files {
 		b, e := os.ReadFile(path)
@@ -129,6 +132,6 @@ func verify() error {
 	if e = os.WriteFile(filepath.Join(dir, "coverage.json"), append(b, '\n'), 0600); e != nil {
 		return e
 	}
-	fmt.Printf("Root metadata writing: %d/%d covered statements; %d passing test records on %s/%s\n", covered, total, passed, runtime.GOOS, runtime.GOARCH)
+	fmt.Printf("Image mode preservation: %d/%d covered statements; %d passing test records on %s/%s\n", covered, total, passed, runtime.GOOS, runtime.GOARCH)
 	return nil
 }

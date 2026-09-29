@@ -31,12 +31,16 @@ import (
 // Children; a regular file or symlink carries its bytes in Data (for a
 // symlink, Data is the target path).
 type Entry struct {
-	Name     string
-	Mode     os.FileMode // dir/symlink/perm bits
-	ModTime  time.Time
-	UID, GID uint32
-	Data     []byte   // file content, or symlink target bytes
-	Children []*Entry // directory children (writer sorts them)
+	Name string
+	Mode os.FileMode // type, permissions and Go set-ID/sticky bits
+	// ModeExplicit disables default permissions, including on the root.
+	// Use true to preserve 0000; false retains the legacy 0644/0755 defaults.
+	// Hard-link groups use the first entry's inode metadata.
+	ModeExplicit bool
+	ModTime      time.Time
+	UID, GID     uint32
+	Data         []byte   // file content, or symlink target bytes
+	Children     []*Entry // directory children (writer sorts them)
 
 	// Open supplies a regular file's content lazily. It is the alternative to
 	// Data for content too large to hold in memory; setting both is an error.
@@ -977,28 +981,6 @@ func (b *builder) countUsedBlocks(lay *layout) uint32 {
 	}
 	used++ // alternate volume header (last block, in the trailing free region)
 	return used
-}
-
-// hfsFileMode maps a node to an HFS+ BSD file mode (S_IFMT | perms).
-func hfsFileMode(n *fileNode) uint16 {
-	perm := uint16(n.entry.Mode.Perm())
-	switch {
-	case n.isSymlink:
-		if perm == 0 {
-			perm = 0o755
-		}
-		return sIFLNK | perm
-	case n.isDir:
-		if perm == 0 {
-			perm = 0o755
-		}
-		return sIFDIR | perm
-	default:
-		if perm == 0 {
-			perm = 0o644
-		}
-		return sIFREG | perm
-	}
 }
 
 // toHFSTime converts a time to seconds since the HFS+ epoch (1904-01-01 UTC).

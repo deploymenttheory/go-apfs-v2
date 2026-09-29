@@ -234,7 +234,7 @@ func (w *volumeWalker) readDir(dir string) ([]*apfswrite.Entry, error) {
 			return nil, fmt.Errorf("%s: %w", full, err)
 		}
 		mode := info.Mode()
-		e := &apfswrite.Entry{Name: name, Mode: mode, ModTime: info.ModTime()}
+		e := &apfswrite.Entry{Name: name, Mode: mode, ModeExplicit: true, ModTime: info.ModTime()}
 		if inode, ok := info.Sys().(*apfs.Inode); ok {
 			e.UID, e.GID = inode.OwnerIdentifier, inode.GroupIdentifier
 			// A link count above one means the source had several names for

@@ -12,6 +12,8 @@ import (
 	"io/fs"
 	"path"
 	"time"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/unixmode"
 )
 
 var (
@@ -176,7 +178,7 @@ func (v *Volume) newFileInfo(name string, e *entry) *fileInfo {
 		sys = e.file
 	}
 
-	mode := fs.FileMode(bsd.FileMode & 0o777)
+	mode := unixmode.FilePermissions(bsd.FileMode)
 	switch bsd.FileMode & sIFMT {
 	case sIFDIR:
 		mode |= fs.ModeDir

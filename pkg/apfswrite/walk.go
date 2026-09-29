@@ -72,15 +72,16 @@ func EntryTreeFromDir(srcDir string, opts *WalkOptions) (*Entry, *fidelity.Repor
 // newEntry builds one APFS Entry from the walker's platform-neutral node.
 func newEntry(n hostwalk.Node, children []*Entry) *Entry {
 	return &Entry{
-		Name:      n.Name,
-		Mode:      n.Mode,
-		ModTime:   n.ModTime,
-		UID:       n.UID,
-		GID:       n.GID,
-		Data:      n.Data,
-		Xattrs:    n.Xattrs,
-		LinkGroup: n.LinkGroup,
-		Children:  children,
+		Name:         n.Name,
+		Mode:         n.Mode,
+		ModeExplicit: n.Name != "", // The anonymous root is synthetic, not captured metadata.
+		ModTime:      n.ModTime,
+		UID:          n.UID,
+		GID:          n.GID,
+		Data:         n.Data,
+		Xattrs:       n.Xattrs,
+		LinkGroup:    n.LinkGroup,
+		Children:     children,
 	}
 }
 

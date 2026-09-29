@@ -33,7 +33,10 @@ restrictive-flag errors rule out substituting attribute writes.
 [Extended chmod requests](appledouble-acl-chmod.md) qualify the matching native
 operation for those measured cases. [Optional-property arguments](appledouble-acl-chmod-properties.md)
 add omission/removal forms and qualify the distinct Darwin ownership sentinel.
-The production call boundary remains open.
+[Image permission preservation](appledouble-image-modes.md) now retains explicit
+zero modes and special bits across both writers, readers and captured entry
+conversion, with native mode and image-hash qualification. This removes a write
+integration prerequisite; the production ACL call boundary remains open.
 [Controlled owner/non-owner image tests](appledouble-acl-nonowner.md) qualify
 ordinary-user APFS/HFSX authorization and fix missing HFS security catalog flags.
 [Ordinary ACL copy policy](appledouble-acl-copy.md) selects explicit source and

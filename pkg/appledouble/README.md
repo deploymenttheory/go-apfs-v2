@@ -155,6 +155,9 @@ of this roadmap delivered. These phases are not estimates of remaining PR count.
    [APFS root metadata writing](../../docs/appledouble-root-metadata.md) retains
    supplied ownership, permissions, timestamps and security/attribute storage,
    including root-only volumes and snapshots.
+   [Image permission preservation](../../docs/appledouble-image-modes.md) retains
+   explicit zero modes and set-ID/sticky bits in both writers and readers,
+   including native-qualified roots, symlinks and hard links on all three OSes.
    Native extended chmod comparisons resolve the measured attribute/copyfile
    refusal and empty-ACL flag differences for the qualified owner-operated cases.
    **Remaining:** production write adapters, live host source acquisition,
