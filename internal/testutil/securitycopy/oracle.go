@@ -27,6 +27,7 @@ type Metadata struct {
 }
 type Event struct {
 	Operation        string
+	NoSetID          bool
 	Code, Errno      int
 	UID, GID         uint32
 	Mode             int32
@@ -46,10 +47,13 @@ type Case struct {
 	Name, Kind, SourceACL, DestinationACL       string
 	Flags, Filter, Presence, Fault, TargetFlags int
 	Native                                      Observation
+	QueryVolumes                                bool
+	SourceVolume, DestinationVolume             int
 }
 type Fixture struct {
 	Revision, Host, HelperSHA256, CopyfileSHA256, LibcSHA256 string
 	Models, Applications                                     []Case
+	Helpers                                                  map[string]string `json:",omitempty"`
 }
 type NativeError int
 
@@ -179,6 +183,16 @@ func (b *backend) SetACL(a *appledouble.ACL) error {
 	return b.record(Event{Operation: "acl", ACL: ACLBytes(a)})
 }
 
+func (b *backend) NoSetID(volume hostmeta.SecurityCopyVolume) (bool, error) {
+	i := len(b.got)
+	e := Event{Operation: "volume-" + string(volume)}
+	if i < len(b.want) {
+		e.NoSetID = b.want[i].NoSetID
+	}
+	err := b.record(e)
+	return e.NoSetID, err
+}
+
 // Replay uses observed errors as backend responses and independently checks the
 // Go executor's decisions and exact requests, including source-cache effects.
 func Replay(tc Case) (hostmeta.SecurityCopyResult, []Event, error) {
@@ -188,7 +202,11 @@ func Replay(tc Case) (hostmeta.SecurityCopyResult, []Event, error) {
 		return hostmeta.SecurityCopyResult{}, nil, e
 	}
 	b := &backend{want: n.Events}
-	result, runErr := hostmeta.CopySecurity(hostmeta.SecurityCopySource{Properties: p, UID: n.Source.UID, GID: n.Source.GID, Mode: n.Source.Mode}, Options(tc.Flags, tc.Filter), b)
+	options := Options(tc.Flags, tc.Filter)
+	if tc.QueryVolumes {
+		options.VolumePolicy = b
+	}
+	result, runErr := hostmeta.CopySecurity(hostmeta.SecurityCopySource{Properties: p, UID: n.Source.UID, GID: n.Source.GID, Mode: n.Source.Mode}, options, b)
 	if b.mismatch != nil {
 		return result, b.got, b.mismatch
 	}
@@ -210,8 +228,15 @@ func Replay(tc Case) (hostmeta.SecurityCopyResult, []Event, error) {
 	writes := 0
 	fallback := false
 	var failures []hostmeta.SecurityCopyFailure
+	var queries []hostmeta.SecurityCopyVolumeQuery
 	for _, v := range n.Events {
-		if v.Operation != "capture" {
+		if strings.HasPrefix(v.Operation, "volume-") {
+			q := hostmeta.SecurityCopyVolumeQuery{Volume: hostmeta.SecurityCopyVolume(strings.TrimPrefix(v.Operation, "volume-")), NoSetID: v.NoSetID}
+			if v.Code != 0 {
+				q.NoSetID, q.Err = false, NativeError(v.Errno)
+			}
+			queries = append(queries, q)
+		} else if v.Operation != "capture" {
 			writes++
 			if v.Operation == "security" && v.Code != 0 {
 				fallback = true
@@ -220,6 +245,9 @@ func Replay(tc Case) (hostmeta.SecurityCopyResult, []Event, error) {
 				failures = append(failures, hostmeta.SecurityCopyFailure{Operation: v.Operation, Err: NativeError(v.Errno)})
 			}
 		}
+	}
+	if !reflect.DeepEqual(result.VolumeQueries, queries) {
+		return result, b.got, fmt.Errorf("volume diagnostics mismatch")
 	}
 	if result.Writes != writes || result.Fallback != fallback || !reflect.DeepEqual(result.Failures, failures) {
 		return result, b.got, fmt.Errorf("write diagnostics mismatch")
@@ -230,6 +258,8 @@ func Protocol(events []Event) string {
 	var b strings.Builder
 	for _, e := range events {
 		switch e.Operation {
+		case "volume-source", "volume-destination":
+			fmt.Fprintln(&b, e.Operation)
 		case "capture":
 			fmt.Fprintln(&b, "capture")
 		case "security":

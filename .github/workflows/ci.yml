@@ -188,6 +188,17 @@ jobs:
           name: image-copy-coverage-${{ matrix.os }}
           path: artifacts/image-copy-coverage/
           if-no-files-found: error
+      - name: Portable security volume policy and coverage above 95%
+        env:
+          CGO_ENABLED: "0"
+        run: go run scripts/verify-security-volume-coverage.go
+      - name: Upload security volume policy coverage
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: security-volume-coverage-${{ matrix.os }}
+          path: artifacts/security-volume-coverage/
+          if-no-files-found: error
       - name: AppleDouble 32-bit address-space regressions
         if: runner.os == 'Linux'
         env:
@@ -260,6 +271,18 @@ jobs:
         with:
           name: security-copy
           path: artifacts/security-copy/
+          if-no-files-found: error
+      - name: Security volume policy query order and live native comparisons
+        if: runner.os == 'macOS'
+        env:
+          CGO_ENABLED: "0"
+        run: go run scripts/verify-security-copy-volume.go
+      - name: Upload security volume policy native evidence
+        if: always() && runner.os == 'macOS'
+        uses: actions/upload-artifact@v7
+        with:
+          name: security-copy-volume
+          path: artifacts/security-copy-volume/
           if-no-files-found: error
       - name: Native APFS/HFS image security capture comparisons
         if: runner.os == 'macOS'

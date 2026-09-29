@@ -16,7 +16,8 @@ import (
 // Completed means staged, not serialized: CreateContainer must still succeed.
 // This pure-Go operation performs no host authorization, native fallback or
 // timestamp synthesis. BSD flags, payloads and unrelated attributes remain intact.
-// Volume policy must be captured by the caller. Exclude concurrent tree mutation.
+// Volume policy can be precaptured or queried through options.VolumePolicy.
+// Providers must not mutate the tree. Exclude concurrent tree mutation.
 // A subsequent deferred RestoreACL replaces the merged ACL.
 func (root *Entry) CopySecurity(target *Entry, source hostmeta.SecurityCopySource, options hostmeta.SecurityCopyOptions) (hostmeta.SecurityCopyResult, error) {
 	return imageacl.Copy(root, target, source, options, (*Entry).imageSecurityNode, func(e *Entry, change imageacl.Change) {
