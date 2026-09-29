@@ -85,3 +85,11 @@ modification, change and access times. Nil keeps existing `ModTime` defaults.
 Both image readers expose `Volume.FileTimes(name)` without following symlinks. See
 [image timestamps](../../docs/appledouble-image-times.md) for clamping, precision,
 validation and native qualification.
+
+### BSD flags
+
+Set `Entry.BSDFlags` to preserve ordinary inode flags, including explicit zero.
+Nil keeps legacy compression inference. Both readers expose `Volume.BSDFlags`;
+HFS+ has the same entry field. Tracked entries receive new-volume document IDs.
+See [image BSD flags](../../docs/appledouble-image-flags.md) for compression
+validation, HFS catalog mapping, native evidence and limits.

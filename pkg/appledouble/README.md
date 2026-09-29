@@ -147,7 +147,7 @@ of this roadmap delivered. These phases are not estimates of remaining PR count.
 
 | Phase | Current state | Completion gate |
 | --- | --- | --- |
-| 1. ACL application | Source acquisition, image copying, volume policy, independent image timestamps and stat-stage execution implemented; host bindings and lifecycle integration remain | Source acquisition, authorization, actual writes and restoration ordering qualified together |
+| 1. ACL application | Source acquisition, image copying, volume policy, independent image timestamps/flags and stat-stage execution implemented; host bindings and lifecycle integration remain | Source acquisition, authorization, actual writes and restoration ordering qualified together |
 | 2. Quarantine | Conversion and much of application policy implemented; context/integration gaps open | Remaining process contexts and ordered restoration qualify against native behavior |
 | 3. Large values and allocation | Known native differences remain | Oversized values, aggregates, forks and allocation policy have explicit, tested behavior |
 | 4. Shared filesystem transport | Host primitives and exact image permissions available; complete metadata transport outstanding | APFS/HFS+ extract-and-repack preserves logical metadata on all three OSes |
@@ -202,6 +202,12 @@ of this roadmap delivered. These phases are not estimates of remaining PR count.
    retains ignored native failures. Native APFS file/directory comparisons and
    controlled race/failure cases replay on Linux, macOS and Windows. This is the
    final stat stage, not a completed host backend or restoration lifecycle.
+   [Image BSD flags](../../docs/appledouble-image-flags.md) now retain ordinary
+   flags in both writers/readers, including root and hard-link state, HFS catalog
+   normalization, new-volume tracked document IDs and APFS snapshot rebuilding.
+   Native comparisons qualify 276 entries across four images. Host flag setters,
+   general FinderInfo restoration, special object flags and original document
+   identity preservation remain outside this increment.
    **Remaining:** native host write
    adapters, live host source acquisition,
    privileged/sandbox authorization contexts and full restoration ordering.

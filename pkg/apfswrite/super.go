@@ -267,7 +267,7 @@ func (b volCtx) volumeSuperblock() *apfsSuperblock {
 	vsb.FormattedBy.Timestamp = b.timestamp
 	vsb.FormattedBy.LastXID = formatXID
 	copy(vsb.Volname[:], b.label)
-	vsb.NextDocID = minDocID
+	vsb.NextDocID = b.nextDocID
 	vsb.Role = b.role
 	vsb.VolumeGroupID = b.volumeGroupID
 	return vsb

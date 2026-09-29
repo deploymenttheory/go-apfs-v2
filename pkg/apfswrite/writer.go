@@ -57,7 +57,7 @@ type CreateOptions struct {
 	// nil Root (and empty RootFiles) formats an empty volume, exactly as before.
 	//
 	// Root itself represents the volume root directory. Its Mode, UID, GID,
-	// ModTime/Times and Xattrs are retained; Name, Data and LinkGroup are ignored.
+	// ModTime/Times, BSDFlags and Xattrs are retained; Name, Data and LinkGroup are ignored.
 	// A zero mode defaults to directory 0755 unless ModeExplicit is true;
 	// os.ModeDir alone also preserves 0000 on the root.
 	// Explicit non-directory types fail.
@@ -171,6 +171,10 @@ type Entry struct {
 	// Nil retains the legacy ModTime/default behavior. ClampModTimes changes
 	// only Times.Modify. Explicit times retain nanoseconds and Unix epoch zero.
 	Times *hostmeta.FileTimes
+	// BSDFlags explicitly selects the inode's chflags word. Nil retains legacy
+	// compression inference. UF_COMPRESSED must agree with decmpfs storage.
+	// The first hard-link entry supplies the shared inode flags.
+	BSDFlags *uint32
 	// UID and GID are the inode's owner and group ids.
 	UID, GID uint32
 	// Data is the file content for a regular file (any size, may be empty), or
@@ -262,7 +266,8 @@ type builderEntry struct {
 	// bsdFlags are the chflags(2) flags for the inode's bsd_flags field.
 	// UF_COMPRESSED is the one that matters here, and like xattrFlags it has to
 	// agree with the attribute it describes.
-	bsdFlags uint32
+	bsdFlags   uint32
+	documentID uint32
 
 	// Regular files with content (non-empty streams).
 	data        []byte
@@ -522,6 +527,7 @@ type volBuild struct {
 
 	// The user directory tree, flattened into file-system tree entries in oid order,
 	// plus the subset that are regular files with a data extent.
+	nextDocID   uint32
 	root        *builderEntry // special inode 2, excluded from user counts
 	entries     []*builderEntry
 	streamFiles []*builderEntry
@@ -625,7 +631,7 @@ func volumeSpecs(opts *CreateOptions) ([]VolumeSpec, error) {
 func (b *builder) setVolumes(specs []VolumeSpec) error {
 	b.vols = make([]*volBuild, len(specs))
 	for i := range specs {
-		b.vols[i] = &volBuild{index: uint64(i)}
+		b.vols[i] = &volBuild{index: uint64(i), nextDocID: minDocID}
 	}
 
 	nextXID := uint64(formatXID)

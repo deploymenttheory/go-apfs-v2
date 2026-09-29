@@ -192,7 +192,12 @@ func entryTreeFromVolume(vol *apfs.Volume, warn func(string, fidelity.Kind, stri
 	if err != nil {
 		return nil, w.report, err
 	}
-	return &apfswrite.Entry{Children: children, Times: &times}, w.report, nil
+	flags, err := vol.BSDFlags(".")
+	if err != nil {
+		return nil, w.report, err
+	}
+	flags &^= apfs.BSDFlagCompressed
+	return &apfswrite.Entry{Children: children, Times: &times, BSDFlags: &flags}, w.report, nil
 }
 
 type volumeWalker struct {
@@ -242,7 +247,13 @@ func (w *volumeWalker) readDir(dir string) ([]*apfswrite.Entry, error) {
 		if err != nil {
 			return nil, err
 		}
-		e := &apfswrite.Entry{Name: name, Mode: mode, ModeExplicit: true, ModTime: info.ModTime(), Times: &times}
+		flags, err := w.vol.BSDFlags(full)
+		if err != nil {
+			return nil, err
+		}
+		// Rebuild reads expanded data and drops xattrs, so compression is no longer present.
+		flags &^= apfs.BSDFlagCompressed
+		e := &apfswrite.Entry{Name: name, Mode: mode, ModeExplicit: true, ModTime: info.ModTime(), Times: &times, BSDFlags: &flags}
 		if inode, ok := info.Sys().(*apfs.Inode); ok {
 			e.UID, e.GID = inode.OwnerIdentifier, inode.GroupIdentifier
 			// A link count above one means the source had several names for
