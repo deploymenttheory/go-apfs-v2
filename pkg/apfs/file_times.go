@@ -14,11 +14,11 @@ func (v *Volume) FileTimes(name string) (hostmeta.FileTimes, error) {
 	if v == nil {
 		return hostmeta.FileTimes{}, &fs.PathError{Op: "timestamps", Path: name, Err: fs.ErrInvalid}
 	}
-	info, err := v.Stat(name)
+	entry, err := v.entryByFSName("timestamps", name)
 	if err != nil {
 		return hostmeta.FileTimes{}, err
 	}
-	inode := info.Sys().(*Inode)
+	inode := entry.Inode
 	return hostmeta.FileTimes{
 		Birth:  time.Unix(0, int64(inode.CreationTime)).UTC(),
 		Modify: time.Unix(0, int64(inode.ModificationTime)).UTC(),

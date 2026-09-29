@@ -22,7 +22,7 @@ entry.Times = &times
 `FileTimes` is available on both APFS and HFS+ volumes. It reads inode/catalog
 metadata, resolves hard links, and does not follow the final symlink or load
 payloads and xattrs. Names use `fs.ValidPath`; `"."` selects the root. Lookup and
-I/O failures remain errors. Keep the source image immutable during acquisition.
+I/O failures remain errors. Acquisition bypasses general file-size calculation,\nso compressed-file attributes are not loaded just to read timestamps. Keep the\nsource image immutable during acquisition.
 
 A non-nil `Times` selects **all four fields**: `Birth`, `Modify`, `Change`, and
 `Access`. They override the entry's legacy `ModTime`. Unix epoch zero is a real
@@ -78,7 +78,7 @@ resolved indirect inode. APFS keeps one inode for all names in a hard-link group
   across two writes. This does not claim a separate native snapshot-mount test.
 - `go run scripts/verify-image-times-coverage.go` replays the corpus on all three
   OSes, checks the eight image hashes and rejects skipped focused tests. Each new
-  production file must exceed 95% coverage; the current gate covers **47/47
+  production file must exceed 95% coverage; the current gate covers **48/48
   statements (100%)**. Existing layout controls and codec/security gates remain.
 
 The source references for the storage formats are Apple's

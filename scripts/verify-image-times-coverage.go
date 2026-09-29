@@ -36,7 +36,7 @@ func verify() error {
 	defer log.Close()
 	var transcript bytes.Buffer
 	profile := filepath.Join(dir, "coverage.out")
-	cmd := exec.Command("go", "test", "-count=1", "-json", "-run", "^(TestImageTimes|TestInodeTimes)", "-covermode=atomic", "-coverprofile="+profile, "-coverpkg=./internal/inodetime,./pkg/apfs,./pkg/apfswrite,./pkg/hfsplus", "./internal/inodetime", "./internal/testutil/imagesecurity", "./internal/cli")
+	cmd := exec.Command("go", "test", "-count=1", "-json", "-run", "^(TestImageTimes|TestInodeTimes)", "-covermode=atomic", "-coverprofile="+profile, "-coverpkg=./internal/inodetime,./pkg/apfs,./pkg/apfswrite,./pkg/hfsplus", "./internal/inodetime", "./internal/testutil/imagesecurity", "./internal/cli", "./pkg/hfsplus")
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 	cmd.Stdout = io.MultiWriter(os.Stdout, log, &transcript)
 	cmd.Stderr = io.MultiWriter(os.Stderr, log)
@@ -107,10 +107,10 @@ func verify() error {
 	if total == 0 || covered*100 <= total*95 {
 		return fmt.Errorf("Independent image timestamps coverage must exceed 95%%: %d/%d", covered, total)
 	}
-	if passed < 309 {
+	if passed < 310 {
 		return fmt.Errorf("incomplete image security-copy tests: %d", passed)
 	}
-	files := []string{"pkg/hostmeta/file_times.go", "internal/inodetime/time.go", "internal/inodetime/time_test.go", "pkg/apfswrite/times.go", "pkg/apfswrite/writer.go", "pkg/apfswrite/file.go", "pkg/apfswrite/root.go", "pkg/apfs/file_times.go", "pkg/hfsplus/file_times.go", "pkg/hfsplus/writer_times.go", "pkg/hfsplus/writer.go", "internal/cli/snapshot.go", "internal/cli/snapshot_times_test.go", "internal/testutil/imagesecurity/times.go", "internal/testutil/imagesecurity/times_test.go", "internal/testutil/imagesecurity/fixtures.go", "scripts/verify-image-security.go", "scripts/verify-image-times-coverage.go", "testdata/appledouble/native/image-security.c", "testdata/appledouble/native/security-copy.c", "testdata/appledouble/native/image-times.json.gz", "go.mod", "go.sum"}
+	files := []string{"pkg/hfsplus/file_times_test.go", "pkg/hostmeta/file_times.go", "internal/inodetime/time.go", "internal/inodetime/time_test.go", "pkg/apfswrite/times.go", "pkg/apfswrite/writer.go", "pkg/apfswrite/file.go", "pkg/apfswrite/root.go", "pkg/apfs/file_times.go", "pkg/hfsplus/file_times.go", "pkg/hfsplus/writer_times.go", "pkg/hfsplus/writer.go", "internal/cli/snapshot.go", "internal/cli/snapshot_times_test.go", "internal/testutil/imagesecurity/times.go", "internal/testutil/imagesecurity/times_test.go", "internal/testutil/imagesecurity/fixtures.go", "scripts/verify-image-security.go", "scripts/verify-image-times-coverage.go", "testdata/appledouble/native/image-security.c", "testdata/appledouble/native/security-copy.c", "testdata/appledouble/native/image-times.json.gz", "go.mod", "go.sum"}
 	hashes := map[string]string{}
 	for _, path := range files {
 		b, e := os.ReadFile(path)

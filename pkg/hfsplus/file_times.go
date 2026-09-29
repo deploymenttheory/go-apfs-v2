@@ -10,18 +10,19 @@ import (
 // following the final symlink. HFS stores whole seconds since 1904. Raw catalog
 // dates are returned; this does not apply a host driver's sentinel conversion.
 func (v *Volume) FileTimes(name string) (hostmeta.FileTimes, error) {
-	if v == nil {
+	if v == nil || v.root == nil {
 		return hostmeta.FileTimes{}, &fs.PathError{Op: "timestamps", Path: name, Err: fs.ErrInvalid}
 	}
-	info, err := v.Stat(name)
+	entry, err := v.entryByFSName("timestamps", name)
 	if err != nil {
 		return hostmeta.FileTimes{}, err
 	}
 	var values [4]hfsTime
-	if s, ok := info.Sys().(*HFSPlusCatalogFolder); ok {
+	if entry.isDir {
+		s := entry.folder
 		values = [4]hfsTime{s.CreateDate, s.ContentModDate, s.AttributeModDate, s.AccessDate}
 	} else {
-		s := info.Sys().(*HFSPlusCatalogFile)
+		s := entry.file
 		values = [4]hfsTime{s.CreateDate, s.ContentModDate, s.AttributeModDate, s.AccessDate}
 	}
 	return hostmeta.FileTimes{Birth: values[0].Time(), Modify: values[1].Time(), Change: values[2].Time(), Access: values[3].Time()}, nil
