@@ -232,3 +232,47 @@ func FuzzSecurityCopy(f *testing.F) {
 		}
 	})
 }
+
+func TestSecurityCopyNOACLSource(t *testing.T) {
+	source := hostmeta.SecurityCopySource{Mode: 0644, Properties: hostmeta.DarwinChmodProperties{RawSecurity: &appledouble.FileSecurity{NoACLFlags: [4]byte{1, 2, 3, 4}}}}
+	// This source property is present but Libc cannot materialize it as acl_t.
+	// Ordinary ACL copying must reject it before even capturing the destination.
+	for _, stat := range []bool{false, true} {
+		backend := &noACLSourceBackend{t: t}
+		result, err := hostmeta.CopySecurity(source, hostmeta.SecurityCopyOptions{ACL: true, Stat: stat}, backend)
+		if !errors.Is(err, appledouble.ErrFileSecurity) || result.Completed || result.Writes != 0 || result.Source.Properties.RawSecurity == nil {
+			t.Fatal(result, err)
+		}
+	}
+	backend := &noACLSourceBackend{t: t}
+	result, err := hostmeta.CopySecurity(source, hostmeta.SecurityCopyOptions{Stat: true}, backend)
+	if err != nil || !result.Completed || result.Writes != 1 || !backend.mode {
+		t.Fatal(result, err)
+	}
+}
+
+type noACLSourceBackend struct {
+	t    *testing.T
+	mode bool
+}
+
+func (b *noACLSourceBackend) CaptureDestinationACL() (*appledouble.ACL, error) {
+	b.t.Fatal("unexpected capture")
+	return nil, nil
+}
+func (b *noACLSourceBackend) WriteSecurity(hostmeta.DarwinChmodArguments) error {
+	b.t.Fatal("unexpected security write")
+	return nil
+}
+func (b *noACLSourceBackend) Chmod(mode uint16) error {
+	if mode != 0644 {
+		b.t.Fatal(mode)
+	}
+	b.mode = true
+	return nil
+}
+func (b *noACLSourceBackend) Chown(uint32, uint32) error { b.t.Fatal("unexpected chown"); return nil }
+func (b *noACLSourceBackend) SetACL(*appledouble.ACL) error {
+	b.t.Fatal("unexpected ACL write")
+	return nil
+}

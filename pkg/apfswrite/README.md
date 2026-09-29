@@ -70,3 +70,10 @@ The root name, payload and link group are ignored; explicit non-directory types
 fail. Zero mode defaults to directory 0755; explicit `os.ModeDir` permits 0000.
 See [root metadata and native qualification](../../docs/appledouble-root-metadata.md)
 for defaults, native attribute visibility and compatibility details.
+
+### Ordinary security copying
+
+`root.CopySecurity(target, source, options)` stages an ordinary captured security
+copy, including inherited ACL selection and numeric permission/ownership policy.
+The equivalent API exists in HFS+. See [image security copying](../../docs/appledouble-image-security-copy.md)
+for its completion contract, native qualification and remaining host integration.

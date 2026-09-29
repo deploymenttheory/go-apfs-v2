@@ -131,10 +131,14 @@ Relocation coverage alone is not permission to release or resume codesign.
 
 The ordinary security-copy executor is now available as `hostmeta.CopySecurity`.
 It separates native sequence completion from write-failure diagnostics and keeps
-source-cache changes explicit. Production adapters and lifecycle integration
+source-cache changes explicit. Native host adapters and lifecycle integration
 remain required; see [security-copy execution](appledouble-security-copy.md).
 This increment does not unblock package PR72 or the final release gate.
 
 APFS/HFS+ image security source capture and APFS root metadata writing are
 available, with [root layout qualification](appledouble-root-metadata.md).
 These close the measured root-loss gap but do not close the integration gate.
+
+Ordinary security copying is now connected to both image writer trees; see
+[image security-copy integration](appledouble-image-security-copy.md) for selected
+properties, native refusals, qualification and the remaining ordered lifecycle.
