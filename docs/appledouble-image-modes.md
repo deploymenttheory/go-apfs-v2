@@ -36,7 +36,8 @@ share the first entry's inode metadata, as before.
 | APFS root with nonzero `Mode` | Exact permissions, preserving the existing root API |
 
 The APFS root's zero mode still defaults to `0755` unless explicitly supplied.
-HFS+ roots use the general table. Both `EntryTreeFromDir` adapters mark captured
+HFS+ roots use the general table. The host walker still synthesizes a root with default metadata; acquiring its
+actual metadata remains transport work. Both `EntryTreeFromDir` adapters mark captured
 modes explicit. APFS snapshot rebuilding does so for captured child entries as
 well. This does not complete root/security transport in the snapshot command.
 
