@@ -263,3 +263,16 @@ pinned at `9f91eb6ced021952278816cdc76ad68da8631ccb`.
 Strict Windows EA references: [query](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntifs/nf-ntifs-zwqueryeafile),
 [EA wire format and zero-length deletion](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-fscc/0eb94f48-6aac-41df-a878-79f4dcfd8989),
 and [protected kernel EAs](https://learn.microsoft.com/en-us/windows-hardware/drivers/ifs/kernel-extended-attributes).
+
+## Deferred AppleDouble ACL restoration
+
+`RestoreACL` executes an `appledouble.ACLUpdate` through an explicit
+`ACLRestoreBackend`. It captures destination security once, retains ownership and
+mode, and reports actual capture/write errors. An unsupported first write clears
+cached source security and retries the unchanged destination request once.
+Permission failures are not retried. Every callback request owns its data.
+
+The routine is pure Go on Linux, macOS and Windows; native/carrier adapters remain
+separate transport work. Native APFS and FAT comparisons include real permission
+and unsupported-operation failures. See [the backend contract, coverage and
+remaining work](../../docs/appledouble-acl-restoration.md).
