@@ -34,6 +34,7 @@ func TestNativeSecurityCopy(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
+	helper = bytes.ReplaceAll(helper, []byte("\r\n"), []byte("\n"))
 	if f.HelperSHA256 != fmt.Sprintf("%x", sha256.Sum256(helper)) || f.CopyfileSHA256 != "19f3ad0910f05bb2a6ae982ebdabcc4dc9c911b65ec2d99e75b7c4c52272805c" || f.LibcSHA256 != "31c8a6c3729759582796700827583b17639ed0324f44dafb4927f1332bc040ff" {
 		t.Fatal("source/helper provenance")
 	}
