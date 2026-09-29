@@ -36,7 +36,7 @@ func verify() error {
 	defer log.Close()
 	var transcript bytes.Buffer
 	profile := filepath.Join(dir, "coverage.out")
-	cmd := exec.Command("go", "test", "-count=1", "-json", "-run", "^(Test.*RestoreACL|Test.*ACLAttributes|FuzzRestoreACL|FuzzACLAttributes|Test.*Chmod|FuzzDarwinChmod|TestWriteSecurityFlags)", "-covermode=atomic", "-coverprofile="+profile, "./pkg/hostmeta", "./pkg/hfsplus")
+	cmd := exec.Command("go", "test", "-count=1", "-json", "-run", "^(Test.*RestoreACL|Test.*ACLAttributes|FuzzRestoreACL|FuzzACLAttributes|Test.*Chmod|FuzzDarwinChmod|TestWriteSecurityFlags|Test.*SecurityCopy|FuzzSecurityCopy)", "-covermode=atomic", "-coverprofile="+profile, "./pkg/hostmeta", "./pkg/hfsplus")
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 	cmd.Stdout = io.MultiWriter(os.Stdout, log, &transcript)
 	cmd.Stderr = io.MultiWriter(os.Stderr, log)
@@ -64,7 +64,7 @@ func verify() error {
 		return e
 	}
 	covered, total := 0, 0
-	coverageFiles := map[string][2]int{"pkg/hostmeta/acl_restore.go": {}, "pkg/hostmeta/acl_attributes.go": {}, "pkg/hostmeta/acl_chmod.go": {}, "pkg/hostmeta/acl_chmod_properties.go": {}, "pkg/hfsplus/writer_attribute_flags.go": {}}
+	coverageFiles := map[string][2]int{"pkg/hostmeta/security_copy.go": {}, "pkg/hostmeta/acl_restore.go": {}, "pkg/hostmeta/acl_attributes.go": {}, "pkg/hostmeta/acl_chmod.go": {}, "pkg/hostmeta/acl_chmod_properties.go": {}, "pkg/hfsplus/writer_attribute_flags.go": {}}
 	for _, line := range strings.Split(string(b), "\n") {
 		fields := strings.Fields(line)
 		if len(fields) != 3 {
@@ -99,7 +99,7 @@ func verify() error {
 	if total == 0 || covered*100 <= total*95 {
 		return fmt.Errorf("ACL restoration coverage must exceed 95%%: %d/%d", covered, total)
 	}
-	files := []string{"pkg/hostmeta/acl_chmod_properties.go", "pkg/hostmeta/acl_chmod_properties_test.go", "testdata/appledouble/native/acl-chmod-properties.c", "testdata/appledouble/native/acl-chmod-properties.json.gz", "pkg/hostmeta/acl_restore_nonowner_test.go", "testdata/appledouble/native/acl-nonowner.c", "testdata/appledouble/native/acl-nonowner.json.gz", "pkg/hfsplus/writer.go", "pkg/hfsplus/writer_attribute_flags.go", "pkg/hfsplus/writer_security_test.go", "pkg/hfsplus/writer_test.go", "pkg/hfsplus/writer_hardlink_test.go", "pkg/hostmeta/acl_chmod.go", "pkg/hostmeta/acl_chmod_test.go", "testdata/appledouble/native/acl-chmod.c", "testdata/appledouble/native/acl-chmod.json.gz", "pkg/hostmeta/acl_attributes.go", "pkg/hostmeta/acl_attributes_test.go", "testdata/appledouble/native/acl-attributes.c", "testdata/appledouble/native/acl-attributes.json.gz", "go.mod", "go.sum", "pkg/hostmeta/acl_restore.go", "pkg/hostmeta/acl_restore_test.go", "pkg/hostmeta/acl_restore_native_test.go", "pkg/appledouble/acl.go", "pkg/appledouble/acl_external.go", "pkg/appledouble/acl_update.go", "pkg/appledouble/filesec.go", "testdata/appledouble/native/acl-restore.c", "testdata/appledouble/native/filesec.c", "testdata/appledouble/native/acl-restore.json.gz", "scripts/verify-acl-restore.go", "scripts/verify-appledouble-filesec.go"}
+	files := []string{"pkg/hostmeta/security_copy.go", "pkg/hostmeta/security_copy_test.go", "internal/testutil/securitycopy/oracle.go", "scripts/verify-security-copy.go", "testdata/appledouble/native/security-copy.c", "testdata/appledouble/native/security-copy.json.gz", "pkg/hostmeta/acl_chmod_properties.go", "pkg/hostmeta/acl_chmod_properties_test.go", "testdata/appledouble/native/acl-chmod-properties.c", "testdata/appledouble/native/acl-chmod-properties.json.gz", "pkg/hostmeta/acl_restore_nonowner_test.go", "testdata/appledouble/native/acl-nonowner.c", "testdata/appledouble/native/acl-nonowner.json.gz", "pkg/hfsplus/writer.go", "pkg/hfsplus/writer_attribute_flags.go", "pkg/hfsplus/writer_security_test.go", "pkg/hfsplus/writer_test.go", "pkg/hfsplus/writer_hardlink_test.go", "pkg/hostmeta/acl_chmod.go", "pkg/hostmeta/acl_chmod_test.go", "testdata/appledouble/native/acl-chmod.c", "testdata/appledouble/native/acl-chmod.json.gz", "pkg/hostmeta/acl_attributes.go", "pkg/hostmeta/acl_attributes_test.go", "testdata/appledouble/native/acl-attributes.c", "testdata/appledouble/native/acl-attributes.json.gz", "go.mod", "go.sum", "pkg/hostmeta/acl_restore.go", "pkg/hostmeta/acl_restore_test.go", "pkg/hostmeta/acl_restore_native_test.go", "pkg/appledouble/acl.go", "pkg/appledouble/acl_external.go", "pkg/appledouble/acl_update.go", "pkg/appledouble/filesec.go", "testdata/appledouble/native/acl-restore.c", "testdata/appledouble/native/filesec.c", "testdata/appledouble/native/acl-restore.json.gz", "scripts/verify-acl-restore.go", "scripts/verify-appledouble-filesec.go"}
 	hashes := map[string]string{}
 	for _, path := range files {
 		b, e := os.ReadFile(path)

@@ -317,3 +317,11 @@ Null security, a record and the removal sentinel remain distinct arguments.
 Explicit zero UUIDs can cause a record to be sent even without an ACL property.
 See the [contract and native effects](../../docs/appledouble-acl-chmod-properties.md).
 Production capture/call and carrier adapters remain separate integration work.
+
+## Ordinary security-copy execution
+
+`CopySecurity` coordinates ACL selection, optional filesec properties, set-ID
+filtering and copyfile-compatible fallback ordering through a portable backend.
+It retains write failures even where native copyfile reports success. Callers
+must inspect `SecurityCopyResult.Failures`; `Completed` alone does not prove
+metadata preservation. See [execution and qualification](../../docs/appledouble-security-copy.md).

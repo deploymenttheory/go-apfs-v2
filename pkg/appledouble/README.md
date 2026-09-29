@@ -145,7 +145,8 @@ of this roadmap delivered. These phases are not estimates of remaining PR count.
    [write/retry execution](../../docs/appledouble-acl-restoration.md),
    [attribute records](../../docs/appledouble-acl-attributes.md) and
    [extended chmod request preparation](../../docs/appledouble-acl-chmod.md),
-   including [optional properties and removal](../../docs/appledouble-acl-chmod-properties.md).
+   including [optional properties and removal](../../docs/appledouble-acl-chmod-properties.md),
+   plus [ordinary security execution and fallbacks](../../docs/appledouble-security-copy.md).
    Native extended chmod comparisons resolve the measured attribute/copyfile
    refusal and empty-ACL flag differences for the qualified owner-operated cases.
    **Remaining:** production call/capture adapters, live source acquisition,
