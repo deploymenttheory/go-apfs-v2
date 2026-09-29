@@ -55,6 +55,7 @@ type application struct {
 	Native      result
 }
 type fixture struct {
+	Properties                                              *propertyFixture
 	NonOwner                                                *nonOwnerFixture
 	Chmod                                                   *chmodFixture
 	Attributes                                              *attributeFixture
@@ -219,6 +220,8 @@ func main() {
 	verifyAttributes(root, f.Attributes, *capture)
 	f.Chmod = &chmodFixture{Revision: f.Revision, Host: f.Host, HelperSHA256: sum(read("testdata/appledouble/native/acl-chmod.c")), ParentHelperSHA256: f.HelperSHA256}
 	verifyChmod(root, f.Chmod, f.Attributes, *capture)
+	f.Properties = &propertyFixture{Revision: f.Revision, Host: f.Host, HelperSHA256: sum(read("testdata/appledouble/native/acl-chmod-properties.c")), ParentHelperSHA256: f.HelperSHA256, LibcSHA256: f.Chmod.LibcSHA256, XNUSHA256: f.Chmod.XNUSHA256}
+	verifyChmodProperties(root, f.Properties, *capture)
 	f.NonOwner = &nonOwnerFixture{Revision: f.Revision, Host: f.Host, HelperSHA256: sum(read("testdata/appledouble/native/acl-nonowner.c")), ParentHelperSHA256: f.HelperSHA256, CopyfileSHA256: f.CopyfileSHA256}
 	verifyNonOwner(root, f.NonOwner, *capture)
 	b, e := json.MarshalIndent(f, "", "  ")
@@ -1349,4 +1352,296 @@ func principalReadback(path, filesystem string, f *nonOwnerFixture) {
 		}
 		tc.AfterDisk = nativeAttrs["com.apple.system.Security"]
 	}
+}
+
+// Property inputs use raw bytes: FileSecurity contains ACL's text marshaler,
+// which cannot preserve unknown binary bits in JSON fixtures.
+type chmodPropertyInput struct {
+	UID, GID, Mode       *uint32
+	OwnerUUID, GroupUUID *[16]byte
+	RawSecurity          []byte
+	RemoveACL            bool
+}
+
+func (p chmodPropertyInput) properties() hostmeta.DarwinChmodProperties {
+	out := hostmeta.DarwinChmodProperties{UID: p.UID, GID: p.GID, Mode: p.Mode, OwnerUUID: p.OwnerUUID, GroupUUID: p.GroupUUID, RemoveACL: p.RemoveACL}
+	if p.RawSecurity != nil {
+		s, e := appledouble.ParseDarwinFileSecurity(p.RawSecurity)
+		must(e)
+		out.RawSecurity = s
+	}
+	return out
+}
+func (p chmodPropertyInput) arguments(dir string) []string {
+	raw := "-"
+	if p.RemoveACL {
+		raw = "remove"
+	} else if p.RawSecurity != nil {
+		raw = filepath.Join(dir, "properties.bin")
+		write(raw, p.RawSecurity)
+	}
+	number := func(v *uint32) string {
+		if v == nil {
+			return "-"
+		}
+		return fmt.Sprint(*v)
+	}
+	uuid := func(v *[16]byte) string {
+		if v == nil {
+			return "-"
+		}
+		return hex.EncodeToString(v[:])
+	}
+	return []string{raw, number(p.UID), number(p.GID), number(p.Mode), uuid(p.OwnerUUID), uuid(p.GroupUUID)}
+}
+
+type propertyConversion struct {
+	Name    string
+	Input   chmodPropertyInput
+	Request hostmeta.DarwinChmodArguments
+}
+type propertyResult struct {
+	result
+	Attributes, Filesystem string
+	PayloadUnchanged       bool
+}
+type propertyApplication struct {
+	Name, Kind, Profile, SecurityProfile string
+	Initial                              int
+	Flags                                uint32
+	Input                                chmodPropertyInput
+	Before                               metadata
+	Response                             []byte
+	Native                               propertyResult
+	Request                              hostmeta.DarwinChmodArguments
+}
+type propertyFixture struct {
+	Revision, Host, HelperSHA256, ParentHelperSHA256, LibcSHA256, XNUSHA256, HeaderSHA256 string
+	ActorUID, ActorGID                                                                    uint32
+	Conversions                                                                           []propertyConversion
+	Applications                                                                          []propertyApplication
+}
+
+func propertyRequestLine(r hostmeta.DarwinChmodArguments) string {
+	security := "-"
+	if r.SecurityArgument == hostmeta.DarwinSecurityRecord {
+		security = hex.EncodeToString(r.Security)
+	}
+	return fmt.Sprintf("%d %d %d %d %s\n", r.UID, r.GID, r.Mode, r.SecurityArgument, security)
+}
+func propertyRun(helper, dir, kind string, tc propertyApplication) (metadata, []byte, propertyResult) {
+	args := []string{filepath.Join(dir, kind), tc.Kind, fmt.Sprint(tc.Initial), fmt.Sprint(tc.Flags), kind}
+	args = append(args, tc.Input.arguments(dir)...)
+	cmd := exec.Command(helper, args...)
+	input := ""
+	if kind == "go" {
+		input = propertyRequestLine(tc.Request)
+		cmd.Stdin = strings.NewReader(input)
+	}
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	out, e := cmd.Output()
+	commands = append(commands, command{Args: append([]string{helper}, args...), Input: input, Output: string(out), Error: stderr.String()})
+	if e != nil {
+		panic(fmt.Sprintf("property application %s: %v %s", tc.Name, e, stderr.String()))
+	}
+	rows := bytes.Split(bytes.TrimSpace(out), []byte{'\n'})
+	if len(rows) != 2 {
+		panic("property protocol rows")
+	}
+	var before struct {
+		Before     metadata
+		Attributes string
+	}
+	var after propertyResult
+	must(json.Unmarshal(rows[0], &before))
+	must(json.Unmarshal(rows[1], &after))
+	raw, e := hex.DecodeString(before.Attributes)
+	must(e)
+	write(filepath.Join(dir, kind+"-properties.jsonl"), out)
+	write(filepath.Join(dir, kind+"-properties.stdin"), []byte(input))
+	return before.Before, raw, after
+}
+func verifyChmodProperties(root string, f *propertyFixture, capture bool) {
+	const helperSource = "testdata/appledouble/native/acl-chmod-properties.c"
+	f.HeaderSHA256 = "9009cb706a24501dff4f47024c63dc730618249d85dd050f2bf97515a3ca6098"
+	download("https://raw.githubusercontent.com/apple-oss-distributions/xnu/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/bsd/sys/kauth.h", f.HeaderSHA256, filepath.Join(root, "kauth.h.pinned"))
+	helper := filepath.Join(root, "acl-chmod-properties")
+	run("xcrun", "clang", "-Wall", "-Wextra", "-Werror", "-I", root, helperSource, "-o", helper)
+	for _, arch := range []string{"arm64", "x86_64"} {
+		b := run("xcrun", "clang", "-arch", arch, "-I", root, "-fsyntax-only", "-Xclang", "-ast-dump=json", helperSource)
+		commands[len(commands)-1].Output = fmt.Sprintf("AST retained: %d bytes", len(b))
+		write(filepath.Join(root, "acl-chmod-properties-"+arch+".ast.json"), b)
+	}
+	f.ActorUID, f.ActorGID = uint32(os.Getuid()), uint32(os.Getgid())
+	if os.Getuid() == 0 || os.Getuid() != os.Geteuid() || os.Getgid() != os.Getegid() {
+		panic("property oracle requires ordinary actor")
+	}
+	type state struct {
+		Name   string
+		Raw    []byte
+		Remove bool
+	}
+	states := []state{{Name: "none"}, {Name: "remove", Remove: true}}
+	for _, n := range []int{-2, -1, 0, 1, 128} {
+		s := &appledouble.FileSecurity{OwnerUUID: [16]byte{0x31}, GroupUUID: [16]byte{0x32}}
+		name := "noacl"
+		if n == -2 {
+			name = "opaque-noacl"
+			s.NoACLFlags = [4]byte{1, 2, 3, 4}
+		}
+		if n >= 0 {
+			name = fmt.Sprintf("acl-%d", n)
+			s.ACL = &appledouble.ACL{Flags: 1 << 17}
+			for i := 0; i < n; i++ {
+				s.ACL.Entries = append(s.ACL.Entries, appledouble.ACLEntry{Principal: [16]byte{0x11, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef, 1, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef}, Flags: 1, Rights: 1})
+			}
+		}
+		b, e := s.MarshalDarwinBinary()
+		must(e)
+		states = append(states, state{Name: name, Raw: b})
+	}
+	for variant := 0; variant < 4; variant++ {
+		uid, gid, mode := uint32(0), uint32(0), uint32(0)
+		owner, group := [16]byte{}, [16]byte{}
+		switch variant {
+		case 1:
+			uid, gid, mode = 42, 43, 0xabcd0000|06755
+			owner[0], group[0] = 0x11, 0x22
+		case 2:
+			uid, gid, mode = 0xffffffff, 0xffffffff, 0xffffffff
+			owner[0], group[0] = 0x33, 0x44
+		case 3:
+			uid, gid, mode = 0xffffff9b, 0xffffff9b, 0x10000
+			owner[0], group[0] = 0x55, 0x66
+		}
+		for mask := 0; mask < 32; mask++ {
+			for _, s := range states {
+				p := chmodPropertyInput{RawSecurity: s.Raw, RemoveACL: s.Remove}
+				if mask&1 != 0 {
+					p.UID = &uid
+				}
+				if mask&2 != 0 {
+					p.GID = &gid
+				}
+				if mask&4 != 0 {
+					p.Mode = &mode
+				}
+				if mask&8 != 0 {
+					p.OwnerUUID = &owner
+				}
+				if mask&16 != 0 {
+					p.GroupUUID = &group
+				}
+				name := fmt.Sprintf("properties-v%d-mask%02d-%s", variant, mask, s.Name)
+				dir := filepath.Join(root, name)
+				must(os.MkdirAll(dir, 0700))
+				output := filepath.Join(dir, "request.bin")
+				args := []string{helper, "pack", output}
+				args = append(args, p.arguments(dir)...)
+				var observed hostmeta.DarwinChmodArguments
+				must(json.Unmarshal(run(args...), &observed))
+				if observed.SecurityArgument == hostmeta.DarwinSecurityRecord {
+					observed.Security = read(output)
+				}
+				got, e := p.properties().ChmodArguments()
+				must(e)
+				if !reflect.DeepEqual(got, observed) {
+					panic("property request differs: " + name)
+				}
+				f.Conversions = append(f.Conversions, propertyConversion{Name: name, Input: p, Request: observed})
+			}
+		}
+	}
+	actorUID, actorGID := f.ActorUID, f.ActorGID
+	modeZero, modeNew, modeMax := uint32(0), uint32(0600), uint32(0xffff)
+	none, max := uint32(0xffffff9b), uint32(0xffffffff)
+	uuid := [16]byte{}
+	profiles := []struct {
+		Name  string
+		Input chmodPropertyInput
+	}{{"omitted", chmodPropertyInput{}}, {"actor", chmodPropertyInput{UID: &actorUID, GID: &actorGID}}, {"mode-zero", chmodPropertyInput{Mode: &modeZero}}, {"mode-0600", chmodPropertyInput{Mode: &modeNew}}, {"mode-ffff", chmodPropertyInput{Mode: &modeMax}}, {"owner-zero", chmodPropertyInput{OwnerUUID: &uuid}}, {"group-zero", chmodPropertyInput{GroupUUID: &uuid}}, {"full", chmodPropertyInput{UID: &actorUID, GID: &actorGID, Mode: &modeNew, OwnerUUID: &uuid, GroupUUID: &uuid}}, {"explicit-none", chmodPropertyInput{UID: &none, GID: &none}}, {"explicit-max", chmodPropertyInput{UID: &max, GID: &max}}}
+	for _, kind := range []string{"file", "directory"} {
+		for _, initial := range []int{-1, 0, 1} {
+			for _, flags := range []uint32{0, 2, 4} {
+				for _, profile := range profiles {
+					for _, s := range states {
+						name := fmt.Sprintf("property-write-%s-i%d-f%d-%s-%s", kind, initial, flags, profile.Name, s.Name)
+						dir := filepath.Join(root, name)
+						must(os.RemoveAll(dir))
+						must(os.MkdirAll(dir, 0700))
+						input := profile.Input
+						input.RawSecurity, input.RemoveACL = s.Raw, s.Remove
+						request, e := input.properties().ChmodArguments()
+						must(e)
+						tc := propertyApplication{Name: name, Kind: kind, Profile: profile.Name, SecurityProfile: s.Name, Initial: initial, Flags: flags, Input: input, Request: request}
+						before, response, native := propertyRun(helper, dir, "native", tc)
+						goBefore, goResponse, goNative := propertyRun(helper, dir, "go", tc)
+						if before != goBefore || !bytes.Equal(response, goResponse) || native != goNative || !native.IdentityUnchanged || !native.PayloadUnchanged || native.Filesystem != "apfs" {
+							panic("property application differs: " + name)
+						}
+						if before.UID != actorUID || before.GID != actorGID || before.Mode&07777 != 0644 || before.Flags != flags || native.After.Flags != flags {
+							panic("property application setup/flags: " + name)
+						}
+						tc.Before, tc.Response, tc.Native = before, response, native
+						f.Applications = append(f.Applications, tc)
+					}
+				}
+			}
+		}
+	}
+	b, e := json.MarshalIndent(f, "", "  ")
+	must(e)
+	write(filepath.Join(root, "observed-properties.json"), b)
+	if capture {
+		fmt.Printf("Captured %d property requests and %d real write pairs; NOT approved\n", len(f.Conversions), len(f.Applications))
+		return
+	}
+	z, e := gzip.NewReader(bytes.NewReader(read("testdata/appledouble/native/acl-chmod-properties.json.gz")))
+	must(e)
+	var archived propertyFixture
+	must(json.NewDecoder(z).Decode(&archived))
+	must(z.Close())
+	if archived.HelperSHA256 != f.HelperSHA256 || archived.ParentHelperSHA256 != f.ParentHelperSHA256 || archived.LibcSHA256 != f.LibcSHA256 || archived.XNUSHA256 != f.XNUSHA256 || archived.HeaderSHA256 != f.HeaderSHA256 || !reflect.DeepEqual(archived.Conversions, f.Conversions) || len(archived.Applications) != len(f.Applications) {
+		panic("property provenance/conversions")
+	}
+	normalize := func(v, old, current uint32) uint32 {
+		if v == old {
+			return current
+		}
+		return v
+	}
+	for i, a := range archived.Applications {
+		b := f.Applications[i]
+		if a.Input.UID != nil {
+			*a.Input.UID = normalize(*a.Input.UID, archived.ActorUID, f.ActorUID)
+		}
+		if a.Input.GID != nil {
+			*a.Input.GID = normalize(*a.Input.GID, archived.ActorGID, f.ActorGID)
+		}
+		a.Before.UID = normalize(a.Before.UID, archived.ActorUID, f.ActorUID)
+		a.Before.GID = normalize(a.Before.GID, archived.ActorGID, f.ActorGID)
+		a.Native.After.UID = normalize(a.Native.After.UID, archived.ActorUID, f.ActorUID)
+		a.Native.After.GID = normalize(a.Native.After.GID, archived.ActorGID, f.ActorGID)
+		a.Request.UID = normalize(a.Request.UID, archived.ActorUID, f.ActorUID)
+		a.Request.GID = normalize(a.Request.GID, archived.ActorGID, f.ActorGID)
+		// Numeric ownership occupies bytes 4..11 in this fixed attribute profile.
+		if len(a.Response) < 12 || len(b.Response) < 12 {
+			panic("short property attributes")
+		}
+		copy(a.Response[4:12], b.Response[4:12])
+		left, e := hex.DecodeString(a.Native.Attributes)
+		must(e)
+		right, e := hex.DecodeString(b.Native.Attributes)
+		must(e)
+		if len(left) < 12 || len(right) < 12 {
+			panic("short property attributes")
+		}
+		copy(left[4:12], right[4:12])
+		a.Native.Attributes = hex.EncodeToString(left)
+		if !reflect.DeepEqual(a, b) {
+			panic("property observation differs: " + b.Name)
+		}
+	}
+	fmt.Printf("Qualified %d optional-property requests and %d real libSystem/Go-argument write pairs\n", len(f.Conversions), len(f.Applications))
 }

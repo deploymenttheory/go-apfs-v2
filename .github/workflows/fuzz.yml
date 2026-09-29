@@ -31,6 +31,7 @@ jobs:
           - { pkg: ./pkg/hostmeta, target: FuzzRestoreACL }
           - { pkg: ./pkg/hostmeta, target: FuzzACLAttributes }
           - { pkg: ./pkg/hostmeta, target: FuzzDarwinChmodRequest }
+          - { pkg: ./pkg/hostmeta, target: FuzzDarwinChmodProperties }
           - { pkg: ./pkg/appledouble, target: FuzzQuarantine }
           - { pkg: ./pkg/appledouble, target: FuzzQuarantineXattr }
           - { pkg: ./pkg/appledouble, target: FuzzQuarantineApplication }

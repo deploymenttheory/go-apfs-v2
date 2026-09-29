@@ -31,7 +31,9 @@ errors and qualifies source-cache reset/retry against real APFS and FAT outcomes
 ownership, but native attribute/copyfile differences in empty ACL flags and
 restrictive-flag errors rule out substituting attribute writes.
 [Extended chmod requests](appledouble-acl-chmod.md) qualify the matching native
-operation for those measured cases; the production call boundary remains open.
+operation for those measured cases. [Optional-property arguments](appledouble-acl-chmod-properties.md)
+add omission/removal forms and qualify the distinct Darwin ownership sentinel.
+The production call boundary remains open.
 [Controlled owner/non-owner image tests](appledouble-acl-nonowner.md) qualify
 ordinary-user APFS/HFSX authorization and fix missing HFS security catalog flags.
 [Ordinary ACL copy policy](appledouble-acl-copy.md) selects explicit source and
