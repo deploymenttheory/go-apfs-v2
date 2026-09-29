@@ -126,6 +126,9 @@ func Tree(uid, gid uint32) (*apfswrite.Entry, []Case) {
 }
 func HFSTree(s *apfswrite.Entry) *hfsplus.Entry {
 	d := &hfsplus.Entry{Name: s.Name, Mode: s.Mode, ModeExplicit: s.ModeExplicit, ModTime: s.ModTime, UID: s.UID, GID: s.GID, Data: s.Data, LinkGroup: s.LinkGroup, Xattrs: s.Xattrs}
+	if s.Mode == 0 && len(s.Children) > 0 {
+		d.Mode = os.ModeDir
+	}
 	for _, c := range s.Children {
 		d.Children = append(d.Children, HFSTree(c))
 	}

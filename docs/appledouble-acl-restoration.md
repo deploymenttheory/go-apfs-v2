@@ -14,6 +14,11 @@ are retained as values, not treated as omitted fields.
 
 ## Backend contract
 
+The image writers provide a [portable production adapter](appledouble-image-acl-restoration.md)
+through `root.RestoreACL(destinationEntry, update)`. It stages the selected ACL
+in APFS/HFS+ entries, updating hard-link aliases together. Native host adapters
+remain separate work.
+
 `ACLRestoreBackend` has three operations:
 
 1. `CaptureACL` returns `ACLMetadata`: current `FileSecurity`, numeric UID/GID,
@@ -99,7 +104,7 @@ The [attribute-record codec](appledouble-acl-attributes.md) provides portable
 Darwin request bytes. Native attribute calls differ from copyfile on empty ACL
 flags and restrictive-flag failures, so they are not a qualified replacement
 backend yet. The [extended chmod request builder](appledouble-acl-chmod.md)
-qualifies the correct operation for the measured cases; its production call
+qualifies the correct operation for the measured cases; its native host call
 boundary remains to be implemented.
 
 This implements the deferred ACL write protocol, not the entire copyfile

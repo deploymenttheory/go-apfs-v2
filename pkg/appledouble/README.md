@@ -72,6 +72,11 @@ full AppleDouble transport integration is on the roadmap below.
   ACL snapshots for portable security copying, with malformed/empty/absent
   records distinguished and native comparisons on four filesystem variants.
   See [image security capture](../../docs/appledouble-image-security.md).
+- **Deferred image ACL restoration:** APFS/HFS+ writers expose
+  `root.RestoreACL(destinationEntry, update)` to stage the selected replacement,
+  preserving ownership and exact permissions and updating hard-link aliases
+  together. It works on every OS; writing the resulting image is a separate step.
+  See [image ACL restoration](../../docs/appledouble-image-acl-restoration.md).
 - **Source identity capture and replay:** `NewACLIdentityCapture` records the
   source callbacks used during parsing and formatting. Its serializable snapshot
   supplies immutable resolvers on any supported OS, preserving confirmed absence
@@ -137,10 +142,10 @@ of this roadmap delivered. These phases are not estimates of remaining PR count.
 
 | Phase | Current state | Completion gate |
 | --- | --- | --- |
-| 1. ACL application | Policy, requests, image source capture and controlled owner/non-owner cases qualified; write integration open | Source acquisition, authorization, actual writes and restoration ordering qualified together |
+| 1. ACL application | Deferred APFS/HFS+ image replacement integrated; ordinary copy and native host integration remain | Source acquisition, authorization, actual writes and restoration ordering qualified together |
 | 2. Quarantine | Conversion and much of application policy implemented; context/integration gaps open | Remaining process contexts and ordered restoration qualify against native behavior |
 | 3. Large values and allocation | Known native differences remain | Oversized values, aggregates, forks and allocation policy have explicit, tested behavior |
-| 4. Shared filesystem transport | Host metadata primitives available; preservation integration outstanding | APFS/HFS+ extract-and-repack preserves logical metadata on all three OSes |
+| 4. Shared filesystem transport | Host primitives and exact image permissions available; complete metadata transport outstanding | APFS/HFS+ extract-and-repack preserves logical metadata on all three OSes |
 | 5. Consumers and release | Component CI and downstream checks exist; final gate blocked by phases 1–4 | Qualified APFS release adopted by package tooling before codesign resumes |
 
 1. **ACL application and transport.** Implemented: deferred replacement,
@@ -158,14 +163,27 @@ of this roadmap delivered. These phases are not estimates of remaining PR count.
    [Image permission preservation](../../docs/appledouble-image-modes.md) retains
    explicit zero modes and set-ID/sticky bits in both writers and readers,
    including native-qualified roots, symlinks and hard links on all three OSes.
+   Captured child entries keep exact permissions during directory packing and
+   APFS snapshot rebuilding; synthetic roots still use default metadata.
    Native extended chmod comparisons resolve the measured attribute/copyfile
    refusal and empty-ACL flag differences for the qualified owner-operated cases.
-   **Remaining:** production write adapters, live host source acquisition,
+   [Deferred image ACL restoration](../../docs/appledouble-image-acl-restoration.md)
+   now stages replacements in both writers, retaining UUID ownership, exact modes
+   and unrelated metadata while updating hard-link aliases together. Written
+   images qualify against real native writes; all three OSes replay the corpus
+   and reproduce the image hashes.
+   **Remaining:** ordinary security-copy image integration, native host write
+   adapters, live host source acquisition,
    privileged/sandbox authorization contexts and full restoration ordering.
    [Owner/non-owner image tests](../../docs/appledouble-acl-nonowner.md) qualify
    ordinary-user APFS/HFSX grants and denials and fix HFS security catalog flags.
    The request builder is not a completed native backend; foreign metadata carriers are integrated
    in phase 4.
+
+   **Next implementation:** connect ordinary security copying to the image
+   writers, including inherited destination entries, selected numeric properties,
+   ACL removal and set-ID policy. Then integrate source acquisition and ordered
+   restoration. Keep one pure-Go implementation on Linux, macOS and Windows.
 2. **Quarantine context and transport qualification.** Implemented: serialized
    and filesystem conversion, ordered updates, application planning, raw
    destination-state handling and file/directory/symlink destination policy.
@@ -180,7 +198,8 @@ of this roadmap delivered. These phases are not estimates of remaining PR count.
    handling versus the decoder's cumulative alias-allocation guard. Each
    difference needs a qualified policy, not an implicit metadata-loss success.
 4. **Shared filesystem transport.** Strict native xattr primitives are available
-   in `pkg/hostmeta`. **Remaining:** integrated preservation for files,
+   in `pkg/hostmeta`; both image readers and writers retain zero permissions and
+   all set-ID/sticky combinations. **Remaining:** integrated preservation for files,
    directories, roots and links; native write refusal/normalization; empty values,
    logical names and large forks; carrier conflicts and path safety. Prove
    logical name/value preservation through APFS/HFS+ extraction and repacking on

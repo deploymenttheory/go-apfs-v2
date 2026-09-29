@@ -36,7 +36,10 @@ add omission/removal forms and qualify the distinct Darwin ownership sentinel.
 [Image permission preservation](appledouble-image-modes.md) now retains explicit
 zero modes and special bits across both writers, readers and captured entry
 conversion, with native mode and image-hash qualification. This removes a write
-integration prerequisite; the production ACL call boundary remains open.
+integration prerequisite. [Deferred image ACL restoration](appledouble-image-acl-restoration.md)
+now connects the shared execution policy to both image writers and qualifies
+real output against native writes. Ordinary security-copy image integration and
+the native host call boundary remain open.
 [Controlled owner/non-owner image tests](appledouble-acl-nonowner.md) qualify
 ordinary-user APFS/HFSX authorization and fix missing HFS security catalog flags.
 [Ordinary ACL copy policy](appledouble-acl-copy.md) selects explicit source and
