@@ -43,7 +43,12 @@ type Entry struct {
 	// Times overrides ModTime for all four inode times. Nil keeps legacy
 	// defaults; HFS stores whole seconds in its 1904–2040 range. Only Modify
 	// is clamped by ClampModTimes. Explicit out-of-range values fail.
-	Times    *hostmeta.FileTimes
+	Times *hostmeta.FileTimes
+	// BSDFlags selects owner/admin catalog flags plus Finder invisibility.
+	// Nil retains legacy compression inference. UF_COMPRESSED must agree with
+	// decmpfs storage. Unrepresentable bits fail before output writes. The
+	// first hard-link entry supplies the shared inode flags; stubs stay internal.
+	BSDFlags *uint32
 	UID, GID uint32
 	Data     []byte   // file content, or symlink target bytes
 	Children []*Entry // directory children (writer sorts them)
@@ -141,7 +146,8 @@ type fileNode struct {
 
 	// attrs are the node's extended attributes, sorted by name. A value too
 	// large to sit inside its record gets an extent of its own.
-	attrs []*attrWrite
+	attrs    []*attrWrite
+	bsdFlags uint32
 
 	// isLink marks a visible name pointing at an indirect node; linkRef is
 	// that node's catalog id. isINode marks the indirect node itself, which
@@ -229,6 +235,9 @@ func CreateImage(w io.WriterAt, sizeBytes int64, volumeName string, root *Entry,
 	// 1b. Turn groups of names sharing an inode into hard links, which adds
 	// the private directory and one indirect node per group.
 	b.buildHardLinks()
+	if err := b.prepareBSDFlags(); err != nil {
+		return err
+	}
 	if err := b.prepareTimes(); err != nil {
 		return err
 	}
@@ -711,7 +720,8 @@ func (b *builder) normalRecord(n *fileNode) btRecord {
 		OwnerID:    n.entry.UID,
 		GroupID:    n.entry.GID,
 		FileMode:   hfsFileMode(n),
-		OwnerFlags: compressedFlag(n),
+		OwnerFlags: uint8(n.bsdFlags),
+		AdminFlags: uint8(n.bsdFlags >> 16),
 	}
 
 	if n.isDir {
@@ -758,6 +768,12 @@ func (b *builder) normalRecord(n *fileNode) btRecord {
 			BSDInfo:          bsd,
 			FolderCount:      subFolders,
 		}
+		if n.bsdFlags&0x40 != 0 {
+			setDocumentID(&folder.FinderInfo, uint32(n.cnid))
+		}
+		if n.bsdFlags&0x8000 != 0 {
+			folder.UserInfo.FinderFlags |= 0x4000
+		}
 		return btRecord{key: key, payload: marshalBE(&folder)}
 	}
 
@@ -772,6 +788,15 @@ func (b *builder) normalRecord(n *fileNode) btRecord {
 		BSDInfo:          bsd,
 		DataFork:         b.forkFor(n),
 		ResourceFork:     b.rsrcForkFor(n),
+	}
+	if n.bsdFlags&0x40 != 0 {
+		setDocumentID(&file.FinderInfo, uint32(n.cnid))
+	}
+	if n.bsdFlags&0x8000 != 0 {
+		file.UserInfo.FinderFlags |= 0x4000
+	}
+	if n.bsdFlags&(0x2|0x20000) != 0 {
+		file.Flags |= HFSFileLockedMask
 	}
 	switch {
 	case n.isSymlink:

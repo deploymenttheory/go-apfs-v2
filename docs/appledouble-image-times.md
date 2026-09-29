@@ -22,7 +22,9 @@ entry.Times = &times
 `FileTimes` is available on both APFS and HFS+ volumes. It reads inode/catalog
 metadata, resolves hard links, and does not follow the final symlink or load
 payloads and xattrs. Names use `fs.ValidPath`; `"."` selects the root. Lookup and
-I/O failures remain errors. Acquisition bypasses general file-size calculation,\nso compressed-file attributes are not loaded just to read timestamps. Keep the\nsource image immutable during acquisition.
+I/O failures remain errors. Acquisition bypasses general file-size calculation,
+so compressed-file attributes are not loaded just to read timestamps. Keep the
+source image immutable during acquisition.
 
 A non-nil `Times` selects **all four fields**: `Birth`, `Modify`, `Change`, and
 `Access`. They override the entry's legacy `ModTime`. Unix epoch zero is a real
@@ -89,7 +91,7 @@ and [APFS reference](https://developer.apple.com/support/apple-file-system/Apple
 
 This is image metadata storage/acquisition, not a live-host timestamp setter or
 an implementation of `copyfile_stat`. Host acquisition, permission-sensitive
-writes, BSD flags, creation inheritance, quarantine/xattrs, deferred AppleDouble
+writes, binding the [image BSD flags](appledouble-image-flags.md), creation inheritance, quarantine/xattrs, deferred AppleDouble
 ACL replacement and cleanup must still be bound in native order. Host directory
 walking still supplies its existing metadata; it does not automatically opt into
 capturing all four timestamps.

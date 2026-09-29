@@ -162,3 +162,11 @@ and the complete restoration lifecycle remain outstanding. The portable
 [stat stage](appledouble-stat-copy.md) now executes ordered timestamp, ownership,
 mode and BSD-flag restoration with native-qualified retries and retained errors;
 live host bindings and integration with xattrs, deferred ACLs and cleanup remain.
+
+[Image BSD flags](appledouble-image-flags.md) now support ordinary inode flags
+in both readers/writers and snapshot rebuilding on all three OSes. Native HFS
+catalog normalization and tracked document-ID allocation are qualified across
+four images. IDs identify the new volume; original document identity, general
+FinderInfo restoration and special object semantics remain separate work. The
+next step is binding these metadata fields to ordered restoration, not releasing
+APFS or changing package PR72's dependency.

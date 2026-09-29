@@ -9,6 +9,8 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/deploymenttheory/go-apfs-v2/internal/bsdflags"
+
 	"github.com/deploymenttheory/go-apfs-v2/internal/decmpfs"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
@@ -147,6 +149,8 @@ func (b volCtx) setTree(spec VolumeSpec) error {
 	if nextOID, err = b.setRoot(spec.Root, nextOID); err != nil {
 		return err
 	}
+
+	b.prepareDocumentIDs()
 
 	// Sibling ids come from the same pool as inode numbers, and the volume's
 	// next-id must end up past them, so they are allocated after the tree is
@@ -295,11 +299,15 @@ func validateXattrs(e *Entry) (map[string][]byte, uint64, uint32, error) {
 	// An inode with no resource fork must say so. The flag is not optional:
 	// a checker treats its absence as a claim that a fork exists.
 	flags := uint64(inodeNoRsrcFork)
+	_, compressed := e.Xattrs[decmpfsName]
+	bsdFlags, err := bsdflags.Select(e.BSDFlags, compressed, false)
+	if err != nil {
+		return nil, 0, 0, err
+	}
 	if len(e.Xattrs) == 0 {
-		return nil, flags, 0, nil
+		return nil, flags, bsdFlags, nil
 	}
 
-	var bsdFlags uint32
 	for name := range e.Xattrs {
 		if name == "" {
 			return nil, 0, 0, fmt.Errorf("apfswrite: %q has an extended attribute with an empty name", e.Name)
@@ -682,7 +690,7 @@ func (b *builder) inodeValue(e *builderEntry) []byte {
 		nameVal := xf0 + sizeofXField
 		copy(val[nameVal:], e.name)
 	}
-	return val
+	return appendDocumentID(val, e.documentID)
 }
 
 // dstreamIDRecord builds the data-stream id record: key (oid, DSTREAM_ID),

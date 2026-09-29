@@ -96,12 +96,13 @@ func main() {
 	modes := flag.Bool("modes", false, "qualify explicit permissions and special bits on both image writers")
 	times := flag.Bool("times", false, "qualify independent inode timestamps and epoch preservation")
 	roots := flag.Bool("roots", false, "qualify root writer metadata and storage")
+	bsdFlags := flag.Bool("flags", false, "qualify independent image BSD flags")
 	flag.Parse()
-	if (*roots && *modes) || (*times && (*roots || *modes)) {
-		panic("choose one of roots, modes or times")
+	if (*roots && *modes) || (*times && (*roots || *modes)) || (*bsdFlags && (*roots || *modes || *times)) {
+		panic("choose one of roots, modes, times or flags")
 	}
 	root := "artifacts/image-security"
-	const helperSource = "testdata/appledouble/native/image-security.c"
+	helperSource := "testdata/appledouble/native/image-security.c"
 	corpus := "testdata/appledouble/native/image-security.json.gz"
 	if *roots {
 		root = "artifacts/image-root-security"
@@ -115,8 +116,18 @@ func main() {
 		root = "artifacts/image-times"
 		corpus = "testdata/appledouble/native/image-times.json.gz"
 	}
+	if *bsdFlags {
+		root = "artifacts/image-flags"
+		corpus = "testdata/appledouble/native/image-flags.json.gz"
+	}
 	must(os.MkdirAll(root, 0700))
 	var f imagesecurity.Fixture
+	if *bsdFlags {
+		f.Helpers = map[string]string{helperSource: sum(read(helperSource))}
+		write(filepath.Join(root, "image-security-base.h"), bytes.Replace(read(helperSource), []byte("int main("), []byte("int image_security_main("), 1))
+		helperSource = "testdata/appledouble/native/image-flags.c"
+		f.DocumentIDs = map[string]uint32{}
+	}
 	passed := false
 	defer func() {
 		failure := recover()
@@ -173,6 +184,23 @@ func main() {
 		"UCStringCompareData.h": "88773669ce79ebe2d6bcc84d3341c3c2586e649984ac97453adb1b8706440464",
 		"hfs_link.c":            "1238abcd80ada12e254a8d0e45dd82d990693f3dea047ecd7c7345c7a1410078",
 	}
+	if *bsdFlags {
+		f.HFSSources["hfs_catalog.c"] = "a459793a5f38d05ad3b5a8e6f9761aefb3d9dfeb077962a7a190b6812bd37dd6"
+		f.HFSSources["hfs_vnops.c"] = "a07a8cd9bad0e485a6c7248facac3edcf66736727777715f8cf6a86fb77f3f44"
+		f.HFSSources["hfs_format.h"] = "114e5349032cd7169331760a5c601b5dea5d0cb9f955cc00e8f53577e74b36db"
+		for _, name := range []string{"hfs_catalog.c", "hfs_vnops.c", "hfs_format.h"} {
+			download("https://raw.githubusercontent.com/apple-oss-distributions/hfs/d1bac2f062e6e9c0dfcce302d9aacb10173d0eea/core/"+name, f.HFSSources[name], filepath.Join(root, name))
+		}
+	}
+	if *bsdFlags {
+		format := read(filepath.Join(root, "hfs_format.h"))
+		vnops := read(filepath.Join(root, "hfs_vnops.c"))
+		header := append([]byte{}, format[:bytes.Index(format, []byte("#ifndef"))]...)
+		header = append(header, extract(format, "struct FndrExtendedFileInfo {", "/* HFS Plus Fork")...)
+		header = append(header, vnops[:bytes.Index(vnops, []byte("#include"))]...)
+		header = append(header, extract(vnops, "static u_int32_t \nhfs_get_document_id_internal", "/* getter(s) for document id */")...)
+		write(filepath.Join(root, "image-document-source.h"), header)
+	}
 	hfsSource := map[string][]byte{}
 	for _, name := range []string{"UnicodeWrappers.c", "UCStringCompareData.h", "hfs_link.c"} {
 		hfsSource[name] = download("https://raw.githubusercontent.com/apple-oss-distributions/hfs/d1bac2f062e6e9c0dfcce302d9aacb10173d0eea/core/"+name, f.HFSSources[name], filepath.Join(root, name))
@@ -185,9 +213,9 @@ func main() {
 	h = append(h, extract(src, "int32_t FastUnicodeCompare (", "/*\n * UnicodeBinaryCompare")...)
 	write(filepath.Join(root, "image-fold-source.h"), h)
 	helper := filepath.Join(root, "image-security")
-	run("xcrun", "clang", "-Wall", "-Wextra", "-Werror", "-Wno-unused-but-set-variable", "-I", root, helperSource, "-o", helper)
+	run("xcrun", "clang", "-Wall", "-Wextra", "-Werror", "-Wno-unused-but-set-variable", "-I", root, "-I", "testdata/appledouble/native", helperSource, "-o", helper)
 	for _, arch := range []string{"arm64", "x86_64"} {
-		b := run("xcrun", "clang", "-arch", arch, "-I", root, "-fsyntax-only", "-Xclang", "-ast-dump=json", helperSource)
+		b := run("xcrun", "clang", "-arch", arch, "-I", root, "-I", "testdata/appledouble/native", "-fsyntax-only", "-Xclang", "-ast-dump=json", helperSource)
 		commands[len(commands)-1].Output = fmt.Sprintf("AST retained: %d bytes", len(b))
 		write(filepath.Join(root, arch+".ast.json"), b)
 	}
@@ -199,7 +227,16 @@ func main() {
 		snapshots  []apfswrite.SnapshotSpec
 	}
 	var scenarios []scenario
-	if *times {
+	if *bsdFlags {
+		for _, kind := range []string{"apfs", "apfs-sensitive", "hfsx", "hfsplus"} {
+			tree, cases := imagesecurity.FlagTree()
+			var snaps []apfswrite.SnapshotSpec
+			if strings.HasPrefix(kind, "apfs") {
+				snaps = []apfswrite.SnapshotSpec{{Name: "flags"}}
+			}
+			scenarios = append(scenarios, scenario{kind, kind + "-flags", tree, cases, snaps})
+		}
+	} else if *times {
 		for _, kind := range []string{"apfs", "apfs-sensitive", "hfsx", "hfsplus"} {
 			for _, clamp := range []bool{false, true} {
 				tree, cases := imagesecurity.TimeTree(clamp)
@@ -242,7 +279,7 @@ func main() {
 			must(hfsplus.CreateImage(file, 64<<20, "SECURITY", imagesecurity.HFSTree(tree), &hfsplus.CreateOptions{CaseInsensitive: kind == "hfsplus", ClampModTimes: strings.HasSuffix(scene.name, "-clamp")}))
 		}
 		must(file.Close())
-		if *roots || *modes || *times {
+		if *roots || *modes || *times || *bsdFlags {
 			if strings.HasPrefix(kind, "apfs") {
 				run("/sbin/fsck_apfs", "-n", image)
 			} else {
@@ -346,6 +383,22 @@ func main() {
 				must(json.Unmarshal(run(helper, path), &n.Native))
 				f.Cases = append(f.Cases, n)
 				native := n.Native
+				if *bsdFlags {
+					got, e := volume.BSDFlags(tc.Name)
+					must(e)
+					if got&0x40 != 0 {
+						var id uint32
+						_, err := fmt.Sscan(string(run(helper, "--document-id", path)), &id)
+						must(err)
+						if (id == 0) != (!strings.HasPrefix(kind, "apfs") && tc.Kind == "symlink") {
+							panic("tracked inode has no document ID")
+						}
+						f.DocumentIDs[scene.name+"/"+tc.Name] = id
+					}
+					if native.Flags != *tc.Flags || got != *tc.Flags {
+						panic(fmt.Sprintf("BSD flags %s/%s: native=%#x reader=%#x want=%#x", scene.name, tc.Name, native.Flags, got, *tc.Flags))
+					}
+				}
 				if *times {
 					want := *tc.Times
 					if !strings.HasPrefix(kind, "apfs") {
@@ -476,9 +529,9 @@ func main() {
 	}
 	oldUID, oldGID := archived.ActorUID, archived.ActorGID
 	for i := range archived.Cases {
-		if *times {
+		if *times || *bsdFlags {
 			continue
-		} // Timestamp fixtures deliberately use fixed foreign IDs.
+		} // Timestamp/flag fixtures deliberately use fixed foreign IDs.
 		c := &archived.Cases[i]
 		if c.Case.UID == oldUID {
 			c.Case.UID = f.ActorUID
@@ -507,7 +560,9 @@ func main() {
 	archived.Revision, archived.Host, archived.ActorUID, archived.ActorGID = f.Revision, f.Host, f.ActorUID, f.ActorGID
 	// Image bytes include actor IDs; each fresh image is independently hashed and
 	// checked unchanged over read-only mounting, not normalized byte-by-byte.
-	archived.Images = f.Images
+	if !*bsdFlags {
+		archived.Images = f.Images
+	} // Flag fixtures use fixed IDs and must reproduce the approved image hashes.
 	if !reflect.DeepEqual(archived, f) {
 		panic("archived observations differ")
 	}

@@ -360,3 +360,7 @@ inspect `Failures`, `VolumeQueries` and `FlagsApplied`.
 Use this after ordinary security copying in an explicitly bound restoration
 pipeline. It neither acquires source state nor creates a live host adapter.
 See [the contract, usage and native qualification](../../docs/appledouble-stat-copy.md).
+
+Both APFS/HFS+ image readers also expose `BSDFlags(name)` and both writer entries
+accept `BSDFlags`. These are portable image metadata APIs, not live host flag
+setters or an automatic binding to `CopyStat`. See [image BSD flags](../../docs/appledouble-image-flags.md).

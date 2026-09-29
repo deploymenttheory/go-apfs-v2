@@ -221,6 +221,17 @@ jobs:
           name: image-times-coverage-${{ matrix.os }}
           path: artifacts/image-times-coverage/
           if-no-files-found: error
+      - name: Image BSD flags and coverage above 95%
+        env:
+          CGO_ENABLED: "0"
+        run: go run scripts/verify-image-flags-coverage.go
+      - name: Upload image BSD flags coverage
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: image-flags-coverage-${{ matrix.os }}
+          path: artifacts/image-flags-coverage/
+          if-no-files-found: error
       - name: Portable ordered stat restoration and coverage above 95%
         env:
           CGO_ENABLED: "0"
@@ -388,6 +399,18 @@ jobs:
         with:
           name: image-times
           path: artifacts/image-times/
+          if-no-files-found: error
+      - name: Native image BSD flags and filesystem qualification
+        if: runner.os == 'macOS'
+        env:
+          CGO_ENABLED: "0"
+        run: go run scripts/verify-image-security.go -flags
+      - name: Upload native image BSD flags evidence
+        if: always() && runner.os == 'macOS'
+        uses: actions/upload-artifact@v7
+        with:
+          name: image-flags
+          path: artifacts/image-flags/
           if-no-files-found: error
       - name: Native image ACL restoration and filesystem qualification
         if: runner.os == 'macOS'
