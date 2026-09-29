@@ -6,6 +6,8 @@ package apfswrite
 import (
 	"fmt"
 	"os"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/unixmode"
 )
 
 // setRoot retains caller-supplied metadata on the special root inode, without
@@ -28,18 +30,7 @@ func (b volCtx) setRoot(source *Entry, nextOID uint64) (uint64, error) {
 		return nextOID, err
 	}
 	embedded, streamed := splitXattrs(xattrs)
-	mode := uint16(sIFDIR) | uint16(source.Mode.Perm())
-	if source.Mode == 0 {
-		mode |= 0755
-	}
-	for _, bit := range []struct {
-		host os.FileMode
-		disk uint16
-	}{{os.ModeSetuid, 04000}, {os.ModeSetgid, 02000}, {os.ModeSticky, 01000}} {
-		if root.Mode&bit.host != 0 {
-			mode |= bit.disk
-		}
-	}
+	mode := uint16(sIFDIR) | unixmode.Permissions(source.Mode, 0755, source.ModeExplicit || source.Mode != 0)
 	b.root = &builderEntry{name: "root", oid: rootDirInoNum, parent: rootDirParent, isDir: true, mode: mode, uid: root.UID, gid: root.GID, mtime: b.entryTime(root.ModTime), timeSet: true, xattrs: embedded, xattrFlags: flags, bsdFlags: bsdFlags}
 	return b.addXattrStreams(b.root, streamed, nextOID), nil
 }

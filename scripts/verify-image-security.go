@@ -8,6 +8,7 @@ import (
 	"compress/gzip"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -17,8 +18,10 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"runtime"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/imagesecurity"
@@ -90,14 +93,22 @@ func extract(b []byte, start, end string) []byte {
 }
 func main() {
 	capture := flag.Bool("capture", false, "record unapproved observations")
+	modes := flag.Bool("modes", false, "qualify explicit permissions and special bits on both image writers")
 	roots := flag.Bool("roots", false, "qualify root writer metadata and storage")
 	flag.Parse()
+	if *roots && *modes {
+		panic("choose roots or modes")
+	}
 	root := "artifacts/image-security"
 	const helperSource = "testdata/appledouble/native/image-security.c"
 	corpus := "testdata/appledouble/native/image-security.json.gz"
 	if *roots {
 		root = "artifacts/image-root-security"
 		corpus = "testdata/appledouble/native/image-root-security.json.gz"
+	}
+	if *modes {
+		root = "artifacts/image-mode-security"
+		corpus = "testdata/appledouble/native/image-mode-security.json.gz"
 	}
 	must(os.MkdirAll(root, 0700))
 	var f imagesecurity.Fixture
@@ -127,6 +138,9 @@ func main() {
 	run("xcrun", "--show-sdk-version")
 	f.ActorUID, f.ActorGID = uint32(os.Getuid()), uint32(os.Getegid())
 	f.Images = map[string]string{}
+	if *modes {
+		f.NativeAccess = map[string]string{}
+	}
 	f.HelperSHA256 = sum(read(helperSource))
 	f.ParentSHA256 = sum(read("testdata/appledouble/native/security-copy.c"))
 	f.CopyfileSHA256 = "19f3ad0910f05bb2a6ae982ebdabcc4dc9c911b65ec2d99e75b7c4c52272805c"
@@ -186,6 +200,12 @@ func main() {
 				scenarios = append(scenarios, scenario{kind, kind + "-" + r.Name, r.Root, []imagesecurity.Case{r.Case}, r.Snapshots})
 			}
 		}
+	} else if *modes {
+		for _, kind := range []string{"apfs", "apfs-sensitive", "hfsx", "hfsplus"} {
+			for _, r := range imagesecurity.Modes(f.ActorUID, f.ActorGID) {
+				scenarios = append(scenarios, scenario{kind, kind + "-" + r.Name, r.Root, r.Cases, nil})
+			}
+		}
 	} else {
 		for _, kind := range []string{"apfs", "apfs-sensitive", "hfsx", "hfsplus"} {
 			scenarios = append(scenarios, scenario{kind, kind, tree, cases, nil})
@@ -202,8 +222,32 @@ func main() {
 			must(hfsplus.CreateImage(file, 64<<20, "SECURITY", imagesecurity.HFSTree(tree), &hfsplus.CreateOptions{CaseInsensitive: kind == "hfsplus"}))
 		}
 		must(file.Close())
-		if *roots {
-			run("/sbin/fsck_apfs", "-n", image)
+		if *roots || *modes {
+			if strings.HasPrefix(kind, "apfs") {
+				run("/sbin/fsck_apfs", "-n", image)
+			} else {
+				func() {
+					attached := run("hdiutil", "attach", "-imagekey", "diskimage-class=CRawDiskImage", "-nomount", "-readonly", image)
+					device := regexp.MustCompile(`/dev/disk[0-9]+`).FindString(string(attached))
+					if device == "" {
+						panic("missing HFS device")
+					}
+					defer run("hdiutil", "detach", device)
+					args := []string{"/sbin/fsck_hfs", "-n", device}
+					output, err := exec.Command(args[0], args[1:]...).CombinedOutput()
+					c := command{Args: args, Output: string(output)}
+					if err != nil {
+						c.Error = err.Error()
+					}
+					commands = append(commands, c)
+					// Like the existing HFS acceptance gate, require the completed
+					// clean-volume verdict. Ordinary users can get a nonzero exit
+					// for the raw character-device pass despite a clean block pass.
+					if !bytes.Contains(output, []byte("appears to be OK")) {
+						panic(fmt.Sprintf("HFS check: %v %s", err, output))
+					}
+				}()
+			}
 		}
 		beforeHash := fileSum(image)
 		file, e = os.Open(image)
@@ -282,6 +326,9 @@ func main() {
 				must(json.Unmarshal(run(helper, path), &n.Native))
 				f.Cases = append(f.Cases, n)
 				native := n.Native
+				if *modes && (native.Mode != uint32(tc.Mode) || native.UID != tc.UID || native.GID != tc.GID) {
+					panic(fmt.Sprintf("native mode/ownership %s/%s: got %#o want %#o", scene.name, tc.Name, native.Mode, tc.Mode))
+				}
 				if *roots {
 					stamp := tree.ModTime
 					if stamp.IsZero() {
@@ -306,6 +353,13 @@ func main() {
 				}
 				info, e := fs.Stat(volume, tc.Name)
 				must(e)
+				if *modes {
+					nativeInfo, e := os.Lstat(path)
+					must(e)
+					if info.Mode() != nativeInfo.Mode() {
+						panic(fmt.Sprintf("FileInfo.Mode mismatch %s/%s: %s/%s", scene.name, tc.Name, info.Mode(), nativeInfo.Mode()))
+					}
+				}
 				var inode uint64
 				switch s := info.Sys().(type) {
 				case *apfs.Inode:
@@ -327,8 +381,18 @@ func main() {
 						panic("payload mismatch")
 					}
 					nativePayload, e := os.ReadFile(path)
-					must(e)
-					if !bytes.Equal(b, nativePayload) {
+					if *modes {
+						value := fmt.Sprintf("read:%x", nativePayload)
+						if e != nil {
+							value = "read:errno13"
+						}
+						f.NativeAccess[scene.name+"/"+tc.Name] = value
+					}
+					if *modes && tc.Mode&0400 == 0 {
+						if !errors.Is(e, syscall.EACCES) {
+							panic(fmt.Sprintf("expected native read refusal %s: %v", path, e))
+						}
+					} else if e != nil || !bytes.Equal(b, nativePayload) {
 						panic("native payload mismatch")
 					}
 				}
@@ -336,8 +400,18 @@ func main() {
 					target, e := volume.Readlink(tc.Name)
 					must(e)
 					b, e := os.Readlink(path)
-					must(e)
-					if target != b {
+					if *modes {
+						value := "readlink:" + b
+						if e != nil {
+							value = "readlink:errno13"
+						}
+						f.NativeAccess[scene.name+"/"+tc.Name] = value
+					}
+					if *modes && tc.Mode&0400 == 0 {
+						if !errors.Is(e, syscall.EACCES) {
+							panic(fmt.Sprintf("expected native readlink refusal %s: %v", path, e))
+						}
+					} else if e != nil || target != b {
 						panic("link target mismatch")
 					}
 				}

@@ -13,6 +13,8 @@ import (
 	"path"
 	"sort"
 	"time"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/unixmode"
 )
 
 var (
@@ -197,7 +199,7 @@ func newFileInfo(name string, entry *FileEntry) (*fileInfo, error) {
 
 	inode := entry.Inode
 
-	mode := fs.FileMode(inode.FileMode & 0o777)
+	mode := unixmode.FilePermissions(inode.FileMode)
 	switch inode.FileMode & 0xF000 {
 	case 0x4000: // S_IFDIR
 		mode |= fs.ModeDir

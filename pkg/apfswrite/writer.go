@@ -57,7 +57,8 @@ type CreateOptions struct {
 	//
 	// Root itself represents the volume root directory. Its Mode, UID, GID,
 	// ModTime and Xattrs are retained; Name, Data and LinkGroup are ignored.
-	// A zero mode defaults to directory 0755; os.ModeDir alone preserves 0000.
+	// A zero mode defaults to directory 0755 unless ModeExplicit is true;
+	// os.ModeDir alone also preserves 0000 on the root.
 	// Explicit non-directory types fail.
 	Root *Entry
 
@@ -155,9 +156,13 @@ type SnapshotSpec struct {
 type Entry struct {
 	// Name is the entry's file name (no path separators, no NUL).
 	Name string
-	// Mode carries the entry type (dir/symlink) and permission bits. When zero,
+	// Mode carries the entry type, permissions and Go set-ID/sticky bits. When zero,
 	// sensible defaults are applied (0755 dirs, 0644 files).
 	Mode os.FileMode
+	// ModeExplicit disables default permission bits, permitting mode 0000.
+	// Mode still selects the entry type; set-ID and sticky bits are always retained.
+	// For a hard-link group the first entry supplies the shared inode metadata.
+	ModeExplicit bool
 	// ModTime is written to the inode's create/mod/change/access times. When
 	// zero, a fixed deterministic timestamp is used.
 	ModTime time.Time
@@ -200,29 +205,6 @@ func (e *Entry) isDirEntry() bool {
 
 // isSymlinkEntry reports whether e is a symbolic link.
 func (e *Entry) isSymlinkEntry() bool { return e.Mode&os.ModeSymlink != 0 }
-
-// resolvedMode returns the on-disk inode mode (S_IFMT | perm) for e, applying
-// default permission bits when Mode carries none.
-func (e *Entry) resolvedMode() uint16 {
-	perm := uint16(e.Mode.Perm())
-	switch {
-	case e.isSymlinkEntry():
-		if perm == 0 {
-			perm = 0o755
-		}
-		return sIFLNK | perm
-	case e.isDirEntry():
-		if perm == 0 {
-			perm = 0o755
-		}
-		return sIFDIR | perm
-	default:
-		if perm == 0 {
-			perm = 0o644
-		}
-		return sIFREG | perm
-	}
-}
 
 // RootFile is a regular file to be created in the volume root directory.
 type RootFile struct {

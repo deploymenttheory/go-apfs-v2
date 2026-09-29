@@ -92,6 +92,7 @@ func newEntry(n hostwalk.Node, children []*Entry) *Entry {
 	return &Entry{
 		Name:         n.Name,
 		Mode:         n.Mode,
+		ModeExplicit: true,
 		ModTime:      n.ModTime,
 		UID:          n.UID,
 		GID:          n.GID,

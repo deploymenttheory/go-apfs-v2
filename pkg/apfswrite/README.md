@@ -24,6 +24,16 @@ when it mounts a volume (for example the space manager free-queue node limits),
 those values are reproduced as functional interoperability requirements of the
 format, verified against Apple's `fsck_apfs`/`hdiutil` and the Linux `apfsck`.
 
+## Exact permissions
+
+Set `Entry.ModeExplicit` when `Mode` contains captured or explicitly requested
+permissions, including `0000`. Both APFS and HFS+ writers retain Go's
+`os.ModeSetuid`, `os.ModeSetgid` and `os.ModeSticky` bits; both readers expose them
+through `FileInfo.Mode`. With `ModeExplicit` false, existing low-permission
+defaults remain. Host-directory walkers set it automatically. See
+[image permission preservation](../../docs/appledouble-image-modes.md) for root
+semantics, native qualification and the remaining security integration work.
+
 ## Block size
 
 Containers are written with a 4096-byte block, and that is the only size

@@ -70,6 +70,7 @@ type NativeCase struct {
 	Native     Observation
 }
 type Fixture struct {
+	NativeAccess                                                                                    map[string]string                      `json:",omitempty"`
 	NativeXattrs                                                                                    map[string]map[string]XattrObservation `json:",omitempty"`
 	HFSSources                                                                                      map[string]string
 	Revision, Host, HelperSHA256, ParentSHA256, CopyfileSHA256, ChmodSHA256, StatxSHA256, XNUSHA256 string
@@ -124,7 +125,7 @@ func Tree(uid, gid uint32) (*apfswrite.Entry, []Case) {
 	return root, cases
 }
 func HFSTree(s *apfswrite.Entry) *hfsplus.Entry {
-	d := &hfsplus.Entry{Name: s.Name, Mode: s.Mode, UID: s.UID, GID: s.GID, Data: s.Data, LinkGroup: s.LinkGroup, Xattrs: s.Xattrs}
+	d := &hfsplus.Entry{Name: s.Name, Mode: s.Mode, ModeExplicit: s.ModeExplicit, ModTime: s.ModTime, UID: s.UID, GID: s.GID, Data: s.Data, LinkGroup: s.LinkGroup, Xattrs: s.Xattrs}
 	for _, c := range s.Children {
 		d.Children = append(d.Children, HFSTree(c))
 	}
