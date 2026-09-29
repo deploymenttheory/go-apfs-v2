@@ -20,8 +20,10 @@ qualified case. The attribute API itself still differs and is not interchangeabl
 it is **not a packed syscall struct**. An adapter must pass them through a
 supported libSystem wrapper while retaining the destination's identity.
 
-- Numeric UID/GID values are retained. Zero is a value; `0xffffffff` keeps its
-  Darwin no-change sentinel meaning when the request is applied.
+- Numeric UID/GID values are retained literally. Zero is a value. `0xffffffff`
+  is not the extended-chmod omitted-owner sentinel: libSystem uses `0xffffff9b`
+  (`KAUTH_UID_NONE`/`KAUTH_GID_NONE`, -101). See the
+  [optional-property request contract](appledouble-acl-chmod-properties.md).
 - Mode narrows to Darwin's 16-bit `mode_t`, as `FILESEC_MODE` does before the C
   wrapper promotes it to an integer. This differs from the attribute wire
   profile's 32-bit field. The native operation decides which mode bits apply.

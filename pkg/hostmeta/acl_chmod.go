@@ -12,7 +12,8 @@ import "github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
 // The request always supplies numeric fields and a security record. It does not
 // represent omitted properties, null security pointers or pointer-valued removal
 // sentinels. A nil ACL inside Security is the distinct NOACL record encoding.
-// UID/GID 0xffffffff retain Darwin's no-change sentinel meaning at application.
+// Numeric values are preserved literally; 0xffffffff is not the omitted-owner
+// sentinel. Use DarwinChmodProperties when properties are independently absent.
 // Building a request neither authorizes nor performs a filesystem operation.
 type DarwinChmodRequest struct {
 	UID, GID uint32

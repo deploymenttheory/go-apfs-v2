@@ -307,3 +307,13 @@ Controlled owner/non-owner APFS/HFSX contexts are qualified; see
 [authorization evidence](../../docs/appledouble-acl-nonowner.md). Ordinary
 copy selection uses [`appledouble.CopyACL`](../../docs/appledouble-acl-copy.md),
 separately from this package's deferred replacement protocol.
+
+## Optional extended chmod properties
+
+`DarwinChmodProperties.ChmodArguments` handles independently present numeric,
+UUID and raw-security properties plus explicit ACL removal on every OS.
+Omitted ownership uses Darwin's -101 sentinel, and omitted mode is integer -1.
+Null security, a record and the removal sentinel remain distinct arguments.
+Explicit zero UUIDs can cause a record to be sent even without an ACL property.
+See the [contract and native effects](../../docs/appledouble-acl-chmod-properties.md).
+Production capture/call and carrier adapters remain separate integration work.
