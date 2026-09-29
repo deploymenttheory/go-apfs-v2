@@ -147,7 +147,7 @@ of this roadmap delivered. These phases are not estimates of remaining PR count.
 
 | Phase | Current state | Completion gate |
 | --- | --- | --- |
-| 1. ACL application | Deferred/ordinary image security copying and lazy volume-policy acquisition integrated; host adapters and ordered restoration remain | Source acquisition, authorization, actual writes and restoration ordering qualified together |
+| 1. ACL application | Source acquisition/fallbacks, image-reader copying and lazy volume policy integrated; native host bindings and ordered restoration remain | Source acquisition, authorization, actual writes and restoration ordering qualified together |
 | 2. Quarantine | Conversion and much of application policy implemented; context/integration gaps open | Remaining process contexts and ordered restoration qualify against native behavior |
 | 3. Large values and allocation | Known native differences remain | Oversized values, aggregates, forks and allocation policy have explicit, tested behavior |
 | 4. Shared filesystem transport | Host primitives and exact image permissions available; complete metadata transport outstanding | APFS/HFS+ extract-and-repack preserves logical metadata on all three OSes |
@@ -185,6 +185,12 @@ of this roadmap delivered. These phases are not estimates of remaining PR count.
    queries source and destination policy lazily in native order, retains lookup
    failures separately from write failures, and works through both image writers
    on all three OSes. Image bytes alone do not establish mount policy.
+   [Source acquisition](../../docs/appledouble-security-source.md) now runs before
+   ordinary copying, retaining descriptor statx/fstat failures and the native
+   source-type gate. `CopySecurityFrom` connects both image readers to both
+   writers without a host-dependent capture path; all 16 filesystem combinations
+   reproduce manually captured output. This is the shared acquisition coordinator
+   and image binding; live native host read/write providers remain outstanding.
    **Remaining:** native host write
    adapters, live host source acquisition,
    privileged/sandbox authorization contexts and full restoration ordering.
@@ -193,8 +199,8 @@ of this roadmap delivered. These phases are not estimates of remaining PR count.
    The request builder is not a completed native backend; foreign metadata carriers are integrated
    in phase 4.
 
-   **Next implementation:** connect live source acquisition and host/carrier
-   adapters to ordered restoration, including creation inheritance, ordinary security copying,
+   **Next implementation:** bind held native/foreign host metadata and destination
+   write adapters to ordered restoration, including creation inheritance, ordinary security copying,
    stat/flags/times/xattrs, deferred AppleDouble replacement and cleanup. Keep one
    pure-Go implementation on Linux, macOS and Windows.
 2. **Quarantine context and transport qualification.** Implemented: serialized

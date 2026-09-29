@@ -333,3 +333,12 @@ and unqueried endpoints. The executor preserves native short-circuit order and
 continues after lookup failures. Both image writers accept the same provider on
 Linux, macOS and Windows; the provider must supply actual host or captured foreign
 mount state. See [volume policy and native comparisons](../../docs/appledouble-security-copy-volume.md).
+
+`CaptureSecuritySource` acquires fresh descriptor-style source state through
+explicit callbacks. Only classified statx `EPERM`/`ENOTSUP` errors permit plain
+stat fallback; failures remain visible even when native execution continues.
+`CopySecurityFrom` connects acquisition to ordinary copying while retaining the
+pre-selection source separately from the copy cache. `ImageSecurityCapture`
+binds existing APFS/HFS+ readers without loading file payloads or resource forks.
+Both image writers expose `root.CopySecurityFrom(target, capture, options)` on
+every OS. See [source acquisition and qualification](../../docs/appledouble-security-source.md).

@@ -30,12 +30,18 @@ func Copy[T comparable](root, target T, source hostmeta.SecurityCopySource, opti
 	if _, err := source.Properties.ChmodArguments(); err != nil {
 		return hostmeta.SecurityCopyResult{}, err
 	}
+	return stageCopy(root, target, read, write, func(backend *copier) (hostmeta.SecurityCopyResult, error) {
+		return hostmeta.CopySecurity(source, options, backend)
+	})
+}
+
+func stageCopy[T comparable](root, target T, read func(T, bool) (Node[T], error), write func(T, Change), execute func(*copier) (hostmeta.SecurityCopyResult, error)) (hostmeta.SecurityCopyResult, error) {
 	aliases, nodes, destination, err := bind(root, target, read)
 	if err != nil {
 		return hostmeta.SecurityCopyResult{}, err
 	}
 	backend := &copier{Change: Change{UID: destination.UID, GID: destination.GID, Mode: destination.Mode, Xattrs: destination.Xattrs}}
-	result, err := hostmeta.CopySecurity(source, options, backend)
+	result, err := execute(backend)
 	if err != nil || len(result.Failures) != 0 {
 		return result, err
 	}
