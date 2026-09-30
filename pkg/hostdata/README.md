@@ -153,7 +153,7 @@ partial or successful-empty list. Unix size/read changes fail; Windows uses one
 EA cursor with fixed scratch space and rejects duplicate records. Enumeration
 retains native casing and raw name bytes even beyond the named-read ASCII subset.
 See [held-file listing](../../docs/appledouble-held-xattr-list.md) for its native
-qualification, concurrency limits and remaining carrier/provider work.
+qualification, concurrency limits and carrier/provider integration.
 
 `CaptureXattrValuesAt(ctx, root, name, limits)` captures through a held root,
 including Linux symlinks. Linux reads the link's own namespace through a pinned
@@ -171,7 +171,7 @@ The filesystem controls empty-value and special-name behavior; a successful writ
 is not a byte-equality guarantee. Windows requests write access without read access
 and bounds its EA record allocation. Unix uses ordinary native flags. See
 [held-file writes](../../docs/appledouble-held-xattr-write.md) for limits, native
-readback evidence and the remaining provider/carrier work.
+readback evidence and provider/carrier integration.
 
 Path operations are not a containment or identity primitive. Intermediate
 components can be symlinks and each call resolves the path again. Use a suitably
@@ -282,11 +282,11 @@ hosts return an explicit unsupported error; callers supply a previously captured
 snapshot when applying Darwin policy on Linux or Windows. See
 [raw capture and native qualification](../../docs/appledouble-quarantine-process-capture.md).
 
-This package is the former `internal/hostdata`, exposed for consumers such as
-`go-macos-codesign`. APFS/HFS+ writers, extraction, capacity checks and signing
-share the same implementation and platform definitions.
+APFS/HFS+ writers, extraction, capacity checks and external consumers share these
+implementations and platform definitions. Consumers adopt the new import paths
+through the qualified release described in the migration guide.
 
-`ListXattrs`, `SetXattrs`, `Flags`, `Link`, `AvailableSpace` and the attribute
+`ListXattrs`, `SetXattrs`, `bsdflags.Flags`, `Link`, `diskspace.AvailableSpace` and the attribute
 constants retain their existing behavior. Attribute extraction is best effort;
 callers must inspect reported failures. Darwin compression-aware reads use
 option-aware libSystem bindings through the pinned purego dependency, with CGo
@@ -424,57 +424,61 @@ and [protected kernel EAs](https://learn.microsoft.com/en-us/windows-hardware/dr
 
 ## Deferred AppleDouble ACL restoration
 
-`RestoreACL` executes an `appledouble.ACLUpdate` through an explicit
-`ACLRestoreBackend`. It captures destination security once, retains ownership and
+`acl.RestoreACL` executes an `appledouble.ACLUpdate` through an explicit
+`acl.ACLRestoreBackend`. It captures destination security once, retains ownership and
 mode, and reports actual capture/write errors. An unsupported first write clears
 cached source security and retries the unchanged destination request once.
 Permission failures are not retried. Every callback request owns its data.
 
-The routine is pure Go on Linux, macOS and Windows; native/carrier adapters remain
-separate transport work. Native APFS and FAT comparisons include real permission
-and unsupported-operation failures. See [the backend contract, coverage and
-remaining work](../../docs/appledouble-acl-restoration.md).
+The routine is pure Go on Linux, macOS and Windows. `NewHeldMetadata` supplies
+the native Darwin backend, while `NewLogicalMetadata` and the image bindings
+provide portable logical restoration. The complete object/path APIs compose
+these operations with acquisition and cleanup. Native APFS and FAT comparisons
+include real permission and unsupported-operation failures. See
+[the backend contract and coverage](../../docs/appledouble-acl-restoration.md).
 
 ## Portable Darwin ACL attribute records
 
-`ParseDarwinACLAttributes` decodes successful Darwin attribute-list responses;
-`ACLMetadata.MarshalDarwinACLAttributes` encodes set requests for the explicit
-`DarwinACLCommonAttributes` profile. Both operate identically on every OS and
+`acl.ParseDarwinACLAttributes` decodes successful Darwin attribute-list responses;
+`acl.ACLMetadata.MarshalDarwinACLAttributes` encodes set requests for the explicit
+`acl.DarwinACLCommonAttributes` profile. Both operate identically on every OS and
 retain numeric ownership, raw mode, UUID ownership and ACL bytes without native
 calls. Ownership UUIDs use their separate attribute fields because Darwin ignores
 the embedded blob ownership slots. See the [wire profile and native evidence](../../docs/appledouble-acl-attributes.md).
 
-This codec is a transport building block. Native tests show that the attribute
-API and copyfile differ on empty ACL flags and immutable/append-only failures;
-it is not yet a compatible built-in `RestoreACL` backend. Shared native/carrier
-integration remains outstanding.
+This codec represents the attribute-list wire layout. Native tests show that the
+attribute API and copyfile differ on empty ACL flags and immutable/append-only
+failures. The production held provider uses the extended chmod protocol to retain
+the qualified copyfile behavior; the attribute codec keeps its separate contract.
 
 ## Extended chmod requests
 
-`ACLMetadata.DarwinChmodRequest` builds the numeric arguments and owned security
+`acl.ACLMetadata.DarwinChmodRequest` builds the numeric arguments and owned security
 blob for the extended chmod operation used by copyfile. Ownership UUIDs remain
 embedded; mode narrows to Darwin's 16-bit `mode_t`. It uses the same pure-Go
 implementation on Linux, macOS and Windows. Native comparisons resolve all 16
 measured attribute/copyfile error differences and eight empty-ACL flag differences
 by submitting the request to the correct operation. See the [contract and evidence](../../docs/appledouble-acl-chmod.md).
 
-This prepares request data, not a production native call or foreign-host carrier.
-Do not substitute `fsetattrlist` or add a permission-changing preflight. Adapters,
-privileged/sandbox contexts and complete lifecycle integration remain outstanding.
-Controlled owner/non-owner APFS/HFSX contexts are qualified; see
+The held native provider consumes these requests through libSystem; the logical
+provider applies them to captured metadata on every supported OS. Do not
+substitute `fsetattrlist` or add a permission-changing preflight. Complete
+lifecycle, privileged/nonowner and signed-sandbox qualification passed in PR182.
+Controlled owner/non-owner APFS/HFSX contexts are also qualified; see
 [authorization evidence](../../docs/appledouble-acl-nonowner.md). Ordinary
 copy selection uses [`appledouble.CopyACL`](../../docs/appledouble-acl-copy.md),
 separately from this package's deferred replacement protocol.
 
 ## Optional extended chmod properties
 
-`DarwinChmodProperties.ChmodArguments` handles independently present numeric,
+`acl.DarwinChmodProperties.ChmodArguments` handles independently present numeric,
 UUID and raw-security properties plus explicit ACL removal on every OS.
 Omitted ownership uses Darwin's -101 sentinel, and omitted mode is integer -1.
 Null security, a record and the removal sentinel remain distinct arguments.
 Explicit zero UUIDs can cause a record to be sent even without an ACL property.
 See the [contract and native effects](../../docs/appledouble-acl-chmod-properties.md).
-Production capture/call and carrier adapters remain separate integration work.
+The production held and logical providers bind these properties into complete
+object/path operations and carrier/image preservation.
 
 ## Ordinary security-copy execution
 
@@ -527,4 +531,5 @@ APFS/HFS+ writer entries bind `CopyStat` to offline trees.
 `ImageStatCopyResult.Applied` distinguishes publication into all aliases from
 private executor completion. Explicit destination times are required; failed
 staging leaves entries untouched. See [image stat staging](../../docs/appledouble-image-stat.md)
-for validation, diagnostics and the remaining live-host/lifecycle work.
+for validation and diagnostics. The complete held/path APIs provide the qualified
+live-host lifecycle integration.
