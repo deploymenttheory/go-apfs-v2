@@ -7,8 +7,6 @@ import (
 	"io"
 	"io/fs"
 	"os"
-	"runtime"
-	"syscall"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
 )
@@ -45,10 +43,14 @@ func CaptureXattrValues(ctx context.Context, file *os.File, limits XattrCaptureL
 // CaptureXattrValuesAt binds capture to a held root without following the final
 // link. Borrowed fork reads reopen through the root and check original identity;
 // no descriptor is retained per entry. Keep root open and exclude concurrent
-// changes, including same-size edits. Native unsupported link namespaces remain
-// explicit constraints; they never become an absent logical carrier value.
+// changes, including same-size edits. Linux symlink namespaces are read through
+// their held parent using procfs and no-follow operations with identity checks.
+// Native errors remain explicit; they never become an absent carrier value.
 func CaptureXattrValuesAt(ctx context.Context, root *os.Root, name string, limits XattrCaptureLimits) (values map[string]appledouble.Value, err error) {
-	return captureXattrValuesAt(ctx, root, name, limits, xattrValueOps{OpenMetadataFileRead, CaptureXattrValues, func(file *os.File) (*os.File, error) { return OpenResourceFork(file, false) }})
+	capture := func(ctx context.Context, file *os.File, limits XattrCaptureLimits) (map[string]appledouble.Value, error) {
+		return captureXattrValuesBound(ctx, root, name, file, limits)
+	}
+	return captureXattrValuesAt(ctx, root, name, limits, xattrValueOps{OpenMetadataFileRead, capture, func(file *os.File) (*os.File, error) { return OpenResourceFork(file, false) }})
 }
 
 type xattrValueOps struct {
@@ -74,9 +76,6 @@ func captureXattrValuesAt(ctx context.Context, root *os.Root, name string, limit
 	}
 	values, err = ops.capture(ctx, file, limits)
 	if err != nil {
-		if original.Mode()&os.ModeSymlink != 0 && runtime.GOOS == "linux" && errors.Is(err, syscall.EBADF) {
-			return nil, errors.Join(ErrXattrUnsupported, err)
-		}
 		return nil, err
 	}
 	if value, ok := values[ResourceForkName].(*resourceForkValue); ok {

@@ -1,6 +1,9 @@
 package lzbitmap
 
-import "math/bits"
+import (
+	"bytes"
+	"math/bits"
+)
 
 // Encoding, translated from libzbitmap's compressor.
 //
@@ -258,16 +261,15 @@ func (e *encoder) findPattern(n int) int {
 		back = e.pos
 	}
 	for at := e.pos - back; at < split; {
-		next := -1
-		for i := at; i < split; i++ {
-			if e.src[i] == e.src[e.pos] {
-				next = i
-				break
-			}
-		}
-		if next < 0 {
+		// Search the same ascending candidate interval with the standard
+		// library's optimized byte scan. The first match and tie order stay
+		// identical to the scalar loop; unmatching history is scanned in
+		// machine-sized groups instead of one Go iteration per byte.
+		relative := bytes.IndexByte(e.src[at:split], e.src[e.pos])
+		if relative < 0 {
 			break
 		}
+		next := at + relative
 		if d := differing(e.load8(next), needle) + 2; d < cost {
 			best, cost = next, d
 			if cost == 2 {

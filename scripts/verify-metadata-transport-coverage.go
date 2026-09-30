@@ -89,6 +89,9 @@ func verify() error {
 	}
 	if runtime.GOOS == "linux" {
 		coverageFiles["pkg/hostmeta/access_time_linux.go"] = [2]int{}
+		coverageFiles["pkg/hostmeta/xattr_values_bound_linux.go"] = [2]int{}
+	} else {
+		coverageFiles["pkg/hostmeta/xattr_values_bound_other.go"] = [2]int{}
 	}
 	if runtime.GOOS == "windows" {
 		coverageFiles["pkg/hostmeta/creation_time_windows.go"] = [2]int{}

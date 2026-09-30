@@ -17,10 +17,7 @@ import (
 // still an order of magnitude under that.
 func TestIncompressibleIsNotQuadratic(t *testing.T) {
 	limit := 20 * time.Second
-	// Atomic statement counters instrument the byte-search inner loops, just
-	// as the race detector does. Ordinary test runs retain the 20-second
-	// throughput guard; instrumented runs execute the same complete workload.
-	if raceEnabled || testing.CoverMode() == "atomic" {
+	if raceEnabled {
 		limit = 3 * time.Minute
 	}
 	buf := make([]byte, 8<<20)
@@ -46,7 +43,7 @@ func TestIncompressibleIsNotQuadratic(t *testing.T) {
 
 // This checks the adaptive search budget without relying on runner speed. A
 // regression that keeps scanning the full history on unproductive input must
-// fail even when a coverage or race build has a larger elapsed-time allowance.
+// fail even when a race build has a larger elapsed-time allowance.
 func TestIncompressibleSearchBackoff(t *testing.T) {
 	random := mathrand.New(mathrand.NewPCG(1, 2))
 	input := make([]byte, MaxChunk)

@@ -55,6 +55,17 @@ retains native casing and raw name bytes even beyond the named-read ASCII subset
 See [held-file listing](../../docs/appledouble-held-xattr-list.md) for its native
 qualification, concurrency limits and remaining carrier/provider work.
 
+`CaptureXattrValuesAt(ctx, root, name, limits)` captures through a held root,
+including Linux symlinks. Linux reads the link's own namespace through a pinned
+parent descriptor and no-follow xattr calls; dangling links and targets outside
+the root do not cause the target to be opened. Identity checks before and after
+capture reject observed replacement. Callers must exclude concurrent changes,
+including substitution followed by restoration of the original entry. Linux
+requires accessible procfs for this descriptor-relative symlink capture; a
+missing procfs or denied native operation returns its error without dropping
+metadata. Ordinary values remain bounded owned snapshots. Darwin regular-file
+resource forks remain borrowed 64-bit readers with the documented owner lifetime.
+
 `SetXattr(file, name, value)` assigns one native attribute through the held object.
 The filesystem controls empty-value and special-name behavior; a successful write
 is not a byte-equality guarantee. Windows requests write access without read access
