@@ -254,6 +254,17 @@ jobs:
           name: xattr-restore-coverage-${{ matrix.os }}
           path: artifacts/xattr-restore-coverage/
           if-no-files-found: error
+      - name: Portable AppleDouble unpack lifecycle above 95% coverage
+        env:
+          CGO_ENABLED: "0"
+        run: go run scripts/verify-unpack-restore-coverage.go
+      - name: Upload AppleDouble unpack coverage
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: unpack-restore-coverage-${{ matrix.os }}
+          path: artifacts/unpack-restore-coverage/
+          if-no-files-found: error
       - name: Portable copy pipeline ordering and coverage above 95%
         env:
           CGO_ENABLED: "0"
@@ -384,6 +395,18 @@ jobs:
         with:
           name: xattr-restore
           path: artifacts/xattr-restore/
+          if-no-files-found: error
+      - name: Native AppleDouble unpack ordering and live writes
+        if: runner.os == 'macOS'
+        env:
+          CGO_ENABLED: "0"
+        run: go run scripts/verify-unpack-restore.go
+      - name: Upload native AppleDouble unpack evidence
+        if: always() && runner.os == 'macOS'
+        uses: actions/upload-artifact@v7
+        with:
+          name: unpack-restore
+          path: artifacts/unpack-restore/
           if-no-files-found: error
       - name: Native copy pipeline ordering comparisons
         if: runner.os == 'macOS'
