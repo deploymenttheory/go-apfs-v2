@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 
 	"golang.org/x/sys/unix"
@@ -96,14 +97,28 @@ func TestStrictXattrListHost(t *testing.T) {
 	if n, e := listVisibleXattrFD(-1, 100); n != nil || e == nil {
 		t.Fatal(n, e)
 	}
-	// Pipes have no descriptor-backed xattr namespace; never turn that into empty.
+	// Pipe namespaces vary by kernel. Match the native result, including empty
+	// success, instead of imposing another OS's unsupported/error policy.
 	r, w, e := os.Pipe()
 	if e != nil {
 		t.Fatal(e)
 	}
 	defer r.Close()
 	defer w.Close()
-	if n, e := ListXattrNames(r, 100); n != nil || e == nil {
-		t.Fatal(n, e)
+	raw := make([]byte, MaxXattrListSize)
+	count, nativeErr := unix.Flistxattr(int(r.Fd()), raw)
+	names, err := ListXattrNames(r, MaxXattrListSize)
+	if nativeErr != nil {
+		if names != nil || !errors.Is(err, nativeErr) {
+			t.Fatal(names, err, nativeErr)
+		}
+	} else {
+		actual := strings.Join(names, "\x00")
+		if len(names) > 0 {
+			actual += "\x00"
+		}
+		if err != nil || names == nil || actual != string(raw[:count]) {
+			t.Fatal(names, err, count)
+		}
 	}
 }
