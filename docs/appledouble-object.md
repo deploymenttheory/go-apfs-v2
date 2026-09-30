@@ -157,11 +157,16 @@ root versus the existing `nobody` identity, PACK versus UNPACK, destination mode
 fixtures. Children receive held descriptors before dropping privileges, clear
 supplementary groups, and assert their real and effective UID. Native C and Go
 results, failure errno, output bytes and independent C metadata readback must
-agree. For the independently observed nonowner PACK case whose final stat cannot
-restore source time, each write-generated mtime must fall within its own measured
-invocation interval. Actual timestamps and bounds remain in evidence; other
-metadata and all output bytes still compare exactly. Cases where stat copies
-source time retain exact timestamp comparisons. Missing privilege is a failing prerequisite, never a skipped test. No
+agree. Nonowner PACK can write through the inherited descriptor but cannot set
+the source's explicit timestamp. Nonowner UNPACK with destination mode 0666 can
+write the fork but cannot restore its explicit pre-fork or source timestamp;
+initial attribute cleanup may already have changed the pre-fork time. In these
+observed contexts, each write-generated mtime must fall within its own measured
+invocation interval. Raw timestamps and bounds remain in evidence; all other
+metadata and output bytes still compare exactly. Mode 0400 UNPACK must retain
+its exact unchanged timestamp, and successful source-time copying must match
+exactly. Comparison failures are collected across all sixteen cases before the
+gate fails, preserving the complete diagnostic matrix. Missing privilege is a failing prerequisite, never a skipped test. No
 account is created or changed. This supervisor is implemented; actual privileged
 execution remains a CI qualification requirement on hosts without passwordless
 sudo.

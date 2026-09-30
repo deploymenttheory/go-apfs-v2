@@ -202,6 +202,7 @@ func supervise(oracle string) {
 	native := filepath.Join(work, "native-observer")
 	must(os.WriteFile(native, read(oracle), 0755))
 	cases := []map[string]any{}
+	var mismatches []string
 	for _, identity := range []struct {
 		name     string
 		uid, gid uint32
@@ -248,14 +249,17 @@ func supervise(oracle string) {
 					expected := invoke(native, []string{"fd-" + operation, "0", statArg}, identity.uid, identity.gid, source, files["native-target"])
 					nativeEnd := time.Now().UTC()
 					if actual.Code != expected.Code || (actual.Code < 0 && actual.Errno != expected.Errno) {
-						panic(fmt.Sprintf("%s: result differs Go=%+v native=%+v", name, actual, expected))
+						mismatches = append(mismatches, fmt.Sprintf("%s: result differs Go=%+v native=%+v", name, actual, expected))
 					}
 					goMetadata, nativeMetadata := inspect(native, files["go-target"].Name()), inspect(native, files["native-target"].Name())
 					goComparable, nativeComparable := goMetadata, nativeMetadata
 					timestampPolicy := "exact source or unchanged destination timestamp"
-					if identity.uid != 0 && operation == "pack" {
+					if identity.uid != 0 && (operation == "pack" || (operation == "unpack" && mode == 0666)) {
 						// Inherited writable descriptors permit PACK data writes, but a
 						// nonowner cannot install the root-owned source's fixed mtime.
+						// Writable UNPACK can replace the fork but cannot restore its
+						// explicit pre-fork/source mtime either. Read-only UNPACK cannot write
+						// that fork and must retain the exact original timestamp.
 						// Native observation retains each operation's actual write time.
 						// Check both independently against their own invocation bounds;
 						// neither the old destination nor source timestamp may pass.
@@ -266,21 +270,21 @@ func supervise(oracle string) {
 						}{{"Go", goMetadata, goStart, goEnd}, {"native", nativeMetadata, nativeStart, nativeEnd}} {
 							stamp := time.Unix(observation.metadata.Mtime, observation.metadata.Nano)
 							if observation.metadata.Nano < 0 || observation.metadata.Nano >= int64(time.Second) || observation.end.Before(observation.start) || stamp.Before(observation.start) || stamp.After(observation.end) {
-								panic(fmt.Sprintf("%s: %s write timestamp %s outside actual invocation [%s, %s]", name, observation.label, stamp.Format(time.RFC3339Nano), observation.start.Format(time.RFC3339Nano), observation.end.Format(time.RFC3339Nano)))
+								mismatches = append(mismatches, fmt.Sprintf("%s: %s write timestamp %s outside actual invocation [%s, %s]", name, observation.label, stamp.Format(time.RFC3339Nano), observation.start.Format(time.RFC3339Nano), observation.end.Format(time.RFC3339Nano)))
 							}
 						}
-						timestampPolicy = "each nonowner PACK mtime strictly within its own recorded invocation"
+						timestampPolicy = "each nonowner data/fork write mtime strictly within its own recorded invocation"
 						goComparable.Mtime, goComparable.Nano = 0, 0
 						nativeComparable.Mtime, nativeComparable.Nano = 0, 0
 					}
 					if !reflect.DeepEqual(goComparable, nativeComparable) {
 						goJSON, _ := json.Marshal(goMetadata)
 						nativeJSON, _ := json.Marshal(nativeMetadata)
-						panic(fmt.Sprintf("%s: independently observed destination metadata differs Go=%s native=%s", name, goJSON, nativeJSON))
+						mismatches = append(mismatches, fmt.Sprintf("%s: independently observed destination metadata differs Go=%s native=%s", name, goJSON, nativeJSON))
 					}
 					goBytes, nativeBytes := read(files["go-target"].Name()), read(files["native-target"].Name())
 					if !bytes.Equal(goBytes, nativeBytes) {
-						panic(fmt.Sprintf("%s: output bytes differ Go length=%d sha256=%s native length=%d sha256=%s", name, len(goBytes), hash(goBytes), len(nativeBytes), hash(nativeBytes)))
+						mismatches = append(mismatches, fmt.Sprintf("%s: output bytes differ Go length=%d sha256=%s native length=%d sha256=%s", name, len(goBytes), hash(goBytes), len(nativeBytes), hash(nativeBytes)))
 					}
 					for _, f := range files {
 						must(f.Close())
@@ -293,5 +297,8 @@ func supervise(oracle string) {
 		}
 	}
 	must(os.RemoveAll(work))
+	if len(mismatches) != 0 {
+		panic(fmt.Sprintf("authorization matrix completed all %d cases with %d mismatches:\n%s", len(cases), len(mismatches), strings.Join(mismatches, "\n")))
+	}
 	emit(cases)
 }

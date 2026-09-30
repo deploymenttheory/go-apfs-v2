@@ -55,8 +55,10 @@ present-empty ACLs remain distinct during logical preparation.
 The live owner matrix now compares packed metadata as well as bytes, including
 unconditional inner PACK stat and the outer mode reset. The 16-case real
 root/nonowner supervisor requires `sudo -n` and validates actual process
-credentials without creating accounts. Nonowner PACK retains independently
-generated write times when copying the source timestamp is unauthorized: each
+credentials without creating accounts. Nonowner PACK and writable (0666) UNPACK
+retain independently generated data/fork write times when explicit timestamp
+restoration is unauthorized; read-only (0400) UNPACK retains its exact original
+timestamp. For the two measured write contexts, each
 observed mtime must lie within its own recorded invocation interval. Raw times
 and bounds are retained, and all other metadata and output bytes remain exact.
 Signed sandbox qualification requires an
