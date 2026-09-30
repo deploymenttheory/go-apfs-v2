@@ -185,3 +185,10 @@ boundaries; unpack's deferred ACL runs before its final stat. Native controlled
 observations and real image-API composition replay on all three OSes. Held host
 providers, unpack internals and the outer creation/permission-restoration/close
 lifecycle remain outstanding. All five roadmap gates remain open.
+
+[Ordinary unpack xattr restoration](appledouble-xattr-restoration.md) now connects
+its callback/intent/error policy to both image writer trees. The HFS binding uses
+the existing catalog resource-fork field; aliases agree before updates and Finish
+cancellation does not roll back successful publication. This closes the ordinary
+record execution component, not full unpack ordering or host/carrier transport.
+All five completion gates and the package PR72 release hold remain open.

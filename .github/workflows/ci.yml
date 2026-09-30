@@ -243,6 +243,17 @@ jobs:
           name: image-stat-coverage-${{ matrix.os }}
           path: artifacts/image-stat-coverage/
           if-no-files-found: error
+      - name: Portable xattr restoration and image bindings above 95% coverage
+        env:
+          CGO_ENABLED: "0"
+        run: go run scripts/verify-xattr-restore-coverage.go
+      - name: Upload xattr restoration coverage
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: xattr-restore-coverage-${{ matrix.os }}
+          path: artifacts/xattr-restore-coverage/
+          if-no-files-found: error
       - name: Portable copy pipeline ordering and coverage above 95%
         env:
           CGO_ENABLED: "0"
@@ -361,6 +372,18 @@ jobs:
         with:
           name: security-source
           path: artifacts/security-source/
+          if-no-files-found: error
+      - name: Native xattr restoration callbacks and write comparisons
+        if: runner.os == 'macOS'
+        env:
+          CGO_ENABLED: "0"
+        run: go run scripts/verify-xattr-restore.go
+      - name: Upload native xattr restoration evidence
+        if: always() && runner.os == 'macOS'
+        uses: actions/upload-artifact@v7
+        with:
+          name: xattr-restore
+          path: artifacts/xattr-restore/
           if-no-files-found: error
       - name: Native copy pipeline ordering comparisons
         if: runner.os == 'macOS'
@@ -617,7 +640,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: .acceptance-cache
-          key: acceptance-firefox-150.0-zed-0.196.5
+          key: acceptance-firefox-150.0-zed-0.196.5-charles-5.2.1-bbedit-16.0.3
       - name: Download Firefox 150 acceptance image
         if: steps.dmg-cache.outputs.cache-hit != 'true'
         shell: bash
@@ -636,6 +659,7 @@ jobs:
         env:
           CGO_ENABLED: "0"
           APFS_ACCEPTANCE_DMG: ${{ github.workspace }}/.acceptance-cache/Firefox.dmg
+          APFS_ACCEPTANCE_FILESYSTEM: hfs+
         shell: bash
         run: go test -v -run TestAcceptance ./acceptance/
       - name: Acceptance tests (Zed 0.196.5 image, APFS)
@@ -646,5 +670,49 @@ jobs:
           APFS_ACCEPTANCE_APP: Zed.app
           APFS_ACCEPTANCE_BUNDLE_ID: dev.zed.Zed
           APFS_ACCEPTANCE_BINARY: zed
+          APFS_ACCEPTANCE_FILESYSTEM: apfs
         shell: bash
         run: go test -v -run TestAcceptance ./acceptance/
+      - name: Download Charles 5.2.1 and BBEdit 16.0.3 acceptance images
+        if: steps.dmg-cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          curl -fsSL --retry 3 --connect-timeout 30 --max-time 600 -o .acceptance-cache/Charles.dmg \
+            "https://www.charlesproxy.com/assets/release/5.2.1/charles-proxy-5.2.1.dmg"
+          curl -fsSL --retry 3 --connect-timeout 30 --max-time 600 -o .acceptance-cache/BBEdit.dmg \
+            "https://s3.amazonaws.com/BBSW-download/BBEdit_16.0.3.dmg"
+      - name: Acceptance tests (Charles 5.2.1 image, HFS+)
+        env:
+          CGO_ENABLED: "0"
+          APFS_ACCEPTANCE_DMG: ${{ github.workspace }}/.acceptance-cache/Charles.dmg
+          APFS_ACCEPTANCE_VOLNAME: Charles Proxy v5.2.1
+          APFS_ACCEPTANCE_APP: Charles.app
+          APFS_ACCEPTANCE_BUNDLE_ID: com.xk72.Charles
+          APFS_ACCEPTANCE_BINARY: Charles
+          APFS_ACCEPTANCE_FILESYSTEM: hfs+
+          APFS_ACCEPTANCE_SHA256: d233395a7fbb487f0fe20ddff16e02a65990add20d5aa9ce1e87a8f9ff0fe0d5
+        shell: bash
+        run: |
+          mkdir -p artifacts/vendor-dmg
+          go test -json -count=1 -run TestAcceptance ./acceptance/ | tee artifacts/vendor-dmg/charles.jsonl
+      - name: Acceptance tests (BBEdit 16.0.3 image, APFS)
+        env:
+          CGO_ENABLED: "0"
+          APFS_ACCEPTANCE_DMG: ${{ github.workspace }}/.acceptance-cache/BBEdit.dmg
+          APFS_ACCEPTANCE_VOLNAME: BBEdit 16.0.3
+          APFS_ACCEPTANCE_APP: BBEdit.app
+          APFS_ACCEPTANCE_BUNDLE_ID: com.barebones.bbedit
+          APFS_ACCEPTANCE_BINARY: BBEdit
+          APFS_ACCEPTANCE_FILESYSTEM: apfs
+          APFS_ACCEPTANCE_SHA256: acf2ae9e5c68beacdfd7534861fa8c992e1bdd5391a71b3c08b3ed879c2b3572
+        shell: bash
+        run: |
+          mkdir -p artifacts/vendor-dmg
+          go test -json -count=1 -run TestAcceptance ./acceptance/ | tee artifacts/vendor-dmg/bbedit.jsonl
+      - name: Upload commercial DMG acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: vendor-dmg-${{ matrix.os }}
+          path: artifacts/vendor-dmg/
+          if-no-files-found: error

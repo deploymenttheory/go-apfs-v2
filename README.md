@@ -475,9 +475,11 @@ CI runs the build matrix and the test suite on
 Linux, macOS and Windows. Correctness is cross-checked against the platforms'
 own tools: created HFS+ volumes are validated with `fsck_hfs` and mounted with
 `hdiutil`; created APFS containers with `fsck_apfs` (macOS) and `apfsck`
-(Linux). Real-world acceptance runs against published vendor DMGs (Firefox for
-HFS+, Zed for APFS), and on macOS every extraction is compared byte-for-byte
-against an `hdiutil` mount of the same image.
+(Linux). Real-world acceptance runs against published vendor DMGs (Firefox and
+Charles for HFS+, Zed and BBEdit for APFS), and on macOS every extraction is
+compared byte-for-byte against an `hdiutil` mount of the same image. See the
+[vendor DMG fixtures](docs/vendor-dmg-acceptance.md) for pinned versions,
+checksums, format differences and local test commands.
 
 ## Acknowledgements
 

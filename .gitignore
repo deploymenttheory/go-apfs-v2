@@ -20,4 +20,5 @@
 dist/
 coverage.out
 artifacts/
+.acceptance-cache/
 profiler.csv
