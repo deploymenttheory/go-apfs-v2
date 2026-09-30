@@ -2,7 +2,7 @@
 
 ## Strict extended attributes
 
-`XattrSize`, `ReadXattr` and `RemoveXattr` operate on an already-open `*os.File`.
+`ListXattrNames`, `XattrSize`, `ReadXattr` and `RemoveXattr` operate on an already-open `*os.File`.
 The corresponding `XattrSizeNoFollow`, `ReadXattrNoFollow` and
 `RemoveXattrNoFollow` operate on a path without following its final symlink.
 These APIs provide strict results separately from the existing best-effort
@@ -47,6 +47,14 @@ the target. Darwin `O_SYMLINK` descriptors operate on the link itself. Linux
 `O_PATH` descriptors return `EBADF` from these operations, without a pathname
 fallback. Nil and closed descriptors fail.
 
+`ListXattrNames(file, maxBytes)` retains native name order and bytes, with a
+caller budget up to 1 MiB including name terminators. Errors return nil, never a
+partial or successful-empty list. Unix size/read changes fail; Windows uses one
+EA cursor with fixed scratch space and rejects duplicate records. Enumeration
+retains native casing and raw name bytes even beyond the named-read ASCII subset.
+See [held-file listing](../../docs/appledouble-held-xattr-list.md) for its native
+qualification, concurrency limits and remaining carrier/provider work.
+
 Path operations are not a containment or identity primitive. Intermediate
 components can be symlinks and each call resolves the path again. Use a suitably
 opened descriptor for held-object semantics. Missing files remain errors rather
@@ -57,12 +65,12 @@ there are no new direct syscalls, native bindings or helper processes. The
 namespace is the ordinary native namespace: Darwin does not request
 `XATTR_SHOWCOMPRESSION`, so compression-hidden metadata is not exposed. Linux
 namespace/permission rules still apply; names are not automatically remapped.
-Windows implements all six strict operations using native NTFS extended
+Windows implements all seven strict operations using native NTFS extended
 attributes through the supported `NtCreateFile`, `NtQueryEaFile` and `NtSetEaFile`
 wrappers. Path opens use `FILE_FLAG_OPEN_REPARSE_POINT`; held-object opens use an
 empty relative name without looking up `File.Name`. Access is checked against the
 current DACL, without backup privilege. Files, directories and held symbolic links
-are supported. Native EA names are case-insensitive ASCII, up to 255 bytes, with
+are supported. Named EA operations accept case-insensitive ASCII names up to 254 bytes, with
 Windows name restrictions; values follow native EA storage limits. Assigning zero
 length deletes a native EA, so NTFS cannot store a present-empty EA. Removal
 queries presence before deletion on the same handle; concurrent mutation is not

@@ -107,6 +107,28 @@ jobs:
 
       - name: Vet
         run: go vet ./...
+      - name: Strict xattr API tests and coverage above 95%
+        env:
+          CGO_ENABLED: "0"
+        run: go run scripts/verify-xattrs.go
+      - name: Upload strict xattr API evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: strict-xattrs-${{ matrix.os }}
+          path: artifacts/strict-xattrs/
+          if-no-files-found: error
+      - name: Native held xattr listing and Clang comparisons
+        if: runner.os == 'macOS'
+        run: go run scripts/verify-xattr-list-native.go
+      - name: Upload native held xattr listing evidence
+        if: always() && runner.os == 'macOS'
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: held-xattr-list
+          path: artifacts/held-xattr-list/
+          if-no-files-found: error
+
       - name: AppleDouble unit tests and coverage above 95%
         env:
           CGO_ENABLED: "0"
@@ -623,17 +645,6 @@ jobs:
         with:
           name: appledouble-quarantine-destinations
           path: artifacts/appledouble-quarantine-runtime-destinations/
-          if-no-files-found: error
-      - name: Strict xattr API tests and coverage above 95%
-        env:
-          CGO_ENABLED: "0"
-        run: go run scripts/verify-xattrs.go
-      - name: Upload strict xattr API evidence
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: strict-xattrs-${{ matrix.os }}
-          path: artifacts/strict-xattrs/
           if-no-files-found: error
       - name: Build apfsck (Linux; pinned version)
         if: runner.os == 'Linux'

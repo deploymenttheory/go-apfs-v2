@@ -11,10 +11,10 @@ var (
 	// ErrXattrUnsupported means the host or filesystem cannot perform the
 	// requested strict attribute operation. It never means the attribute is absent.
 	ErrXattrUnsupported = errors.New("strict extended attributes are unsupported")
-	// ErrXattrTooLarge means a value exceeds the caller's read limit.
+	// ErrXattrTooLarge means a value or name list exceeds the caller's limit.
 	ErrXattrTooLarge = errors.New("extended attribute exceeds read limit")
-	// ErrXattrChanged means a value disappeared or its observed size changed
-	// between sizing and reading. Same-size concurrent changes cannot be detected.
+	// ErrXattrChanged means an observed value or namespace changed during a
+	// multi-call query. Some concurrent changes cannot be detected.
 	ErrXattrChanged = errors.New("extended attribute changed while reading")
 )
 
@@ -35,7 +35,7 @@ const MaxXattrReadSize = 8 << 20
 //
 // Darwin/Linux use the ordinary visible namespace; Windows uses native NTFS EAs
 // through supported x/sys wrappers. Darwin compression-hidden attributes are not
-// exposed. Windows names are case-insensitive ASCII (at most 255 bytes), and
+// exposed. Windows names are case-insensitive ASCII (at most 254 bytes), and
 // zero-length assignment is native deletion, not a present-empty value. Windows
 // operations reopen the held object for synchronous EA access without resolving
 // its name; current filesystem permissions still apply. Other hosts return
@@ -138,11 +138,15 @@ func xattrReadLimit(limit int) error {
 }
 
 func withXattrFile(file *os.File, name string, action func(int) error) error {
-	if file == nil {
-		return os.ErrInvalid
-	}
 	if err := validXattrName(name); err != nil {
 		return err
+	}
+	return withXattrDescriptor(file, action)
+}
+
+func withXattrDescriptor(file *os.File, action func(int) error) error {
+	if file == nil {
+		return os.ErrInvalid
 	}
 	conn, err := file.SyscallConn()
 	if err != nil {
