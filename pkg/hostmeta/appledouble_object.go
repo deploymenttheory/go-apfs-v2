@@ -83,29 +83,47 @@ func NewCapturedAppleDoubleObject(c CapturedAppleDoubleObject) (*AppleDoubleObje
 // and directory-service inputs. It does not own or close file. Foreign hosts
 // construct NewCapturedAppleDoubleObject from their image/carrier observations.
 func NewHostAppleDoubleObject(ctx context.Context, file *os.File) (*AppleDoubleObject, error) {
+	return newHostAppleDoubleObject(ctx, file, objectCaptureProviders{
+		metadata:   func(f *os.File) (objectMetadata, error) { return NewHeldMetadata(f) },
+		identities: NewNativeACLIdentityCapture, process: CaptureQuarantineProcess,
+		sandbox: CaptureAppSandbox, attributes: newHostObjectAttributes,
+	})
+}
+
+// Acquisition is composed explicitly so failures can be qualified on every
+// host. Native providers still execute for every public host construction.
+type objectCaptureProviders struct {
+	metadata   func(*os.File) (objectMetadata, error)
+	identities func(context.Context) (*appledouble.ACLIdentityCapture, error)
+	process    func(context.Context) (*QuarantineProcessCapture, error)
+	sandbox    func() (bool, error)
+	attributes func(*os.File) (objectAttributes, error)
+}
+
+func newHostAppleDoubleObject(ctx context.Context, file *os.File, providers objectCaptureProviders) (*AppleDoubleObject, error) {
 	if ctx == nil {
 		return nil, os.ErrInvalid
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	meta, err := NewHeldMetadata(file)
+	meta, err := providers.metadata(file)
 	if err != nil {
 		return nil, err
 	}
-	identities, err := NewNativeACLIdentityCapture(ctx)
+	identities, err := providers.identities(ctx)
 	if err != nil {
 		return nil, err
 	}
-	process, err := CaptureQuarantineProcess(ctx)
+	process, err := providers.process(ctx)
 	if err != nil {
 		return nil, err
 	}
-	sandboxed, err := CaptureAppSandbox()
+	sandboxed, err := providers.sandbox()
 	if err != nil {
 		return nil, err
 	}
-	attrs, err := newHostObjectAttributes(file)
+	attrs, err := providers.attributes(file)
 	if err != nil {
 		return nil, err
 	}
@@ -189,7 +207,7 @@ type ObjectPackResult struct {
 }
 
 // PackAppleDoubleObject composes source acquisition, intent/ACL/quarantine
-// handling, packing, optional stat and temporary descriptor-mode restoration.
+// handling, packing, its final stat and temporary descriptor-mode restoration.
 // It executes in pure Go with captured objects on every operating system.
 func PackAppleDoubleObject(ctx context.Context, source, destination *AppleDoubleObject, output io.WriterAt, options ObjectPackOptions) (result ObjectPackResult, err error) {
 	if ctx == nil || source == nil || destination == nil || output == nil || options.HasQuarantine {

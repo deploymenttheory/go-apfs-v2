@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfswrite"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/metatransport"
 	"os"
@@ -84,4 +85,55 @@ func TestProjectionStreamedForkBaseline(t *testing.T) {
 		}
 		t.Fatal("native edit was ignored", err)
 	}
+}
+
+func TestCarrierNativeInitialForkBaseline(t *testing.T) {
+	content := bytes.Repeat([]byte{5}, (1<<20)+1)
+	e := newCarrierExtractor(t, carrierVolume{MapFS: fstest.MapFS{"file": {Data: []byte("body")}}})
+	e.NativeCaptureLimits = &hostmeta.XattrCaptureLimits{NameBytes: hostmeta.MaxXattrListSize, ValueBytes: 16384, TotalBytes: 32768}
+	ops := carrierExtractionOps{os.ReadDir, os.OpenRoot, func(ctx context.Context, root *os.Root, name string, limits hostmeta.XattrCaptureLimits) (map[string]appledouble.Value, error) {
+		if name == "file" {
+			f, err := root.OpenFile(name, os.O_RDWR, 0)
+			if err != nil {
+				return nil, err
+			}
+			_, err = hostmeta.ReplaceResourceFork(ctx, f, bytes.NewReader(content))
+			err = errors.Join(err, f.Close())
+			if err != nil {
+				return nil, err
+			}
+		}
+		return hostmeta.CaptureXattrValuesAt(ctx, root, name, limits)
+	}}
+	if err := e.extractCarrierUsing(".", "", ops); err != nil {
+		t.Fatal(err)
+	}
+	store, err := metatransport.Open(e.Destination, e.MetadataRoot, metatransport.DefaultLimits())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	manifest, err := store.Load(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range manifest.Records {
+		if r.Original != "file" {
+			continue
+		}
+		values, err := store.BorrowAttributes(context.Background(), r.NativeAttributes)
+		if err != nil {
+			t.Fatal(err)
+		}
+		fork := values[hostmeta.ResourceForkName]
+		if !r.NativeCaptured || fork == nil || fork.Size() != int64(len(content)) {
+			t.Fatal(r)
+		}
+		got := make([]byte, 17)
+		if _, err := fork.ReadAt(got, fork.Size()-17); err != nil || !bytes.Equal(got, content[:17]) {
+			t.Fatal(got, err)
+		}
+		return
+	}
+	t.Fatal("native fork baseline absent")
 }

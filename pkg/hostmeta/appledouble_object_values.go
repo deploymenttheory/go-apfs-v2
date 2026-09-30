@@ -119,10 +119,21 @@ func (a *logicalObjectAttributes) write(name string, value []byte) error {
 	if !present {
 		a.order = append(a.order, name)
 	}
-	owned := bytes.Clone(value)
-	var next appledouble.Value = bytes.NewReader(owned)
-	if name == appledouble.ResourceForkName && present && old.Size() > int64(len(owned)) {
-		next = &prefixObjectValue{head: owned, tail: old}
+	var next appledouble.Value
+	if name == appledouble.ResourceForkName && present && old.Size() > int64(len(value)) {
+		if previous, ok := old.(*prefixObjectValue); ok {
+			// Coalesce owned prefixes without reading the borrowed suffix.
+			// Keeping previous as the tail would retain every superseded
+			// buffer after repeated shorter writes. Clone for old snapshots.
+			head := make([]byte, max(len(previous.head), len(value)))
+			copy(head, previous.head)
+			copy(head, value)
+			next = &prefixObjectValue{head: head, tail: previous.tail}
+		} else {
+			next = &prefixObjectValue{head: bytes.Clone(value), tail: old}
+		}
+	} else {
+		next = bytes.NewReader(bytes.Clone(value))
 	}
 	a.values[name] = next
 	return nil

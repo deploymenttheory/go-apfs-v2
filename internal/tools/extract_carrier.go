@@ -113,13 +113,13 @@ func (e *Extractor) planCarrier(root, destBase string) ([]carrierExtractEntry, e
 // metadata blob has been written. An empty destination prevents preexisting
 // symlink redirection, name collisions and accidental overwrite of user files.
 func (e *Extractor) extractCarrier(root, destBase string) (err error) {
-	return e.extractCarrierUsing(root, destBase, carrierExtractionOps{os.ReadDir, os.OpenRoot, hostmeta.CaptureXattrsNoFollow})
+	return e.extractCarrierUsing(root, destBase, carrierExtractionOps{os.ReadDir, os.OpenRoot, hostmeta.CaptureXattrValuesAt})
 }
 
 type carrierExtractionOps struct {
 	readDir  func(string) ([]os.DirEntry, error)
 	openRoot func(string) (*os.Root, error)
-	capture  func(context.Context, string, hostmeta.XattrCaptureLimits) (map[string][]byte, error)
+	capture  func(context.Context, *os.Root, string, hostmeta.XattrCaptureLimits) (map[string]appledouble.Value, error)
 }
 
 func (e *Extractor) extractCarrierUsing(root, destBase string, ops carrierExtractionOps) (err error) {
@@ -264,14 +264,14 @@ func (e *Extractor) extractCarrierUsing(root, destBase string, ops carrierExtrac
 		if e.NativeCaptureLimits != nil {
 			captureLimits = *e.NativeCaptureLimits
 		}
-		native, captureErr := ops.capture(ctx, filepath.Join(e.Destination, filepath.FromSlash(r.Materialized)), captureLimits)
+		native, captureErr := ops.capture(ctx, payload, filepath.FromSlash(r.Materialized), captureLimits)
 		if errors.Is(captureErr, hostmeta.ErrXattrUnsupported) {
 			r.NativeUnsupported = true
 		} else if captureErr != nil {
 			return captureErr
 		} else {
 			r.NativeCaptured = true
-			r.NativeAttributes, err = store.StoreAttributes(ctx, native)
+			r.NativeAttributes, err = store.StoreAttributeValues(ctx, native)
 			if err != nil {
 				return err
 			}

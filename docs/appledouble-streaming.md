@@ -39,6 +39,33 @@ value budget counts aliases once per reference, bounding total copying work.
 width or address-space limitation. The existing `File`, `Encode` and `Decode`
 contracts remain unchanged.
 
+## Native capture and carrier lifetime
+
+`hostmeta.CaptureXattrValuesAt` captures a relative object through a held payload
+root without following its final symlink. Ordinary native attributes still need
+whole-value reads: their syscalls do not support arbitrary chunked reads. Name,
+individual-value and aggregate capture budgets remain explicit, and exceeding a
+budget is an error rather than an empty attribute or a skipped value.
+
+Darwin regular-file resource forks use a separate held named stream with 64-bit
+offsets. They can exceed the ordinary attribute allocation budget while each read
+remains bounded. Linux symlinks use the held-parent no-follow provider, including
+dangling links and links whose targets are outside the payload root. This captures
+the link namespace, not the target namespace.
+
+Extraction records both its initial native baseline and its post-projection
+baseline using these sized values and `StoreAttributeValues`. Neither baseline
+requires materializing a resource fork. The carrier retains complete logical
+values when native projection has a capacity or platform constraint; projection
+outcomes remain separate from preservation success. Borrowed sources and stores
+must remain open and unchanged until their consumers finish.
+
+AppleDouble's fork length field remains unsigned 32-bit. A larger fork is kept in
+the carrier as a raw streamed blob, with its optional AppleDouble representation
+omitted. APFS and HFS+ streamed image APIs preserve the full 64-bit length. See
+[large resource forks](appledouble-large-values.md) for real-byte boundary tests,
+native descriptor qualification, memory and disk budgets, and cross-host CI.
+
 ## Explicit sequential execution
 
 `hostmeta.RestoreAppleDouble` remains the safe snapshot operation: it decodes the

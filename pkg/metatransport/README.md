@@ -113,8 +113,11 @@ materializing large values. Borrowed sources must remain immutable and open thro
 `CreateContainer`. Existing `EntryTreeFromDir` and `Xattrs` APIs retain their owned
 byte-slice contracts.
 
-Native attribute acquisition and captured native baselines remain explicitly
-budgeted. The logical carrier values do not inherit that native allocation limit.
-Format and layout bounds remain enforced before image publication. Complete native
-copy/unpack policy, authorization and lifecycle qualification remain separate
-requirements.
+Ordinary native attribute acquisition remains explicitly budgeted. Initial and
+post-projection native baselines use held capture and streamed blob publication;
+Darwin regular-file resource forks do not inherit a whole-value allocation limit.
+Format and layout bounds remain enforced before image publication. The
+[large-value qualification](../../docs/appledouble-large-values.md) exercises a
+real fork beyond the AppleDouble 32-bit length field through the carrier, both
+image formats and native macOS readback. Complete native copy/unpack policy,
+authorization and lifecycle qualification remain separate requirements.

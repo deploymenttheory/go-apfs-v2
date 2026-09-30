@@ -3,6 +3,7 @@ package hostmeta
 import (
 	"errors"
 	"runtime"
+	"strings"
 	"sync"
 	"syscall"
 	"unsafe"
@@ -15,6 +16,7 @@ import (
 // Only libSystem IO and filesec property access cross this boundary. The ACL,
 // AppleDouble, policy and ordering algorithms remain Go implementations.
 type darwinSecurityABI struct {
+	native  map[string]uintptr
 	init    func() uintptr
 	free    func(uintptr)
 	get     func(uintptr, int32, unsafe.Pointer) int32
@@ -34,7 +36,7 @@ var loadDarwinSecurity = sync.OnceValues(func() (*darwinSecurityABI, error) {
 })
 
 func bindDarwinSecurity(symbol func(string) (uintptr, error), arch string) (*darwinSecurityABI, error) {
-	a := &darwinSecurityABI{}
+	a := &darwinSecurityABI{native: make(map[string]uintptr)}
 	stat := "fstatx_np"
 	if arch == "amd64" {
 		stat += "$INODE64"
@@ -50,22 +52,14 @@ func bindDarwinSecurity(symbol func(string) (uintptr, error), arch string) (*dar
 		if err != nil {
 			return nil, err
 		}
+		a.native[strings.TrimSuffix(item.name, "$INODE64")] = p
 		purego.RegisterFunc(item.target, p)
 	}
 	return a, nil
 }
 
-func (a *darwinSecurityABI) call(fn func() int32) error {
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-	if fn() == -1 {
-		return syscall.Errno(*a.errno())
-	}
-	return nil
-}
-
 func (a *darwinSecurityABI) property(sec uintptr, name int32, out unsafe.Pointer) (bool, error) {
-	err := a.call(func() int32 { return a.get(sec, name, out) })
+	_, err := callDarwinInt(a.native["filesec_get_property"], func() int32 { return a.get(sec, name, out) }, a.errno, sec, uintptr(name), uintptr(out))
 	if errors.Is(err, syscall.ENOENT) {
 		return false, nil
 	}

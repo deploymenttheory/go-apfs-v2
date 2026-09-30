@@ -18,7 +18,7 @@ import (
 // CoverageDirectories is the portable evidence inventory. New focused gates must
 // extend this list; a missing report is a qualification failure.
 func CoverageDirectories() []string {
-	return []string{"held-metadata", "decmpfs-formats-coverage", "appledouble-pack-coverage", "metadata-transport-coverage", "appledouble-stream", "appledouble", "strict-xattrs", "acl-restore", "image-security-coverage", "root-security-coverage", "mode-security-coverage", "image-acl-coverage", "image-copy-coverage", "security-volume-coverage", "security-source-coverage", "image-times-coverage", "image-flags-coverage", "image-stat-coverage", "xattr-restore-coverage", "unpack-restore-coverage", "copy-pipeline-coverage", "stat-copy-coverage"}
+	return []string{"path-lifecycle-coverage", "held-metadata", "decmpfs-formats-coverage", "appledouble-pack-coverage", "metadata-transport-coverage", "appledouble-stream", "appledouble", "strict-xattrs", "acl-restore", "image-security-coverage", "root-security-coverage", "mode-security-coverage", "image-acl-coverage", "image-copy-coverage", "security-volume-coverage", "security-source-coverage", "image-times-coverage", "image-flags-coverage", "image-stat-coverage", "xattr-restore-coverage", "unpack-restore-coverage", "copy-pipeline-coverage", "stat-copy-coverage"}
 }
 
 type count struct{ Covered, Statements int64 }

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"unsafe"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
 	"github.com/ebitengine/purego"
@@ -29,6 +30,7 @@ type quarantineProcessInfo struct {
 }
 
 type quarantineCaptureABI struct {
+	native  map[string]uintptr
 	query   func(*byte, int32, *quarantineProcessInfo) int32
 	getFile func(*byte, int32, *quarantineFileGet) int32
 	setFile func(*byte, int32, *quarantineFileSet) int32
@@ -57,7 +59,7 @@ var loadQuarantineCapture = sync.OnceValues(func() (*quarantineCaptureABI, error
 })
 
 func bindQuarantineCapture(symbol func(string) (uintptr, error)) (*quarantineCaptureABI, error) {
-	a := &quarantineCaptureABI{}
+	a := &quarantineCaptureABI{native: map[string]uintptr{}}
 	for _, item := range []struct {
 		name   string
 		target any
@@ -70,6 +72,7 @@ func bindQuarantineCapture(symbol func(string) (uintptr, error)) (*quarantineCap
 			return nil, err
 		}
 		purego.RegisterFunc(item.target, p)
+		a.native[item.name] = p
 	}
 	return a, nil
 }
@@ -105,22 +108,14 @@ func captureNativeQuarantineUsing(ctx context.Context, version func() (string, e
 	return captureQuarantineProcess(ctx, func() (*QuarantineProcessCapture, error) { return a.read(profile) }, a.confirmAbsent)
 }
 
-func (a *quarantineCaptureABI) call(action func() int32) error {
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-	if action() == -1 {
-		return syscall.Errno(*a.errno())
-	}
-	return nil
-}
-
 func (a *quarantineCaptureABI) read(profile appledouble.QuarantineProfile) (*QuarantineProcessCapture, error) {
 	var agent [257]byte
 	var metadata [65]byte
 	var tracking [64]byte
 	i := quarantineProcessInfo{agent: &agent[0], metadata: &metadata[0], tracking: &tracking[0]}
 	policy := []byte("Quarantine\x00")
-	err := a.call(func() int32 { return a.query(&policy[0], 84, &i) })
+	_, err := callDarwinInt(a.native["__mac_syscall"], func() int32 { return a.query(&policy[0], 84, &i) }, a.errno,
+		uintptr(unsafe.Pointer(&policy[0])), 84, uintptr(unsafe.Pointer(&i)))
 	runtime.KeepAlive(policy)
 	runtime.KeepAlive(agent)
 	runtime.KeepAlive(metadata)
@@ -143,7 +138,7 @@ func (a *quarantineCaptureABI) confirmAbsent() error {
 		return syscall.ENOMEM
 	}
 	defer a.free(p)
-	err := a.call(func() int32 { return a.capture(p) })
+	_, err := callDarwinInt(a.native["_qtn_proc_init_with_self"], func() int32 { return a.capture(p) }, a.errno, p)
 	if errors.Is(err, syscall.ENOATTR) {
 		return nil
 	}
