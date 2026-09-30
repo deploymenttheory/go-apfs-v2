@@ -111,7 +111,8 @@ Clang is qualification-only.
 ## Remaining integration
 
 Held namespace listing closes one prerequisite for the production unpack
-provider. Strict writes, special-name normalization, cleanup readback, quarantine
+provider. [Strict assignment](appledouble-held-xattr-write.md) is available. Special-name
+policy, cleanup readback, quarantine
 state, deferred ACL application and times still need a complete held/carrier
 binding. Image namespace visibility/order, foreign carrier conflicts and lossless
 round trips also remain. Outer creation/inheritance/permission/close handling and

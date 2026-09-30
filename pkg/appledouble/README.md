@@ -160,7 +160,7 @@ of this roadmap delivered. These phases are not estimates of remaining PR count.
 
 | Phase | Current state | Completion gate |
 | --- | --- | --- |
-| 1. ACL application | Source/image policies, stat staging, copy routing and validated unpack ordering implemented; held native listing implemented; complete providers and outer lifecycle remain | Source acquisition, authorization, actual writes and restoration ordering qualified together |
+| 1. ACL application | Source/image policies, stat staging, copy routing and validated unpack ordering implemented; held native listing and assignment implemented; complete providers and outer lifecycle remain | Source acquisition, authorization, actual writes and restoration ordering qualified together |
 | 2. Quarantine | Conversion and much of application policy implemented; context/integration gaps open | Remaining process contexts and ordered restoration qualify against native behavior |
 | 3. Large values and allocation | Known native differences remain | Oversized values, aggregates, forks and allocation policy have explicit, tested behavior |
 | 4. Shared filesystem transport | Host primitives and exact image permissions available; complete metadata transport outstanding | APFS/HFS+ extract-and-repack preserves logical metadata on all three OSes |
@@ -253,8 +253,11 @@ of this roadmap delivered. These phases are not estimates of remaining PR count.
    bounded destination names on all three OSes, with native ordering, descriptor
    identity and complete error results. It does not supply image namespace policy
    or a foreign metadata carrier.
-   **Remaining:** native host write
-   adapters, live host source acquisition,
+   [Held native writes](../../docs/appledouble-held-xattr-write.md) now assign
+   attributes through pinned descriptors on all three OSes. Native Mac readback
+   qualifies FinderInfo normalization and resource-fork non-truncation; Windows
+   retains EA size/name rules and write access without requiring read access.
+   **Remaining:** complete native host provider bindings, live host source acquisition,
    privileged/sandbox authorization contexts, unpack provider bindings and outer
    creation/permission-restoration/close lifecycle.
    [Owner/non-owner image tests](../../docs/appledouble-acl-nonowner.md) qualify
@@ -263,8 +266,8 @@ of this roadmap delivered. These phases are not estimates of remaining PR count.
    in phase 4.
 
    **Next implementation:** bind the validated unpack executor to production
-   held destinations and foreign-metadata carriers. Native descriptor listing is
-   available; qualify image namespace visibility/order and connect it with writes
+   held destinations and foreign-metadata carriers. Native descriptor listing and assignment are
+   available; qualify image namespace visibility/order and connect the write primitive
    (including hidden compression/security metadata), deletion/readback, quarantine state
    at each record, ACL application and timestamp restoration as one transport.
    Keep the same logical capability on Linux, macOS and Windows. Creation
@@ -283,7 +286,7 @@ of this roadmap delivered. These phases are not estimates of remaining PR count.
    the native packing versus lossless-codec difference, and native sequential
    handling versus the decoder's cumulative alias-allocation guard. Each
    difference needs a qualified policy, not an implicit metadata-loss success.
-4. **Shared filesystem transport.** Strict held listing, read and removal primitives are available
+4. **Shared filesystem transport.** Strict held listing, read, assignment and removal primitives are available
    in `pkg/hostmeta`; both image readers and writers retain zero permissions and
    all set-ID/sticky combinations. **Remaining:** integrated preservation for files,
    directories, roots and links; native write refusal/normalization; empty values,

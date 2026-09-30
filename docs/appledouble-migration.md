@@ -209,3 +209,10 @@ allocation and rejects partial results. This closes the native listing
 prerequisite, not the full unpack binding or foreign-carrier preservation gate.
 See [held-file listing](appledouble-held-xattr-list.md). Package PR72 remains
 draft on released v0.13.0; codesign remains paused.
+
+Held native assignment is available on all three OSes through
+[`hostmeta.SetXattr`](appledouble-held-xattr-write.md), with native error and
+normalization behavior, bounded Windows records and independent Mac readback.
+This completes the assignment primitive, not provider/carrier integration. All
+five roadmap gates remain open; package PR72 remains draft until qualification
+and a published APFS release.

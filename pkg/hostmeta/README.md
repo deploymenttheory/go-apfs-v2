@@ -55,6 +55,13 @@ retains native casing and raw name bytes even beyond the named-read ASCII subset
 See [held-file listing](../../docs/appledouble-held-xattr-list.md) for its native
 qualification, concurrency limits and remaining carrier/provider work.
 
+`SetXattr(file, name, value)` assigns one native attribute through the held object.
+The filesystem controls empty-value and special-name behavior; a successful write
+is not a byte-equality guarantee. Windows requests write access without read access
+and bounds its EA record allocation. Unix uses ordinary native flags. See
+[held-file writes](../../docs/appledouble-held-xattr-write.md) for limits, native
+readback evidence and the remaining provider/carrier work.
+
 Path operations are not a containment or identity primitive. Intermediate
 components can be symlinks and each call resolves the path again. Use a suitably
 opened descriptor for held-object semantics. Missing files remain errors rather
@@ -65,7 +72,7 @@ there are no new direct syscalls, native bindings or helper processes. The
 namespace is the ordinary native namespace: Darwin does not request
 `XATTR_SHOWCOMPRESSION`, so compression-hidden metadata is not exposed. Linux
 namespace/permission rules still apply; names are not automatically remapped.
-Windows implements all seven strict operations using native NTFS extended
+Windows implements all eight strict operations using native NTFS extended
 attributes through the supported `NtCreateFile`, `NtQueryEaFile` and `NtSetEaFile`
 wrappers. Path opens use `FILE_FLAG_OPEN_REPARSE_POINT`; held-object opens use an
 empty relative name without looking up `File.Name`. Access is checked against the
@@ -74,7 +81,7 @@ are supported. Named EA operations accept case-insensitive ASCII names up to 254
 Windows name restrictions; values follow native EA storage limits. Assigning zero
 length deletes a native EA, so NTFS cannot store a present-empty EA. Removal
 queries presence before deletion on the same handle; concurrent mutation is not
-atomic. Protected `$Kernel.` removal is explicitly denied because Windows silently
+atomic. Protected `$Kernel.` assignment/removal is explicitly denied because Windows silently
 ignores user-mode updates in that namespace. Alternate data streams remain separate
 and untouched. The older best-effort `ListXattrs`/`SetXattrs` APIs and their
 `XattrsSupported` constant retain their existing behavior.
@@ -91,9 +98,10 @@ ordinary reads is safe to remove. Ordinary unrelated attributes and file content
 are preserved in the tested profile.
 
 The Mac tests compare reads and removals with `/usr/bin/xattr`, cover file/directory
-and held symlink identity, and assert real ACL-denial errors. APFS normalizes an
-empty ResourceFork and all-zero FinderInfo to absence; an ordinary empty
-attribute remains present. Linux tests cover permission denial, final-link
+and held symlink identity, and assert real ACL-denial errors. APFS normalizes a
+fresh empty ResourceFork and all-zero FinderInfo to absence; an ordinary empty
+attribute remains present. An empty or shorter assignment over an existing
+resource fork does not necessarily truncate its previous bytes. Linux tests cover permission denial, final-link
 behavior and rejection of `O_PATH` handles. Windows tests perform real file/directory EA creation, query, bounded read and
 removal, including 60,000-byte values, case-insensitive lookup, empty-value
 normalization, moved handles, hard links, old-name decoys, dangling and held

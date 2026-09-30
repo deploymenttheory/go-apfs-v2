@@ -11,3 +11,5 @@ func xattrRangeError(error) bool                              { return false }
 func strictXattrError(err error) error                        { return err }
 
 func listVisibleXattrFD(int, int) ([]string, error) { return nil, ErrXattrUnsupported }
+
+func setVisibleXattrFD(int, string, []byte) error { return ErrXattrUnsupported }
