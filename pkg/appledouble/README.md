@@ -151,7 +151,7 @@ of this roadmap delivered. These phases are not estimates of remaining PR count.
 
 | Phase | Current state | Completion gate |
 | --- | --- | --- |
-| 1. ACL application | Source acquisition, image copying, volume policy, independent image timestamps/flags, ordered stat staging and inner copy routing implemented; providers and outer lifecycle remain | Source acquisition, authorization, actual writes and restoration ordering qualified together |
+| 1. ACL application | Source acquisition, image copying, volume policy, independent image timestamps/flags, ordered stat staging, inner copy routing and ordinary xattr/image execution implemented; full unpack and host providers remain | Source acquisition, authorization, actual writes and restoration ordering qualified together |
 | 2. Quarantine | Conversion and much of application policy implemented; context/integration gaps open | Remaining process contexts and ordered restoration qualify against native behavior |
 | 3. Large values and allocation | Known native differences remain | Oversized values, aggregates, forks and allocation policy have explicit, tested behavior |
 | 4. Shared filesystem transport | Host primitives and exact image permissions available; complete metadata transport outstanding | APFS/HFS+ extract-and-repack preserves logical metadata on all three OSes |
@@ -224,6 +224,12 @@ of this roadmap delivered. These phases are not estimates of remaining PR count.
    writer APIs compose through this coordinator with identical direct/staged
    image hashes on all three OSes. The unpack delegate still owns its internal
    deferred ACL-before-stat sequence; this is not a complete unpack provider.
+   [Ordinary unpack xattr restoration](../../docs/appledouble-xattr-restoration.md)
+   now executes native callback/intent/error rules and binds them to both image
+   writers. Hard-link aliases update together, Finish cancellation retains an
+   applied write, and HFS resource forks use their existing catalog storage.
+   4,088 controlled cases and 180 native applications qualify the executor;
+   all three OSes replay those observations and reproduce four image hashes.
    **Remaining:** native host write
    adapters, live host source acquisition,
    privileged/sandbox authorization contexts, unpack internals and outer
@@ -233,11 +239,12 @@ of this roadmap delivered. These phases are not estimates of remaining PR count.
    The request builder is not a completed native backend; foreign metadata carriers are integrated
    in phase 4.
 
-   **Next implementation:** bind held native/foreign host metadata and destination
-   write adapters to these routes, including creation inheritance, xattr/data
-   transport and unpack's deferred ACL-before-stat sequence. Integrate outer
-   permission restoration and resource cleanup. Keep one
-   pure-Go implementation on Linux, macOS and Windows.
+   **Next implementation:** integrate destination-xattr cleanup and ordered
+   record dispatch with the existing ordinary xattr, quarantine, security and stat
+   stages. The unpack provider must preserve separate FinderInfo/resource-fork
+   slot rules and deferred ACL-before-stat ordering. Held host/foreign carriers,
+   creation inheritance, outer permission restoration and resource cleanup remain
+   required, with one pure-Go implementation on Linux, macOS and Windows.
 2. **Quarantine context and transport qualification.** Implemented: serialized
    and filesystem conversion, ordered updates, application planning, raw
    destination-state handling and file/directory/symlink destination policy.

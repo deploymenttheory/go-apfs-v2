@@ -27,8 +27,8 @@ import (
 )
 
 // Expected facts about the acceptance image (default: Firefox 150),
-// overridable via environment to swap artifacts. CI runs this suite twice:
-// once against Firefox 150 (HFS+) and once against Zed (APFS).
+// overridable via environment to swap artifacts. CI runs the same suite for
+// each pinned vendor image; see docs/vendor-dmg-acceptance.md.
 var (
 	acceptanceVolumeName = envOr("APFS_ACCEPTANCE_VOLNAME", "Firefox")
 	acceptanceAppBundle  = envOr("APFS_ACCEPTANCE_APP", "Firefox.app")
@@ -109,7 +109,20 @@ func acceptanceInfoJSON(t *testing.T, dmg string) acceptanceInfo {
 
 func TestAcceptanceInfo(t *testing.T) {
 	dmg := acceptanceDMG(t)
+	if expected := os.Getenv("APFS_ACCEPTANCE_SHA256"); expected != "" {
+		actual, err := sha256File(dmg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if actual != expected {
+			t.Fatalf("vendor DMG SHA256 = %s, want %s", actual, expected)
+		}
+		attest(t, "vendor DMG SHA256: %s", actual)
+	}
 	info := acceptanceInfoJSON(t, dmg)
+	if expected := os.Getenv("APFS_ACCEPTANCE_FILESYSTEM"); expected != "" && info.FileSystem != expected {
+		t.Fatalf("file system = %q, want %q", info.FileSystem, expected)
+	}
 
 	if info.Volumes[0].Name != acceptanceVolumeName {
 		t.Errorf("volume name = %q, want %q", info.Volumes[0].Name, acceptanceVolumeName)
@@ -299,7 +312,10 @@ func TestAcceptanceGroundTruthAgainstHdiutil(t *testing.T) {
 
 	var checked int
 	err := filepath.WalkDir(mountPoint, func(path string, entry fs.DirEntry, err error) error {
-		if err != nil || !entry.Type().IsRegular() {
+		if err != nil {
+			return err
+		}
+		if !entry.Type().IsRegular() {
 			return nil
 		}
 		rel, err := filepath.Rel(mountPoint, path)
@@ -309,7 +325,7 @@ func TestAcceptanceGroundTruthAgainstHdiutil(t *testing.T) {
 
 		truthSum, err := sha256File(path)
 		if err != nil {
-			return nil // unreadable via mount (permissions); not our bug
+			return fmt.Errorf("native file %s: %w", rel, err)
 		}
 		ourSum, err := sha256File(filepath.Join(dest, rel))
 		if err != nil {
@@ -363,12 +379,15 @@ func TestAcceptancePackRoundTrip(t *testing.T) {
 	// Content invariant: the repacked image extracts to the same files.
 	origDir := t.TempDir()
 	reDir := t.TempDir()
-	run(t, "extract", "-q", dmg, "-C", origDir)
-	run(t, "extract", "-q", repacked, "-C", reDir)
+	mustRun(t, "extract", "-q", dmg, "-C", origDir)
+	mustRun(t, "extract", "-q", repacked, "-C", reDir)
 	origManifest := extractionManifest(t, origDir)
 	reManifest := extractionManifest(t, reDir)
 	if len(origManifest) == 0 {
 		t.Fatal("original extraction produced no files")
+	}
+	if len(origManifest) != len(reManifest) {
+		t.Fatalf("file count changed after repack: %d -> %d", len(origManifest), len(reManifest))
 	}
 	for path, sum := range origManifest {
 		if reManifest[path] != sum {
@@ -388,19 +407,27 @@ func TestAcceptancePackRoundTrip(t *testing.T) {
 func extractionManifest(t *testing.T, root string) map[string]string {
 	t.Helper()
 	manifest := map[string]string{}
-	filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
-		if err != nil || !entry.Type().IsRegular() {
+	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !entry.Type().IsRegular() {
 			return nil
 		}
 		rel, err := filepath.Rel(root, path)
 		if err != nil {
-			return nil
+			return err
 		}
-		if sum, err := sha256File(path); err == nil {
-			manifest[filepath.ToSlash(rel)] = sum
+		sum, err := sha256File(path)
+		if err != nil {
+			return err
 		}
+		manifest[filepath.ToSlash(rel)] = sum
 		return nil
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	return manifest
 }
 
