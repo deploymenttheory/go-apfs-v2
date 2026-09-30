@@ -84,11 +84,16 @@ func capture() error {
 	if err != nil {
 		return err
 	}
+	provider, err := os.ReadFile("testdata/appledouble/native/xattr-provider-context.h")
+	if err != nil {
+		return err
+	}
 	resolved, err := resolveStubs(executable, functions)
 	if err != nil {
 		return err
 	}
 	observation := map[string]any{"resolved_call_stubs": resolved, "evidence": "installed-binary-disassembly", "capture": true, "passed": false, "host": strings.TrimSpace(string(host)), "goarch": runtime.GOARCH, "revision": strings.TrimSpace(string(revision)), "image_uuid": string(image[1]), "image_base": string(image[2]), "image_path": "/usr/lib/system/libcopyfile.dylib", "source_sha256": fmt.Sprintf("%x", sha256.Sum256(probe)), "functions": functions}
+	observation["provider_sha256"] = fmt.Sprintf("%x", sha256.Sum256(provider))
 	encoded, err := json.MarshalIndent(observation, "", "  ")
 	if err != nil {
 		return err

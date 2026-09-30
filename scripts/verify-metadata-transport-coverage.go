@@ -36,7 +36,7 @@ func verify() error {
 	defer log.Close()
 	var transcript bytes.Buffer
 	profile := filepath.Join(dir, "coverage.out")
-	cmd := exec.Command("go", "test", "-count=1", "-json", "-run", "^(TestCarrier|TestCaptureXattrs|TestLibSystem|TestRecordAttribute|TestNativeBaseline|TestOpenWalk|TestLazyCarrier|TestNodeAndValue|TestValue|TestXattrValue|TestVolumeXattrValues|TestStreamedValues|TestOpenEntryTree|TestHFSValues|TestProjection|TestQuarantineCapture|TestQuarantineFile|TestACLIdentityCapture|TestAppleDoubleObject|TestXattrIntent|TestSandboxCapture)", "-covermode=atomic", "-coverprofile="+profile, "-coverpkg=./pkg/metatransport,./pkg/hostmeta,./internal/hostwalk,./internal/tools,./pkg/apfs,./pkg/apfswrite,./pkg/hfsplus,./internal/decmpfs,./internal/testutil/largefork", "./pkg/metatransport", "./pkg/hostmeta", "./internal/hostwalk", "./internal/tools", "./pkg/apfs", "./pkg/apfswrite", "./pkg/hfsplus", "./internal/decmpfs", "./internal/testutil/largefork")
+	cmd := exec.Command("go", "test", "-count=1", "-json", "-run", "^(TestCarrier|TestCaptureXattrs|TestLibSystem|TestRecordAttribute|TestNativeBaseline|TestOpenWalk|TestLazyCarrier|TestNodeAndValue|TestValue|TestXattrValue|TestVolumeXattrValues|TestStreamedValues|TestOpenEntryTree|TestHFSValues|TestProjection|TestQuarantineCapture|TestQuarantineFile|TestACLIdentityCapture|TestAppleDoubleObject|TestPathCapturedRemoval|TestPathCapturedWrite|TestXattrIntent|TestSandboxCapture)", "-covermode=atomic", "-coverprofile="+profile, "-coverpkg=./pkg/metatransport,./pkg/hostmeta,./internal/hostwalk,./internal/tools,./pkg/apfs,./pkg/apfswrite,./pkg/hfsplus,./internal/decmpfs,./internal/testutil/largefork", "./pkg/metatransport", "./pkg/hostmeta", "./internal/hostwalk", "./internal/tools", "./pkg/apfs", "./pkg/apfswrite", "./pkg/hfsplus", "./internal/decmpfs", "./internal/testutil/largefork")
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 	cmd.Stdout = io.MultiWriter(os.Stdout, log, &transcript)
 	cmd.Stderr = io.MultiWriter(os.Stderr, log)
@@ -87,6 +87,8 @@ func verify() error {
 	coverageFiles["pkg/hostmeta/file_times.go"] = [2]int{}
 	coverageFiles["internal/decmpfs/carrier_storage.go"] = [2]int{}
 	coverageFiles["internal/tools/extract_projection_readback.go"] = [2]int{}
+	coverageFiles["internal/tools/extract_projection_capture.go"] = [2]int{}
+	coverageFiles["pkg/hostmeta/appledouble_object_removal.go"] = [2]int{}
 	coverageFiles["pkg/hostmeta/quarantine_capture.go"] = [2]int{}
 	for _, file := range []string{"pkg/hostmeta/acl_identity_capture.go", "pkg/hostmeta/quarantine_file.go", "pkg/hostmeta/resource_fork.go", "pkg/hostmeta/xattr_values.go", "pkg/metatransport/native_values.go", "internal/hostwalk/native_values.go"} {
 		coverageFiles[file] = [2]int{}

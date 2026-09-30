@@ -22,6 +22,7 @@ type objectAttributes interface {
 	read(string, []byte) (int, error)
 	write(string, []byte) error
 	remove(string) error
+	truncateFork(uint32) error
 	quarantine(context.Context, appledouble.QuarantineProfile) (*appledouble.Quarantine, error)
 	applyQuarantine(context.Context, *appledouble.Quarantine, QuarantineProcessCapture, uint32) error
 	noSetID() (bool, error)
@@ -47,6 +48,11 @@ type AppleDoubleObject struct {
 type CapturedAppleDoubleObject struct {
 	State      MetadataState
 	Attributes []appledouble.StreamAttr
+	// Removals supplies explicit observed provider effects. Unlisted names use
+	// logical deletion; this does not claim to reproduce unknown kernel policy.
+	Removals []CapturedXattrRemoval
+	// Writes binds observed fsetxattr effects to exact input and before bytes.
+	Writes     []CapturedXattrWrite
 	Identities appledouble.ACLIdentitySnapshot
 	Process    QuarantineProcessCapture
 	Sandboxed  bool
@@ -71,6 +77,12 @@ func NewCapturedAppleDoubleObject(c CapturedAppleDoubleObject) (*AppleDoubleObje
 	}
 	attrs, err := newLogicalObjectAttributes(meta, c.Attributes, c.NoSetID)
 	if err != nil {
+		return nil, err
+	}
+	if err = captureXattrRemovals(attrs, c.Removals); err != nil {
+		return nil, err
+	}
+	if err = captureXattrWrites(attrs, c.Writes); err != nil {
 		return nil, err
 	}
 	c.Process.Agent = bytes.Clone(c.Process.Agent)

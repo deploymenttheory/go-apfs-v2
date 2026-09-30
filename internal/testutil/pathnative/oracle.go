@@ -28,13 +28,31 @@ type AttributeValue struct {
 	Size, Read, SizeErrno, ReadErrno int
 }
 type InputContext struct {
-	SourceData                                   SourceData
-	Sandboxed                                    bool
-	SourceSecurityFollow, SourceSecurityNoFollow SourceSecurity
-	SourceFollow, SourceNoFollow                 AttributeContext
-	DestinationFollow, DestinationNoFollow       AttributeContext
-	Target                                       AttributeContext
+	SourceProviderFollow, SourceProviderNoFollow           PathProviderContext
+	DestinationProviderFollow, DestinationProviderNoFollow PathProviderContext
+	TargetProvider                                         PathProviderContext
+	SourceData                                             SourceData
+	Sandboxed                                              bool
+	SourceSecurityFollow, SourceSecurityNoFollow           SourceSecurity
+	SourceFollow, SourceNoFollow                           AttributeContext
+	DestinationFollow, DestinationNoFollow                 AttributeContext
+	Target                                                 AttributeContext
 }
+type PathProviderContext struct {
+	OpenErrno int
+	State     RemovalContext
+}
+
+// WithoutObjectIdentity compares equivalent, separately created fixtures while
+// preserving owner, permissions, ACLs, filesystem, process and descriptor flags.
+// Original captures keep dev/inode for identity checks within each operation.
+func (c InputContext) WithoutObjectIdentity() InputContext {
+	for _, p := range []*PathProviderContext{&c.SourceProviderFollow, &c.SourceProviderNoFollow, &c.DestinationProviderFollow, &c.DestinationProviderNoFollow, &c.TargetProvider} {
+		p.State.Device, p.State.Inode = 0, 0
+	}
+	return c
+}
+
 type SourceData struct {
 	NotRegular bool
 	Errno      int
@@ -64,6 +82,7 @@ type Case struct {
 }
 type Fixture struct {
 	Revision, Host, HelperSHA256 string
+	ProviderSHA256               string
 	Cases                        []Case
 }
 

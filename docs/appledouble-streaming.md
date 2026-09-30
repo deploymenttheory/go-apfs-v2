@@ -54,7 +54,11 @@ dangling links and links whose targets are outside the payload root. This captur
 the link namespace, not the target namespace.
 
 Extraction records both its initial native baseline and its post-projection
-baseline using these sized values and `StoreAttributeValues`. Neither baseline
+baseline using these sized values and `StoreAttributeValues`. Projection readback
+uses the contained root on every OS, including Linux no-follow symlinks, and
+checks identity against the descriptor that received the projection. Failed
+readback retains the prior baseline and reports the failure; it never replaces
+known host metadata with a fabricated empty namespace. Neither baseline
 requires materializing a resource fork. The carrier retains complete logical
 values when native projection has a capacity or platform constraint; projection
 outcomes remain separate from preservation success. Borrowed sources and stores

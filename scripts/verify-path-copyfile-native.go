@@ -83,6 +83,11 @@ func verify(capture bool) error {
 		return err
 	}
 	fixture := pathnative.Fixture{Revision: strings.TrimSpace(string(revision)), Host: string(host), HelperSHA256: fmt.Sprintf("%x", sha256.Sum256(helperBytes)), Cases: cases}
+	provider, err := os.ReadFile("testdata/appledouble/native/xattr-provider-context.h")
+	if err != nil {
+		return err
+	}
+	fixture.ProviderSHA256 = fmt.Sprintf("%x", sha256.Sum256(provider))
 	encoded, err := json.MarshalIndent(fixture, "", "  ")
 	if err != nil {
 		return err
@@ -106,7 +111,7 @@ func verify(capture bool) error {
 		if err = json.NewDecoder(z).Decode(&approved); err != nil {
 			return err
 		}
-		if approved.HelperSHA256 != fixture.HelperSHA256 || len(approved.Cases) != len(cases) {
+		if approved.HelperSHA256 != fixture.HelperSHA256 || approved.ProviderSHA256 != fixture.ProviderSHA256 || len(approved.Cases) != len(cases) {
 			return fmt.Errorf("native path helper/case inventory changed")
 		}
 		for i, current := range cases {
@@ -126,8 +131,10 @@ func verify(capture bool) error {
 				current.Native.FreeCode != prior.Native.FreeCode || current.Native.FreeErrno != prior.Native.FreeErrno {
 				return fmt.Errorf("native path case %d caller-owned state behavior changed", i)
 			}
-			if reflect.DeepEqual(current.Native.Input, prior.Native.Input) {
+			if reflect.DeepEqual(current.Native.Input.WithoutObjectIdentity(), prior.Native.Input.WithoutObjectIdentity()) {
 				matchedContexts++
+				current.Native.Input, prior.Native.Input = current.Native.Input.WithoutObjectIdentity(), prior.Native.Input.WithoutObjectIdentity()
+				current.Native.Output, prior.Native.Output = current.Native.Output.WithoutObjectIdentity(), prior.Native.Output.WithoutObjectIdentity()
 				if !reflect.DeepEqual(current.Native, prior.Native) {
 					return fmt.Errorf("native path case %d behavior changed with identical input context", i)
 				}
@@ -153,7 +160,7 @@ func verify(capture bool) error {
 		}
 	}
 	hashes := map[string]string{}
-	for _, p := range []string{source, "testdata/appledouble/native/path-link-write.c", "scripts/verify-path-copyfile-native.go", "internal/testutil/pathnative/oracle.go", "pkg/hostmeta/appledouble_path_native_test.go"} {
+	for _, p := range []string{source, "testdata/appledouble/native/xattr-provider-context.h", "testdata/appledouble/native/path-link-write.c", "scripts/verify-path-copyfile-native.go", "internal/testutil/pathnative/oracle.go", "internal/testutil/pathnative/removal.go", "pkg/hostmeta/appledouble_path_native_test.go"} {
 		b, err := os.ReadFile(p)
 		if err != nil {
 			return err

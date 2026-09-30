@@ -241,13 +241,39 @@ func supervise(oracle string) {
 						must(f.Chmod(mode))
 						must(os.Chtimes(f.Name(), time.Unix(1600000000, 0), time.Unix(1600000001, 0)))
 					}
+					goStart := time.Now().UTC()
 					actual := invoke(childPath, []string{"-child-operation", operation, "-stat=" + strconv.FormatBool(stat)}, identity.uid, identity.gid, source, files["go-target"])
+					goEnd := time.Now().UTC()
+					nativeStart := time.Now().UTC()
 					expected := invoke(native, []string{"fd-" + operation, "0", statArg}, identity.uid, identity.gid, source, files["native-target"])
+					nativeEnd := time.Now().UTC()
 					if actual.Code != expected.Code || (actual.Code < 0 && actual.Errno != expected.Errno) {
 						panic(fmt.Sprintf("%s: result differs Go=%+v native=%+v", name, actual, expected))
 					}
 					goMetadata, nativeMetadata := inspect(native, files["go-target"].Name()), inspect(native, files["native-target"].Name())
-					if !reflect.DeepEqual(goMetadata, nativeMetadata) {
+					goComparable, nativeComparable := goMetadata, nativeMetadata
+					timestampPolicy := "exact source or unchanged destination timestamp"
+					if identity.uid != 0 && operation == "pack" {
+						// Inherited writable descriptors permit PACK data writes, but a
+						// nonowner cannot install the root-owned source's fixed mtime.
+						// Native observation retains each operation's actual write time.
+						// Check both independently against their own invocation bounds;
+						// neither the old destination nor source timestamp may pass.
+						for _, observation := range []struct {
+							label      string
+							metadata   metadata
+							start, end time.Time
+						}{{"Go", goMetadata, goStart, goEnd}, {"native", nativeMetadata, nativeStart, nativeEnd}} {
+							stamp := time.Unix(observation.metadata.Mtime, observation.metadata.Nano)
+							if observation.metadata.Nano < 0 || observation.metadata.Nano >= int64(time.Second) || observation.end.Before(observation.start) || stamp.Before(observation.start) || stamp.After(observation.end) {
+								panic(fmt.Sprintf("%s: %s write timestamp %s outside actual invocation [%s, %s]", name, observation.label, stamp.Format(time.RFC3339Nano), observation.start.Format(time.RFC3339Nano), observation.end.Format(time.RFC3339Nano)))
+							}
+						}
+						timestampPolicy = "each nonowner PACK mtime strictly within its own recorded invocation"
+						goComparable.Mtime, goComparable.Nano = 0, 0
+						nativeComparable.Mtime, nativeComparable.Nano = 0, 0
+					}
+					if !reflect.DeepEqual(goComparable, nativeComparable) {
 						goJSON, _ := json.Marshal(goMetadata)
 						nativeJSON, _ := json.Marshal(nativeMetadata)
 						panic(fmt.Sprintf("%s: independently observed destination metadata differs Go=%s native=%s", name, goJSON, nativeJSON))
@@ -259,7 +285,9 @@ func supervise(oracle string) {
 					for _, f := range files {
 						must(f.Close())
 					}
-					cases = append(cases, map[string]any{"name": name, "code": actual.Code, "failure_errno": actual.Errno, "output_sha256": hash(goBytes), "metadata_equal": true, "verified_real_uid": identity.uid})
+					cases = append(cases, map[string]any{"name": name, "code": actual.Code, "failure_errno": actual.Errno, "output_sha256": hash(goBytes), "metadata_equivalent": true, "non_timestamp_metadata_equal": true, "verified_real_uid": identity.uid,
+						"timestamp_policy": timestampPolicy, "go_metadata": goMetadata, "native_metadata": nativeMetadata,
+						"go_invocation_start": goStart, "go_invocation_end": goEnd, "native_invocation_start": nativeStart, "native_invocation_end": nativeEnd})
 				}
 			}
 		}

@@ -153,3 +153,27 @@ func TestAppleDoubleObjectNativeHeldRoundTrip(t *testing.T) {
 		t.Fatal(info, err)
 	}
 }
+
+func TestAppleDoubleObjectNativeTruncateFork(t *testing.T) {
+	f, err := os.CreateTemp(t.TempDir(), "fork")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	a := &hostObjectAttributes{file: f}
+	if err := a.write(appledouble.ResourceForkName, []byte("owned fork")); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.truncateFork(0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.size(appledouble.ResourceForkName); !missingXattr(err) {
+		t.Fatal("native fork not truncated", err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.truncateFork(0600); err == nil {
+		t.Fatal("closed source accepted")
+	}
+}

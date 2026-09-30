@@ -59,10 +59,7 @@ func (p *appleDoublePath) openDestinationFork() []HeldLifecycleStep {
 	if p.options.Captured != nil {
 		// Creating/truncating an empty Darwin fork reads back as absent. The
 		// logical route must perform this effect on every receiving platform.
-		err = p.destination.attrs.remove(appledouble.ResourceForkName)
-		if errors.Is(err, os.ErrNotExist) {
-			err = nil
-		}
+		err = p.destination.attrs.truncateFork(p.sourceMetadata.State.Stat.Mode | 0200)
 		if err == nil {
 			p.destinationFork = logicalPathFork{}
 		}

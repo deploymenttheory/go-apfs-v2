@@ -407,6 +407,18 @@ jobs:
           name: path-security-native
           path: artifacts/path-security-native/
           if-no-files-found: error
+      - name: Native attribute mutation provider contexts and portable replay
+        if: "!cancelled() && runner.os == 'macOS'"
+        env:
+          CGO_ENABLED: "0"
+        run: go run scripts/verify-xattr-remove-effects-native.go
+      - name: Upload xattr-remove-effects-native evidence
+        if: always() && runner.os == 'macOS'
+        uses: actions/upload-artifact@v7
+        with:
+          name: xattr-remove-effects-native
+          path: artifacts/xattr-remove-effects-native/
+          if-no-files-found: error
       - name: Native held AppleDouble object byte and metadata parity
         if: "!cancelled() && runner.os == 'macOS'"
         env:

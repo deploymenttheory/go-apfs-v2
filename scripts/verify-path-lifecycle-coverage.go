@@ -133,7 +133,7 @@ func verify() error {
 	if passed < 50 {
 		return fmt.Errorf("incomplete path lifecycle tests: %d", passed)
 	}
-	files := []string{"scripts/verify-path-lifecycle-coverage.go", "go.mod", "go.sum", "pkg/hostmeta/*.go", "internal/evidenceaudit/*.go", "internal/testutil/pathnative/*.go", "internal/testutil/pathsecurity/*.go", "testdata/appledouble/native/path-*.c", "testdata/appledouble/native/path-*.json.gz"}
+	files := []string{"scripts/verify-path-lifecycle-coverage.go", "go.mod", "go.sum", "pkg/hostmeta/*.go", "internal/evidenceaudit/*.go", "internal/testutil/pathnative/*.go", "internal/testutil/pathsecurity/*.go", "testdata/appledouble/native/path-*.c", "testdata/appledouble/native/path-*.json.gz", "testdata/appledouble/native/xattr-provider-context.h", "testdata/appledouble/native/xattr-remove-effects*"}
 	hashes, e := evidenceaudit.SourceHashes(os.DirFS("."), files)
 	if e != nil {
 		return e

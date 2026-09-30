@@ -9,6 +9,19 @@ selecting a carrier does not authorize treating arbitrary user files as metadata
 
 The production path is `Extractor.MetadataRoot` followed by the APFS or HFS+
 writer's `WalkOptions.MetadataRoot`. Both ends must explicitly select the carrier.
+The CLI requires `--metadata-root` whenever `--xattrs` or `--preserve-meta` is
+requested and rejects a missing selection before opening the image or extracting
+payloads. Payload-only extraction remains available without metadata flags.
+`--project-native` additionally attempts host materialization while retaining the
+complete logical source in the carrier.
+
+The extraction report separates preservation from host writes. `xattrsCarried`
+counts preserved logical attributes. The existing `xattrsRestored` field counts
+successful native write calls, including normalization; `xattrsUnwritable` counts
+attributes retained without a successful native write. `nativeProjection` gives
+each write's outcome and exact-readback status. Carrier-only extraction reports
+preservation without claiming that native attributes were written.
+
 Image readers supply `Metadata(name)` for numeric inode properties and four times;
 `XattrValues` supplies borrowed raw attribute and security readers. Inode IDs establish aliases
 within one immutable source volume, never across different volumes.

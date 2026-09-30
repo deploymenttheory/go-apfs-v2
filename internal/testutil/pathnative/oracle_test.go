@@ -39,6 +39,10 @@ func TestPathNativeFixtureInventory(t *testing.T) {
 	if fixture.HelperSHA256 != fmt.Sprintf("%x", sha256.Sum256(helper)) || fixture.Revision == "" || fixture.Host == "" {
 		t.Fatal("native source provenance changed or absent")
 	}
+	provider, err := os.ReadFile("../../../testdata/appledouble/native/xattr-provider-context.h")
+	if err != nil || fixture.ProviderSHA256 != fmt.Sprintf("%x", sha256.Sum256(provider)) {
+		t.Fatal("native provider context source provenance changed or absent", err)
+	}
 	generated := Cases()
 	if len(fixture.Cases) != 552 || len(generated) != len(fixture.Cases) {
 		t.Fatalf("incomplete inventory: native%d generated%d", len(fixture.Cases), len(generated))
@@ -48,5 +52,21 @@ func TestPathNativeFixtureInventory(t *testing.T) {
 		if !reflect.DeepEqual(observed, generated[i]) {
 			t.Fatalf("native input changed at case%d: %+v != %+v", i, observed, generated[i])
 		}
+	}
+}
+
+func TestPathNativeContextIdentity(t *testing.T) {
+	p := PathProviderContext{State: RemovalContext{Device: 11, Inode: 22, UID: 501, GID: 20, Mode: 0600, MountFlags: 7, ACLHex: "retained"}}
+	c := InputContext{SourceProviderFollow: p, SourceProviderNoFollow: p, DestinationProviderFollow: p, DestinationProviderNoFollow: p, TargetProvider: p}
+	got := c.WithoutObjectIdentity()
+	for _, state := range []PathProviderContext{got.SourceProviderFollow, got.SourceProviderNoFollow, got.DestinationProviderFollow, got.DestinationProviderNoFollow, got.TargetProvider} {
+		want := p
+		want.State.Device, want.State.Inode = 0, 0
+		if state != want {
+			t.Fatal("non-identity provider context was changed", state)
+		}
+	}
+	if c.SourceProviderFollow != p || c.DestinationProviderFollow != p || c.TargetProvider != p {
+		t.Fatal("original recorded identity was mutated")
 	}
 }

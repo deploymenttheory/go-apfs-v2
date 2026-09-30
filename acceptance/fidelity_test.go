@@ -5,6 +5,7 @@
 package acceptance
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/exitcode"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/fidelity"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
 )
 
 // lossyTree builds a directory holding, as far as the platform allows, one of
@@ -228,12 +230,10 @@ func TestPackStrictOnRepackSucceeds(t *testing.T) {
 // TestExtractXattrsRestoresAttributes checks --xattrs actually writes the
 // attributes onto the extracted files, and that omitting it leaves them off.
 func TestExtractXattrsRestoresAttributes(t *testing.T) {
-	if !xattrsReadable() {
-		t.Skip("extended attributes are not readable on this platform")
-	}
-
 	withFlag := t.TempDir()
-	mustRun(t, "extract", fixtureDMG, "-C", withFlag, "--xattrs", "-q")
+	metadata := t.TempDir()
+	mustRun(t, "extract", fixtureDMG, "-C", withFlag, "--xattrs", "--metadata-root", metadata, "--project-native", "-q")
+	assertCarriedFixtureAttrs(t, withFlag, metadata)
 
 	without := t.TempDir()
 	mustRun(t, "extract", fixtureDMG, "-C", without, "-q")
@@ -264,11 +264,11 @@ func TestExtractXattrsRestoresAttributes(t *testing.T) {
 	// describe content the file no longer holds.
 	compressed := filepath.Join(withFlag, "compressed.txt")
 	if _, err := os.Stat(compressed); err == nil {
-		attrs, err := readXattrNames(compressed)
+		attrs, err := hostmeta.CaptureXattrsNoFollow(context.Background(), compressed, hostmeta.XattrCaptureLimits{NameBytes: hostmeta.MaxXattrListSize, ValueBytes: 64 << 20, TotalBytes: 256 << 20})
 		if err != nil {
 			t.Fatalf("reading attributes of %s: %v", compressed, err)
 		}
-		for _, name := range attrs {
+		for name := range attrs {
 			if name == "com.apple.decmpfs" || name == "com.apple.ResourceFork" {
 				t.Errorf("%s was restored onto a decompressed file; it describes content that is no longer there", name)
 			}
@@ -278,12 +278,9 @@ func TestExtractXattrsRestoresAttributes(t *testing.T) {
 
 // TestExtractXattrsReports checks the counts reach the user.
 func TestExtractXattrsReports(t *testing.T) {
-	if !xattrsReadable() {
-		t.Skip("extended attributes are not readable on this platform")
-	}
 	dest := t.TempDir()
-
-	stdout := mustRun(t, "extract", fixtureDMG, "-C", dest, "--xattrs", "-o", "json")
+	metadata := t.TempDir()
+	stdout := mustRun(t, "extract", fixtureDMG, "-C", dest, "--xattrs", "--metadata-root", metadata, "-o", "json")
 	var summary map[string]any
 	if err := json.Unmarshal([]byte(stdout), &summary); err != nil {
 		t.Fatalf("extract JSON invalid: %v\n%s", err, stdout)
@@ -294,6 +291,10 @@ func TestExtractXattrsReports(t *testing.T) {
 	if _, ok := summary["xattrsUnwritable"]; !ok {
 		t.Error("xattrsUnwritable missing from the extract report")
 	}
+	if intField(t, summary, "xattrsCarried") <= 0 || intField(t, summary, "xattrsUnwritable") != 0 {
+		t.Fatal("selected attributes were not preserved", summary)
+	}
+	assertCarriedFixtureAttrs(t, dest, metadata)
 }
 
 // TestExtractCompletesWithXattrs is the regression test for an infinite loop:
@@ -302,7 +303,8 @@ func TestExtractXattrsReports(t *testing.T) {
 // terminated. Nothing reached that path until --xattrs existed.
 func TestExtractCompletesWithXattrs(t *testing.T) {
 	dest := t.TempDir()
-	_, stderr, code := runTimeout(t, packTimeout, "extract", fixtureDMG, "-C", dest, "--xattrs", "-q")
+	metadata := t.TempDir()
+	_, stderr, code := runTimeout(t, packTimeout, "extract", fixtureDMG, "-C", dest, "--xattrs", "--metadata-root", metadata, "-q")
 	if code != exitcode.OK {
 		t.Errorf("extract --xattrs exited %s\nstderr: %s", exitcode.Name(code), stderr)
 	}
@@ -329,7 +331,7 @@ func TestPackCarriesXattrs(t *testing.T) {
 		mustRun(t, "pack", dir, out, "--fs", "apfs", "--volname", "XATTR", "-q")
 
 		dest := t.TempDir()
-		mustRun(t, "extract", out, "-C", dest, "--xattrs", "-q")
+		mustRun(t, "extract", out, "-C", dest, "--xattrs", "--metadata-root", t.TempDir(), "--project-native", "-q")
 
 		names, err := readXattrNames(filepath.Join(dest, "file.txt"))
 		if err != nil {
@@ -354,7 +356,7 @@ func TestPackCarriesXattrs(t *testing.T) {
 		}
 
 		dest := t.TempDir()
-		mustRun(t, "extract", out, "-C", dest, "--xattrs", "-q")
+		mustRun(t, "extract", out, "-C", dest, "--xattrs", "--metadata-root", t.TempDir(), "--project-native", "-q")
 
 		names, err := readXattrNames(filepath.Join(dest, "file.txt"))
 		if err != nil {

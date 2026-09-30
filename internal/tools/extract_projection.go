@@ -254,7 +254,7 @@ func (e *Extractor) verifyProjection(r metatransport.Record, native map[string][
 	}
 }
 
-func (e *Extractor) projectCarrier(ctx context.Context, payload *os.Root, store *metatransport.Store, records []metatransport.Record, limits hostmeta.XattrCaptureLimits, makeBackend func(*os.File) projectionBackend, capture func(context.Context, *os.File, hostmeta.XattrCaptureLimits) (map[string][]byte, error), captureValues ...func(context.Context, *os.File, hostmeta.XattrCaptureLimits) (map[string]appledouble.Value, error)) error {
+func (e *Extractor) projectCarrier(ctx context.Context, payload *os.Root, store *metatransport.Store, records []metatransport.Record, limits hostmeta.XattrCaptureLimits, makeBackend func(*os.File) projectionBackend, capture func(context.Context, *os.File, hostmeta.XattrCaptureLimits) (map[string][]byte, error), captureValues ...func(context.Context, *os.Root, string, *os.File, hostmeta.XattrCaptureLimits) (map[string]appledouble.Value, error)) error {
 	for i := len(records) - 1; i >= 0; i-- {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -281,31 +281,29 @@ func (e *Extractor) projectCarrier(ctx context.Context, payload *os.Root, store 
 		var nativeValues map[string]appledouble.Value
 		var captureErr error
 		if len(captureValues) > 0 {
-			nativeValues, captureErr = captureValues[0](ctx, f, limits)
+			nativeValues, captureErr = captureValues[0](ctx, payload, filepath.FromSlash(r.Materialized), f, limits)
 		} else {
 			native, captureErr = capture(ctx, f, limits)
 		}
-		if r.Kind == "symlink" && runtime.GOOS == "linux" && errors.Is(captureErr, syscall.EBADF) {
-			captureErr = errors.Join(hostmeta.ErrXattrUnsupported, captureErr)
-		}
-		r.NativeAttributes = nil
-		r.NativeCaptured = false
-		r.NativeUnsupported = false
 		switch {
 		case errors.Is(captureErr, hostmeta.ErrXattrUnsupported):
-			r.NativeUnsupported = true
+			if !r.NativeCaptured {
+				r.NativeUnsupported = true
+			}
+			e.projection(r.Original, "native-baseline", captureErr)
 		case captureErr != nil:
 			e.projection(r.Original, "native-baseline", captureErr)
 		default:
-			r.NativeCaptured = true
+			var baseline []metatransport.Attribute
 			if len(captureValues) > 0 {
-				r.NativeAttributes, err = store.StoreAttributeValues(ctx, nativeValues)
+				baseline, err = store.StoreAttributeValues(ctx, nativeValues)
 			} else {
-				r.NativeAttributes, err = store.StoreAttributes(ctx, native)
+				baseline, err = store.StoreAttributes(ctx, native)
 			}
 			if err != nil {
 				return errors.Join(err, f.Close())
 			}
+			r.NativeAttributes, r.NativeCaptured, r.NativeUnsupported = baseline, true, false
 			e.verifyProjectionRefs(*r, r.NativeAttributes)
 		}
 		if reader, ok := backend.(projectionReadback); ok {

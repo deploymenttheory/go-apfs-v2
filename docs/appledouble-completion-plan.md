@@ -133,8 +133,9 @@ Keep every existing CI gate. Add complete scenario manifests and test:
 
 Portable codec, every changed provider and each new subsystem must exceed 95%
 statement coverage on each supported OS. Retain file-level gates so new code is
-not concealed by mature code's coverage. Retain all current 33 fuzz targets and add
-streaming/carrier/lifecycle targets, overflow tests and corpus replay. Retain race,
+not concealed by mature code's coverage. The CI fuzz inventory now retains all
+35 preceding targets and adds carrier-manifest and path-lifecycle fuzzing, for
+37 targets including streaming decode. Retain overflow tests, corpus replay, race,
 Linux 386, CGO=0 six-target builds, three-GOOS lint, vet and vulnerability checks.
 
 Retain all native C/AST qualification, hdiutil and fsck comparisons and all four
@@ -203,7 +204,7 @@ is a wire-format restriction; the shared carrier and 64-bit image storage preser
 larger forks. Complete every dedicated large-value job before closing that row.
 
 Installed macOS behavior and published source are different evidence classes.
-Keep the retained installed-function captures, 548 live path observations,
+Keep the retained installed-function captures, 552 live path observations,
 controlled failure traces and current production replay together. Source ASTs
 alone do not prove newer private permission/identity-check helper behavior.
 

@@ -12,6 +12,7 @@
 #include <string.h>
 #include <stdbool.h>
 extern bool _xpc_runtime_is_app_sandboxed(void);
+#include "xattr-provider-context.h"
 
 struct notice {int what,stage;long long copied;};
 static struct notice notices[256];static unsigned notice_count;static int quit;
@@ -76,6 +77,10 @@ static void source_security(const char *path,int nofollow){
  if(acl){n=acl_size(acl);if(n<0||n>1024*1024)exit(31);bytes=malloc((size_t)n);if(!bytes||acl_copy_ext(bytes,acl,n)!=n)exit(32);acl_free(acl);}
  printf("{\"StatErrno\":%d,\"ACLErrno\":%d,\"ACLHex\":\"",se,ae);hex_bytes(bytes,n);printf("\"}");free(bytes);filesec_free(fs);
 }
+static void path_provider(const char *path,int nofollow){
+ errno=0;int fd=open(path,O_RDONLY|(nofollow?O_SYMLINK:0));int e=fd<0?errno:0;
+ printf("{\"OpenErrno\":%d,\"State\":",e);if(fd>=0){provider_context_json(fd);if(close(fd))exit(36);}else printf("{}");putchar('}');
+}
 static void input_context(const char *src,const char *dst,const char *target){
  printf("{\"SourceData\":{");
  struct stat st;errno=0;
@@ -88,7 +93,12 @@ static void input_context(const char *src,const char *dst,const char *target){
    if(n>=0&&n!=st.st_size)exit(35);printf("\"Errno\":%d,\"Hex\":\"",e);hex_bytes(bytes,n);putchar('"');free(bytes);close(fd);
   }
  }
- printf("},\"Sandboxed\":%s,\"SourceSecurityFollow\":",_xpc_runtime_is_app_sandboxed()?"true":"false");source_security(src,0);
+ printf("},\"SourceProviderFollow\":");path_provider(src,0);
+ printf(",\"SourceProviderNoFollow\":");path_provider(src,1);
+ printf(",\"DestinationProviderFollow\":");path_provider(dst,0);
+ printf(",\"DestinationProviderNoFollow\":");path_provider(dst,1);
+ printf(",\"TargetProvider\":");path_provider(target,1);
+ printf(",\"Sandboxed\":%s,\"SourceSecurityFollow\":",_xpc_runtime_is_app_sandboxed()?"true":"false");source_security(src,0);
  printf(",\"SourceSecurityNoFollow\":");source_security(src,1);
  printf(",\"SourceFollow\":");attributes(src,0);
  printf(",\"SourceNoFollow\":");attributes(src,XATTR_NOFOLLOW);

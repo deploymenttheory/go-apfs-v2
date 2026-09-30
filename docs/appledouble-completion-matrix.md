@@ -4,6 +4,11 @@ This matrix is the completion checklist for the [integrated plan](appledouble-co
 It distinguishes existing components from completed end-to-end functionality.
 No row is complete solely because its component coverage exceeds 95%.
 
+The production integration is implemented. Open rows below require the complete
+qualification set against the final committed revision; local results and CI on
+an earlier commit do not qualify subsequent edits. A discovered discrepancy must
+be resolved before the corresponding row closes.
+
 | Requirement | Existing foundation | Required closing evidence | Status |
 | --- | --- | --- | --- |
 | Binary codec | Borrowed streaming values, sequential partial mutation, native packing and retained source/AST fixtures | Final revision CI/fuzz/race and integrated lifecycle qualification | Open |
@@ -11,10 +16,10 @@ No row is complete solely because its component coverage exceeds 95%.
 | Resource forks | Bounded APFS/HFS fork writers/readers, native non-truncation, large/empty carrier values; real 4 GiB + 17 byte image/carrier/native harness | Final three-OS large-value jobs and independent Mac readback of both foreign image artifacts; documented whole-buffer sequential limit | Open |
 | Compressed storage | Types 1, 3/4,7/8,9/10,11/12,13/14; native compression bounds and independent inline forks | Final codec/transport CI; external generation-store/provider references require their separate content source | Open |
 | ACL and security | Conversion, captured identities, inheritance, image bindings; 579-case temporary-permission oracle and explicitly scoped portable replay | Final live root/nonowner supervisor and signed native/Go App Sandbox jobs; retain C-only allocator boundaries | Open |
-| Quarantine | macOS 26/27 conversion/application profiles and destination corpus | Remaining process contexts, raw source/agent capture, protection and ordered write/failure integration | Open |
+| Quarantine | macOS 26/27 conversion/application profiles, raw process/source capture, destination corpus and integrated object/path providers | Final process-context, protection, destination normalization and ordered write/failure native gates | Open |
 | Stat restoration | Image time/mode/flags storage and ordered policy executor | Live host binding, side effects, temporary permission restoration and close failures | Open |
-| Shared metadata transport | Production carrier, host baseline reconciliation, collision/path safety, roots/links/hardlinks and explicit native projection/readback | Final cross-platform CI and remaining complete lifecycle composition | Open |
-| Complete lifecycle | Production held-object and path APIs; 8 live held-owner combinations; 548 native path scenarios; temporary permission and close-failure traces | Final 23-report audit and complete native CI; actual authorization, protection and version-specific host observations | Open |
+| Shared metadata transport | Production carrier, required preservation preflight, host baseline reconciliation, collision/path safety, roots/links/hardlinks and contained native projection/readback | Final cross-platform lifecycle, CLI preservation and independent image acceptance | Open |
+| Complete lifecycle | Production held-object and path APIs; 8 live held-owner combinations; 552 native path scenarios; temporary permission and close-failure traces | Final 23-report audit and complete native CI; actual authorization, protection and version-specific host observations | Open |
 | End-to-end filesystem qualification | 16 streaming extract/repack pairs with native mounted metadata/content comparison, 14 native compression cases and 80 FinderInfo cases | Final Linux/Windows image artifacts independently mounted on Mac; edited-payload/refusal lifecycle qualification | Open |
 | Evidence integrity | Source-hashed coverage and retained native artifacts | Integrated journey manifests and comprehensive required-case inventory | Open |
 | Documentation | Detailed investigations and package roadmap | Current architecture, usage, carrier/streaming contracts and final capability matrix | Open |
@@ -50,7 +55,11 @@ present-empty ACLs remain distinct during logical preparation.
 The live owner matrix now compares packed metadata as well as bytes, including
 unconditional inner PACK stat and the outer mode reset. The 16-case real
 root/nonowner supervisor requires `sudo -n` and validates actual process
-credentials without creating accounts. Signed sandbox qualification requires an
+credentials without creating accounts. Nonowner PACK retains independently
+generated write times when copying the source timestamp is unauthorized: each
+observed mtime must lie within its own recorded invocation interval. Raw times
+and bounds are retained, and all other metadata and output bytes remain exact.
+Signed sandbox qualification requires an
 explicit disposable GitHub-hosted Mac runner: two generated container namespaces
 expire when the VM is destroyed, while temporary app-bundle cleanup is checked
 before success is reported. Local prerequisite failure is not a passing result.

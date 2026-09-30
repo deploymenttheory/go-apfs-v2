@@ -396,7 +396,10 @@ func (p *appleDoublePath) ResetSecurity() []HeldLifecycleStep {
 		}
 		effective = *c.EffectiveUserUUID
 	} else {
-		identities, e := p.native.identities(p.ctx)
+		// Restoration must finish even if cancellation arrives after the route's
+		// final check. Preserve caller values for identity lookup, but do not let
+		// a canceled deadline leave the temporary access ACE on the destination.
+		identities, e := p.native.identities(context.WithoutCancel(p.ctx))
 		if e != nil {
 			return append(steps, HeldLifecycleStep{Operation: "effective-user", Err: e})
 		}

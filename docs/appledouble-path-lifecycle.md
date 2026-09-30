@@ -44,6 +44,13 @@ names and values, size/read errors, followed and no-follow source ACLs, exact
 regular source bytes, and the actual sandbox predicate before the operation.
 The same complete context is captured afterwards. This includes automatically
 supplied attributes such as `com.apple.provenance`; they are never filtered.
+The shared native context observer also captures held object identity, numeric
+owner and process IDs, mode, BSD flags, exact external ACL bytes, descriptor
+access flags, filesystem type and mount flags. Followed and no-follow objects
+are recorded independently. The corpus retains fixture owner/principal
+identifiers needed for exact ACL and provider-context comparisons; it does not
+collect account names or full directory-service records. The observer header
+is hashed alongside each C helper.
 
 `TestAppleDoublePathNativeReplay` compiles the independent C oracle, prepares
 separate C and Go inputs, verifies their complete captured contexts are equal,
@@ -55,6 +62,21 @@ requires all 552 current-context C/Go comparisons in either case. An attribute
 supplied on one host and absent on another is an input difference, not by itself
 evidence of a different codec or macOS version policy. The native test requires
 the existing Xcode/Clang qualification toolchain; production remains pure Go.
+Only device/inode identifiers are excluded when comparing separately created
+equivalent fixtures. Raw observations retain them for identity checks within
+each operation; owner, ACL, process, filesystem and access context remain exact.
+
+`verify-xattr-remove-effects-native.go` independently observes removal and
+replacement on 228 owned fixture contexts, including regular files, directories,
+held links and dangling links. Each records exact syscall input, result and
+readback, before/after provider context, unchanged referents, and cleanup.
+Read-write directory acquisition failures are captured explicitly. A successful
+call can leave bytes unchanged; portable replay uses that observed post-state
+without inventing an attribute-name rule. Matching an unpack destination uses
+its measured temporary mode and ACL, derived through the separately qualified
+native permission policy, rather than treating its initial permissions as the
+mutation-time context. The native gate replays its current captured effects
+through the Go API and compares retained results only for matching contexts.
 
 Explicit caller-owned state-free fields belong to the C fixture;
 the Go path API instead owns and closes its handles.
@@ -156,6 +178,10 @@ that repeatedly return retryable `EEXIST`/`EISDIR`. Budget exhaustion is a libra
 diagnostic, not an invented native errno. Symlink creation starts at
 `0777 & ~umask`, independently of source link permissions; the live corpus
 includes source mode `0400` with umasks `0000` and `0077` on failed unpack.
+Once restoration begins, effective-identity lookup uses
+`context.WithoutCancel`: caller context values remain available, while a late
+cancellation or deadline cannot itself prevent temporary-ACE removal. Actual
+identity lookup and restoration failures remain recorded in the cleanup trace.
 
 ## Temporary ACE removal
 
@@ -253,6 +279,19 @@ available on every filesystem. CI must establish each supported runner's live
 behavior, and additional native profiles must be retained when it differs.
 No corpus or branch coverage percentage proves equality for all possible
 concurrent filesystem mutations or undefined C allocation failures.
+
+`FuzzPathLifecycle` exercises the production captured path binding on actual
+files on every supported OS. Inputs select PACK/UNPACK, bounded endpoint retries,
+exclusive/replacement/move options, malformed or failing source values,
+cancellation between acquisition/transfer stages, and cleanup failures. Each
+run limits attributes to 64 bytes and open attempts to 6. It verifies that all
+acquired descriptors are closed exactly once, release is idempotent, error
+cleanup restores temporary modes before releasing the permission handle,
+cancellation cannot run success-only cleanup, and unpack leaves data bytes
+unchanged. Errors from acquisition and release remain observable together.
+The regular three-OS test jobs replay its seeds; the existing scheduled/PR fuzz
+workflow mutates inputs. These invariants complement the independent native
+corpus and do not manufacture native error numbers.
 
 The canonical null source is `os.DevNull`: `/dev/null` on Darwin/Linux and `NUL`
 on Windows. Captured operation requires an explicit Darwin character-device

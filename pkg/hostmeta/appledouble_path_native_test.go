@@ -92,7 +92,7 @@ func TestAppleDoublePathNativeReplay(t *testing.T) {
 			if err := json.Unmarshal(out, &input); err != nil {
 				t.Fatal(err)
 			}
-			if !reflect.DeepEqual(input, c.Native.Input) {
+			if !reflect.DeepEqual(input.WithoutObjectIdentity(), c.Native.Input.WithoutObjectIdentity()) {
 				t.Fatalf("C and Go input attributes differ: Go=%+v C=%+v", input, c.Native.Input)
 			}
 			if input.Sandboxed != sandboxed {
@@ -139,7 +139,7 @@ func TestAppleDoublePathNativeReplay(t *testing.T) {
 			if err := json.Unmarshal(out, &output); err != nil {
 				t.Fatal(err)
 			}
-			if !reflect.DeepEqual(output, c.Native.Output) {
+			if !reflect.DeepEqual(output.WithoutObjectIdentity(), c.Native.Output.WithoutObjectIdentity()) {
 				t.Errorf("C and Go output context differs: Go=%+v C=%+v", output, c.Native.Output)
 			}
 			if result.Lifecycle.Code != c.Native.Code {

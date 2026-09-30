@@ -83,6 +83,7 @@ type pathForkAttrsFailure struct {
 
 func (a pathForkAttrsFailure) size(string) (int64, error) { return 0, a.sizeErr }
 func (a pathForkAttrsFailure) remove(string) error        { return a.removeErr }
+func (a pathForkAttrsFailure) truncateFork(uint32) error  { return a.removeErr }
 
 func TestPathResourceForkLogicalThreshold(t *testing.T) {
 	for _, size := range []int{0, 1 << 20, (1 << 20) + 1} {

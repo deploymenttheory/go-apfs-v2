@@ -923,3 +923,41 @@ func TestAppleDoublePathCapturedIdentityUsesOneProvider(t *testing.T) {
 		t.Fatal("capture and held validation used different identity providers", calls, p.sourceMetadata.Identity)
 	}
 }
+
+func TestAppleDoublePathResetCompletesAfterCancellation(t *testing.T) {
+	p := pathQualification(t)
+	p.source, p.destination = objectFixture(t), objectFixture(t)
+	original := appledouble.ACLEntry{Principal: [16]byte{8}, Flags: 1, Rights: 2}
+	temporary := appledouble.ACLEntry{Principal: [16]byte{7}, Flags: 1, Rights: TemporaryWriteRights}
+	metadata := p.destination.meta.(*LogicalMetadata)
+	if err := metadata.SetACL(&appledouble.ACL{Entries: []appledouble.ACLEntry{temporary, original}}); err != nil {
+		t.Fatal(err)
+	}
+	type contextKey struct{}
+	ctx, cancel := context.WithCancel(context.WithValue(context.Background(), contextKey{}, "cleanup identity context"))
+	p.ctx = ctx
+	cancel()
+	p.native.identities = func(cleanup context.Context) (*appledouble.ACLIdentityCapture, error) {
+		if cleanup.Value(contextKey{}) != "cleanup identity context" {
+			t.Fatal("cleanup discarded caller context values")
+		}
+		if err := cleanup.Err(); err != nil {
+			return nil, err
+		}
+		return appledouble.NewACLIdentityCapture(func(appledouble.ACLIdentity) ([16]byte, error) {
+			return [16]byte{7}, cleanup.Err()
+		}, nil), nil
+	}
+	for _, step := range p.ResetSecurity() {
+		if step.Err != nil {
+			t.Fatalf("cleanup %s failed after cancellation: %v", step.Operation, step.Err)
+		}
+	}
+	acl, err := metadata.CaptureDestinationACL()
+	if err != nil || acl == nil || len(acl.Entries) != 1 || acl.Entries[0] != original {
+		t.Fatalf("temporary ACE survived cancellation: %+v, %v", acl, err)
+	}
+	if !errors.Is(ctx.Err(), context.Canceled) {
+		t.Fatal("cleanup changed the caller's cancellation state")
+	}
+}
