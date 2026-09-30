@@ -95,7 +95,7 @@ func Coverage(sources, evidence fs.FS, dir, revision, goos string) error {
 	}
 	actual, err := profile(b)
 	if err != nil {
-		return err
+		return fmt.Errorf("%s: %w", path.Join(dir, "coverage.out"), err)
 	}
 	selected := map[string]count{}
 	switch dir {
@@ -164,7 +164,10 @@ func profile(data []byte) (map[string]count, error) {
 			return nil, fmt.Errorf("invalid coverage block")
 		}
 		n, e := strconv.ParseInt(fields[1], 10, 64)
-		if e != nil || n <= 0 || n > 1<<30 {
+		// Go emits zero-statement blocks for empty function bodies, including
+		// callbacks. Validate their location and hits normally, but count zero
+		// statements: executing one cannot improve measured coverage.
+		if e != nil || n < 0 || n > 1<<30 {
 			return nil, fmt.Errorf("invalid statement count")
 		}
 		hits, e := strconv.ParseInt(fields[2], 10, 64)

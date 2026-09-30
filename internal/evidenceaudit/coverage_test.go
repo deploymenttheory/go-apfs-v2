@@ -140,6 +140,18 @@ func TestProfile(t *testing.T) {
 	if e != nil || got["pkg/a.go"] != (count{20, 21}) {
 		t.Fatalf("%v %v", got, e)
 	}
+	// Real Go profiles contain empty callback blocks (for example the
+	// decmpfs handler's no-op release function). Repeated hit/miss blocks
+	// must neither reject the report nor give it statement coverage credit.
+	empty := prefix + "pkg/a.go:64.91,64.91 0 26\n" + prefix + "pkg/a.go:64.91,64.91 0 0\n"
+	got, e = profile([]byte(good + empty))
+	if e != nil || got["pkg/a.go"] != (count{20, 21}) {
+		t.Fatalf("empty callback changed coverage: %v %v", got, e)
+	}
+	got, e = profile([]byte("mode: atomic\n" + empty))
+	if e != nil || got["pkg/a.go"] != (count{}) || above95(got["pkg/a.go"]) {
+		t.Fatalf("empty callbacks cannot satisfy coverage: %v %v", got, e)
+	}
 	for _, bad := range []string{"", "mode: set\n", "mode: atomic\n", "mode: atomic\ninvalid\n", "mode: atomic\nx 0 1", "mode: atomic\nx -1 1", "mode: atomic\nx 99999999999 1", "mode: atomic\nx one 1", "mode: atomic\nx 1 -1", "mode: atomic\nx 1 no", "mode: atomic\nx 1 1", "mode: atomic\nother/a.go:1.1,2.1 1 1", "mode: atomic\n" + prefix + "../a.go:1.1,2.1 1 1", good + prefix + "pkg/a.go:1.1,2.1 21 1", "mode: atomic\n" + strings.Repeat("a", 70000)} {
 		if bad == "mode: atomic\n" {
 			continue
@@ -155,5 +167,14 @@ func TestProfile(t *testing.T) {
 	}
 	if !above95(count{20, 20}) {
 		t.Fatal("rejected full coverage")
+	}
+}
+
+func TestCoverageProfileErrorIdentifiesArtifact(t *testing.T) {
+	sources, artifacts, _ := fixture(t, "example")
+	artifacts["example/coverage.out"].Data = []byte("mode: atomic\ninvalid\n")
+	err := Coverage(sources, artifacts, "example", "head", "linux")
+	if err == nil || !strings.Contains(err.Error(), "example/coverage.out: invalid coverage block") {
+		t.Fatalf("missing report identity in parse failure: %v", err)
 	}
 }
