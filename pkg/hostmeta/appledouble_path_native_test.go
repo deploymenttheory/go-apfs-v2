@@ -11,8 +11,10 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"syscall"
 	"testing"
 
@@ -22,6 +24,14 @@ import (
 )
 
 func TestAppleDoublePathNativeReplay(t *testing.T) {
+	sandboxed, err := CaptureAppSandbox()
+	if err != nil {
+		t.Fatal(err)
+	}
+	helper := filepath.Join(t.TempDir(), "path-copyfile")
+	if out, err := exec.Command("xcrun", "clang", "-Wall", "-Wextra", "-Werror", "../../testdata/appledouble/native/path-copyfile.c", "-o", helper).CombinedOutput(); err != nil {
+		t.Fatalf("compile independent installed-copyfile oracle: %v: %s", err, out)
+	}
 	f, err := os.Open("../../testdata/appledouble/native/path-copyfile.json.gz")
 	if err != nil {
 		t.Fatal(err)
@@ -48,6 +58,46 @@ func TestAppleDoublePathNativeReplay(t *testing.T) {
 				t.Fatal("native input changed")
 			}
 			src, dst, target := prepareNativePathCase(t, c)
+			// The recorded baseline is bound to its input context. Ambient native
+			// attributes (including protected provenance) must not be filtered or
+			// assumed equal on another process/host. Qualify current behavior with
+			// independent C and Go operations on verified equivalent inputs.
+			nativeSource, nativeDestination, nativeTarget := prepareNativePathCase(t, c)
+			mask := -1
+			if c.SetUmask {
+				mask = c.Umask
+			}
+			out, err := exec.Command(helper, nativeSource, nativeDestination, nativeTarget, strconv.Itoa(c.Route), strconv.Itoa(c.Selected), strconv.Itoa(c.Quit), strconv.Itoa(c.SourceMode), strconv.Itoa(mask)).CombinedOutput()
+			if err != nil {
+				t.Fatalf("installed-copyfile oracle: %v: %s", err, out)
+			}
+			if err := json.Unmarshal(out, &c.Native); err != nil {
+				t.Fatalf("native observation: %v: %s", err, out)
+			}
+			// Unmarshal overwrites fields present in C output; the digest is
+			// computed here and must never retain a previous host's value.
+			c.Native.DestinationSHA256 = ""
+			if st, err := os.Lstat(nativeDestination); err == nil && st.Mode().IsRegular() {
+				data, err := os.ReadFile(nativeDestination)
+				if err != nil {
+					t.Fatal(err)
+				}
+				c.Native.DestinationSHA256 = fmt.Sprintf("%x", sha256.Sum256(data))
+			}
+			out, err = exec.Command(helper, "--inspect", src, dst, target).CombinedOutput()
+			if err != nil {
+				t.Fatalf("independent input inspection: %v: %s", err, out)
+			}
+			var input pathnative.InputContext
+			if err := json.Unmarshal(out, &input); err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(input, c.Native.Input) {
+				t.Fatalf("C and Go input attributes differ: Go=%+v C=%+v", input, c.Native.Input)
+			}
+			if input.Sandboxed != sandboxed {
+				t.Fatalf("oracle process sandbox=%t differs from Go process=%t", input.Sandboxed, sandboxed)
+			}
 			options := AppleDoublePathOptions{Operation: PathPackAppleDouble, Pack: DefaultObjectPackOptions(), Unpack: DefaultObjectUnpackOptions(), MaxOpenAttempts: 8, Exclusive: c.Selected&2 != 0, NoFollowSource: c.Selected&4 != 0, NoFollowDestination: c.Selected&4 != 0, UnlinkDestination: c.Selected&8 != 0, MoveSource: c.Selected&16 != 0}
 			options.Pack.Stat = c.Selected&1 != 0
 			options.Unpack.Stat = c.Selected&1 != 0
@@ -81,6 +131,17 @@ func TestAppleDoublePathNativeReplay(t *testing.T) {
 				defer unix.Umask(prior)
 			}
 			result, operationErr := CopyAppleDoublePath(context.Background(), src, dst, options)
+			out, err = exec.Command(helper, "--inspect", src, dst, target).CombinedOutput()
+			if err != nil {
+				t.Fatalf("independent output inspection: %v: %s", err, out)
+			}
+			var output pathnative.InputContext
+			if err := json.Unmarshal(out, &output); err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(output, c.Native.Output) {
+				t.Errorf("C and Go output context differs: Go=%+v C=%+v", output, c.Native.Output)
+			}
 			if result.Lifecycle.Code != c.Native.Code {
 				t.Errorf("code got%d want%d: %v", result.Lifecycle.Code, c.Native.Code, operationErr)
 			}

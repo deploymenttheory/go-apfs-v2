@@ -175,11 +175,15 @@ func main() {
 					if expected.Code != 0 {
 						panic(fmt.Sprintf("scoped sandbox operation failed %s/%s: %+v", name, operation, expected))
 					}
-					if operation == "pack" && !bytes.Equal(read(targetC), read(targetGo)) {
-						panic(name + ": sandbox packed bytes differ")
+					goBytes, nativeBytes := read(targetGo), read(targetC)
+					if operation == "pack" && !bytes.Equal(nativeBytes, goBytes) {
+						panic(fmt.Sprintf("%s: sandbox packed bytes differ Go length=%d sha256=%s native length=%d sha256=%s", name, len(goBytes), hash(goBytes), len(nativeBytes), hash(nativeBytes)))
 					}
-					if !reflect.DeepEqual(inspect(oracle, targetC), inspect(oracle, targetGo)) {
-						panic(name + "/" + operation + ": sandbox metadata differs")
+					goMetadata, nativeMetadata := inspect(oracle, targetGo), inspect(oracle, targetC)
+					if !reflect.DeepEqual(nativeMetadata, goMetadata) {
+						goJSON, _ := json.Marshal(goMetadata)
+						nativeJSON, _ := json.Marshal(nativeMetadata)
+						panic(fmt.Sprintf("%s/%s: sandbox metadata differs Go=%s native=%s", name, operation, goJSON, nativeJSON))
 					}
 					cases = append(cases, map[string]any{"name": name + "/" + operation, "native": expected, "go": actual, "bytes_sha256": hash(read(targetGo)), "metadata_equal": true})
 				}

@@ -39,9 +39,24 @@ slides as if they were stable identifiers.
 The separate live gate `verify-path-copyfile-native.go` invokes native copyfile
 on real disposable files, directories and links. The 552 retained cases cover
 creation, replacement, ACLs, malformed unpacking, callbacks, no-follow flags,
-move and explicit state-free errors. `TestAppleDoublePathNativeReplay` compares
-the concrete Go API's return code, metadata, contents and callbacks against
-those cases. Explicit caller-owned state-free fields belong to the C fixture;
+move and explicit state-free errors. Every capture retains ordered raw xattr
+names and values, size/read errors, followed and no-follow source ACLs, exact
+regular source bytes, and the actual sandbox predicate before the operation.
+The same complete context is captured afterwards. This includes automatically
+supplied attributes such as `com.apple.provenance`; they are never filtered.
+
+`TestAppleDoublePathNativeReplay` compiles the independent C oracle, prepares
+separate C and Go inputs, verifies their complete captured contexts are equal,
+then compares the concrete Go API's return code, metadata, contents and
+callbacks against that installed native operation. The retained baseline is
+context-bound evidence: the live gate requires exact baseline equality when
+the input context matches, reports differences in ambient input context, and
+requires all 552 current-context C/Go comparisons in either case. An attribute
+supplied on one host and absent on another is an input difference, not by itself
+evidence of a different codec or macOS version policy. The native test requires
+the existing Xcode/Clang qualification toolchain; production remains pure Go.
+
+Explicit caller-owned state-free fields belong to the C fixture;
 the Go path API instead owns and closes its handles.
 
 An extracted source function establishes source-version behavior. An extracted function executing against
@@ -173,6 +188,22 @@ is unknown rather than a negative capability observation. Their native
 filesystems do not acquire Darwin authorization or protection classes merely by
 storing these observations. Temporary receiving-host backing permissions are
 saved/restored independently of the logical Darwin result.
+
+Windows payload handles share read, write and delete access. This permits the
+same held-inode rename and failed-PACK unlink ordering without closing handles
+early. Backing permission changes acquire `FILE_WRITE_ATTRIBUTES` on the held
+object itself; they do not resolve the original pathname again. Read-only
+receiving-host files can therefore receive temporary access and recover their
+original attributes even when their directory entry is renamed. Exclusive
+creation, truncation and long filesystem paths retain their normal semantics;
+an inaccessible read-only file is not replaced to make truncation succeed.
+
+On Linux and Windows, a no-follow destination link is opened as a metadata-only
+object. A PACK data write fails on that held link and the operation then removes
+the failed destination, matching the native lifecycle. Its referent is never
+opened for writing or truncated, including when the link is dangling or points
+outside the working directory. Receiving-host I/O errors remain observable;
+Linux or Windows error numbers are not relabeled as Darwin errno values.
 
 The path named-fork lifecycle is implemented on both bindings. For a regular
 source with a fork strictly larger than 1 MiB, installed macOS opens the source

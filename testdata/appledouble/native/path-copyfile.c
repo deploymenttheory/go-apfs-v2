@@ -10,6 +10,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
+extern bool _xpc_runtime_is_app_sandboxed(void);
 
 struct notice {int what,stage;long long copied;};
 static struct notice notices[256];static unsigned notice_count;static int quit;
@@ -38,7 +40,64 @@ static void snapshot(const char *path){
  if(n>0)for(ssize_t i=0;i<n;i++)printf("%02x",value[i]);
  printf("\"}");
 }
+static void hex_bytes(const unsigned char *bytes,ssize_t count){
+ for(ssize_t i=0;i<count;i++)printf("%02x",bytes[i]);
+}
+static void attributes(const char *path,int flags){
+ errno=0;ssize_t size=listxattr(path,NULL,0,flags);int se=size<0?errno:0;
+ if(size>1024*1024)exit(23);
+ char *names=calloc(size>0?(size_t)size:1,1);if(!names)exit(24);
+ ssize_t n=-1;int re=0;
+ if(size>=0){errno=0;n=listxattr(path,names,(size_t)size,flags);re=n<0?errno:0;}
+ if(n>size)exit(25);
+ printf("{\"Size\":%lld,\"Read\":%lld,\"SizeErrno\":%d,\"ReadErrno\":%d,\"NamesHex\":\"",(long long)size,(long long)n,se,re);
+ hex_bytes((const unsigned char *)names,n);printf("\",\"Values\":[");
+ int first=1;
+ for(ssize_t at=0;at<n;){
+  size_t length=strnlen(names+at,(size_t)(n-at));if(length==(size_t)(n-at))exit(26);
+  const char *name=names+at;errno=0;ssize_t vs=getxattr(path,name,NULL,0,0,flags);int vse=vs<0?errno:0;
+  if(vs>1024*1024)exit(27);
+  unsigned char *value=calloc(vs>0?(size_t)vs:1,1);if(!value)exit(28);
+  ssize_t vn=-1;int vre=0;
+  if(vs>=0){errno=0;vn=getxattr(path,name,value,(size_t)vs,0,flags);vre=vn<0?errno:0;}
+  if(vn>vs)exit(29);
+  if(!first)putchar(',');first=0;
+  printf("{\"NameHex\":\"");hex_bytes((const unsigned char *)name,(ssize_t)length);
+  printf("\",\"Size\":%lld,\"Read\":%lld,\"SizeErrno\":%d,\"ReadErrno\":%d,\"Hex\":\"",(long long)vs,(long long)vn,vse,vre);
+  hex_bytes(value,vn);printf("\"}");free(value);at+=(ssize_t)length+1;
+ }
+ printf("]}");free(names);
+}
+static void source_security(const char *path,int nofollow){
+ filesec_t fs=filesec_init();if(!fs)exit(30);struct stat st;
+ errno=0;int result=nofollow?lstatx_np(path,&st,fs):statx_np(path,&st,fs);int se=result<0?errno:0;
+ acl_t acl=NULL;int ae=0;unsigned char *bytes=NULL;ssize_t n=0;
+ if(result==0){errno=0;if(filesec_get_property(fs,FILESEC_ACL,&acl))ae=errno;}
+ if(acl){n=acl_size(acl);if(n<0||n>1024*1024)exit(31);bytes=malloc((size_t)n);if(!bytes||acl_copy_ext(bytes,acl,n)!=n)exit(32);acl_free(acl);}
+ printf("{\"StatErrno\":%d,\"ACLErrno\":%d,\"ACLHex\":\"",se,ae);hex_bytes(bytes,n);printf("\"}");free(bytes);filesec_free(fs);
+}
+static void input_context(const char *src,const char *dst,const char *target){
+ printf("{\"SourceData\":{");
+ struct stat st;errno=0;
+ if(stat(src,&st))printf("\"Errno\":%d",errno);
+ else if(!S_ISREG(st.st_mode))printf("\"NotRegular\":true");
+ else{
+  int fd=open(src,O_RDONLY);if(fd<0)printf("\"Errno\":%d",errno);
+  else{if(st.st_size>1024*1024)exit(33);unsigned char *bytes=malloc(st.st_size?(size_t)st.st_size:1);if(!bytes)exit(34);
+   ssize_t n=read(fd,bytes,(size_t)st.st_size);int e=n<0?errno:0;
+   if(n>=0&&n!=st.st_size)exit(35);printf("\"Errno\":%d,\"Hex\":\"",e);hex_bytes(bytes,n);putchar('"');free(bytes);close(fd);
+  }
+ }
+ printf("},\"Sandboxed\":%s,\"SourceSecurityFollow\":",_xpc_runtime_is_app_sandboxed()?"true":"false");source_security(src,0);
+ printf(",\"SourceSecurityNoFollow\":");source_security(src,1);
+ printf(",\"SourceFollow\":");attributes(src,0);
+ printf(",\"SourceNoFollow\":");attributes(src,XATTR_NOFOLLOW);
+ printf(",\"DestinationFollow\":");attributes(dst,0);
+ printf(",\"DestinationNoFollow\":");attributes(dst,XATTR_NOFOLLOW);
+ printf(",\"Target\":");attributes(target,XATTR_NOFOLLOW);putchar('}');
+}
 int main(int argc,char **argv){
+ if(argc==5&&!strcmp(argv[1],"--inspect")){input_context(argv[2],argv[3],argv[4]);putchar('\n');return 0;}
  if(argc!=9)return 2;
  const char *src=argv[1],*dst=argv[2],*target=argv[3];int route=atoi(argv[4]),selected=atoi(argv[5]);quit=atoi(argv[6]);
  copyfile_flags_t flags=route?COPYFILE_UNPACK:COPYFILE_PACK;
@@ -60,7 +119,7 @@ int main(int argc,char **argv){
  if(mask>=0)umask((mode_t)mask);
  copyfile_state_t state=NULL;int owned=(selected&64)!=0;
  if(owned||quit){state=copyfile_state_alloc();if(!state)return 5;if(copyfile_state_set(state,COPYFILE_STATE_STATUS_CB,callback))return 6;}
- printf("{\"Before\":");snapshot(dst);printf(",\"Code\":");
+ printf("{\"Input\":");input_context(src,dst,target);printf(",\"Before\":");snapshot(dst);printf(",\"Code\":");
  errno=0;int result=copyfile(src,dst,state,flags),saved=errno;
  printf("%d,\"Errno\":%d,\"Notices\":[",result,saved);
  for(unsigned i=0;i<notice_count;i++){if(i)putchar(',');printf("{\"What\":%d,\"Stage\":%d,\"Copied\":%lld}",notices[i].what,notices[i].stage,notices[i].copied);}
@@ -75,5 +134,5 @@ int main(int argc,char **argv){
   source_closed=source_fd>=0&&fcntl(source_fd,F_GETFD)<0&&errno==EBADF;destination_closed=destination_fd>=0&&fcntl(destination_fd,F_GETFD)<0&&errno==EBADF;
  }
  printf("],\"SourceOpenBeforeFree\":%s,\"DestinationOpenBeforeFree\":%s,\"SourceClosedAfterFree\":%s,\"DestinationClosedAfterFree\":%s,\"FreeCode\":%d,\"FreeErrno\":%d,\"After\":",source_open?"true":"false",destination_open?"true":"false",source_closed?"true":"false",destination_closed?"true":"false",free_result,free_error);
- snapshot(dst);printf(",\"Source\":");snapshot(src);printf(",\"Target\":");snapshot(target);puts("}");return 0;
+ snapshot(dst);printf(",\"Source\":");snapshot(src);printf(",\"Target\":");snapshot(target);printf(",\"Output\":");input_context(src,dst,target);puts("}");return 0;
 }

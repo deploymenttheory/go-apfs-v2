@@ -79,6 +79,11 @@ func verify() error {
 	coverageFiles["pkg/hostmeta/appledouble_path_io_"+suffix+".go"] = [2]int{}
 	coverageFiles["pkg/hostmeta/appledouble_path_fork_"+suffix+".go"] = [2]int{}
 	coverageFiles["pkg/hostmeta/path_native_"+suffix+".go"] = [2]int{}
+	handleSuffix := "unix"
+	if runtime.GOOS == "windows" {
+		handleSuffix = "windows"
+	}
+	coverageFiles["pkg/hostmeta/appledouble_path_handle_"+handleSuffix+".go"] = [2]int{}
 	blocks := map[string][2]int{}
 	for _, line := range strings.Split(string(b), "\n") {
 		fields := strings.Fields(line)

@@ -62,7 +62,7 @@ func (p *appleDoublePath) prepareBackingAccess() error {
 		return ErrMetadataIdentity
 	}
 	if !p.backing.changed && info.Mode().Perm()&0600 != 0600 {
-		if err = file.Chmod(info.Mode() | 0600); err != nil {
+		if err = chmodPathBacking(file, info.Mode()|0600); err != nil {
 			return err
 		}
 		p.backing.changed = true
@@ -87,7 +87,7 @@ func (p *appleDoublePath) closeBackingAccess() []HeldLifecycleStep {
 		}
 		if err == nil {
 			if backing.file != nil {
-				err = backing.file.Chmod(backing.mode)
+				err = chmodPathBacking(backing.file, backing.mode)
 			} else {
 				err = p.access.chmod(p.destinationName, backing.mode)
 			}

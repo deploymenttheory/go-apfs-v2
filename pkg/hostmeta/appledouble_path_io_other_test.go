@@ -42,8 +42,15 @@ func TestAppleDoublePathPortableIO(t *testing.T) {
 				t.Fatal(err)
 			}
 			for _, flags := range []int{os.O_WRONLY, os.O_RDWR, os.O_RDONLY | os.O_TRUNC} {
-				if file, err := openPathPayload(link, flags, 0600, true, false, 0); file != nil || !errors.Is(err, errors.ErrUnsupported) {
-					t.Fatalf("unsupported write must preserve link and target: %v %v", file, err)
+				file, err := openPathPayload(link, flags, 0600, true, false, 0)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if n, err := file.Write([]byte("must not reach target")); n != 0 || err == nil {
+					t.Fatal(n, err)
+				}
+				if err := file.Close(); err != nil {
+					t.Fatal(err)
 				}
 			}
 			if err := pathUnlink(link); err != nil {

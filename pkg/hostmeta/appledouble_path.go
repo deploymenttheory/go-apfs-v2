@@ -186,7 +186,7 @@ func (p *appleDoublePath) capture(name string, source, nofollow bool) (PathMetad
 		return PathMetadata{}, fmt.Errorf("missing captured path object: %w", os.ErrInvalid)
 	}
 	security, state, err := object.meta.CaptureSecurityState()
-	identity, _ := Link(info)
+	identity, _ := p.native.identity(info)
 	return PathMetadata{State: MetadataState{Security: security, Stat: state}, Identity: identity, Size: info.Size()}, err
 }
 

@@ -12,13 +12,13 @@ func openPathPayload(name string, flags int, mode uint32, nofollow, _ bool, _ in
 	if nofollow {
 		info, err := os.Lstat(name)
 		if err == nil && info.Mode()&os.ModeSymlink != 0 {
-			if flags&(os.O_WRONLY|os.O_RDWR|os.O_TRUNC) != 0 {
-				return nil, errors.ErrUnsupported
-			}
+			// A foreign host has no writable link data stream. Acquire the link
+			// itself anyway: a PACK write must fail at transfer, then perform the
+			// native failed-PACK unlink lifecycle without touching its referent.
 			return openPathLink(name, pathLinkAccess{os.OpenRoot, OpenMetadataFileRead, (*os.Root).Close})
 		}
 	}
-	return os.OpenFile(name, flags, pathFileMode(uint16(mode)))
+	return openPathOrdinary(name, flags, pathFileMode(uint16(mode)))
 }
 
 // pathLinkAccess isolates acquisition and cleanup failures without replacing the

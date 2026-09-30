@@ -246,12 +246,15 @@ func supervise(oracle string) {
 					if actual.Code != expected.Code || (actual.Code < 0 && actual.Errno != expected.Errno) {
 						panic(fmt.Sprintf("%s: result differs Go=%+v native=%+v", name, actual, expected))
 					}
-					if !reflect.DeepEqual(inspect(native, files["go-target"].Name()), inspect(native, files["native-target"].Name())) {
-						panic(name + ": independently observed destination metadata differs")
+					goMetadata, nativeMetadata := inspect(native, files["go-target"].Name()), inspect(native, files["native-target"].Name())
+					if !reflect.DeepEqual(goMetadata, nativeMetadata) {
+						goJSON, _ := json.Marshal(goMetadata)
+						nativeJSON, _ := json.Marshal(nativeMetadata)
+						panic(fmt.Sprintf("%s: independently observed destination metadata differs Go=%s native=%s", name, goJSON, nativeJSON))
 					}
 					goBytes, nativeBytes := read(files["go-target"].Name()), read(files["native-target"].Name())
 					if !bytes.Equal(goBytes, nativeBytes) {
-						panic(name + ": output bytes differ")
+						panic(fmt.Sprintf("%s: output bytes differ Go length=%d sha256=%s native length=%d sha256=%s", name, len(goBytes), hash(goBytes), len(nativeBytes), hash(nativeBytes)))
 					}
 					for _, f := range files {
 						must(f.Close())

@@ -87,6 +87,27 @@ func pathQualification(t *testing.T) *appleDoublePath {
 	return p
 }
 
+// File.Stat on a closed handle reports the host's underlying error. Windows
+// reports ERROR_INVALID_HANDLE here, while Close itself reports os.ErrClosed.
+// Observe the independent standard-library call and require preservation of
+// that exact cause rather than changing the production error to fit a test.
+func closedPathStatCause(t *testing.T) error {
+	t.Helper()
+	file, err := os.CreateTemp(t.TempDir(), "closed-stat-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	_, err = file.Stat()
+	var pathError *os.PathError
+	if !errors.As(err, &pathError) || pathError.Err == nil {
+		t.Fatalf("closed Stat did not retain an OS failure: %v", err)
+	}
+	return pathError.Err
+}
+
 func TestAppleDoublePathValidationAndIdentity(t *testing.T) {
 	p := pathQualification(t)
 	for _, tc := range []struct {
@@ -141,6 +162,7 @@ func TestAppleDoublePathValidationAndIdentity(t *testing.T) {
 
 func TestAppleDoublePathAcquisitionFailures(t *testing.T) {
 	marker := errors.New("injected host boundary failure")
+	closedStat := closedPathStatCause(t)
 	for _, tc := range []struct {
 		name   string
 		change func(*appleDoublePath)
@@ -174,7 +196,7 @@ func TestAppleDoublePathAcquisitionFailures(t *testing.T) {
 				}
 				return v, e
 			}
-		}, os.ErrClosed},
+		}, closedStat},
 		{"held-identity", func(p *appleDoublePath) {
 			old := p.access.open
 			p.access.open = func(_ string, f int, m uint32, a, b bool, c int) (*os.File, error) {
@@ -624,7 +646,7 @@ func TestAppleDoublePathResetAndRunFailureBoundaries(t *testing.T) {
 		t.Fatal(e)
 	}
 	result, _ := p.Run(p.ctx)
-	if result.Code != -1 || !errors.Is(result.Err, os.ErrClosed) {
+	if result.Code != -1 || !errors.Is(result.Err, closedPathStatCause(t)) {
 		t.Fatal(result)
 	}
 	p.sourceFile = nil
@@ -647,6 +669,7 @@ func (m *pathSecurityWriteFailure) Chmod(mode uint16) error {
 
 func TestAppleDoublePathTemporaryHandleQualification(t *testing.T) {
 	marker := errors.New("saved destination effect failed")
+	closedStat := closedPathStatCause(t)
 	for _, tc := range []struct {
 		name   string
 		change func(*appleDoublePath)
@@ -666,7 +689,7 @@ func TestAppleDoublePathTemporaryHandleQualification(t *testing.T) {
 				}
 				return v, e
 			}
-		}, os.ErrClosed},
+		}, closedStat},
 		{"substituted", func(p *appleDoublePath) {
 			old := p.access.open
 			p.access.open = func(_ string, f int, m uint32, a, b bool, c int) (*os.File, error) {
@@ -730,6 +753,7 @@ func TestAppleDoublePathTemporaryHandleQualification(t *testing.T) {
 }
 
 func TestAppleDoublePathValidatesSavedDestination(t *testing.T) {
+	closedStat := closedPathStatCause(t)
 	for _, fault := range []string{"none", "closed-original", "closed-payload", "substitution"} {
 		t.Run(fault, func(t *testing.T) {
 			p := pathQualification(t)
@@ -769,7 +793,7 @@ func TestAppleDoublePathValidatesSavedDestination(t *testing.T) {
 					t.Fatal(e)
 				}
 			default:
-				if !errors.Is(e, os.ErrClosed) {
+				if !errors.Is(e, closedStat) {
 					t.Fatal(e)
 				}
 			}
@@ -881,5 +905,21 @@ func TestAppleDoublePathCapturedSymlinkCreationMode(t *testing.T) {
 				t.Fatal(state, e)
 			}
 		})
+	}
+}
+
+func TestAppleDoublePathCapturedIdentityUsesOneProvider(t *testing.T) {
+	p := pathQualification(t)
+	p.options.Captured = pathCapturedFixture(t, objectFixture(t), objectFixture(t))
+	// These explicit provider observations differ from the local Unix stat and
+	// reproduce a foreign platform binding without assuming Unix FileInfo.Sys.
+	observed := LinkIdentity{Device: 987, Inode: 654}
+	calls := 0
+	p.native.identity = func(os.FileInfo) (LinkIdentity, bool) { calls++; return observed, true }
+	if _, err := p.Open(p.ctx, 4); err != nil {
+		t.Fatal(err)
+	}
+	if calls != 2 || p.sourceMetadata.Identity != observed {
+		t.Fatal("capture and held validation used different identity providers", calls, p.sourceMetadata.Identity)
 	}
 }

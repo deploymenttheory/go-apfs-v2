@@ -15,7 +15,38 @@ type Notice struct {
 	What, Stage int
 	Copied      int64
 }
+
+// AttributeContext preserves native enumeration order and both size/read errors.
+// Hex strings preserve arbitrary name and value bytes without JSON conversion.
+type AttributeContext struct {
+	Size, Read, SizeErrno, ReadErrno int
+	NamesHex                         string
+	Values                           []AttributeValue
+}
+type AttributeValue struct {
+	NameHex, Hex                     string
+	Size, Read, SizeErrno, ReadErrno int
+}
+type InputContext struct {
+	SourceData                                   SourceData
+	Sandboxed                                    bool
+	SourceSecurityFollow, SourceSecurityNoFollow SourceSecurity
+	SourceFollow, SourceNoFollow                 AttributeContext
+	DestinationFollow, DestinationNoFollow       AttributeContext
+	Target                                       AttributeContext
+}
+type SourceData struct {
+	NotRegular bool
+	Errno      int
+	Hex        string
+}
+type SourceSecurity struct {
+	StatErrno, ACLErrno int
+	ACLHex              string
+}
 type Observation struct {
+	Output                                            InputContext
+	Input                                             InputContext
 	Before, After, Source, Target                     Snapshot
 	Code, Errno                                       int
 	Notices                                           []Notice

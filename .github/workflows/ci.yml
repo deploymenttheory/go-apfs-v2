@@ -372,7 +372,7 @@ jobs:
           path: artifacts/path-lifecycle-coverage/
           if-no-files-found: error
       - name: Pinned Apple path lifecycle and both SDK ASTs
-        if: runner.os == 'macOS'
+        if: "!cancelled() && runner.os == 'macOS'"
         env:
           CGO_ENABLED: "0"
         run: go run scripts/verify-path-lifecycle-source.go
@@ -384,7 +384,7 @@ jobs:
           path: artifacts/path-lifecycle-source/
           if-no-files-found: error
       - name: Native path creation, callback, cleanup and state release
-        if: runner.os == 'macOS'
+        if: "!cancelled() && runner.os == 'macOS'"
         env:
           CGO_ENABLED: "0"
         run: go run scripts/verify-path-copyfile-native.go
@@ -396,7 +396,7 @@ jobs:
           path: artifacts/path-copyfile-native/
           if-no-files-found: error
       - name: Native path ACL preparation and restoration
-        if: runner.os == 'macOS'
+        if: "!cancelled() && runner.os == 'macOS'"
         env:
           CGO_ENABLED: "0"
         run: go run scripts/verify-path-security-native.go
@@ -408,7 +408,7 @@ jobs:
           path: artifacts/path-security-native/
           if-no-files-found: error
       - name: Native held AppleDouble object byte and metadata parity
-        if: runner.os == 'macOS'
+        if: "!cancelled() && runner.os == 'macOS'"
         env:
           CGO_ENABLED: "0"
         run: go run scripts/verify-appledouble-object-native.go
@@ -420,7 +420,7 @@ jobs:
           path: artifacts/appledouble-object-native/
           if-no-files-found: error
       - name: Privileged and nonowner held-object authorization
-        if: runner.os == 'macOS'
+        if: "!cancelled() && runner.os == 'macOS'"
         env:
           CGO_ENABLED: "0"
         run: go run scripts/verify-appledouble-object-authorization.go
@@ -432,7 +432,7 @@ jobs:
           path: artifacts/appledouble-object-authorization/
           if-no-files-found: error
       - name: Native and signed sandbox attribute-intent policy
-        if: runner.os == 'macOS'
+        if: "!cancelled() && runner.os == 'macOS'"
         env:
           CGO_ENABLED: "0"
         run: go run scripts/verify-xattr-intent.go -ephemeral-runner
@@ -444,7 +444,7 @@ jobs:
           path: artifacts/xattr-intent/
           if-no-files-found: error
       - name: Native path resource fork threshold and cleanup parity
-        if: runner.os == 'macOS'
+        if: "!cancelled() && runner.os == 'macOS'"
         env:
           CGO_ENABLED: "0"
         run: go run scripts/verify-path-fork-native.go
@@ -456,7 +456,7 @@ jobs:
           path: artifacts/path-fork-native/
           if-no-files-found: error
       - name: Signed sandbox full-object operations and real authorization denials
-        if: runner.os == 'macOS'
+        if: "!cancelled() && runner.os == 'macOS'"
         env:
           CGO_ENABLED: "0"
         run: go run scripts/verify-appledouble-object-sandbox.go -ephemeral-runner

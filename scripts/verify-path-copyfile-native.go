@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -60,6 +61,9 @@ func verify(capture bool) error {
 	if out, err := exec.Command("xcrun", "clang", "-Wall", "-Wextra", "-Werror", source, "-o", helper).CombinedOutput(); err != nil {
 		return fmt.Errorf("compile: %w %s", err, out)
 	}
+	if err := verifyLinkWrite(dir); err != nil {
+		return err
+	}
 	cases := pathnative.Cases()
 	for i := range cases {
 		if err := observe(helper, dir, &cases[i]); err != nil {
@@ -86,6 +90,7 @@ func verify(capture bool) error {
 	if err = os.WriteFile(filepath.Join(dir, "observations.json"), append(encoded, '\n'), 0600); err != nil {
 		return err
 	}
+	matchedContexts, changedContexts := 0, 0
 	if !capture {
 		f, err := os.Open("testdata/appledouble/native/path-copyfile.json.gz")
 		if err != nil {
@@ -101,19 +106,61 @@ func verify(capture bool) error {
 		if err = json.NewDecoder(z).Decode(&approved); err != nil {
 			return err
 		}
-		if approved.HelperSHA256 != fixture.HelperSHA256 || !reflect.DeepEqual(approved.Cases, cases) {
-			return fmt.Errorf("native path behavior changed")
+		if approved.HelperSHA256 != fixture.HelperSHA256 || len(approved.Cases) != len(cases) {
+			return fmt.Errorf("native path helper/case inventory changed")
+		}
+		for i, current := range cases {
+			prior := approved.Cases[i]
+			currentSpec, priorSpec := current, prior
+			currentSpec.Native, priorSpec.Native = pathnative.Observation{}, pathnative.Observation{}
+			if !reflect.DeepEqual(currentSpec, priorSpec) {
+				return fmt.Errorf("native path case %d specification changed", i)
+			}
+			// Caller-owned state is a separate native contract: the Go path
+			// facade owns its descriptors and cannot exercise explicit free.
+			// Preserve those exact assertions even if ambient xattrs differ.
+			if current.Native.SourceOpenBeforeFree != prior.Native.SourceOpenBeforeFree ||
+				current.Native.DestinationOpenBeforeFree != prior.Native.DestinationOpenBeforeFree ||
+				current.Native.SourceClosedAfterFree != prior.Native.SourceClosedAfterFree ||
+				current.Native.DestinationClosedAfterFree != prior.Native.DestinationClosedAfterFree ||
+				current.Native.FreeCode != prior.Native.FreeCode || current.Native.FreeErrno != prior.Native.FreeErrno {
+				return fmt.Errorf("native path case %d caller-owned state behavior changed", i)
+			}
+			if reflect.DeepEqual(current.Native.Input, prior.Native.Input) {
+				matchedContexts++
+				if !reflect.DeepEqual(current.Native, prior.Native) {
+					return fmt.Errorf("native path case %d behavior changed with identical input context", i)
+				}
+			} else {
+				changedContexts++
+			}
+		}
+		// Every current context must pass an independent installed-C versus Go
+		// comparison, including contexts different from the retained baseline.
+		// The test first verifies full ordered metadata input equivalence and
+		// then checks exact output bytes, callbacks and filesystem effects.
+		log, err := os.Create(filepath.Join(dir, "replay.tests.jsonl"))
+		if err != nil {
+			return err
+		}
+		cmd := exec.Command("go", "test", "-json", "-count=1", "./pkg/hostmeta", "-run", "^TestAppleDoublePathNativeReplay$")
+		cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
+		cmd.Stdout, cmd.Stderr = io.MultiWriter(os.Stdout, log), io.MultiWriter(os.Stderr, log)
+		err = cmd.Run()
+		closeErr := log.Close()
+		if err != nil || closeErr != nil {
+			return fmt.Errorf("current-context native replay: command=%v close=%v", err, closeErr)
 		}
 	}
 	hashes := map[string]string{}
-	for _, p := range []string{source, "scripts/verify-path-copyfile-native.go", "internal/testutil/pathnative/oracle.go"} {
+	for _, p := range []string{source, "testdata/appledouble/native/path-link-write.c", "scripts/verify-path-copyfile-native.go", "internal/testutil/pathnative/oracle.go", "pkg/hostmeta/appledouble_path_native_test.go"} {
 		b, err := os.ReadFile(p)
 		if err != nil {
 			return err
 		}
 		hashes[p] = fmt.Sprintf("%x", sha256.Sum256(b))
 	}
-	report := map[string]any{"passed": !capture, "capture": capture, "cases": len(cases), "revision": fixture.Revision, "host": fixture.Host, "goos": runtime.GOOS, "goarch": runtime.GOARCH, "source_sha256": hashes}
+	report := map[string]any{"passed": !capture, "capture": capture, "cases": len(cases), "baseline_context_matches": matchedContexts, "baseline_context_differences": changedContexts, "current_context_differential_replay": !capture, "revision": fixture.Revision, "host": fixture.Host, "goos": runtime.GOOS, "goarch": runtime.GOARCH, "source_sha256": hashes}
 	encoded, err = json.MarshalIndent(report, "", "  ")
 	if err != nil {
 		return err
@@ -122,6 +169,55 @@ func verify(capture bool) error {
 		return err
 	}
 	fmt.Printf("public path copyfile: %d cases; capture=%t\n", len(cases), capture)
+	return nil
+}
+
+// The full path corpus proves failed-PACK unlink effects. This independent
+// primitive probe establishes that acquiring a writable no-follow link succeeds
+// and EPERM occurs at transfer, with the held link and referent unchanged.
+func verifyLinkWrite(dir string) error {
+	const source = "testdata/appledouble/native/path-link-write.c"
+	for _, arch := range []string{"arm64", "x86_64"} {
+		out, err := exec.Command("xcrun", "clang", "-arch", arch, "-fsyntax-only", "-Xclang", "-ast-dump=json", source).Output()
+		if err != nil {
+			return fmt.Errorf("link write AST %s: %w", arch, err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "link-write-"+arch+".ast.json"), out, 0600); err != nil {
+			return err
+		}
+	}
+	helper, err := filepath.Abs(filepath.Join(dir, "link-write"))
+	if err != nil {
+		return err
+	}
+	if out, err := exec.Command("xcrun", "clang", "-Wall", "-Wextra", "-Werror", source, "-o", helper).CombinedOutput(); err != nil {
+		return fmt.Errorf("link write compile: %w: %s", err, out)
+	}
+	out, err := exec.Command(helper).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("native link write: %w: %s", err, out)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "link-write.json"), out, 0600); err != nil {
+		return err
+	}
+	var observation struct {
+		Cases []struct {
+			Dangling, IdentityPreserved, ReferentUnchanged                      bool
+			OpenErrno, HeldMode, AccessMode, WriteCount, WriteErrno, CloseErrno int
+		}
+		CleanupVerified bool
+	}
+	if err := json.Unmarshal(out, &observation); err != nil {
+		return err
+	}
+	if len(observation.Cases) != 2 || !observation.CleanupVerified {
+		return fmt.Errorf("incomplete native link-write evidence: %s", out)
+	}
+	for i, c := range observation.Cases {
+		if c.Dangling != (i == 1) || !c.IdentityPreserved || !c.ReferentUnchanged || c.OpenErrno != 0 || c.HeldMode&0170000 != 0120000 || c.AccessMode != 1 || c.WriteCount != -1 || c.WriteErrno != 1 || c.CloseErrno != 0 {
+			return fmt.Errorf("native nofollow link-write behavior changed: %+v", c)
+		}
+	}
 	return nil
 }
 
