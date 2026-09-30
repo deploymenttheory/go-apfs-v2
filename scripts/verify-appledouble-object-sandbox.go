@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/evidenceaudit"
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/quarantinetime"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
 )
@@ -36,6 +37,10 @@ type outcome struct {
 	Code, Errno int
 	Stage       string
 	Sandboxed   bool
+}
+type invocation struct {
+	outcome
+	quarantinetime.Interval
 }
 type attribute struct{ Name, Value string }
 type metadata struct {
@@ -65,6 +70,85 @@ func inspect(oracle, path string) metadata {
 	must(json.Unmarshal(run(oracle, "inspect", path), &value))
 	sort.Slice(value.Attrs, func(i, j int) bool { return value.Attrs[i].Name < value.Attrs[j].Name })
 	return value
+}
+
+func compareMetadata(actual, expected metadata, goCall, nativeCall quarantinetime.Interval) error {
+	a, b := actual, expected
+	a.Attrs, b.Attrs = nil, nil
+	if !reflect.DeepEqual(a, b) {
+		return fmt.Errorf("non-xattr metadata differs")
+	}
+	if len(actual.Attrs) != len(expected.Attrs) {
+		return fmt.Errorf("attribute count differs")
+	}
+	quarantineName := hex.EncodeToString([]byte(appledouble.QuarantineName))
+	count := 0
+	for i, a := range actual.Attrs {
+		b := expected.Attrs[i]
+		if a.Name != b.Name {
+			return fmt.Errorf("attribute name/order differs")
+		}
+		if a.Name != quarantineName {
+			if a.Value != b.Value {
+				return fmt.Errorf("raw attribute %s differs", a.Name)
+			}
+			continue
+		}
+		count++
+		for _, v := range []struct {
+			label, encoded string
+			interval       quarantinetime.Interval
+		}{{"Go", a.Value, goCall}, {"native", b.Value, nativeCall}} {
+			data, err := hex.DecodeString(v.encoded)
+			if err != nil {
+				return err
+			}
+			// PACK labels its destination through ambient sandbox kernel writes;
+			// UNPACK applies the nonzero source quarantine explicitly. Both are
+			// process-generated regular-file labels in this fixture, not copied
+			// source timestamps. Every other raw byte remains an exact assertion.
+			if err := quarantinetime.Validate(data, []byte("0086;"), []byte(";object-probe;"), v.interval); err != nil {
+				return fmt.Errorf("%s: %w", v.label, err)
+			}
+		}
+	}
+	if count != 1 {
+		return fmt.Errorf("expected exactly one process-generated quarantine attribute, got%d", count)
+	}
+	return nil
+}
+
+func fixedSourceQuarantine(value metadata) error {
+	wantName := hex.EncodeToString([]byte(appledouble.QuarantineName))
+	for _, a := range value.Attrs {
+		if a.Name == wantName {
+			if a.Value != hex.EncodeToString([]byte("0080;6553f100;Fixture;")) {
+				return fmt.Errorf("fixed source quarantine changed: %s", a.Value)
+			}
+			return nil
+		}
+	}
+	return fmt.Errorf("fixed source quarantine absent")
+}
+
+func packedSourceQuarantine(data []byte) error {
+	f, err := appledouble.Decode(data)
+	if err != nil {
+		return err
+	}
+	count := 0
+	for _, a := range f.Attrs {
+		if a.Name == appledouble.QuarantineName {
+			count++
+			if !bytes.Equal(a.Value, []byte("q/0080;6553f100;Fixture;\x00")) {
+				return fmt.Errorf("packed source quarantine changed: %x", a.Value)
+			}
+		}
+	}
+	if count != 1 {
+		return fmt.Errorf("packed fixed source quarantine count%d", count)
+	}
+	return nil
 }
 func main() {
 	child := flag.Bool("sandbox-child", false, "internal signed operation")
@@ -106,7 +190,14 @@ func main() {
 	nativeApp := sign(work, "native", oracle, allowed, generated)
 	goApp := sign(work, "go", self, allowed, generated)
 	var cases []map[string]any
-	observe := func(binary, operation, source, target string, acl, stat bool) outcome {
+	var failures []string
+	check := func(name string, err error) {
+		if err != nil {
+			failures = append(failures, name+": "+err.Error())
+			fmt.Fprintln(os.Stderr, failures[len(failures)-1])
+		}
+	}
+	observe := func(binary, operation, source, target string, acl, stat bool) invocation {
 		a, b := "0", "0"
 		if acl {
 			a = "1"
@@ -119,8 +210,11 @@ func main() {
 			args = append(args, "-sandbox-child")
 		}
 		args = append(args, operation, source, target, a, b)
-		var result outcome
-		must(json.Unmarshal(run(args...), &result))
+		var result invocation
+		result.Start = time.Now().UTC()
+		data := run(args...)
+		result.End = time.Now().UTC()
+		must(json.Unmarshal(data, &result.outcome))
 		if !result.Sandboxed {
 			panic("operation did not enter actual sandbox")
 		}
@@ -155,7 +249,9 @@ func main() {
 				}
 				must(held.Chmod(0640))
 				must(held.SetTimes(time.Unix(1700000000, 0), time.Unix(1700000001, 0)))
+				var packedGo, packedNative quarantinetime.Interval
 				for _, operation := range []string{"pack", "unpack"} {
+					failureStart := len(failures)
 					sourceGo, sourceC := src.Name(), src.Name()
 					targetGo, targetC := files["go-packed"].Name(), files["native-packed"].Name()
 					if operation == "unpack" {
@@ -167,25 +263,39 @@ func main() {
 							must(os.Chtimes(files[key].Name(), time.Unix(1600000000, 0), time.Unix(1600000001, 0)))
 						}
 					}
+					sourceGoMetadata, sourceNativeMetadata := inspect(oracle, sourceGo), inspect(oracle, sourceC)
+					if operation == "pack" {
+						check(name+"/source", fixedSourceQuarantine(sourceGoMetadata))
+						check(name+"/native-source", fixedSourceQuarantine(sourceNativeMetadata))
+					} else {
+						check(name+"/inherited-packed-source", compareMetadata(sourceGoMetadata, sourceNativeMetadata, packedGo, packedNative))
+					}
 					expected := observe(nativeApp, operation, sourceC, targetC, acl, stat)
 					actual := observe(goApp, operation, sourceGo, targetGo, acl, stat)
+					if operation == "pack" {
+						packedGo, packedNative = actual.Interval, expected.Interval
+					}
 					if expected.Code != actual.Code || expected.Stage != actual.Stage || (expected.Code < 0 && expected.Errno != actual.Errno) {
-						panic(fmt.Sprintf("%s/%s outcome mismatch native%+v Go%+v", name, operation, expected, actual))
+						check(name+"/"+operation, fmt.Errorf("outcome mismatch native%+v Go%+v", expected, actual))
 					}
 					if expected.Code != 0 {
-						panic(fmt.Sprintf("scoped sandbox operation failed %s/%s: %+v", name, operation, expected))
+						check(name+"/"+operation, fmt.Errorf("scoped sandbox operation failed: %+v", expected))
 					}
 					goBytes, nativeBytes := read(targetGo), read(targetC)
 					if operation == "pack" && !bytes.Equal(nativeBytes, goBytes) {
-						panic(fmt.Sprintf("%s: sandbox packed bytes differ Go length=%d sha256=%s native length=%d sha256=%s", name, len(goBytes), hash(goBytes), len(nativeBytes), hash(nativeBytes)))
+						check(name+"/pack", fmt.Errorf("packed bytes differ Go length=%d sha256=%s native length=%d sha256=%s", len(goBytes), hash(goBytes), len(nativeBytes), hash(nativeBytes)))
+					}
+					if operation == "pack" {
+						check(name+"/go-wire", packedSourceQuarantine(goBytes))
+						check(name+"/native-wire", packedSourceQuarantine(nativeBytes))
 					}
 					goMetadata, nativeMetadata := inspect(oracle, targetGo), inspect(oracle, targetC)
-					if !reflect.DeepEqual(nativeMetadata, goMetadata) {
+					if err := compareMetadata(goMetadata, nativeMetadata, actual.Interval, expected.Interval); err != nil {
 						goJSON, _ := json.Marshal(goMetadata)
 						nativeJSON, _ := json.Marshal(nativeMetadata)
-						panic(fmt.Sprintf("%s/%s: sandbox metadata differs Go=%s native=%s", name, operation, goJSON, nativeJSON))
+						check(name+"/"+operation, fmt.Errorf("metadata comparison: %w; Go=%s native=%s boundsGo=%+v boundsNative=%+v", err, goJSON, nativeJSON, actual.Interval, expected.Interval))
 					}
-					cases = append(cases, map[string]any{"name": name + "/" + operation, "native": expected, "go": actual, "bytes_sha256": hash(read(targetGo)), "metadata_equal": true})
+					cases = append(cases, map[string]any{"name": name + "/" + operation, "native": expected, "go": actual, "go_bytes_sha256": hash(goBytes), "native_bytes_sha256": hash(nativeBytes), "go_metadata": goMetadata, "native_metadata": nativeMetadata, "go_source_metadata": sourceGoMetadata, "native_source_metadata": sourceNativeMetadata, "quarantine_timestamp_policy": "Each generated destination timestamp lies within its own complete invocation at exact encoded one-second precision; all other raw metadata and packed bytes are exact.", "passed": len(failures) == failureStart})
 				}
 				for _, file := range files {
 					must(file.Close())
@@ -196,23 +306,24 @@ func main() {
 	// Denied acquisition is real App Sandbox enforcement, not an injected errno.
 	// Both sides must report the same refusal before metadata mutation.
 	for _, operation := range []string{"pack", "unpack"} {
+		failureStart := len(failures)
 		source, target := filepath.Join(denied, "source"), filepath.Join(allowed, "denied-target")
 		must(os.WriteFile(source, []byte("denied"), 0600))
 		must(os.WriteFile(target, []byte("unchanged"), 0600))
 		expected := observe(nativeApp, operation, source, target, false, false)
 		actual := observe(goApp, operation, source, target, false, false)
-		if !reflect.DeepEqual(expected, actual) || expected.Code != -1 || expected.Stage != "open-source" || (expected.Errno != int(syscall.EACCES) && expected.Errno != int(syscall.EPERM)) {
-			panic(fmt.Sprintf("sandbox denied acquisition mismatch %+v %+v", expected, actual))
+		if !reflect.DeepEqual(expected.outcome, actual.outcome) || expected.Code != -1 || expected.Stage != "open-source" || (expected.Errno != int(syscall.EACCES) && expected.Errno != int(syscall.EPERM)) {
+			check("denied/"+operation, fmt.Errorf("sandbox denied acquisition mismatch %+v %+v", expected, actual))
 		}
 		if string(read(target)) != "unchanged" {
-			panic("denied acquisition mutated destination")
+			check("denied/"+operation, errors.New("denied acquisition mutated destination"))
 		}
-		cases = append(cases, map[string]any{"name": "denied/" + operation, "native": expected, "go": actual, "destination_unchanged": true})
+		cases = append(cases, map[string]any{"name": "denied/" + operation, "native": expected, "go": actual, "destination_unchanged": string(read(target)) == "unchanged", "passed": len(failures) == failureStart})
 	}
 	if len(cases) != 18 {
 		panic("incomplete signed object matrix")
 	}
-	hashes, err := evidenceaudit.SourceHashes(os.DirFS("."), []string{nativeSource, "testdata/appledouble/native/appledouble-object.c", "scripts/verify-appledouble-object-sandbox.go", "pkg/hostmeta/appledouble_object*.go", "pkg/hostmeta/held*.go", "pkg/hostmeta/quarantine*.go", "pkg/hostmeta/sandbox*.go", "pkg/hostmeta/xattr_intent*.go", "pkg/hostmeta/libsystem*.go", "go.mod", "go.sum"})
+	hashes, err := evidenceaudit.SourceHashes(os.DirFS("."), []string{nativeSource, "testdata/appledouble/native/appledouble-object.c", "scripts/verify-appledouble-object-sandbox.go", "internal/testutil/quarantinetime/*.go", "pkg/hostmeta/appledouble_object*.go", "pkg/hostmeta/held*.go", "pkg/hostmeta/quarantine*.go", "pkg/hostmeta/sandbox*.go", "pkg/hostmeta/xattr_intent*.go", "pkg/hostmeta/libsystem*.go", "go.mod", "go.sum"})
 	must(err)
 	must(os.RemoveAll(work))
 	must(os.RemoveAll(denied))
@@ -221,10 +332,13 @@ func main() {
 			panic("sandbox fixture cleanup failed")
 		}
 	}
-	report := map[string]any{"passed": true, "revision": strings.TrimSpace(string(run("git", "rev-parse", "HEAD"))), "goos": runtime.GOOS, "goarch": runtime.GOARCH, "host": string(run("sw_vers")), "cases": cases, "source_sha256": hashes, "ast_sha256": ast, "generated_sha256": generated, "container_lifecycle": "Two unique synthetic App Sandbox containers expire with the disposable GitHub-hosted VM. Application bundles and all allowed/denied fixture data are removed before success."}
+	report := map[string]any{"passed": len(failures) == 0, "failures": failures, "revision": strings.TrimSpace(string(run("git", "rev-parse", "HEAD"))), "goos": runtime.GOOS, "goarch": runtime.GOARCH, "host": string(run("sw_vers")), "cases": cases, "source_sha256": hashes, "ast_sha256": ast, "generated_sha256": generated, "container_lifecycle": "Two unique synthetic App Sandbox containers expire with the disposable GitHub-hosted VM. Application bundles and all allowed/denied fixture data are removed before success."}
 	data, err := json.MarshalIndent(report, "", "  ")
 	must(err)
 	must(os.WriteFile(filepath.Join(artifactDir, "report.json"), data, 0600))
+	if len(failures) != 0 {
+		panic(fmt.Sprintf("%d signed sandbox comparison failures; complete observations in %s/report.json", len(failures), artifactDir))
+	}
 	fmt.Printf("Qualified %d signed sandbox object/acquisition cases\n", len(cases))
 }
 func operate(args []string) {
