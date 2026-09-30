@@ -33,6 +33,8 @@ func Decompress(
 	}
 
 	switch compressionMethod {
+	case MethodNone, MethodRawMarked, MethodLZBITMAP:
+		return decompressStorage(compressedData, compressionMethod, uncompressedData, uncompressedDataSize)
 	case MethodDeflate:
 		return decompressDeflate(compressedData, uncompressedData, uncompressedDataSize)
 

@@ -26,6 +26,9 @@ func TestHeldMetadataNative(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err = h.DisableCache(); err != nil {
+		t.Fatal(err)
+	}
 	original, err := h.CaptureStat()
 	if err != nil {
 		t.Fatal(err)

@@ -9,11 +9,13 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"path/filepath"
 	"runtime"
 	"sort"
 	"syscall"
 	"time"
 
+	"github.com/deploymenttheory/go-apfs-v2/internal/decmpfs"
 	"github.com/deploymenttheory/go-apfs-v2/internal/unixmode"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
@@ -61,17 +63,30 @@ type projectionBackend interface {
 	SetBirth(time.Time) error
 	Chflags(uint32) error
 }
+type projectionMetadata interface {
+	WriteSecurity(hostmeta.DarwinChmodArguments) error
+	Chflags(uint32) error
+	CaptureStat() (hostmeta.StatCopySource, error)
+	CaptureACL() (hostmeta.ACLMetadata, error)
+	SetTimes(time.Time, time.Time) error
+}
+
 type nativeProjection struct {
 	file    *os.File
-	held    *hostmeta.HeldMetadata
+	held    projectionMetadata
 	heldErr error
+	symlink bool
 }
 
 func newNativeProjection(f *os.File) projectionBackend {
 	h, err := hostmeta.NewHeldMetadata(f)
-	return nativeProjection{f, h, err}
+	info, statErr := f.Stat()
+	isLink := statErr == nil && info.Mode()&os.ModeSymlink != 0
+	return nativeProjection{file: f, held: h, heldErr: errors.Join(err, statErr), symlink: isLink}
 }
-func (p nativeProjection) SetXattr(n string, v []byte) error { return hostmeta.SetXattr(p.file, n, v) }
+func (p nativeProjection) SetXattr(n string, v []byte) error {
+	return p.nativeError(hostmeta.SetXattr(p.file, n, v))
+}
 func (p nativeProjection) Security(s *appledouble.FileSecurity) error {
 	if p.heldErr != nil {
 		return p.heldErr
@@ -90,11 +105,18 @@ func (p nativeProjection) Chown(u, g uint32) error {
 	if err != nil && runtime.GOOS == "windows" {
 		return errors.Join(errors.ErrUnsupported, err)
 	}
-	return err
+	return p.nativeError(err)
 }
-func (p nativeProjection) Chmod(m uint16) error          { return p.file.Chmod(unixmode.FilePermissions(m)) }
-func (p nativeProjection) SetTimes(m, a time.Time) error { return hostmeta.SetFileTimes(p.file, m, a) }
-func (p nativeProjection) SetBirth(t time.Time) error    { return hostmeta.SetCreationTime(p.file, t) }
+func (p nativeProjection) Chmod(m uint16) error {
+	return p.nativeError(p.file.Chmod(unixmode.FilePermissions(m)))
+}
+func (p nativeProjection) SetTimes(m, a time.Time) error {
+	if p.heldErr == nil {
+		return p.held.SetTimes(m, a)
+	}
+	return p.nativeError(hostmeta.SetFileTimes(p.file, m, a))
+}
+func (p nativeProjection) SetBirth(t time.Time) error { return hostmeta.SetCreationTime(p.file, t) }
 func (p nativeProjection) Chflags(f uint32) error {
 	if p.heldErr != nil {
 		return p.heldErr
@@ -103,7 +125,7 @@ func (p nativeProjection) Chflags(f uint32) error {
 }
 
 func projectionConstraint(err error) bool {
-	return errors.Is(err, errors.ErrUnsupported) || errors.Is(err, hostmeta.ErrXattrUnsupported) || errors.Is(err, hostmeta.ErrXattrTooLarge) || errors.Is(err, hostmeta.ErrCreationTimeUnsupported) || errors.Is(err, fs.ErrPermission) || errors.Is(err, fs.ErrInvalid) || errors.Is(err, syscall.E2BIG) || errors.Is(err, syscall.ENOSPC) || errors.Is(err, appledouble.ErrFileSecurity)
+	return errors.Is(err, errors.ErrUnsupported) || errors.Is(err, hostmeta.ErrXattrUnsupported) || errors.Is(err, hostmeta.ErrXattrTooLarge) || errors.Is(err, hostmeta.ErrCreationTimeUnsupported) || errors.Is(err, hostmeta.ErrFileTimesUnsupported) || errors.Is(err, fs.ErrPermission) || errors.Is(err, fs.ErrInvalid) || errors.Is(err, syscall.E2BIG) || errors.Is(err, syscall.ENOSPC) || errors.Is(err, appledouble.ErrFileSecurity)
 }
 func (e *Extractor) projection(path, field string, err error) {
 	state := ProjectionApplied
@@ -144,14 +166,29 @@ func (e *Extractor) applyProjection(ctx context.Context, r metatransport.Record,
 		names = append(names, n)
 	}
 	sort.Strings(names)
-	_, compressed := attrs[hostmeta.DecmpfsName]
+	compression, compressed := attrs[hostmeta.DecmpfsName]
+	forkBacked := false
+	if compressed {
+		var shapeErr error
+		forkBacked, shapeErr = decmpfs.UsesResourceFork(compression)
+		if shapeErr != nil {
+			forkBacked = true
+			e.projection(r.Original, "compression-shape", errors.Join(fs.ErrInvalid, shapeErr))
+		}
+	}
 	for _, name := range names {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		if compressed && (name == hostmeta.DecmpfsName || name == hostmeta.ResourceForkName) {
+		if compressed && (name == hostmeta.DecmpfsName || (name == hostmeta.ResourceForkName && forkBacked)) {
 			e.projection(r.Original, "xattr:"+name, fmt.Errorf("payload is decompressed: %w", errors.ErrUnsupported))
 			continue
+		}
+		if name == hostmeta.ResourceForkName {
+			if writer, ok := b.(projectionForkWriter); ok {
+				e.projection(r.Original, "xattr:"+name, writer.ResourceFork(ctx, attrs[name], max))
+				continue
+			}
 		}
 		value, err := projectionBytes(ctx, attrs[name], max)
 		if err == nil {
@@ -175,7 +212,9 @@ func (e *Extractor) applyProjection(ctx context.Context, r metatransport.Record,
 		e.projection(r.Original, "mode", b.Chmod(uint16(*d.Mode&07777)))
 	}
 	if d.Modify != nil && d.Access != nil {
-		e.projection(r.Original, "modify/access", b.SetTimes(*d.Modify, *d.Access))
+		err := b.SetTimes(*d.Modify, *d.Access)
+		e.projection(r.Original, "modify", err)
+		e.projection(r.Original, "access", err)
 	}
 	if d.Birth != nil {
 		e.projection(r.Original, "birth", b.SetBirth(*d.Birth))
@@ -215,29 +254,40 @@ func (e *Extractor) verifyProjection(r metatransport.Record, native map[string][
 	}
 }
 
-func (e *Extractor) projectCarrier(ctx context.Context, payload *os.Root, store *metatransport.Store, records []metatransport.Record, limits hostmeta.XattrCaptureLimits, makeBackend func(*os.File) projectionBackend, capture func(context.Context, *os.File, hostmeta.XattrCaptureLimits) (map[string][]byte, error)) error {
+func (e *Extractor) projectCarrier(ctx context.Context, payload *os.Root, store *metatransport.Store, records []metatransport.Record, limits hostmeta.XattrCaptureLimits, makeBackend func(*os.File) projectionBackend, capture func(context.Context, *os.File, hostmeta.XattrCaptureLimits) (map[string][]byte, error), captureValues ...func(context.Context, *os.File, hostmeta.XattrCaptureLimits) (map[string]appledouble.Value, error)) error {
 	for i := len(records) - 1; i >= 0; i-- {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
 		r := &records[i]
-		if r.Kind == "symlink" {
-			e.projection(r.Original, "symlink-metadata", fmt.Errorf("held nofollow native projection unavailable: %w", errors.ErrUnsupported))
+		if r.Kind == "symlink" && r.MaterializedKind != "symlink" {
+			e.projection(r.Original, "symlink-metadata", fmt.Errorf("degraded symlink requires its logical carrier: %w", errors.ErrUnsupported))
 			continue
 		}
-		f, err := payload.Open(r.Materialized)
+		f, err := hostmeta.OpenMetadataFile(payload, filepath.FromSlash(r.Materialized))
 		if err != nil {
 			e.projection(r.Original, "open", err)
 			continue
 		}
 		attrs, err := store.BorrowRecordAttributes(ctx, *r)
+		backend := makeBackend(f)
 		if err == nil {
-			err = e.applyProjection(ctx, *r, attrs, limits.ValueBytes, makeBackend(f))
+			err = e.applyProjection(ctx, *r, attrs, limits.ValueBytes, backend)
 		}
 		if err != nil {
 			return errors.Join(err, f.Close())
 		}
-		native, captureErr := capture(ctx, f, limits)
+		var native map[string][]byte
+		var nativeValues map[string]appledouble.Value
+		var captureErr error
+		if len(captureValues) > 0 {
+			nativeValues, captureErr = captureValues[0](ctx, f, limits)
+		} else {
+			native, captureErr = capture(ctx, f, limits)
+		}
+		if r.Kind == "symlink" && runtime.GOOS == "linux" && errors.Is(captureErr, syscall.EBADF) {
+			captureErr = errors.Join(hostmeta.ErrXattrUnsupported, captureErr)
+		}
 		r.NativeAttributes = nil
 		r.NativeCaptured = false
 		r.NativeUnsupported = false
@@ -248,11 +298,23 @@ func (e *Extractor) projectCarrier(ctx context.Context, payload *os.Root, store 
 			e.projection(r.Original, "native-baseline", captureErr)
 		default:
 			r.NativeCaptured = true
-			r.NativeAttributes, err = store.StoreAttributes(ctx, native)
+			if len(captureValues) > 0 {
+				r.NativeAttributes, err = store.StoreAttributeValues(ctx, nativeValues)
+			} else {
+				r.NativeAttributes, err = store.StoreAttributes(ctx, native)
+			}
 			if err != nil {
 				return errors.Join(err, f.Close())
 			}
-			e.verifyProjection(*r, native)
+			e.verifyProjectionRefs(*r, r.NativeAttributes)
+		}
+		if reader, ok := backend.(projectionReadback); ok {
+			checks, readErr := reader.Readback(*r)
+			if readErr != nil {
+				e.projection(r.Original, "native-readback", readErr)
+			} else {
+				e.verifyProjectionChecks(*r, checks)
+			}
 		}
 		if err = f.Close(); err != nil {
 			e.projection(r.Original, "close", err)
@@ -268,4 +330,51 @@ func (e *Extractor) projectionError() error {
 		}
 	}
 	return err
+}
+
+func (p nativeProjection) nativeError(err error) error {
+	if p.symlink && runtime.GOOS == "linux" && errors.Is(err, syscall.EBADF) {
+		return errors.Join(errors.ErrUnsupported, err)
+	}
+	return err
+}
+
+type projectionForkWriter interface {
+	ResourceFork(context.Context, appledouble.Value, int) error
+}
+
+func (p nativeProjection) ResourceFork(ctx context.Context, value appledouble.Value, max int) error {
+	_, err := hostmeta.ReplaceResourceFork(ctx, p.file, value)
+	if !errors.Is(err, errors.ErrUnsupported) {
+		return err
+	}
+	if runtime.GOOS == "windows" {
+		max = min(max, 65535)
+	}
+	data, err := projectionBytes(ctx, value, max)
+	if err != nil {
+		return err
+	}
+	return p.SetXattr(hostmeta.ResourceForkName, data)
+}
+func (e *Extractor) verifyProjectionRefs(r metatransport.Record, native []metatransport.Attribute) {
+	refs := make(map[string]metatransport.BlobRef, len(native))
+	for _, a := range native {
+		refs[a.Name] = a.Value
+	}
+	for i := range e.projectionResults {
+		result := &e.projectionResults[i]
+		if result.Path != r.Original || result.Status != ProjectionApplied {
+			continue
+		}
+		for _, a := range r.Attributes {
+			if result.Field == "xattr:"+a.Name {
+				got, present := refs[a.Name]
+				result.Verified = present && got == a.Value
+				if !result.Verified {
+					result.Status = ProjectionNormalized
+				}
+			}
+		}
+	}
 }

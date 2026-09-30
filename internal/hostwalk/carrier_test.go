@@ -107,7 +107,7 @@ func TestCarrierWalkPreservesTree(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if got.Name != "" || got.Mode.Perm() != 0 || !got.ModeExplicit || got.Times.Change != change || got.UID != uid {
+	if got.Name != "" || got.Mode.Perm() != 0 || !got.ModeExplicit || got.Times == nil || !got.Times.Change.Equal(change) || got.UID != uid {
 		t.Fatalf("root %#v", got)
 	}
 	if report.Count(fidelity.Xattr) != 0 {
@@ -197,7 +197,7 @@ func TestCarrierWalkConflicts(t *testing.T) {
 func TestCarrierWalkCompressionAndSidecar(t *testing.T) {
 	p, m, s := carrierFixture(t)
 	r := carrierFile(t, p, "file", "file")
-	values := map[string][]byte{hostmeta.DecmpfsName: {1, 2}, hostmeta.ResourceForkName: {3, 4}}
+	values := map[string][]byte{hostmeta.DecmpfsName: compressionHeader(4), hostmeta.ResourceForkName: {3, 4}}
 	r.Attributes = attrsCarrier(t, s, values)
 	data, e := appledouble.FromXattrs(values).Encode()
 	if e != nil {

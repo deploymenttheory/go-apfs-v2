@@ -49,6 +49,12 @@ logical symlink targets must reconstruct correctly on every destination format.
 APFS's internal `com.apple.fs.symlink` storage is checked through link-target
 semantics; the native kernel does not expose it as an ordinary xattr.
 
+Every journey also carries the 14 retained native compression storage cases,
+covering raw, LZBITMAP, empty/boundary type 1 and independent resource forks.
+The [compression storage contract](appledouble-compression-storage.md) describes
+their native source evidence and bounds. Both byte and borrowed image APIs retain
+compressed metadata while presenting decompressed content through file reads.
+
 The test distinguishes source metadata from attributes the host creates while
 materializing payloads. An unchanged extraction must not introduce host-generated
 metadata into the reconstructed image. Changes to native attributes require an
@@ -100,8 +106,7 @@ It uploads the complete gzip-compressed output images plus metadata observations
 image hashes and provenance. A dependent macOS job downloads Linux and Windows
 outputs, requires the same revision and source contents, checks their image hashes
 against the native Mac run, and independently mounts and reads all 32 images.
-Source validation explicitly permits only LF/CRLF checkout conversion; unrelated
-source changes fail. Case inventories must be complete and unique.
+Source validation requires exact byte hashes; .gitattributes pins LF checkouts on all operating systems. Case inventories must be complete and unique.
 
 For a local replay of downloaded CI artifacts:
 

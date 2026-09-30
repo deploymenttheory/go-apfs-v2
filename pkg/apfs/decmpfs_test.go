@@ -132,6 +132,11 @@ func openDecmpfs(t *testing.T, payload []byte, uncompressedSize uint64, method i
 // two drifted apart numerically.
 func TestInternalCompressionMethodLZFSE(t *testing.T) {
 	supported := map[uint32]int{
+		1:  CompressionMethodNone,
+		9:  CompressionMethodRawMarked,
+		10: CompressionMethodRawMarked,
+		13: CompressionMethodLZBITMAP,
+		14: CompressionMethodLZBITMAP,
 		3:  CompressionMethodDeflate,
 		4:  CompressionMethodDeflate,
 		7:  CompressionMethodLZVN,
@@ -150,7 +155,7 @@ func TestInternalCompressionMethodLZFSE(t *testing.T) {
 		}
 	}
 
-	for _, decmpfsType := range []uint32{5, 9, 10, 13, 14, 99} {
+	for _, decmpfsType := range []uint32{5, 99} {
 		if _, err := internalCompressionMethod(decmpfsType); err == nil {
 			t.Errorf("type %d is not decodable but returned no error", decmpfsType)
 		}

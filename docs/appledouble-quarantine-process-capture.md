@@ -2,8 +2,31 @@
 
 The application planner needs the actual effective process flags and raw agent,
 or an explicit confirmation that no process quarantine label exists. A failed
-serialized snapshot is not enough to select either state. Capture remains a
-transport responsibility; the production API contains no macOS calls.
+serialized snapshot is not enough to select either state. The portable AppleDouble
+planner contains no macOS calls. Host acquisition is provided separately by
+`hostmeta.CaptureQuarantineProcess`.
+
+## Production capture
+
+`hostmeta.CaptureQuarantineProcess(ctx)` reads the current process on qualified
+macOS 26/27 hosts. It uses the fixed libSystem wrapper ABI measured below and
+returns owned raw agent, metadata and tracking byte slices. It never changes a
+label, queries another PID or infers effective state from a request. Two raw
+observations must agree; absence additionally requires libquarantine's independent
+self-capture to report `ENOATTR`. Permission errors, allocation failure, unknown
+ABIs and changing snapshots remain errors. Callers must exclude concurrent label
+changes because observed equality cannot detect a change followed by a reversal.
+
+Call the snapshot's `Process()` method to obtain exact planner input. A capture
+does not authorize a native write or turn an unqualified policy context into a
+supported one. Linux and Windows consume the same portable snapshot without
+native dependencies. Byte slices survive JSON as base64; opaque tracking bytes
+must be retained only when required and must not be written into diagnostic logs.
+
+`go run scripts/verify-quarantine-capture-native.go` compiles an independent C
+observer, retains Clang ASTs for both architectures and compares C and production
+Go capture inside the same process. The evidence records only payload lengths,
+toolchain/OS/source hashes and completion, not raw process tracking bytes.
 
 ## Using an absent context
 
@@ -45,7 +68,9 @@ wrapper ABI is declared in Apple's pinned
 The private process-info layout and operations were identified by inspecting the
 host library's `qtn_proc_init_with_pid` and
 `__qtn_syscall_quarantine_getprocinfo` routines, then measured independently.
-No numbered system calls, native library or native process are used in production.
+The portable policy uses no native library or process. The Darwin host adapter
+calls libSystem wrappers with CGo disabled; it does not issue numbered system
+calls. Native C helpers are used only for qualification.
 
 The extension records:
 
@@ -87,10 +112,31 @@ retrospectively relabeled as confirmed absence. The native macOS 26 mode also
 requires actual absent and present observations, so missing absence coverage
 cannot silently qualify the new behavior.
 
+## Held-file quarantine I/O
+
+`hostmeta.CaptureQuarantineFile` reads through the held descriptor and parses the
+returned envelope in Go. `ApplyQuarantineFile` checks that the captured process
+context still matches, serializes the source model in Go, and submits it through
+the libSystem MAC wrapper. The kernel performs destination authorization and
+normalization. Sending already normalized planner output through that operation
+would apply the native transformation twice.
+
+Captured logical objects use the portable application planner instead. This
+keeps Linux and Windows operations independent of a Darwin host, while the host
+adapter measures actual kernel results. A nil source requests native clearing;
+permission failures remain errors rather than becoming an absent value.
+
+Run `CGO_ENABLED=0 go run scripts/verify-quarantine-capture-native.go` on a qualified
+Mac to compare the production adapter against an independent C helper in the
+same process. It covers twelve flag/protected-file combinations and clearing,
+retains both architecture ASTs, and checks readback as well as return codes.
+These cases do not qualify every destination or privilege context.
+
 ## Remaining work
 
-Production capture and host transport still need integration, including capture
-races, additional privilege/tracking contexts and errors. An absent process on
+Production capture is implemented with observed-change detection and preserved
+errors. Host lifecycle integration and additional privilege contexts still need
+qualification. An absent process on
 macOS 27 is not qualified. Destination automatic creation, link transport,
 cleanup/callback behavior and the remaining size/allocation gaps
 also remain part of the [migration gate](appledouble-migration.md). Package PR #72

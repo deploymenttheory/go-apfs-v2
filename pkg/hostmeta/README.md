@@ -146,11 +146,12 @@ write-only and event-only descriptors are rejected. Other hosts return
 `ErrReadAccessUnsupported`; no timestamp-write emulation is performed. This is an
 explicit operation and does not change replacement API defaults.
 
-`SetCreationTime(file, when)` updates the creation time of an open regular file
+`SetCreationTime(file, when)` updates the creation time of an open regular file,
+directory or held symlink
 on Darwin with nanosecond precision and Windows with 100ns precision. Windows
 rejects values outside its representable range or precision. Replacing the original pathname does not change
 the target. Contents, access/modification times and other supported metadata remain
-unchanged. Hard-link names share the update. Nil, closed and non-regular files
+unchanged. Hard-link names share the update. Nil, closed and other special files
 fail; other hosts return `ErrCreationTimeUnsupported` without emulating the time.
 This is an explicit caller operation; replacement APIs retain their source
 creation-time preservation contract. Call it on a private staged file before
@@ -161,6 +162,14 @@ directories on Darwin, Linux and Windows. Native filesystem resolution can diffe
 read back results when exact projection matters. Store the original logical values
 in the portable carrier to retain nanoseconds or creation times unavailable on the
 host. These setters never fabricate a native metadata-change timestamp.
+
+`CaptureQuarantineProcess(ctx)` captures effective raw process quarantine state
+on macOS 26/27. Its owned snapshot retains binary agent/metadata/tracking values;
+`Process()` supplies the pure-Go application planner on every operating system.
+Capture does not change process state. Unknown ABIs and native capture on foreign
+hosts return an explicit unsupported error; callers supply a previously captured
+snapshot when applying Darwin policy on Linux or Windows. See
+[raw capture and native qualification](../../docs/appledouble-quarantine-process-capture.md).
 
 This package is the former `internal/hostmeta`, exposed for consumers such as
 `go-macos-codesign`. APFS/HFS+ writers, extraction, capacity checks and signing

@@ -31,6 +31,8 @@ const BlockSize = 65536
 const (
 	AttributeName    = "com.apple.decmpfs"
 	ResourceForkName = "com.apple.ResourceFork"
+	// MaxAttributeSize is XNU MAX_DECMPFS_XATTR_SIZE, including the header.
+	MaxAttributeSize = 3802
 )
 
 // Internal compression method codes. These are this package's own vocabulary,
@@ -39,10 +41,12 @@ const (
 // resource fork is decided by where it is read from rather than by how it is
 // decoded.
 const (
-	MethodNone    = 0
-	MethodDeflate = 1
-	MethodLZFSE   = 2
-	MethodLZVN    = 3
+	MethodNone      = 0
+	MethodDeflate   = 1
+	MethodLZFSE     = 2
+	MethodLZVN      = 3
+	MethodRawMarked = 4
+	MethodLZBITMAP  = 6
 
 	// MethodUnknown5 is retained only because it is reachable through a
 	// deprecated alias in pkg/apfs. Nothing maps to it: see MethodFor.
@@ -86,6 +90,12 @@ func MethodFor(decmpfsType uint32) (int, error) {
 		return MethodLZVN, nil
 	case 11, 12:
 		return MethodLZFSE, nil
+	case 1:
+		return MethodNone, nil
+	case 9, 10:
+		return MethodRawMarked, nil
+	case 13, 14:
+		return MethodLZBITMAP, nil
 
 	case 5:
 		// Not a compression type at all: it marks de-duplication within the
@@ -94,12 +104,6 @@ func MethodFor(decmpfsType uint32) (int, error) {
 		// silently returned the wrong contents for a file that has real data
 		// somewhere else. Refusing is the only safe answer.
 		return 0, fmt.Errorf("decmpfs type 5 (de-duplication within the generation store) does not describe file content and is not supported")
-	case 1:
-		return 0, fmt.Errorf("decmpfs uncompressed inline storage (type 1) is not supported yet")
-	case 9, 10:
-		return 0, fmt.Errorf("decmpfs uncompressed storage (type %d) is not supported yet", decmpfsType)
-	case 13, 14:
-		return 0, fmt.Errorf("decmpfs LZBITMAP compression (type %d) is not supported yet", decmpfsType)
 	default:
 		return 0, fmt.Errorf("unsupported decmpfs compression type: %d", decmpfsType)
 	}
@@ -114,6 +118,9 @@ func MethodFor(decmpfsType uint32) (int, error) {
 // first bytes of the compressed data as a block-offset table and produces
 // plausible nonsense. Checking here makes that mistake fail loudly instead.
 func CheckInline(attrValue []byte) error {
+	if len(attrValue) > MaxAttributeSize {
+		return fmt.Errorf("decmpfs attribute exceeds native %d-byte limit", MaxAttributeSize)
+	}
 	if len(attrValue) <= HeaderSize {
 		return fmt.Errorf("inline decmpfs attribute is %d bytes: too short to hold a %d-byte header and any data",
 			len(attrValue), HeaderSize)
@@ -150,6 +157,9 @@ func Validate(attrValue []byte, dataForkSize int, resourceFork []byte) error {
 // compression methods and structural rules as Validate, not compressed payload
 // integrity. Sources must remain immutable between validation and writing.
 func ValidateLayout(prefix []byte, attrSize, dataForkSize, resourceForkSize uint64) error {
+	if attrSize > MaxAttributeSize {
+		return fmt.Errorf("decmpfs attribute exceeds native %d-byte limit", MaxAttributeSize)
+	}
 	if uint64(len(prefix)) > attrSize || uint64(len(prefix)) < min(attrSize, uint64(HeaderSize)) {
 		return fmt.Errorf("decmpfs prefix length %d does not cover attribute header for %d bytes", len(prefix), attrSize)
 	}
@@ -172,6 +182,12 @@ func ValidateLayout(prefix []byte, attrSize, dataForkSize, resourceForkSize uint
 		return fmt.Errorf("a decmpfs-compressed file has an empty data fork, but this one has %d bytes of data",
 			dataForkSize)
 	}
+	if header.CompressionMethod == 1 && (header.UncompressedDataSize > ^uint64(0)-HeaderSize || header.UncompressedDataSize+HeaderSize != attrSize) {
+		return fmt.Errorf("decmpfs type 1 requires attribute size equal to header plus declared file size")
+	}
+	if header.CompressionMethod == 1 && header.UncompressedDataSize == 0 {
+		return nil
+	}
 
 	if StoresDataInResourceFork(header.CompressionMethod) {
 		if resourceForkSize == 0 {
@@ -186,10 +202,8 @@ func ValidateLayout(prefix []byte, attrSize, dataForkSize, resourceForkSize uint
 		return nil
 	}
 
-	if resourceForkSize != 0 {
-		return fmt.Errorf("decmpfs type %d stores its data inline, but the file also has a %s",
-			header.CompressionMethod, ResourceForkName)
-	}
+	// Inline compression leaves the catalog resource fork available for
+	// independent file metadata; native macOS retains and exposes that fork.
 	if attrSize <= HeaderSize {
 		return fmt.Errorf("inline decmpfs attribute is %d bytes: too short to hold a %d-byte header and any data", attrSize, HeaderSize)
 	}

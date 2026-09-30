@@ -58,6 +58,7 @@ jobs:
           - { pkg: ./pkg/disk, target: FuzzFindAPFSPartitionInAPM }
           - { pkg: ./pkg/disk, target: FuzzDecompressADC }
           - { pkg: ./pkg/compression/lzfse, target: FuzzDecompress }
+          - { pkg: ./pkg/compression/lzbitmap, target: FuzzLZBitmapDecompress }
           - { pkg: ./pkg/compression/lzfse, target: FuzzDecompressLZVN }
           - { pkg: ./pkg/compression/lzfse, target: FuzzRoundTrip }
     steps:

@@ -36,7 +36,7 @@ func verify() error {
 	defer log.Close()
 	var transcript bytes.Buffer
 	profile := filepath.Join(dir, "coverage.out")
-	cmd := exec.Command("go", "test", "-count=1", "-json", "-run", "^(TestCarrier|TestCaptureXattrs|TestLibSystem|TestRecordAttribute|TestNativeBaseline|TestOpenWalk|TestLazyCarrier|TestNodeAndValue|TestValue|TestXattrValue|TestVolumeXattrValues|TestStreamedValues|TestOpenEntryTree|TestHFSValues)", "-covermode=atomic", "-coverprofile="+profile, "-coverpkg=./pkg/metatransport,./pkg/hostmeta,./internal/hostwalk,./internal/tools,./pkg/apfs,./pkg/apfswrite,./pkg/hfsplus", "./pkg/metatransport", "./pkg/hostmeta", "./internal/hostwalk", "./internal/tools", "./pkg/apfs", "./pkg/apfswrite", "./pkg/hfsplus")
+	cmd := exec.Command("go", "test", "-count=1", "-json", "-run", "^(TestCarrier|TestCaptureXattrs|TestLibSystem|TestRecordAttribute|TestNativeBaseline|TestOpenWalk|TestLazyCarrier|TestNodeAndValue|TestValue|TestXattrValue|TestVolumeXattrValues|TestStreamedValues|TestOpenEntryTree|TestHFSValues|TestProjection|TestQuarantineCapture|TestQuarantineFile|TestACLIdentityCapture)", "-covermode=atomic", "-coverprofile="+profile, "-coverpkg=./pkg/metatransport,./pkg/hostmeta,./internal/hostwalk,./internal/tools,./pkg/apfs,./pkg/apfswrite,./pkg/hfsplus,./internal/decmpfs", "./pkg/metatransport", "./pkg/hostmeta", "./internal/hostwalk", "./internal/tools", "./pkg/apfs", "./pkg/apfswrite", "./pkg/hfsplus", "./internal/decmpfs")
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 	cmd.Stdout = io.MultiWriter(os.Stdout, log, &transcript)
 	cmd.Stderr = io.MultiWriter(os.Stderr, log)
@@ -64,12 +64,29 @@ func verify() error {
 		return e
 	}
 	covered, total := 0, 0
-	coverageFiles := map[string][2]int{"pkg/metatransport/carrier.go": {}, "pkg/metatransport/attributes.go": {}, "pkg/metatransport/values.go": {}, "internal/hostwalk/open.go": {}, "pkg/apfs/xattr_values.go": {}, "pkg/apfswrite/values.go": {}, "pkg/hostmeta/xattr_capture.go": {}, "internal/hostwalk/carrier.go": {}, "internal/tools/extract_carrier.go": {}}
+	coverageFiles := map[string][2]int{"pkg/metatransport/carrier.go": {}, "pkg/metatransport/attributes.go": {}, "pkg/metatransport/values.go": {}, "internal/hostwalk/open.go": {}, "pkg/apfs/xattr_values.go": {}, "pkg/apfswrite/values.go": {}, "pkg/hostmeta/xattr_capture.go": {}, "internal/hostwalk/carrier.go": {}, "internal/tools/extract_carrier.go": {}, "internal/tools/extract_projection.go": {}}
 	coverageFiles["pkg/hostmeta/xattr_capture_path_"+runtime.GOOS+".go"] = [2]int{}
 	coverageFiles["pkg/hfsplus/writer_values.go"] = [2]int{}
 	coverageFiles["pkg/hfsplus/attribute_values.go"] = [2]int{}
 	coverageFiles["pkg/hostmeta/filetime.go"] = [2]int{}
 	coverageFiles["pkg/hostmeta/file_times.go"] = [2]int{}
+	coverageFiles["internal/decmpfs/carrier_storage.go"] = [2]int{}
+	coverageFiles["internal/tools/extract_projection_readback.go"] = [2]int{}
+	coverageFiles["pkg/hostmeta/quarantine_capture.go"] = [2]int{}
+	for _, file := range []string{"pkg/hostmeta/acl_identity_capture.go", "pkg/hostmeta/quarantine_file.go", "pkg/hostmeta/resource_fork.go", "pkg/hostmeta/xattr_values.go", "pkg/metatransport/native_values.go", "internal/hostwalk/native_values.go"} {
+		coverageFiles[file] = [2]int{}
+	}
+	if runtime.GOOS == "darwin" {
+		coverageFiles["pkg/hostmeta/quarantine_capture_darwin.go"] = [2]int{}
+		coverageFiles["pkg/hostmeta/acl_identity_capture_darwin.go"] = [2]int{}
+		coverageFiles["pkg/hostmeta/quarantine_file_darwin.go"] = [2]int{}
+		coverageFiles["pkg/hostmeta/resource_fork_darwin.go"] = [2]int{}
+	} else {
+		coverageFiles["pkg/hostmeta/quarantine_capture_other.go"] = [2]int{}
+		coverageFiles["pkg/hostmeta/acl_identity_capture_other.go"] = [2]int{}
+		coverageFiles["pkg/hostmeta/quarantine_file_other.go"] = [2]int{}
+		coverageFiles["pkg/hostmeta/resource_fork_other.go"] = [2]int{}
+	}
 	if runtime.GOOS == "linux" {
 		coverageFiles["pkg/hostmeta/access_time_linux.go"] = [2]int{}
 	}
@@ -128,7 +145,14 @@ func verify() error {
 		return fmt.Errorf("incomplete image stat restoration tests: %d", passed)
 	}
 	files := []string{"scripts/verify-metadata-transport-coverage.go", "scripts/verify-metadata-transport.go", "go.mod", "go.sum"}
-	for _, pattern := range []string{"pkg/metatransport/*.go", "pkg/hostmeta/xattr_capture*.go", "pkg/hostmeta/libsystem_xattr*.go", "internal/hostwalk/carrier*.go", "internal/hostwalk/open*.go", "pkg/apfs/xattr_values*.go", "pkg/apfswrite/values*.go", "pkg/hfsplus/*values*.go", "pkg/hfsplus/values_test.go", "pkg/hfsplus/writer.go", "pkg/hfsplus/validate.go", "pkg/hostmeta/filetime*.go", "pkg/hostmeta/access_time*.go", "pkg/hostmeta/creation_time*.go", "internal/tools/extract_carrier*.go"} {
+	for _, pattern := range []string{"pkg/hostmeta/acl_identity_capture*.go", "pkg/hostmeta/quarantine_file*.go", "pkg/hostmeta/resource_fork*.go", "pkg/hostmeta/xattr_values*.go", "internal/hostwalk/native_values*.go", "pkg/hfsplus/root_values_test.go", "testdata/appledouble/native/acl-identity*.c", "testdata/appledouble/native/acl-identity-capture.json.gz", "scripts/verify-acl-identity-capture-native.go"} {
+		matches, err := filepath.Glob(pattern)
+		if err != nil {
+			return err
+		}
+		files = append(files, matches...)
+	}
+	for _, pattern := range []string{"pkg/metatransport/*.go", "pkg/hostmeta/xattr_capture*.go", "pkg/hostmeta/libsystem_xattr*.go", "internal/hostwalk/carrier*.go", "internal/hostwalk/open*.go", "pkg/apfs/xattr_values*.go", "pkg/apfswrite/values*.go", "pkg/hfsplus/*values*.go", "pkg/hfsplus/values_test.go", "pkg/hfsplus/writer.go", "pkg/hfsplus/validate.go", "pkg/hostmeta/filetime*.go", "pkg/hostmeta/quarantine_capture*.go", "internal/decmpfs/*.go", "pkg/hostmeta/file_times*.go", "pkg/hostmeta/access_time*.go", "pkg/hostmeta/creation_time*.go", "internal/tools/extract_carrier*.go", "internal/tools/extract_projection*.go"} {
 		matches, err := filepath.Glob(pattern)
 		if err != nil {
 			return err

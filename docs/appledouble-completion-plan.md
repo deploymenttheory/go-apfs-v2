@@ -144,7 +144,7 @@ execute the complete logical operation, replay the corpus and submit output for
 independent Mac inspection. Normalize only legitimately nondeterministic fields
 under a documented rule, never unexplained mismatches.
 
-The Go evidence auditor checks the required 20 portable report directories against
+The Go evidence auditor checks the required 22 portable report directories against
 the exact checkout revision and source hashes, raw coverage and JSONL transcript.
 Native semantic comparison remains the responsibility of each native harness.
 Extend the auditor inventory for every new gate and add end-to-end artifact

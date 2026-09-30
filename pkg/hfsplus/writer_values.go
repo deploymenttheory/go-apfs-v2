@@ -47,6 +47,21 @@ func validateAttributeName(name string) error {
 	return nil
 }
 
+// validateRootSources rejects content the root directory cannot store, including
+// the legacy zero-mode root which is still treated as a directory.
+func validateRootSources(root *Entry) error {
+	if kind := root.Mode.Type(); kind != 0 && kind != os.ModeDir {
+		return fmt.Errorf("hfsplus: volume root must be a directory")
+	}
+	if root.Data != nil || root.DataValue != nil || root.Open != nil || root.Size != 0 || root.ResourceFork != nil || root.ResourceForkValue != nil {
+		return fmt.Errorf("hfsplus: directory root cannot carry data or resource fork sources")
+	}
+	if _, compressed := compressedValue(root); compressed {
+		return fmt.Errorf("hfsplus: directory root cannot carry compressed file content")
+	}
+	return nil
+}
+
 // prepareValueTree owns only bounded inline copies; all large sources remain borrowed.
 func prepareValueTree(e *Entry, blockSize int) (*Entry, error) {
 	if e == nil {

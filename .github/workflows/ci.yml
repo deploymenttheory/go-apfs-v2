@@ -383,6 +383,62 @@ jobs:
           name: appledouble-pack
           path: artifacts/appledouble-pack/
           if-no-files-found: error
+      - name: Held metadata providers above 95% coverage
+        env:
+          CGO_ENABLED: "0"
+        run: go run scripts/verify-held-metadata.go
+      - name: Upload held metadata coverage
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: held-metadata-${{ matrix.os }}
+          path: artifacts/held-metadata/
+          if-no-files-found: error
+      - name: Compression storage above 95% coverage
+        env:
+          CGO_ENABLED: "0"
+        run: go run scripts/verify-decmpfs-formats-coverage.go
+      - name: Upload compression storage coverage
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: decmpfs-formats-coverage-${{ matrix.os }}
+          path: artifacts/decmpfs-formats-coverage/
+          if-no-files-found: error
+      - name: Native held metadata and projection comparisons
+        if: runner.os == 'macOS'
+        env:
+          CGO_ENABLED: "0"
+        run: |
+          go run scripts/verify-held-metadata-native.go
+          go run scripts/verify-held-lifecycle.go
+          go run scripts/verify-native-projection.go
+          go run scripts/verify-quarantine-capture-native.go
+          go run scripts/verify-acl-identity-capture-native.go
+      - name: Upload native held metadata and projection evidence
+        if: always() && runner.os == 'macOS'
+        uses: actions/upload-artifact@v7
+        with:
+          name: held-metadata-projection-native
+          path: |
+            artifacts/held-metadata-native/
+            artifacts/held-lifecycle/
+            artifacts/native-projection/
+            artifacts/quarantine-capture-native/
+            artifacts/acl-identity-capture-native/
+          if-no-files-found: error
+      - name: Native compression producer and kernel comparisons
+        if: runner.os == 'macOS'
+        env:
+          CGO_ENABLED: "0"
+        run: go run scripts/verify-decmpfs-formats.go
+      - name: Upload native compression storage evidence
+        if: always() && runner.os == 'macOS'
+        uses: actions/upload-artifact@v7
+        with:
+          name: decmpfs-formats-native
+          path: artifacts/decmpfs-formats/
+          if-no-files-found: error
       - name: Audit portable AppleDouble qualification evidence
         env:
           CGO_ENABLED: "0"

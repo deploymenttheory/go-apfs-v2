@@ -186,45 +186,13 @@ func (s *Store) validateValueSidecar(ctx context.Context, ref *BlobRef, values m
 // Baseline nil selects ordinary strict merging. Returned native values own
 // their bytes; logical readers retain the source's borrowed lifetime.
 func ReconcileAttributeValues(ctx context.Context, native, baseline map[string][]byte, logical map[string]appledouble.Value) (map[string]appledouble.Value, error) {
-	if ctx == nil {
-		return nil, fs.ErrInvalid
-	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	out := make(map[string]appledouble.Value, len(logical)+len(native))
-	for name, value := range logical {
-		if value == nil || value.Size() < 0 {
-			return nil, ErrInvalid
-		}
-		out[name] = value
-	}
-	for name := range baseline {
-		if _, exists := native[name]; !exists {
-			if _, carried := logical[name]; carried {
-				return nil, ErrConflict
-			}
-		}
-	}
+	owned := make(map[string]appledouble.Value, len(native))
+	prior := make(map[string]appledouble.Value, len(baseline))
 	for name, value := range native {
-		if old, exists := baseline[name]; exists && bytes.Equal(old, value) {
-			continue
-		}
-		if original, exists := logical[name]; exists {
-			if original.Size() != int64(len(value)) {
-				return nil, ErrConflict
-			}
-			h := sha256.New()
-			if err := copyExact(ctx, h, original, original.Size()); err != nil {
-				return nil, err
-			}
-			sum := sha256.Sum256(value)
-			if !bytes.Equal(sum[:], h.Sum(nil)) {
-				return nil, ErrConflict
-			}
-		} else {
-			out[name] = bytes.NewReader(bytes.Clone(value))
-		}
+		owned[name] = bytes.NewReader(bytes.Clone(value))
 	}
-	return out, ctx.Err()
+	for name, value := range baseline {
+		prior[name] = bytes.NewReader(value)
+	}
+	return ReconcileValues(ctx, owned, prior, logical)
 }

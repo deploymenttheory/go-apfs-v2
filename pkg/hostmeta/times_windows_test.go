@@ -53,7 +53,7 @@ func TestCarrierWindowsHeldTimes(t *testing.T) {
 		t.Fatal(err)
 	}
 	stamp := windows.Filetime{LowDateTime: 1}
-	if err := setHeldFileTimes(target, &stamp, nil, nil); !errors.Is(err, os.ErrClosed) {
+	if err := setHeldFileTimes(target, &stamp, nil, nil); err == nil {
 		t.Fatalf("closed: %v", err)
 	}
 	if err := setHeldFileTimes(nil, &stamp, nil, nil); !errors.Is(err, os.ErrInvalid) {

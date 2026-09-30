@@ -45,12 +45,12 @@ int main(int argc, char **argv) {
         return written == n && fflush(stdout) == 0 ? 0 : 1;
     }
     if (argc == 4 && strcmp(argv[1], "--xattr") == 0) {
-        ssize_t size = getxattr(argv[2], argv[3], NULL, 0, 0, XATTR_NOFOLLOW);
+        ssize_t size = getxattr(argv[2], argv[3], NULL, 0, 0, XATTR_NOFOLLOW|XATTR_SHOWCOMPRESSION);
         if (size < 0) { perror("getxattr size"); return 1; }
         if (size > 64 * 1024 * 1024) { fprintf(stderr, "oracle allocation bound\n"); return 1; }
         unsigned char *data = malloc(size ? (size_t)size : 1);
         if (!data) { perror("malloc"); return 1; }
-        ssize_t read = getxattr(argv[2], argv[3], data, size ? (size_t)size : 1, 0, XATTR_NOFOLLOW);
+        ssize_t read = getxattr(argv[2], argv[3], data, size ? (size_t)size : 1, 0, XATTR_NOFOLLOW|XATTR_SHOWCOMPRESSION);
         if (read != size) { perror("getxattr read"); free(data); return 1; }
         size_t written = fwrite(data, 1, (size_t)size, stdout);
         free(data);

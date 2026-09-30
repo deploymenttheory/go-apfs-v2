@@ -34,11 +34,10 @@ the whole volume is extracted.
 Exit code 6 indicates a partial extraction: some entries were skipped and a
 warning was printed to stderr for each.
 
---xattrs restores extended attributes onto the extracted files. Without it they
-are silently discarded, so extracting and repacking a tree is not a faithful
-round trip however capable the writer is. Attributes the kernel reserves, or
-that the destination file system will not take, are counted and reported rather
-than failing the extraction.
+--xattrs selects extended attributes for retention. With --metadata-root they
+are stored in the portable carrier. Without a carrier the tool attempts native
+attribute restoration and reports values the host filesystem cannot store.
+Omitting --xattrs excludes attributes from the extraction.
 
 --metadata-root selects a separate directory for portable metadata transport.
 With it, selected --xattrs/--preserve-meta categories are retained with original
@@ -69,8 +68,8 @@ func init() {
 	extractCmd.Flags().StringVarP(&extractDestination, "destination", "C", "", "destination directory (required)")
 	extractCmd.Flags().StringVar(&extractPattern, "pattern", "", "only extract files whose path matches this regex")
 	extractCmd.Flags().BoolVarP(&extractRecursive, "recursive", "r", false, "recurse into a directory PATH")
-	extractCmd.Flags().BoolVar(&extractPreserveMeta, "preserve-meta", false, "preserve permissions and timestamps")
-	extractCmd.Flags().BoolVar(&extractXattrs, "xattrs", false, "restore extended attributes onto the extracted files")
+	extractCmd.Flags().BoolVar(&extractPreserveMeta, "preserve-meta", false, "retain permissions and timestamps in the carrier, or restore native metadata without one")
+	extractCmd.Flags().BoolVar(&extractXattrs, "xattrs", false, "retain extended attributes in the carrier, or attempt native restoration without one")
 	extractCmd.Flags().BoolVar(&extractVerify, "verify", false, "verify extracted files against source checksums")
 	extractCmd.Flags().StringVar(&extractSymlinks, "symlinks", "auto", "symlink handling: auto, real or file")
 	extractCmd.Flags().StringVar(&extractMetadataRoot, "metadata-root", "", "separate directory for portable metadata; required again when repacking")
@@ -198,7 +197,11 @@ func runExtract(cmd *cobra.Command, args []string) error {
 	if extractProjectNative && opts.Output != "json" {
 		for _, r := range extractor.NativeProjectionResults() {
 			if r.Status != tools.ProjectionApplied || !r.Verified {
-				fmt.Fprintf(cmd.ErrOrStderr(), "Native metadata %s %s: %s (verified=%t): %v\n", r.Path, r.Field, r.Status, r.Verified, r.Err)
+				fmt.Fprintf(cmd.ErrOrStderr(), "Native metadata %s %s: %s (verified=%t)", r.Path, r.Field, r.Status, r.Verified)
+				if r.Err != nil {
+					fmt.Fprintf(cmd.ErrOrStderr(), ": %v", r.Err)
+				}
+				fmt.Fprintln(cmd.ErrOrStderr())
 			}
 		}
 	}

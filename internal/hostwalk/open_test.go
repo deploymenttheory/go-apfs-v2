@@ -3,7 +3,9 @@ package hostwalk
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"os"
@@ -167,7 +169,7 @@ func TestLazyCarrierBranches(t *testing.T) {
 					return map[string][]byte{"case": {2}}, nil
 				}
 			case "compressed", "decompress":
-				records[0].Attributes = attrsCarrier(t, s, map[string][]byte{hostmeta.DecmpfsName: {1}, hostmeta.ResourceForkName: {3}})
+				records[0].Attributes = attrsCarrier(t, s, map[string][]byte{hostmeta.DecmpfsName: compressionHeader(4), hostmeta.ResourceForkName: {3}})
 				o.Compression = name == "compressed"
 			case "alias", "alias-body", "alias-read":
 				records[0].LinkGroup = "shared"
@@ -205,7 +207,8 @@ func TestLazyCarrierBranches(t *testing.T) {
 				}
 			}
 			out, _, e := walkCarrierUsing(p, o, makeCarrierNode, capture)
-			wantErr := name == "keep" || name == "native-conflict" || name == "baseline-corrupt" || name == "alias-body" || name == "alias-read" || name == "logical-corrupt"
+			// A borrowed baseline is independent of the native allocation budget.
+			wantErr := name == "keep" || name == "native-conflict" || name == "alias-body" || name == "alias-read" || name == "logical-corrupt"
 			if wantErr {
 				if e == nil {
 					t.Fatal("expected failure")
@@ -289,3 +292,50 @@ func (fakeLazyInfo) Mode() os.FileMode  { return os.ModeDir }
 func (fakeLazyInfo) ModTime() time.Time { return time.Time{} }
 func (fakeLazyInfo) IsDir() bool        { return true }
 func (fakeLazyInfo) Sys() any           { return nil }
+
+func compressionHeader(method uint32) []byte {
+	p := make([]byte, 16)
+	copy(p, "fpmc")
+	binary.LittleEndian.PutUint32(p[4:], method)
+	return p
+}
+
+func TestCarrierDecompressRetainsIndependentFork(t *testing.T) {
+	for _, lazy := range []bool{false, true} {
+		for _, method := range []uint32{3, 4, 5} {
+			t.Run(fmt.Sprintf("%t/%d", lazy, method), func(t *testing.T) {
+				p, m, s := carrierFixture(t)
+				r := carrierFile(t, p, "file", "file")
+				r.Attributes = attrsCarrier(t, s, map[string][]byte{hostmeta.DecmpfsName: append(compressionHeader(method), 0xff), hostmeta.ResourceForkName: []byte("fork"), "other": {9}})
+				commitCarrier(t, s, []metatransport.Record{r})
+				opts := &Options{MetadataRoot: m}
+				if lazy {
+					root, err := os.OpenRoot(p)
+					if err != nil {
+						t.Fatal(err)
+					}
+					opts.owner = &treeOwner{root: root, ctx: context.Background(), closers: []io.Closer{root}}
+					defer opts.owner.close()
+				}
+				got, _, err := walkCarrierUsing(p, opts, makeCarrierNode, emptyCapture)
+				if method == 5 {
+					if err == nil {
+						t.Fatal("unknown compression shape accepted")
+					}
+					return
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+				attrs := nodeValues(got.Children[0].Node)
+				_, present := attrs[hostmeta.ResourceForkName]
+				if present != (method == 3) {
+					t.Fatal("independent fork lost", attrs)
+				}
+				if _, present = attrs["other"]; !present {
+					t.Fatal("unrelated attribute lost")
+				}
+			})
+		}
+	}
+}

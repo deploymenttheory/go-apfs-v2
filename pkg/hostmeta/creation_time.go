@@ -12,7 +12,8 @@ import (
 // setter. No modification-time or extended-attribute substitute is written.
 var ErrCreationTimeUnsupported = errors.New("creation time is unsupported on this host")
 
-// SetCreationTime sets the creation time of an already-open regular file on
+// SetCreationTime sets the creation time of an already-open regular file,
+// directory or symlink on
 // Darwin (nanoseconds) or Windows (100-nanosecond precision). Windows refuses
 // unrepresentable times instead of rounding. Other hosts return ErrCreationTimeUnsupported.
 // It leaves contents, access/modification times, ownership, mode, ACLs and xattrs
@@ -30,8 +31,8 @@ func SetCreationTime(file *os.File, when time.Time) error {
 	if err != nil {
 		return err
 	}
-	if !info.Mode().IsRegular() {
-		return fmt.Errorf("set creation time: %w: require a regular file", os.ErrInvalid)
+	if !info.Mode().IsRegular() && !info.IsDir() && info.Mode()&os.ModeSymlink == 0 {
+		return fmt.Errorf("set creation time: %w: require a regular file, directory or held symlink", os.ErrInvalid)
 	}
 	return setCreationTime(file, when)
 }

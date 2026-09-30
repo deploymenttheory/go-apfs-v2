@@ -185,6 +185,7 @@ func TestRootMetadataImages(t *testing.T) {
 func TestRootMetadataValidation(t *testing.T) {
 	for _, root := range []*apfswrite.Entry{
 		{Mode: os.ModeSymlink}, {Mode: os.ModeNamedPipe}, {Mode: os.ModeDevice},
+		{DataValue: bytes.NewReader(nil)},
 		{Xattrs: map[string][]byte{"": {1}}}, {Xattrs: map[string][]byte{"bad\x00name": {1}}},
 		{Xattrs: map[string][]byte{"com.apple.fs.symlink": []byte("target")}},
 		{Xattrs: map[string][]byte{"com.apple.decmpfs": {1}}},

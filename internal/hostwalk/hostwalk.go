@@ -25,7 +25,8 @@ import (
 
 // Options tunes a walk.
 type Options struct {
-	owner *treeOwner
+	owner        *treeOwner
+	nativeValues func(context.Context, *os.Root, string, hostmeta.XattrCaptureLimits) (map[string]appledouble.Value, error)
 	// KeepName selects names without reading a borrowed value.
 	KeepName       func(string) bool
 	MetadataRoot   string
@@ -192,7 +193,14 @@ func (w *walker[E]) readDir(dir, rel string) ([]E, error) {
 		}
 
 		var compressionCarried bool
-		node.Xattrs, compressionCarried = w.collectXattrs(full, childRel)
+		if w.opts.owner != nil && w.opts.nativeValues != nil {
+			node.XattrValues, compressionCarried, err = w.collectValueXattrs(childRel)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			node.Xattrs, compressionCarried = w.collectXattrs(full, childRel)
+		}
 		node.LinkGroup = w.noteLinks(childRel, info)
 		w.noteCompression(childRel, info, compressionCarried)
 		w.noteBSDFlags(childRel, info)

@@ -123,6 +123,26 @@ func tree() *apfswrite.Entry {
 		root.Children = append(root.Children, e)
 	}
 	root.Children = append(root.Children, &apfswrite.Entry{Name: "directory", Mode: os.ModeDir | os.ModeSticky | 0755, UID: 501, GID: 20, Times: times, BSDFlags: &flags, Xattrs: map[string][]byte{"org.example.directory": {4}}}, &apfswrite.Entry{Name: "link", Mode: os.ModeSymlink | 0755, UID: 501, GID: 20, Times: times, BSDFlags: &flags, Data: []byte("ordinary"), Xattrs: map[string][]byte{"org.example.link": {5}}})
+	z, err := gzip.NewReader(bytes.NewReader(read("testdata/appledouble/native/decmpfs-formats.json.gz")))
+	must(err)
+	var fixture struct {
+		Cases []struct {
+			Name            string
+			Attribute, Fork []byte
+		}
+	}
+	must(json.NewDecoder(z).Decode(&fixture))
+	must(z.Close())
+	if len(fixture.Cases) != 14 {
+		panic("incomplete native compression fixture")
+	}
+	for _, c := range fixture.Cases {
+		attrs := map[string][]byte{"com.apple.decmpfs": c.Attribute}
+		if c.Fork != nil {
+			attrs[hostmeta.ResourceForkName] = c.Fork
+		}
+		root.Children = append(root.Children, &apfswrite.Entry{Name: "compressed-" + c.Name, Mode: 0644, UID: 501, GID: 20, Times: times, Xattrs: attrs})
+	}
 	return root
 }
 func create(name, kind string, a *apfswrite.Entry, h *hfsplus.Entry) {
@@ -373,7 +393,7 @@ func main() {
 	must(e)
 	must(os.MkdirAll(outputRoot, 0755))
 	evidence = report{Revision: strings.TrimSpace(string(run("git", "rev-parse", "HEAD"))), GOOS: runtime.GOOS, GOARCH: runtime.GOARCH, Go: runtime.Version(), SourceSHA256: map[string]string{}}
-	files := []string{"scripts/verify-metadata-transport.go", "testdata/appledouble/native/metadata-transport.c", "go.mod", "go.sum"}
+	files := []string{"scripts/verify-metadata-transport.go", "testdata/appledouble/native/metadata-transport.c", "testdata/appledouble/native/decmpfs-formats.json.gz", "go.mod", "go.sum"}
 	for _, pattern := range []string{"internal/tools/extract*.go", "internal/hostwalk/*.go", "internal/decmpfs/*.go", "internal/bsdflags/*.go", "pkg/metatransport/*.go", "pkg/hostmeta/*.go", "pkg/apfs/*.go", "pkg/apfswrite/*.go", "pkg/hfsplus/*.go"} {
 		matches, err := filepath.Glob(pattern)
 		must(err)
@@ -405,9 +425,7 @@ func main() {
 		}
 		for name := range evidence.SourceSHA256 {
 			b := read(name)
-			lf := bytes.ReplaceAll(b, []byte("\r\n"), []byte("\n"))
-			crlf := bytes.ReplaceAll(lf, []byte("\n"), []byte("\r\n"))
-			if f.SourceSHA256[name] != digest(b) && f.SourceSHA256[name] != digest(lf) && f.SourceSHA256[name] != digest(crlf) {
+			if f.SourceSHA256[name] != digest(b) {
 				panic("foreign source hash: " + name)
 			}
 		}

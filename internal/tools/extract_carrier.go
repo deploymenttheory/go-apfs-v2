@@ -286,7 +286,7 @@ func (e *Extractor) extractCarrierUsing(root, destBase string, ops carrierExtrac
 		if e.NativeCaptureLimits != nil {
 			captureLimits = *e.NativeCaptureLimits
 		}
-		if err = e.projectCarrier(ctx, payload, store, manifest.Records, captureLimits, newNativeProjection, hostmeta.CaptureXattrs); err != nil {
+		if err = e.projectCarrier(ctx, payload, store, manifest.Records, captureLimits, newNativeProjection, hostmeta.CaptureXattrs, hostmeta.CaptureXattrValues); err != nil {
 			return err
 		}
 	}

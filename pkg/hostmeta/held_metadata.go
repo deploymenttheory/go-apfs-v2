@@ -22,9 +22,11 @@ type heldMetadataOperations interface {
 	SecurityCopyBackend
 	StatCopyBackend
 	CaptureSecurity() (SecurityCopySource, error)
+	CaptureSecurityState() (SecurityCopySource, StatCopySource, error)
 	CaptureStat() (StatCopySource, error)
 	CaptureACL() (ACLMetadata, error)
 	WriteACL(ACLMetadata) error
+	DisableCache() error
 }
 
 // NewHeldMetadata binds a Darwin descriptor. It neither takes ownership nor
@@ -113,9 +115,14 @@ type MetadataState struct {
 // Darwin principals to local users. Persist Snapshot into an image or carrier.
 // Methods are not concurrent; the operation owns this state and SourceCache.
 type LogicalMetadata struct {
-	state       MetadataState
-	SourceCache *SecurityCopySource
+	state         MetadataState
+	SourceCache   *SecurityCopySource
+	cacheDisabled bool
 }
+
+// DisableCache records the descriptor caching request on this logical endpoint.
+// It does not change persistent inode metadata or the receiving host's cache.
+func (m *LogicalMetadata) DisableCache() error { m.cacheDisabled = true; return nil }
 
 // NewLogicalMetadata validates and copies the supplied complete state.
 func NewLogicalMetadata(state MetadataState) (*LogicalMetadata, error) {
@@ -138,6 +145,12 @@ func (m *LogicalMetadata) Snapshot() MetadataState {
 
 func (m *LogicalMetadata) CaptureSecurity() (SecurityCopySource, error) {
 	return cloneSecurityCopySource(m.state.Security)
+}
+
+// CaptureSecurityState returns security and stat from the same logical object.
+func (m *LogicalMetadata) CaptureSecurityState() (SecurityCopySource, StatCopySource, error) {
+	s, err := m.CaptureSecurity()
+	return s, m.state.Stat, err
 }
 func (m *LogicalMetadata) CaptureStat() (StatCopySource, error) { return m.state.Stat, nil }
 func (m *LogicalMetadata) CaptureACL() (ACLMetadata, error) {

@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
 	"io"
-	"sort"
 	"strings"
 )
 
@@ -47,32 +46,11 @@ func (a *Attribute) UnmarshalJSON(b []byte) error {
 // order. Input bytes are borrowed and must not change until return. Cancellation
 // or failure returns no partial attribute list; unreferenced blobs are harmless.
 func (s *Store) StoreAttributes(ctx context.Context, values map[string][]byte) ([]Attribute, error) {
-	if e := s.check(ctx); e != nil {
-		return nil, e
+	borrowed := make(map[string]appledouble.Value, len(values))
+	for name, value := range values {
+		borrowed[name] = bytes.NewReader(value)
 	}
-	if len(values) > s.limits.Attributes {
-		return nil, ErrLimit
-	}
-	names := make([]string, 0, len(values))
-	for name := range values {
-		if name == "" || strings.ContainsRune(name, 0) {
-			return nil, ErrInvalid
-		}
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	out := make([]Attribute, 0, len(names))
-	for _, name := range names {
-		r, e := s.PutBlob(ctx, bytes.NewReader(values[name]), int64(len(values[name])))
-		if e != nil {
-			return nil, e
-		}
-		out = append(out, Attribute{name, r})
-	}
-	if e := ctx.Err(); e != nil {
-		return nil, e
-	}
-	return out, nil
+	return s.StoreAttributeValues(ctx, borrowed)
 }
 
 // ReadAttributes materializes a bounded logical snapshot. maxBytes is the total

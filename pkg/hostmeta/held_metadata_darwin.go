@@ -17,6 +17,10 @@ type nativeHeldMetadata struct {
 	abi  *darwinSecurityABI
 }
 
+func (m *nativeHeldMetadata) DisableCache() error {
+	return m.control(func(fd int32) error { _, err := unix.FcntlInt(uintptr(fd), unix.F_NOCACHE, 1); return err })
+}
+
 func newHeldMetadata(file *os.File) (heldMetadataOperations, error) {
 	conn, err := file.SyscallConn()
 	if err != nil {
@@ -45,6 +49,11 @@ func (m *nativeHeldMetadata) control(fn func(int32) error) error {
 }
 
 func (m *nativeHeldMetadata) CaptureSecurity() (result SecurityCopySource, err error) {
+	result, _, err = m.CaptureSecurityState()
+	return result, err
+}
+
+func (m *nativeHeldMetadata) CaptureSecurityState() (result SecurityCopySource, statResult StatCopySource, err error) {
 	err = m.control(func(fd int32) error {
 		sec := m.abi.init()
 		if sec == 0 {
@@ -54,6 +63,7 @@ func (m *nativeHeldMetadata) CaptureSecurity() (result SecurityCopySource, err e
 		var stat unix.Stat_t
 		err := m.abi.call(func() int32 { return m.abi.stat(fd, &stat, sec) })
 		result.UID, result.GID, result.Mode = stat.Uid, stat.Gid, uint32(stat.Mode)
+		statResult = heldStatMetadata(stat)
 		if err != nil {
 			return err
 		}
@@ -66,7 +76,7 @@ func (m *nativeHeldMetadata) CaptureSecurity() (result SecurityCopySource, err e
 	if errors.Is(err, syscall.EPERM) {
 		err = errors.Join(ErrSecuritySourceNotPermitted, err)
 	}
-	return result, err
+	return result, statResult, err
 }
 
 func (m *nativeHeldMetadata) CaptureStat() (result StatCopySource, err error) {
@@ -75,11 +85,14 @@ func (m *nativeHeldMetadata) CaptureStat() (result StatCopySource, err error) {
 		if err := unix.Fstat(int(fd), &stat); err != nil {
 			return err
 		}
-		result = StatCopySource{UID: stat.Uid, GID: stat.Gid, Mode: uint32(stat.Mode), Flags: stat.Flags,
-			Times: FileTimes{Birth: time.Unix(stat.Btim.Sec, stat.Btim.Nsec), Modify: time.Unix(stat.Mtim.Sec, stat.Mtim.Nsec), Change: time.Unix(stat.Ctim.Sec, stat.Ctim.Nsec), Access: time.Unix(stat.Atim.Sec, stat.Atim.Nsec)}}
+		result = heldStatMetadata(stat)
 		return nil
 	})
 	return result, err
+}
+
+func heldStatMetadata(stat unix.Stat_t) StatCopySource {
+	return StatCopySource{UID: stat.Uid, GID: stat.Gid, Mode: uint32(stat.Mode), Flags: stat.Flags, Times: FileTimes{Birth: time.Unix(stat.Btim.Sec, stat.Btim.Nsec), Modify: time.Unix(stat.Mtim.Sec, stat.Mtim.Nsec), Change: time.Unix(stat.Ctim.Sec, stat.Ctim.Nsec), Access: time.Unix(stat.Atim.Sec, stat.Atim.Nsec)}}
 }
 func (m *nativeHeldMetadata) CaptureACL() (ACLMetadata, error) {
 	s, err := m.CaptureSecurity()

@@ -221,6 +221,9 @@ func CreateImage(w io.WriterAt, sizeBytes int64, volumeName string, root *Entry,
 	if root == nil {
 		root = &Entry{}
 	}
+	if err := validateRootSources(root); err != nil {
+		return err
+	}
 	var prepareErr error
 	root, prepareErr = prepareValueTree(root, blockSize)
 	if prepareErr != nil {

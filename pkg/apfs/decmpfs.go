@@ -12,10 +12,12 @@ import (
 
 // Compression method constants.
 const (
-	CompressionMethodNone    = decmpfs.MethodNone
-	CompressionMethodDeflate = decmpfs.MethodDeflate
-	CompressionMethodLZFSE   = decmpfs.MethodLZFSE
-	CompressionMethodLZVN    = decmpfs.MethodLZVN
+	CompressionMethodNone      = decmpfs.MethodNone
+	CompressionMethodDeflate   = decmpfs.MethodDeflate
+	CompressionMethodLZFSE     = decmpfs.MethodLZFSE
+	CompressionMethodLZVN      = decmpfs.MethodLZVN
+	CompressionMethodRawMarked = decmpfs.MethodRawMarked
+	CompressionMethodLZBITMAP  = decmpfs.MethodLZBITMAP
 
 	// Deprecated: decmpfs type 5 marks de-duplication within the generation
 	// store rather than a compression method, so nothing maps to this and no

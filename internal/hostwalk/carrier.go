@@ -1,6 +1,7 @@
 package hostwalk
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -9,6 +10,8 @@ import (
 	"path"
 	"path/filepath"
 
+	"github.com/deploymenttheory/go-apfs-v2/internal/decmpfs"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/fidelity"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/metatransport"
@@ -120,7 +123,13 @@ func walkCarrierBound[E any](dir string, opts *Options, mk func(Node, []E) E, ca
 		}
 		// Capture the host namespace separately. Unsupported native namespaces can
 		// still carry complete logical metadata via this explicit carrier.
-		native, e := captureAttrs(ctx, filepath.Join(dir, filepath.FromSlash(rel)), capture)
+		var native map[string][]byte
+		var nativeValues map[string]appledouble.Value
+		if opts.owner != nil && opts.nativeValues != nil {
+			nativeValues, e = opts.nativeValues(ctx, opts.owner.root, filepath.FromSlash(rel), capture)
+		} else {
+			native, e = captureAttrs(ctx, filepath.Join(dir, filepath.FromSlash(rel)), capture)
+		}
 		if errors.Is(e, hostmeta.ErrXattrUnsupported) {
 			native = map[string][]byte{}
 		} else if e != nil {
@@ -133,14 +142,20 @@ func walkCarrierBound[E any](dir string, opts *Options, mk func(Node, []E) E, ca
 					return zero, e
 				}
 			}
-			var baseline map[string][]byte
+			var baseline map[string]appledouble.Value
 			if recorded && (record.NativeCaptured || record.NativeUnsupported) {
-				baseline, e = store.ReadNativeBaseline(ctx, record, int64(capture.TotalBytes))
+				baseline, e = store.BorrowAttributes(ctx, record.NativeAttributes)
 				if e != nil {
 					return zero, e
 				}
 			}
-			node.XattrValues, e = metatransport.ReconcileAttributeValues(ctx, native, baseline, node.XattrValues)
+			if nativeValues == nil {
+				nativeValues = map[string]appledouble.Value{}
+				for name, value := range native {
+					nativeValues[name] = bytes.NewReader(value)
+				}
+			}
+			node.XattrValues, e = metatransport.ReconcileValues(ctx, nativeValues, baseline, node.XattrValues)
 			if e != nil {
 				return zero, e
 			}
@@ -229,10 +244,20 @@ func walkCarrierBound[E any](dir string, opts *Options, mk func(Node, []E) E, ca
 				node.Data = nil
 			} else {
 				if compressed {
+					value := node.XattrValues[hostmeta.DecmpfsName]
+					if value == nil {
+						value = bytes.NewReader(node.Xattrs[hostmeta.DecmpfsName])
+					}
+					forkBacked, shapeErr := decmpfs.UsesResourceFork(value)
+					if shapeErr != nil {
+						return zero, shapeErr
+					}
 					delete(node.Xattrs, hostmeta.DecmpfsName)
-					delete(node.Xattrs, hostmeta.ResourceForkName)
 					delete(node.XattrValues, hostmeta.DecmpfsName)
-					delete(node.XattrValues, hostmeta.ResourceForkName)
+					if forkBacked {
+						delete(node.Xattrs, hostmeta.ResourceForkName)
+						delete(node.XattrValues, hostmeta.ResourceForkName)
+					}
 					if node.BSDFlags != nil {
 						flags := *node.BSDFlags &^ hostmeta.UFCompressed
 						node.BSDFlags = &flags

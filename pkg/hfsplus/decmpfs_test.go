@@ -182,16 +182,16 @@ func TestDecmpfsRejectsInconsistentVolume(t *testing.T) {
 	})
 
 	t.Run("undecodable compression type", func(t *testing.T) {
-		// Type 13 is LZBITMAP: recognized, deliberately not decoded.
-		attrValue := append(decmpfsHeaderBytes(13, 100), make([]byte, 8)...)
+		// Type 5 is external generation-store content, not a compression codec.
+		attrValue := append(decmpfsHeaderBytes(5, 100), make([]byte, 8)...)
 		v := attrVolume(t, 512, []btRecord{
 			{key: encodeAttrKey(fileID, decmpfsAttrName, 0), payload: attrInlineRecord(attrValue)},
 		}, nil)
 		_, err := v.dataForkReader(compressedEntry(fileID, ForkData{}))
 		if err == nil {
-			t.Fatal("an LZBITMAP file was accepted")
+			t.Fatal("an external generation-store file was accepted")
 		}
-		if !bytes.Contains([]byte(err.Error()), []byte("LZBITMAP")) {
+		if !bytes.Contains([]byte(err.Error()), []byte("generation store")) {
 			t.Errorf("error %q does not name the format", err)
 		}
 	})

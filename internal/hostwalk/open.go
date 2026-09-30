@@ -13,6 +13,7 @@ import (
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/fidelity"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/metatransport"
 )
 
@@ -55,6 +56,7 @@ func OpenWalk[E any](dir string, opts *Options, mk func(Node, []E) E) (*Tree[E],
 	}
 	owner := &treeOwner{root: root, ctx: ctx, closers: []io.Closer{root}}
 	o.owner = owner
+	o.nativeValues = hostmeta.CaptureXattrValuesAt
 	out, report, err := Walk(dir, &o, mk)
 	if err != nil {
 		return nil, errors.Join(err, owner.close())

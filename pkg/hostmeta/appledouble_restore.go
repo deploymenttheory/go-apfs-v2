@@ -24,6 +24,7 @@ const (
 	UnpackOrdinary     UnpackStage = "ordinary"
 	UnpackFinderInfo   UnpackStage = "finder-info"
 	UnpackResourceFork UnpackStage = "resource-fork"
+	UnpackQuarantine   UnpackStage = "quarantine"
 )
 
 // UnpackNotice carries the current progress counter. Dedicated slots do not

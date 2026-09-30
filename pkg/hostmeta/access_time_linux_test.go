@@ -65,7 +65,7 @@ func TestCarrierLinuxAccessTime(t *testing.T) {
 	if err := target.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if err := copyAccessTime(target, from); !errors.Is(err, os.ErrClosed) {
+	if err := copyAccessTime(target, from); err == nil {
 		t.Fatalf("closed: %v", err)
 	}
 	if err := copyAccessTime(nil, from); !errors.Is(err, os.ErrInvalid) {

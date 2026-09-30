@@ -3,6 +3,7 @@ package tools
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"errors"
 	"io"
 	"io/fs"
@@ -47,7 +48,7 @@ func TestProjectionExecutionAndOutcomes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	attrs := map[string]appledouble.Value{"z": bytes.NewReader([]byte{1}), hostmeta.SecurityName: bytes.NewReader(security), hostmeta.DecmpfsName: bytes.NewReader([]byte{3}), hostmeta.ResourceForkName: bytes.NewReader([]byte{4})}
+	attrs := map[string]appledouble.Value{"z": bytes.NewReader([]byte{1}), hostmeta.SecurityName: bytes.NewReader(security), hostmeta.DecmpfsName: bytes.NewReader(projectionCompression(4)), hostmeta.ResourceForkName: bytes.NewReader([]byte{4})}
 	r := projectionRecord()
 	if err = e.applyProjection(ctx, r, attrs, 1024, b); err != nil {
 		t.Fatal(err)
@@ -59,7 +60,7 @@ func TestProjectionExecutionAndOutcomes(t *testing.T) {
 		t.Fatal(e.projectionError())
 	}
 	result := e.NativeProjectionResults()
-	if len(result) != 11 {
+	if len(result) != 12 {
 		t.Fatal(result)
 	}
 	result[0].Field = "changed"
@@ -274,5 +275,64 @@ func TestProjectionNativeBindings(t *testing.T) {
 	p := nativeProjection{file: f, heldErr: errors.ErrUnsupported}
 	if !errors.Is(p.Security(&appledouble.FileSecurity{}), errors.ErrUnsupported) || !errors.Is(p.Chflags(0), errors.ErrUnsupported) {
 		t.Fatal("unsupported discarded")
+	}
+}
+
+func projectionCompression(method uint32) []byte {
+	p := make([]byte, 16)
+	copy(p, "fpmc")
+	binary.LittleEndian.PutUint32(p[4:], method)
+	return p
+}
+
+func TestProjectionIndependentResourceFork(t *testing.T) {
+	for _, method := range []uint32{3, 4, 5} {
+		e := &Extractor{}
+		b := &projectionRecorder{}
+		attrs := map[string]appledouble.Value{hostmeta.DecmpfsName: bytes.NewReader(projectionCompression(method)), hostmeta.ResourceForkName: bytes.NewReader([]byte("fork"))}
+		if err := e.applyProjection(context.Background(), metatransport.Record{}, attrs, 1024, b); err != nil {
+			t.Fatal(err)
+		}
+		if (len(b.events) == 1) != (method == 3) {
+			t.Fatal(method, b.events)
+		}
+		if method == 5 && e.projectionResults[0].Field != "compression-shape" {
+			t.Fatal(e.projectionResults)
+		}
+	}
+}
+
+func TestProjectionStreamFallbackAndReadback(t *testing.T) {
+	ctx := context.Background()
+	dir, err := os.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dir.Close()
+	p := nativeProjection{file: dir, heldErr: errors.ErrUnsupported}
+	if err := p.ResourceFork(ctx, bytes.NewReader([]byte{1}), 0); !errors.Is(err, hostmeta.ErrXattrTooLarge) {
+		t.Fatal(err)
+	}
+	// A directory has no native fork descriptor. The bounded xattr fallback must
+	// report the host's real result instead of pretending the fork was applied.
+	got := p.ResourceFork(ctx, bytes.NewReader([]byte{1}), 1)
+	want := p.SetXattr(hostmeta.ResourceForkName, []byte{1})
+	if (got == nil) != (want == nil) {
+		t.Fatal(got, want)
+	}
+	tm := time.Now().Add(-time.Hour)
+	if err := p.SetTimes(tm, tm); err != nil && !projectionConstraint(err) {
+		t.Fatal(err)
+	}
+	e := &Extractor{}
+	ref := metatransport.BlobRef{Size: 1, SHA256: "original"}
+	r := metatransport.Record{Original: "file", Attributes: []metatransport.Attribute{{Name: "exact", Value: ref}, {Name: "changed", Value: ref}, {Name: "missing", Value: ref}}}
+	for _, name := range []string{"exact", "changed", "missing"} {
+		e.projection("file", "xattr:"+name, nil)
+	}
+	e.verifyProjectionRefs(r, []metatransport.Attribute{{Name: "exact", Value: ref}, {Name: "changed", Value: metatransport.BlobRef{Size: 2, SHA256: "changed"}}})
+	results := e.NativeProjectionResults()
+	if !results[0].Verified || results[1].Status != ProjectionNormalized || results[2].Status != ProjectionNormalized {
+		t.Fatal(results)
 	}
 }

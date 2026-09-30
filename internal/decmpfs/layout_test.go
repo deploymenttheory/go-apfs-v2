@@ -21,7 +21,7 @@ func TestValidateLayout(t *testing.T) {
 		{"fork", header(4), 16, 0, 1, true},
 		{"large fork", header(12), 16, 0, 1 << 40, true},
 		{"inline", header(3), 17, 0, 0, true},
-		{"large inline", header(11), 1 << 32, 0, 0, true},
+		{"oversized inline", header(11), 1 << 32, 0, 0, false},
 		{"nil", nil, 0, 0, 0, false},
 		{"short", []byte{1}, 1, 0, 0, false},
 		{"bad magic", make([]byte, 16), 16, 0, 1, false},
@@ -31,7 +31,7 @@ func TestValidateLayout(t *testing.T) {
 		{"data", header(4), 16, 1, 1, false},
 		{"missing fork", header(4), 16, 0, 0, false},
 		{"fork with inline payload", header(4), 17, 0, 1, false},
-		{"unexpected fork", header(3), 17, 0, 1, false},
+		{"independent fork", header(3), 17, 0, 1, true},
 		{"no inline payload", header(3), 16, 0, 0, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
