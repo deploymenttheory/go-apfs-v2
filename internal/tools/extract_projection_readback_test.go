@@ -161,3 +161,40 @@ func TestProjectionAllStatMismatches(t *testing.T) {
 }
 
 func (projectionMetadataFixture) SetTimes(time.Time, time.Time) error { return nil }
+
+// Exercise the held-provider protocol independently of the host's ability to
+// enforce Darwin permissions. Real Darwin binding tests qualify that provider.
+func TestProjectionHeldProviderDispatch(t *testing.T) {
+	p := nativeProjection{held: projectionMetadataFixture{}}
+	if err := p.Security(&appledouble.FileSecurity{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := p.Chflags(0); err != nil {
+		t.Fatal(err)
+	}
+	if err := p.SetTimes(time.Unix(1, 0), time.Unix(2, 0)); err != nil {
+		t.Fatal(err)
+	}
+}
+
+type projectionStreamFailure struct{ projectionRecorder }
+
+func (*projectionStreamFailure) ResourceFork(context.Context, appledouble.Value, int) error {
+	return io.ErrClosedPipe
+}
+func TestProjectionStreamingForkFailure(t *testing.T) {
+	e := &Extractor{}
+	backend := &projectionStreamFailure{}
+	attrs := map[string]appledouble.Value{hostmeta.ResourceForkName: projectionFaultValue{size: 1}}
+	if err := e.applyProjection(context.Background(), metatransport.Record{Original: "file"}, attrs, 0, backend); err != nil {
+		t.Fatal(err)
+	}
+	if !errors.Is(e.projectionError(), io.ErrClosedPipe) || len(backend.events) != 0 {
+		t.Fatal(e.NativeProjectionResults(), backend.events)
+	}
+	// A failure before opening the native fork must also remain an explicit error.
+	p := nativeProjection{}
+	if err := p.ResourceFork(context.Background(), attrs[hostmeta.ResourceForkName], 1); !errors.Is(err, os.ErrInvalid) {
+		t.Fatal(err)
+	}
+}

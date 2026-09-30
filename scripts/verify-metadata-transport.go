@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/evidenceaudit"
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/diskimage"
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/imagesecurity"
 	"github.com/deploymenttheory/go-apfs-v2/internal/tools"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
@@ -95,6 +96,28 @@ func run(args ...string) []byte {
 		panic(fmt.Errorf("%v: %w: %s", args, e, b))
 	}
 	return b
+}
+
+func detach(target string) {
+	// Every application-owned reader and oracle process has completed before
+	// this call. A bounded busy retry allows transient external mount users to
+	// finish while retaining evidence and failing if the volume stays busy.
+	must(diskimage.RetryDetach(context.Background(), func() (int, error) {
+		args := []string{"hdiutil", "detach", target}
+		cmd := exec.Command(args[0], args[1:]...)
+		var stdout, stderr bytes.Buffer
+		cmd.Stdout, cmd.Stderr = &stdout, &stderr
+		err := cmd.Run()
+		code := -1
+		if cmd.ProcessState != nil {
+			code = cmd.ProcessState.ExitCode()
+		}
+		evidence.Commands = append(evidence.Commands, command{args, fmt.Sprintf("stdout:\n%s\nstderr:\n%s\nexit_code: %d\nerror: %v", stdout.String(), stderr.String(), code, err)})
+		if err != nil {
+			err = fmt.Errorf("%v: %w: %s", args, err, stderr.String())
+		}
+		return code, err
+	}))
 }
 
 func tree() *apfswrite.Entry {
@@ -316,7 +339,7 @@ func native(image, kind string, want map[string]entry) {
 			if device == "" {
 				panic("missing HFS device")
 			}
-			defer run("hdiutil", "detach", device)
+			defer detach(device)
 			args := []string{"/sbin/fsck_hfs", "-n", device}
 			b, err := exec.Command(args[0], args[1:]...).CombinedOutput()
 			evidence.Commands = append(evidence.Commands, command{args, fmt.Sprintf("%s\nexit: %v", b, err)})
@@ -331,7 +354,7 @@ func native(image, kind string, want map[string]entry) {
 	must(e)
 	defer os.Remove(mount)
 	run("hdiutil", "attach", image, "-readonly", "-owners", "on", "-nobrowse", "-mountpoint", mount)
-	defer run("hdiutil", "detach", mount)
+	defer detach(mount)
 	names := make([]string, 0, len(want))
 	for name := range want {
 		names = append(names, name)
@@ -395,7 +418,7 @@ func main() {
 	must(os.MkdirAll(outputRoot, 0755))
 	evidence = report{Revision: strings.TrimSpace(string(run("git", "rev-parse", "HEAD"))), GOOS: runtime.GOOS, GOARCH: runtime.GOARCH, Go: runtime.Version(), SourceSHA256: map[string]string{}}
 	files := []string{"scripts/verify-metadata-transport.go", "testdata/appledouble/native/metadata-transport.c", "testdata/appledouble/native/decmpfs-formats.json.gz", "go.mod", "go.sum"}
-	files = append(files, "internal/evidenceaudit/*.go", "internal/tools/extract*.go", "internal/hostwalk/*.go", "internal/decmpfs/*.go", "internal/bsdflags/*.go", "pkg/metatransport/*.go", "pkg/hostmeta/*.go", "pkg/apfs/*.go", "pkg/apfswrite/*.go", "pkg/hfsplus/*.go")
+	files = append(files, "internal/evidenceaudit/*.go", "internal/testutil/diskimage/*.go", "internal/tools/extract*.go", "internal/hostwalk/*.go", "internal/decmpfs/*.go", "internal/bsdflags/*.go", "pkg/metatransport/*.go", "pkg/hostmeta/*.go", "pkg/apfs/*.go", "pkg/apfswrite/*.go", "pkg/hfsplus/*.go")
 	evidence.SourceSHA256, e = evidenceaudit.SourceHashes(os.DirFS("."), files)
 	must(e)
 	defer func() { writeJSON(filepath.Join(outputRoot, "report.json"), evidence) }()
@@ -549,7 +572,7 @@ func qualifyFinderInfo() {
 		must(os.Mkdir(mount, 0700))
 		run("hdiutil", "attach", ref, "-owners", "on", "-nobrowse", "-mountpoint", mount)
 		func() {
-			defer run("hdiutil", "detach", mount)
+			defer detach(mount)
 			root := &hfsplus.Entry{Mode: os.ModeDir | 0755}
 			expected := map[string]observation{}
 			for _, object := range []string{"file", "directory", "symlink", "hardlink", "root"} {

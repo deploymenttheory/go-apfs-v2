@@ -3,6 +3,7 @@ package lzbitmap
 import (
 	"bytes"
 	"crypto/rand"
+	mathrand "math/rand/v2"
 	"testing"
 	"time"
 )
@@ -16,7 +17,10 @@ import (
 // still an order of magnitude under that.
 func TestIncompressibleIsNotQuadratic(t *testing.T) {
 	limit := 20 * time.Second
-	if raceEnabled {
+	// Atomic statement counters instrument the byte-search inner loops, just
+	// as the race detector does. Ordinary test runs retain the 20-second
+	// throughput guard; instrumented runs execute the same complete workload.
+	if raceEnabled || testing.CoverMode() == "atomic" {
 		limit = 3 * time.Minute
 	}
 	buf := make([]byte, 8<<20)
@@ -38,6 +42,32 @@ func TestIncompressibleIsNotQuadratic(t *testing.T) {
 	}
 	t.Logf("8 MiB of random data in %s (%.1f MB/s), %d bytes out",
 		took.Round(time.Millisecond), float64(len(buf))/took.Seconds()/1e6, len(out))
+}
+
+// This checks the adaptive search budget without relying on runner speed. A
+// regression that keeps scanning the full history on unproductive input must
+// fail even when a coverage or race build has a larger elapsed-time allowance.
+func TestIncompressibleSearchBackoff(t *testing.T) {
+	random := mathrand.New(mathrand.NewPCG(1, 2))
+	input := make([]byte, MaxChunk)
+	for i := range input {
+		input[i] = byte(random.Uint32())
+	}
+	e := encoder{src: input, pos: 8, decmpLen: len(input), period: initialPeriod}
+	groups, wide := 0, 0
+	for e.pos < len(input) {
+		if !e.cheap || e.probe == 0 {
+			wide++
+		}
+		e.eightBytes()
+		groups++
+	}
+	// At least seven of every eight random groups must avoid the wide
+	// history scan. The margin includes initial sampling and later probes.
+	if wide*8 >= groups {
+		t.Fatalf("unproductive wide searches: %d of %d groups", wide, groups)
+	}
+	t.Logf("wide searches: %d of %d incompressible groups", wide, groups)
 }
 
 func BenchmarkCompress(b *testing.B) {
