@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/securitycopy"
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/statcopy"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfswrite"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/hfsplus"
@@ -72,6 +73,8 @@ type NativeCase struct {
 	Native     Observation
 }
 type Fixture struct {
+	StatModels                                                                                      []statcopy.Case                        `json:",omitempty"`
+	StatSources                                                                                     map[string]string                      `json:",omitempty"`
 	DocumentIDs                                                                                     map[string]uint32                      `json:",omitempty"`
 	Helpers                                                                                         map[string]string                      `json:",omitempty"`
 	NativeAccess                                                                                    map[string]string                      `json:",omitempty"`

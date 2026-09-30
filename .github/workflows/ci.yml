@@ -232,6 +232,17 @@ jobs:
           name: image-flags-coverage-${{ matrix.os }}
           path: artifacts/image-flags-coverage/
           if-no-files-found: error
+      - name: Image stat restoration and coverage above 95%
+        env:
+          CGO_ENABLED: "0"
+        run: go run scripts/verify-image-stat-coverage.go
+      - name: Upload image stat restoration coverage
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: image-stat-coverage-${{ matrix.os }}
+          path: artifacts/image-stat-coverage/
+          if-no-files-found: error
       - name: Portable ordered stat restoration and coverage above 95%
         env:
           CGO_ENABLED: "0"
@@ -411,6 +422,18 @@ jobs:
         with:
           name: image-flags
           path: artifacts/image-flags/
+          if-no-files-found: error
+      - name: Native image stat restoration and filesystem qualification
+        if: runner.os == 'macOS'
+        env:
+          CGO_ENABLED: "0"
+        run: go run scripts/verify-image-security.go -stat
+      - name: Upload native image stat restoration evidence
+        if: always() && runner.os == 'macOS'
+        uses: actions/upload-artifact@v7
+        with:
+          name: image-stat
+          path: artifacts/image-stat/
           if-no-files-found: error
       - name: Native image ACL restoration and filesystem qualification
         if: runner.os == 'macOS'

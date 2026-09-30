@@ -25,7 +25,9 @@ import (
 	"time"
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/imagesecurity"
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/imagestat"
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/securitycopy"
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/statcopy"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfswrite"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/hfsplus"
@@ -97,9 +99,10 @@ func main() {
 	times := flag.Bool("times", false, "qualify independent inode timestamps and epoch preservation")
 	roots := flag.Bool("roots", false, "qualify root writer metadata and storage")
 	bsdFlags := flag.Bool("flags", false, "qualify independent image BSD flags")
+	statStage := flag.Bool("stat", false, "qualify ordered stat staging in both image writers")
 	flag.Parse()
-	if (*roots && *modes) || (*times && (*roots || *modes)) || (*bsdFlags && (*roots || *modes || *times)) {
-		panic("choose one of roots, modes, times or flags")
+	if (*statStage && (*roots || *modes || *times || *bsdFlags)) || (*roots && *modes) || (*times && (*roots || *modes)) || (*bsdFlags && (*roots || *modes || *times)) {
+		panic("choose one of roots, modes, times, flags or stat")
 	}
 	root := "artifacts/image-security"
 	helperSource := "testdata/appledouble/native/image-security.c"
@@ -119,6 +122,10 @@ func main() {
 	if *bsdFlags {
 		root = "artifacts/image-flags"
 		corpus = "testdata/appledouble/native/image-flags.json.gz"
+	}
+	if *statStage {
+		root = "artifacts/image-stat"
+		corpus = "testdata/appledouble/native/image-stat.json.gz"
 	}
 	must(os.MkdirAll(root, 0700))
 	var f imagesecurity.Fixture
@@ -212,6 +219,39 @@ func main() {
 	h = append(h, src[:bytes.Index(src, []byte("#include"))]...)
 	h = append(h, extract(src, "int32_t FastUnicodeCompare (", "/*\n * UnicodeBinaryCompare")...)
 	write(filepath.Join(root, "image-fold-source.h"), h)
+	if *statStage {
+		f.Helpers = map[string]string{}
+		for _, name := range []string{"testdata/appledouble/native/image-stat.c", "testdata/appledouble/native/stat-copy.c"} {
+			f.Helpers[name] = sum(read(name))
+		}
+		f.StatSources = map[string]string{"copyfile_private.h": "8ac427e2c1dbe0ca92cfe2fbf114df90fd747f3fbe25c2a4919ff941a1be81c5", "fsctl.h": "dae81f19610f25fb7905b5c725f728fec4b8b4978f6214374415d420ffac258d"}
+		download("https://raw.githubusercontent.com/apple-oss-distributions/copyfile/9f91eb6ced021952278816cdc76ad68da8631ccb/copyfile_private.h", f.StatSources["copyfile_private.h"], filepath.Join(root, "copyfile_private.h"))
+		source := read(filepath.Join(root, "copyfile.c"))
+		header := append([]byte{}, source[:bytes.Index(source, []byte("#include"))]...)
+		for _, part := range [][2]string{{"#define S_ISSUD", "#define COPYFILE_MNT_CPROTECT_MASK"}, {"static int\nfd_volume_has_feature", "static bool\npath_does_copy_protection"}, {"static errno_t copyfile_set_bsdflags", "/*\n * Attempt to copy the data section"}, {"static int copyfile_stat(copyfile_state_t s)", "/*\n * Copy the resource fork in pieces"}} {
+			header = append(header, extract(source, part[0], part[1])...)
+		}
+		write(filepath.Join(root, "stat-source.h"), header)
+		xnu := download("https://raw.githubusercontent.com/apple-oss-distributions/xnu/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/bsd/sys/fsctl.h", f.StatSources["fsctl.h"], filepath.Join(root, "fsctl.h"))
+		header = append([]byte{}, xnu[:bytes.Index(xnu, []byte("#ifndef"))]...)
+		header = append(header, extract(xnu, "struct fsioc_cas_bsdflags {", "#define FSIOC_GRAFT_VERSION")...)
+		header = append(header, extract(xnu, "#define FSIOC_CAS_BSDFLAGS", "/* Check if a file is only open once")...)
+		write(filepath.Join(root, "stat-fsctl.h"), header)
+		const sourcePath = "testdata/appledouble/native/image-stat.c"
+		oracle := filepath.Join(root, "image-stat")
+		run("xcrun", "clang", "-Wall", "-Wextra", "-Werror", "-I", root, sourcePath, "-o", oracle)
+		for _, arch := range []string{"arm64", "x86_64"} {
+			ast := run("xcrun", "clang", "-arch", arch, "-I", root, "-fsyntax-only", "-Xclang", "-ast-dump=json", sourcePath)
+			commands[len(commands)-1].Output = fmt.Sprintf("AST retained: %d bytes", len(ast))
+			write(filepath.Join(root, arch+"-stat.ast.json"), ast)
+		}
+		for _, tc := range imagestat.Models() {
+			must(json.Unmarshal(run(oracle, fmt.Sprint(tc.SourceFlags), fmt.Sprint(tc.TargetFlags), fmt.Sprint(tc.Options)), &tc.Native))
+			_, _, err := statcopy.Replay(tc)
+			must(err)
+			f.StatModels = append(f.StatModels, tc)
+		}
+	}
 	helper := filepath.Join(root, "image-security")
 	run("xcrun", "clang", "-Wall", "-Wextra", "-Werror", "-Wno-unused-but-set-variable", "-I", root, "-I", "testdata/appledouble/native", helperSource, "-o", helper)
 	for _, arch := range []string{"arm64", "x86_64"} {
@@ -227,7 +267,11 @@ func main() {
 		snapshots  []apfswrite.SnapshotSpec
 	}
 	var scenarios []scenario
-	if *bsdFlags {
+	if *statStage {
+		for _, kind := range []string{"apfs", "apfs-sensitive", "hfsx", "hfsplus"} {
+			scenarios = append(scenarios, scenario{kind: kind, name: kind + "-stat", snapshots: []apfswrite.SnapshotSpec{{Name: "stat"}}})
+		}
+	} else if *bsdFlags {
 		for _, kind := range []string{"apfs", "apfs-sensitive", "hfsx", "hfsplus"} {
 			tree, cases := imagesecurity.FlagTree()
 			var snaps []apfswrite.SnapshotSpec
@@ -270,16 +314,25 @@ func main() {
 	}
 	for _, scene := range scenarios {
 		kind, tree, cases := scene.kind, scene.tree, scene.cases
+		var stagedHFS *hfsplus.Entry
+		if *statStage {
+			var err error
+			tree, stagedHFS, cases, err = imagestat.Build(f.StatModels, strings.HasPrefix(kind, "hfs"))
+			must(err)
+		}
 		image := filepath.Join(root, scene.name+".img")
 		file, e := os.Create(image)
 		must(e)
 		if strings.HasPrefix(kind, "apfs") {
 			must(apfswrite.CreateContainer(file, 64<<20, &apfswrite.CreateOptions{Root: tree, VolumeName: "SECURITY", CaseSensitive: kind == "apfs-sensitive", Snapshots: scene.snapshots, ClampModTimes: strings.HasSuffix(scene.name, "-clamp")}))
 		} else {
-			must(hfsplus.CreateImage(file, 64<<20, "SECURITY", imagesecurity.HFSTree(tree), &hfsplus.CreateOptions{CaseInsensitive: kind == "hfsplus", ClampModTimes: strings.HasSuffix(scene.name, "-clamp")}))
+			if stagedHFS == nil {
+				stagedHFS = imagesecurity.HFSTree(tree)
+			}
+			must(hfsplus.CreateImage(file, 64<<20, "SECURITY", stagedHFS, &hfsplus.CreateOptions{CaseInsensitive: kind == "hfsplus", ClampModTimes: strings.HasSuffix(scene.name, "-clamp")}))
 		}
 		must(file.Close())
-		if *roots || *modes || *times || *bsdFlags {
+		if *roots || *modes || *times || *bsdFlags || *statStage {
 			if strings.HasPrefix(kind, "apfs") {
 				run("/sbin/fsck_apfs", "-n", image)
 			} else {
@@ -383,10 +436,10 @@ func main() {
 				must(json.Unmarshal(run(helper, path), &n.Native))
 				f.Cases = append(f.Cases, n)
 				native := n.Native
-				if *bsdFlags {
+				if *bsdFlags || *statStage {
 					got, e := volume.BSDFlags(tc.Name)
 					must(e)
-					if got&0x40 != 0 {
+					if *bsdFlags && got&0x40 != 0 {
 						var id uint32
 						_, err := fmt.Sscan(string(run(helper, "--document-id", path)), &id)
 						must(err)
@@ -399,7 +452,23 @@ func main() {
 						panic(fmt.Sprintf("BSD flags %s/%s: native=%#x reader=%#x want=%#x", scene.name, tc.Name, native.Flags, got, *tc.Flags))
 					}
 				}
-				if *times {
+				if *statStage {
+					attrs, err := volume.Xattrs(tc.Name)
+					must(err)
+					if string(attrs["org.example.keep"]) != "kept" {
+						panic("stat stage changed unrelated xattr")
+					}
+					var value imagesecurity.XattrObservation
+					must(json.Unmarshal(run(helper, "--xattr", path, "org.example.keep"), &value))
+					if value.Errno != 0 || value.Length != 4 || value.Value == nil || *value.Value != "6b657074" {
+						panic("native unrelated xattr mismatch")
+					}
+					if f.NativeXattrs == nil {
+						f.NativeXattrs = map[string]map[string]imagesecurity.XattrObservation{}
+					}
+					f.NativeXattrs[scene.name+"/"+tc.Name] = map[string]imagesecurity.XattrObservation{"org.example.keep": value}
+				}
+				if *times || *statStage {
 					want := *tc.Times
 					if !strings.HasPrefix(kind, "apfs") {
 						for i, v := range want {
@@ -416,7 +485,7 @@ func main() {
 						panic("reader timestamp mismatch")
 					}
 				}
-				if *modes && (native.Mode != uint32(tc.Mode) || native.UID != tc.UID || native.GID != tc.GID) {
+				if (*modes || *statStage) && (native.Mode != uint32(tc.Mode) || native.UID != tc.UID || native.GID != tc.GID) {
 					panic(fmt.Sprintf("native mode/ownership %s/%s: got %#o want %#o", scene.name, tc.Name, native.Mode, tc.Mode))
 				}
 				if *roots {
@@ -529,7 +598,7 @@ func main() {
 	}
 	oldUID, oldGID := archived.ActorUID, archived.ActorGID
 	for i := range archived.Cases {
-		if *times || *bsdFlags {
+		if *times || *bsdFlags || *statStage {
 			continue
 		} // Timestamp/flag fixtures deliberately use fixed foreign IDs.
 		c := &archived.Cases[i]
@@ -560,7 +629,7 @@ func main() {
 	archived.Revision, archived.Host, archived.ActorUID, archived.ActorGID = f.Revision, f.Host, f.ActorUID, f.ActorGID
 	// Image bytes include actor IDs; each fresh image is independently hashed and
 	// checked unchanged over read-only mounting, not normalized byte-by-byte.
-	if !*bsdFlags {
+	if !*bsdFlags && !*statStage {
 		archived.Images = f.Images
 	} // Flag fixtures use fixed IDs and must reproduce the approved image hashes.
 	if !reflect.DeepEqual(archived, f) {
