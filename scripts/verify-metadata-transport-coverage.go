@@ -5,8 +5,6 @@ package main
 
 import (
 	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -16,6 +14,8 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/evidenceaudit"
 )
 
 func main() {
@@ -146,27 +146,15 @@ func verify() error {
 	}
 	files := []string{"scripts/verify-metadata-transport-coverage.go", "scripts/verify-metadata-transport.go", "go.mod", "go.sum"}
 	for _, pattern := range []string{"pkg/hostmeta/acl_identity_capture*.go", "pkg/hostmeta/quarantine_file*.go", "pkg/hostmeta/resource_fork*.go", "pkg/hostmeta/xattr_values*.go", "internal/hostwalk/native_values*.go", "pkg/hfsplus/root_values_test.go", "testdata/appledouble/native/acl-identity*.c", "testdata/appledouble/native/acl-identity-capture.json.gz", "scripts/verify-acl-identity-capture-native.go"} {
-		matches, err := filepath.Glob(pattern)
-		if err != nil {
-			return err
-		}
-		files = append(files, matches...)
+		files = append(files, pattern)
 	}
 	for _, pattern := range []string{"pkg/metatransport/*.go", "pkg/hostmeta/xattr_capture*.go", "pkg/hostmeta/libsystem_xattr*.go", "internal/hostwalk/carrier*.go", "internal/hostwalk/open*.go", "pkg/apfs/xattr_values*.go", "pkg/apfswrite/values*.go", "pkg/hfsplus/*values*.go", "pkg/hfsplus/values_test.go", "pkg/hfsplus/writer.go", "pkg/hfsplus/validate.go", "pkg/hostmeta/filetime*.go", "pkg/hostmeta/quarantine_capture*.go", "internal/decmpfs/*.go", "pkg/hostmeta/file_times*.go", "pkg/hostmeta/access_time*.go", "pkg/hostmeta/creation_time*.go", "internal/tools/extract_carrier*.go", "internal/tools/extract_projection*.go"} {
-		matches, err := filepath.Glob(pattern)
-		if err != nil {
-			return err
-		}
-		files = append(files, matches...)
+		files = append(files, pattern)
 	}
-	hashes := map[string]string{}
-	for _, path := range files {
-		b, e := os.ReadFile(path)
-		if e != nil {
-			return e
-		}
-		h := sha256.Sum256(b)
-		hashes[path] = hex.EncodeToString(h[:])
+	files = append(files, "internal/evidenceaudit/*.go")
+	hashes, e := evidenceaudit.SourceHashes(os.DirFS("."), files)
+	if e != nil {
+		return e
 	}
 	revision, e := exec.Command("git", "rev-parse", "HEAD").Output()
 	if e != nil {

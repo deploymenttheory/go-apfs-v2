@@ -124,6 +124,9 @@ func TestCarrierBorrowedForkReads(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
+	if v.Size() != 3 {
+		t.Fatalf("captured fork size = %d, want 3", v.Size())
+	}
 	p := make([]byte, 5)
 	if n, e := v.ReadAt(p, 0); n != 3 || !errors.Is(e, io.EOF) || string(p[:3]) != "abc" {
 		t.Fatal(n, e)
@@ -168,11 +171,16 @@ func TestCarrierBorrowedForkReads(t *testing.T) {
 }
 
 func TestCarrierCaptureValueRootFailures(t *testing.T) {
-	for _, test := range []string{"initial-stat", "initial-close", "read-stat", "fork", "read-close", "success"} {
+	for _, test := range []string{"initial-stat", "initial-close", "read-open", "read-identity", "read-stat", "fork", "read-close", "success"} {
 		t.Run(test, func(t *testing.T) {
 			dir := t.TempDir()
 			name := filepath.Join(dir, "file")
 			os.WriteFile(name, []byte("abc"), 0600)
+			// A distinct real file exercises identity rejection independently of
+			// Darwin's resource-fork namespace on every supported host.
+			if err := os.WriteFile(filepath.Join(dir, "replacement"), []byte("xyz"), 0600); err != nil {
+				t.Fatal(err)
+			}
 			root, e := os.OpenRoot(dir)
 			if e != nil {
 				t.Fatal(e)
@@ -183,6 +191,12 @@ func TestCarrierCaptureValueRootFailures(t *testing.T) {
 			ops := xattrValueOps{
 				open: func(r *os.Root, n string) (*os.File, error) {
 					calls++
+					if calls == 2 && test == "read-open" {
+						return nil, os.ErrNotExist
+					}
+					if calls == 2 && test == "read-identity" {
+						n = "replacement"
+					}
 					f, e := r.Open(n)
 					if e == nil && ((test == "initial-stat" && calls == 1) || (test == "read-stat" && calls == 2)) {
 						f.Close()
@@ -228,8 +242,16 @@ func TestCarrierCaptureValueRootFailures(t *testing.T) {
 			if e == nil {
 				t.Fatal("accepted failed read")
 			}
+			if test == "read-open" && !errors.Is(e, os.ErrNotExist) {
+				t.Fatalf("reopen error lost: %v", e)
+			}
+			if test == "read-identity" && !errors.Is(e, ErrMetadataIdentity) {
+				t.Fatalf("replacement identity accepted: %v", e)
+			}
 			if test == "read-close" {
-				if _, e = openedFork.Stat(); !errors.Is(e, os.ErrClosed) {
+				// Stat on a closed Windows file reports ERROR_INVALID_HANDLE.
+				// A second Close directly checks that ownership was released.
+				if e = openedFork.Close(); !errors.Is(e, os.ErrClosed) {
 					t.Fatal("fork leaked", e)
 				}
 			}

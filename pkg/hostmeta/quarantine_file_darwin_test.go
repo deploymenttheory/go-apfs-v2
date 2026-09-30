@@ -43,9 +43,18 @@ func TestQuarantineFileNativeReadWrite(t *testing.T) {
 		t.Fatalf("kernel and xattr capture differ: %#v %#v %v", model, want, err)
 	}
 	changed := *p
+	// CI may have no process label. A nonzero flag with Absent still true
+	// would be malformed input, not the valid-but-stale context tested here.
+	changed.Absent = false
 	changed.Flags ^= 1
+	if _, err := changed.Process(); err != nil {
+		t.Fatalf("changed test context is invalid: %v", err)
+	}
 	if err := ApplyQuarantineFile(ctx, file, q, changed); !errors.Is(err, ErrQuarantineCaptureChanged) {
 		t.Fatalf("changed context: %v", err)
+	}
+	if after, err := CaptureQuarantineFile(ctx, file, p.Profile); err != nil || !reflect.DeepEqual(after, model) {
+		t.Fatalf("rejected context mutated quarantine: %#v %v", after, err)
 	}
 	if _, err := CaptureQuarantineFile(ctx, file, 99); !errors.Is(err, appledouble.ErrQuarantineContext) {
 		t.Fatalf("profile: %v", err)

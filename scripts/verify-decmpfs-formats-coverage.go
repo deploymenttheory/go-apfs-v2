@@ -5,8 +5,6 @@ package main
 
 import (
 	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -16,6 +14,8 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/evidenceaudit"
 )
 
 func main() {
@@ -111,21 +111,10 @@ func verify() error {
 		return fmt.Errorf("incomplete packing tests: %d", passed)
 	}
 	files := []string{"scripts/verify-decmpfs-formats.go", "scripts/verify-decmpfs-formats-coverage.go", "testdata/appledouble/native/decmpfs-formats.c", "testdata/appledouble/native/decmpfs-formats.json.gz", "pkg/compression/lzbitmap/testdata/aa-lzbitmap.aar", "pkg/compression/lzbitmap/testdata/aa-lzbitmap-raw.aar", "go.mod", "go.sum"}
-	for _, pattern := range []string{"internal/decmpfs/*.go", "pkg/compression/lzbitmap/*.go"} {
-		matches, err := filepath.Glob(pattern)
-		if err != nil {
-			return err
-		}
-		files = append(files, matches...)
-	}
-	hashes := map[string]string{}
-	for _, path := range files {
-		b, e := os.ReadFile(path)
-		if e != nil {
-			return e
-		}
-		h := sha256.Sum256(b)
-		hashes[path] = hex.EncodeToString(h[:])
+	files = append(files, "internal/evidenceaudit/*.go", "internal/decmpfs/*.go", "pkg/compression/lzbitmap/*.go")
+	hashes, e := evidenceaudit.SourceHashes(os.DirFS("."), files)
+	if e != nil {
+		return e
 	}
 	revision, e := exec.Command("git", "rev-parse", "HEAD").Output()
 	if e != nil {

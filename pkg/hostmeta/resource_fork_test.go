@@ -159,7 +159,12 @@ func TestCarrierResourceForkIdentity(t *testing.T) {
 		t.Fatal(e)
 	}
 	file.Close()
-	if _, e = openResourceForkUsing(file, false, open); !errors.Is(e, os.ErrClosed) {
-		t.Fatal(e)
+	_, statErr := file.Stat()
+	var pathErr *os.PathError
+	if !errors.As(statErr, &pathErr) {
+		t.Fatalf("closed stat: %v", statErr)
+	}
+	if _, e = openResourceForkUsing(file, false, open); !errors.Is(e, pathErr.Err) {
+		t.Fatalf("closed source: %v; want cause %v", e, pathErr.Err)
 	}
 }

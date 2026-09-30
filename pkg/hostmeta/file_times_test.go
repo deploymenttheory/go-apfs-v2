@@ -43,8 +43,15 @@ func TestCarrierSetFileTimes(t *testing.T) {
 		if err := file.Close(); err != nil {
 			t.Fatal(err)
 		}
-		if err := SetFileTimes(file, modify, access); !errors.Is(err, os.ErrClosed) {
-			t.Fatalf("closed: %v", err)
+		// Stat preserves the host's error: Windows reports an invalid handle,
+		// while Unix reports os.ErrClosed. The setter must propagate that cause.
+		_, statErr := file.Stat()
+		var pathErr *os.PathError
+		if !errors.As(statErr, &pathErr) {
+			t.Fatalf("closed stat: %v", statErr)
+		}
+		if err := SetFileTimes(file, modify, access); !errors.Is(err, pathErr.Err) {
+			t.Fatalf("closed: %v; want cause %v", err, pathErr.Err)
 		}
 	}
 	r, w, err := os.Pipe()

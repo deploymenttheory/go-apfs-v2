@@ -11,7 +11,17 @@ import (
 )
 
 func TestCarrierWindowsHeldTimes(t *testing.T) {
-	source, target := replacementSource(t, 0600), replacementSource(t, 0600)
+	source, readOnlyTarget := replacementSource(t, 0600), replacementSource(t, 0600)
+	// SetFileTime requires FILE_WRITE_ATTRIBUTES on the held handle. Confirm
+	// a read-only handle is refused, then exercise the authorized handle.
+	if err := CopyAccessTime(source, readOnlyTarget); !errors.Is(err, windows.ERROR_ACCESS_DENIED) {
+		t.Fatalf("read-only target: %v", err)
+	}
+	target, err := openTimeTestFile(readOnlyTarget.Name(), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer target.Close()
 	when := time.Unix(978307200, 234567800)
 	if err := os.Chtimes(source.Name(), when, when.Add(time.Hour)); err != nil {
 		t.Fatal(err)

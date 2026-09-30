@@ -89,7 +89,14 @@ func TestProjectionNativeReadback(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.Close()
-	if _, err = p.Readback(r); !errors.Is(err, os.ErrClosed) {
+	// Preserve the host's actual Stat failure, including Windows' invalid
+	// handle error, rather than requiring Unix's closed-file classification.
+	_, statErr := f.Stat()
+	var statPathError *os.PathError
+	if !errors.As(statErr, &statPathError) {
+		t.Fatal("expected closed-file stat failure", statErr)
+	}
+	if _, err = p.Readback(r); !errors.Is(err, statPathError.Err) {
 		t.Fatal(err)
 	}
 }

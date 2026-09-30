@@ -26,6 +26,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/deploymenttheory/go-apfs-v2/internal/evidenceaudit"
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/imagesecurity"
 	"github.com/deploymenttheory/go-apfs-v2/internal/tools"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
@@ -394,14 +395,9 @@ func main() {
 	must(os.MkdirAll(outputRoot, 0755))
 	evidence = report{Revision: strings.TrimSpace(string(run("git", "rev-parse", "HEAD"))), GOOS: runtime.GOOS, GOARCH: runtime.GOARCH, Go: runtime.Version(), SourceSHA256: map[string]string{}}
 	files := []string{"scripts/verify-metadata-transport.go", "testdata/appledouble/native/metadata-transport.c", "testdata/appledouble/native/decmpfs-formats.json.gz", "go.mod", "go.sum"}
-	for _, pattern := range []string{"internal/tools/extract*.go", "internal/hostwalk/*.go", "internal/decmpfs/*.go", "internal/bsdflags/*.go", "pkg/metatransport/*.go", "pkg/hostmeta/*.go", "pkg/apfs/*.go", "pkg/apfswrite/*.go", "pkg/hfsplus/*.go"} {
-		matches, err := filepath.Glob(pattern)
-		must(err)
-		files = append(files, matches...)
-	}
-	for _, name := range files {
-		evidence.SourceSHA256[name] = digest(read(name))
-	}
+	files = append(files, "internal/evidenceaudit/*.go", "internal/tools/extract*.go", "internal/hostwalk/*.go", "internal/decmpfs/*.go", "internal/bsdflags/*.go", "pkg/metatransport/*.go", "pkg/hostmeta/*.go", "pkg/apfs/*.go", "pkg/apfswrite/*.go", "pkg/hfsplus/*.go")
+	evidence.SourceSHA256, e = evidenceaudit.SourceHashes(os.DirFS("."), files)
+	must(e)
 	defer func() { writeJSON(filepath.Join(outputRoot, "report.json"), evidence) }()
 	if runtime.GOOS == "darwin" {
 		prepareOracle()

@@ -440,7 +440,14 @@ func TestCarrierIOFailures(t *testing.T) {
 		t.Fatal(e)
 	}
 	f.Close()
-	if e = verify(testContext, f, ref); !errors.Is(e, os.ErrClosed) {
+	// Stat's closed-handle error is platform-specific (ERROR_INVALID_HANDLE
+	// on Windows). Verification must propagate that actual native cause.
+	_, statErr := f.Stat()
+	var statPathError *os.PathError
+	if !errors.As(statErr, &statPathError) {
+		t.Fatal("expected closed-file stat failure", statErr)
+	}
+	if e = verify(testContext, f, ref); !errors.Is(e, statPathError.Err) {
 		t.Fatal(e)
 	}
 	s.metadata = base
