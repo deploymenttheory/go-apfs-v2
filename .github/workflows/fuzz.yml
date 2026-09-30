@@ -28,6 +28,8 @@ jobs:
           - { pkg: ./pkg/appledouble, target: FuzzCopyACL }
           - { pkg: ./pkg/appledouble, target: FuzzACLIdentitySnapshot }
           - { pkg: ./pkg/appledouble, target: FuzzFileSecurity }
+          - { pkg: ./pkg/hostmeta, target: FuzzXattrListNames }
+          - { pkg: ./pkg/hostmeta, target: FuzzXattrEARecord }
           - { pkg: ./pkg/hostmeta, target: FuzzRestoreACL }
           - { pkg: ./internal/imageacl, target: FuzzImageACLRestore }
           - { pkg: ./internal/imageacl, target: FuzzImageSecurityCopy }

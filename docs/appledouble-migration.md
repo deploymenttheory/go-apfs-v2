@@ -202,3 +202,10 @@ existing image APIs on all three OSes. Complete pinned Apple functions qualify
 lifecycle remain open; input decoding deliberately completes before destination
 mutation. See [unpack restoration](appledouble-unpack-restoration.md). This
 component does not open the package release gate or resume codesign.
+
+Held destination enumeration now uses `hostmeta.ListXattrNames` on Linux, macOS
+and Windows. It preserves native name order and descriptor identity, bounds
+allocation and rejects partial results. This closes the native listing
+prerequisite, not the full unpack binding or foreign-carrier preservation gate.
+See [held-file listing](appledouble-held-xattr-list.md). Package PR72 remains
+draft on released v0.13.0; codesign remains paused.

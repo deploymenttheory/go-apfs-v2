@@ -138,11 +138,15 @@ func xattrReadLimit(limit int) error {
 }
 
 func withXattrFile(file *os.File, name string, action func(int) error) error {
-	if file == nil {
-		return os.ErrInvalid
-	}
 	if err := validXattrName(name); err != nil {
 		return err
+	}
+	return withXattrDescriptor(file, action)
+}
+
+func withXattrDescriptor(file *os.File, action func(int) error) error {
+	if file == nil {
+		return os.ErrInvalid
 	}
 	conn, err := file.SyscallConn()
 	if err != nil {

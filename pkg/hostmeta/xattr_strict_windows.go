@@ -1,7 +1,6 @@
 package hostmeta
 
 import (
-	"encoding/binary"
 	"errors"
 	"os"
 	"strings"
@@ -9,10 +8,6 @@ import (
 
 	"golang.org/x/sys/windows"
 )
-
-// NT query returns complete EA records, not a size-only result. Bound scratch
-// space to one maximum record: header, name, terminator and 65535-byte value.
-const strictWindowsEABufferSize = 8 + 255 + 1 + 65535
 
 func windowsXattrName(name string) error {
 	if len(name) == 0 || len(name) > 255 || strings.ContainsAny(name, `\/:*?"<>|,+=[];`) {
@@ -88,15 +83,11 @@ func queryWindowsXattr(handle windows.Handle, name string, buf []byte) (int, err
 }
 
 func decodeWindowsXattr(record []byte, name string, buf []byte) (int, error) {
-	if len(record) < 9 || binary.LittleEndian.Uint32(record) != 0 {
+	actual, value, err := parseXattrEA(record)
+	if err != nil || !strings.EqualFold(actual, name) {
 		return 0, windows.STATUS_EA_CORRUPT_ERROR
 	}
-	namesize := int(record[5])
-	size := int(binary.LittleEndian.Uint16(record[6:]))
-	valueAt := 9 + namesize
-	if valueAt > len(record) || size > len(record)-valueAt || record[valueAt-1] != 0 || !strings.EqualFold(string(record[8:valueAt-1]), name) {
-		return 0, windows.STATUS_EA_CORRUPT_ERROR
-	}
+	size := len(value)
 	// A named query may return an empty record for an absent EA. NTFS deletes
 	// zero-length values: it cannot retain a present-empty extended attribute.
 	if size == 0 {
@@ -106,7 +97,7 @@ func decodeWindowsXattr(record []byte, name string, buf []byte) (int, error) {
 		if size > len(buf) {
 			return 0, windows.STATUS_BUFFER_TOO_SMALL
 		}
-		copy(buf, record[valueAt:valueAt+size])
+		copy(buf, value)
 	}
 	return size, nil
 }

@@ -9,3 +9,5 @@ func removeVisibleXattrPath(string, string) error             { return ErrXattrU
 func missingXattr(error) bool                                 { return false }
 func xattrRangeError(error) bool                              { return false }
 func strictXattrError(err error) error                        { return err }
+
+func listVisibleXattrFD(int, int) ([]string, error) { return nil, ErrXattrUnsupported }

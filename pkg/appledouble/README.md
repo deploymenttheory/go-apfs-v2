@@ -91,6 +91,10 @@ full AppleDouble transport integration is on the roadmap below.
   dedicated FinderInfo/fork slots, deferred ACL and final stat through held
   providers. Native return codes remain separate from retained failures. See
   [unpack restoration](../../docs/appledouble-unpack-restoration.md).
+- **Held destination names:** `hostmeta.ListXattrNames` provides bounded native
+  enumeration on Linux, macOS and Windows, retaining descriptor identity, native
+  order and failure diagnostics. It is a prerequisite for the complete unpack
+  provider. See [held-file listing](../../docs/appledouble-held-xattr-list.md).
 - **Source identity capture and replay:** `NewACLIdentityCapture` records the
   source callbacks used during parsing and formatting. Its serializable snapshot
   supplies immutable resolvers on any supported OS, preserving confirmed absence
@@ -156,7 +160,7 @@ of this roadmap delivered. These phases are not estimates of remaining PR count.
 
 | Phase | Current state | Completion gate |
 | --- | --- | --- |
-| 1. ACL application | Source/image policies, stat staging, copy routing and validated unpack ordering implemented; production held providers and outer lifecycle remain | Source acquisition, authorization, actual writes and restoration ordering qualified together |
+| 1. ACL application | Source/image policies, stat staging, copy routing and validated unpack ordering implemented; held native listing implemented; complete providers and outer lifecycle remain | Source acquisition, authorization, actual writes and restoration ordering qualified together |
 | 2. Quarantine | Conversion and much of application policy implemented; context/integration gaps open | Remaining process contexts and ordered restoration qualify against native behavior |
 | 3. Large values and allocation | Known native differences remain | Oversized values, aggregates, forks and allocation policy have explicit, tested behavior |
 | 4. Shared filesystem transport | Host primitives and exact image permissions available; complete metadata transport outstanding | APFS/HFS+ extract-and-repack preserves logical metadata on all three OSes |
@@ -245,6 +249,10 @@ of this roadmap delivered. These phases are not estimates of remaining PR count.
    Input decoding finishes before cleanup; native partial mutation from a late
    malformed read, streaming allocation and production held providers are not
    claimed by this snapshot executor.
+   [Held native listing](../../docs/appledouble-held-xattr-list.md) now supplies
+   bounded destination names on all three OSes, with native ordering, descriptor
+   identity and complete error results. It does not supply image namespace policy
+   or a foreign metadata carrier.
    **Remaining:** native host write
    adapters, live host source acquisition,
    privileged/sandbox authorization contexts, unpack provider bindings and outer
@@ -255,8 +263,9 @@ of this roadmap delivered. These phases are not estimates of remaining PR count.
    in phase 4.
 
    **Next implementation:** bind the validated unpack executor to production
-   held destinations and foreign-metadata carriers. Qualify visible xattr listing
-   (including hidden compression/security metadata), deletion, quarantine state
+   held destinations and foreign-metadata carriers. Native descriptor listing is
+   available; qualify image namespace visibility/order and connect it with writes
+   (including hidden compression/security metadata), deletion/readback, quarantine state
    at each record, ACL application and timestamp restoration as one transport.
    Keep the same logical capability on Linux, macOS and Windows. Creation
    inheritance, outer permission restoration, resource cleanup and the streaming
@@ -274,7 +283,7 @@ of this roadmap delivered. These phases are not estimates of remaining PR count.
    the native packing versus lossless-codec difference, and native sequential
    handling versus the decoder's cumulative alias-allocation guard. Each
    difference needs a qualified policy, not an implicit metadata-loss success.
-4. **Shared filesystem transport.** Strict native xattr primitives are available
+4. **Shared filesystem transport.** Strict held listing, read and removal primitives are available
    in `pkg/hostmeta`; both image readers and writers retain zero permissions and
    all set-ID/sticky combinations. **Remaining:** integrated preservation for files,
    directories, roots and links; native write refusal/normalization; empty values,

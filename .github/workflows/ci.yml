@@ -635,6 +635,17 @@ jobs:
           name: strict-xattrs-${{ matrix.os }}
           path: artifacts/strict-xattrs/
           if-no-files-found: error
+      - name: Native held xattr listing and Clang comparisons
+        if: runner.os == 'macOS'
+        run: go run scripts/verify-xattr-list-native.go
+      - name: Upload native held xattr listing evidence
+        if: always() && runner.os == 'macOS'
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: held-xattr-list
+          path: artifacts/held-xattr-list/
+          if-no-files-found: error
+
       - name: Build apfsck (Linux; pinned version)
         if: runner.os == 'Linux'
         run: |

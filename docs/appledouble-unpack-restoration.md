@@ -88,6 +88,12 @@ Existing `File.QuarantineUpdates`, `Quarantine.PlanApplication`, `File.ACLUpdate
 for `RunCopyPipeline` can return the executor's code and error through
 `CopyStageResult`; it must also retain the detailed unpack failures for its caller.
 
+`hostmeta.ListXattrNames` now provides the strict held native enumeration
+primitive on Linux, macOS and Windows. Its complete bounded result is useful to
+providers, but does not itself implement `UnpackBackend`'s native two-stage
+list-error protocol, writes or foreign-carrier semantics. See
+[held-file listing](appledouble-held-xattr-list.md).
+
 The image composition test supplies a provider for a deliberately known fixture
 namespace and uses the actual APFS/HFS+ xattr, ACL and stat APIs. This is not a
 new general-purpose image or host transport provider. The remaining production

@@ -27,6 +27,9 @@ func TestStrictXattrLinuxPathDescriptor(t *testing.T) {
 	if data, present, err := ReadXattr(file, "user.strict", 4); data != nil || present || !errors.Is(err, unix.EBADF) {
 		t.Fatal(data, present, err)
 	}
+	if names, err := ListXattrNames(file, MaxXattrListSize); names != nil || !errors.Is(err, unix.EBADF) {
+		t.Fatal(names, err)
+	}
 	if removed, err := RemoveXattr(file, "user.strict"); removed || !errors.Is(err, unix.EBADF) {
 		t.Fatal(removed, err)
 	}
