@@ -163,7 +163,7 @@ func verify(capture bool, cache string) error {
 		}
 	}
 	hashes := map[string]string{}
-	for _, path := range []string{helperSource, "scripts/verify-held-lifecycle.go", "internal/testutil/heldlifecycle/oracle.go", "pkg/hostmeta/held_lifecycle.go", "pkg/hostmeta/held_lifecycle_native_test.go"} {
+	for _, path := range []string{helperSource, "scripts/verify-held-lifecycle.go", "internal/testutil/heldlifecycle/oracle.go", "pkg/hostdata/held_lifecycle.go", "pkg/hostdata/held_lifecycle_native_test.go"} {
 		b, e := os.ReadFile(path)
 		if e != nil {
 			return e

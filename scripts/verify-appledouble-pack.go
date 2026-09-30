@@ -114,7 +114,7 @@ func main() {
 			}
 		}
 	}
-	for _, path := range []string{helperSource, "pkg/hostmeta/appledouble_pack.go", "pkg/hostmeta/appledouble_pack_values.go", "internal/testutil/packnative/oracle.go", "scripts/verify-appledouble-pack.go"} {
+	for _, path := range []string{helperSource, "pkg/hostdata/appledouble_pack.go", "pkg/hostdata/appledouble_pack_values.go", "internal/testutil/packnative/oracle.go", "scripts/verify-appledouble-pack.go"} {
 		hashes[path] = sum(read(path))
 	}
 	for _, name := range []string{"copyfile.c", "pack-source.h", "pack-sort-source.h", "unpack-layout-source.h", "arm64.ast.json", "x86_64.ast.json"} {

@@ -4,10 +4,11 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
 	"io"
 	"math"
 	"testing"
+
+	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
 )
 
 type cancelHeader struct {

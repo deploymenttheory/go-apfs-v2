@@ -16,7 +16,7 @@ import (
 	"time"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/metatransport"
 )
 
@@ -34,8 +34,8 @@ func (v carrierVolume) Readlink(n string) (string, error) {
 	return string(f.Data), nil
 }
 func (v carrierVolume) Xattrs(string) (map[string][]byte, error) { return v.attrs, v.failure }
-func (v carrierVolume) Metadata(string) (hostmeta.ImageMetadata, error) {
-	return hostmeta.ImageMetadata{UID: 501, GID: 20, Mode: 0640, Times: &hostmeta.FileTimes{Birth: time.Unix(1, 0), Modify: time.Unix(2, 0), Change: time.Unix(3, 0), Access: time.Unix(4, 0)}}, v.failure
+func (v carrierVolume) Metadata(string) (hostdata.ImageMetadata, error) {
+	return hostdata.ImageMetadata{UID: 501, GID: 20, Mode: 0640, Times: &hostdata.FileTimes{Birth: time.Unix(1, 0), Modify: time.Unix(2, 0), Change: time.Unix(3, 0), Access: time.Unix(4, 0)}}, v.failure
 }
 func newCarrierExtractor(t *testing.T, v VolumeFS) *Extractor {
 	t.Helper()
@@ -353,7 +353,7 @@ func (v carrierFaultVolume) ReadDir(n string) ([]fs.DirEntry, error) {
 
 type linkedCarrierVolume struct{ carrierVolume }
 
-func (v linkedCarrierVolume) Metadata(n string) (hostmeta.ImageMetadata, error) {
+func (v linkedCarrierVolume) Metadata(n string) (hostdata.ImageMetadata, error) {
 	m, e := v.carrierVolume.Metadata(n)
 	if n != "." {
 		m.LinkID = 17
@@ -367,7 +367,7 @@ func TestCarrierControlledExtractionFailures(t *testing.T) {
 			v := carrierVolume{MapFS: fstest.MapFS{".": {Mode: fs.ModeDir | 0755}, "file": {Data: []byte("payload")}}}
 			e := newCarrierExtractor(t, v)
 			e.SymlinkMode = SymlinkFile
-			ops := carrierExtractionOps{os.ReadDir, os.OpenRoot, func(context.Context, *os.Root, string, hostmeta.XattrCaptureLimits) (map[string]appledouble.Value, error) {
+			ops := carrierExtractionOps{os.ReadDir, os.OpenRoot, func(context.Context, *os.Root, string, hostdata.XattrCaptureLimits) (map[string]appledouble.Value, error) {
 				return map[string]appledouble.Value{}, nil
 			}}
 			switch which {
@@ -398,18 +398,18 @@ func TestCarrierControlledExtractionFailures(t *testing.T) {
 				e.Context = ctx
 				ops.openRoot = func(p string) (*os.Root, error) { r, err := os.OpenRoot(p); cancel(); return r, err }
 			case "native-unsupported":
-				ops.capture = func(context.Context, *os.Root, string, hostmeta.XattrCaptureLimits) (map[string]appledouble.Value, error) {
-					return nil, hostmeta.ErrXattrUnsupported
+				ops.capture = func(context.Context, *os.Root, string, hostdata.XattrCaptureLimits) (map[string]appledouble.Value, error) {
+					return nil, hostdata.ErrXattrUnsupported
 				}
 			case "native-failure":
-				ops.capture = func(context.Context, *os.Root, string, hostmeta.XattrCaptureLimits) (map[string]appledouble.Value, error) {
+				ops.capture = func(context.Context, *os.Root, string, hostdata.XattrCaptureLimits) (map[string]appledouble.Value, error) {
 					return nil, sentinel
 				}
 			case "native-budget":
 				limits := metatransport.DefaultLimits()
 				limits.BlobBytes = 0
 				e.MetadataLimits = &limits
-				ops.capture = func(context.Context, *os.Root, string, hostmeta.XattrCaptureLimits) (map[string]appledouble.Value, error) {
+				ops.capture = func(context.Context, *os.Root, string, hostdata.XattrCaptureLimits) (map[string]appledouble.Value, error) {
 					return map[string]appledouble.Value{"x": bytes.NewReader([]byte{1})}, nil
 				}
 			case "manifest-budget":
@@ -419,7 +419,7 @@ func TestCarrierControlledExtractionFailures(t *testing.T) {
 			case "source-links":
 				e.Volume = linkedCarrierVolume{v}
 				e.PreserveMeta = true
-				limits := hostmeta.XattrCaptureLimits{NameBytes: hostmeta.MaxXattrListSize}
+				limits := hostdata.XattrCaptureLimits{NameBytes: hostdata.MaxXattrListSize}
 				e.NativeCaptureLimits = &limits
 			case "symlink-auto":
 				v.MapFS["link"] = &fstest.MapFile{Mode: fs.ModeSymlink, Data: []byte("file")}
@@ -477,7 +477,7 @@ func TestCarrierPatternAndLateParentFailure(t *testing.T) {
 			r.Close()
 		}
 		return r, err
-	}, hostmeta.CaptureXattrValuesAt}
+	}, hostdata.CaptureXattrValuesAt}
 	if err = e.extractCarrierUsing("file", "file", ops); !errors.Is(err, os.ErrClosed) {
 		t.Fatal(err)
 	}
@@ -593,9 +593,9 @@ func TestCarrierStreamingFinderReadFailures(t *testing.T) {
 func TestCarrierInitialBaselineStreamsValues(t *testing.T) {
 	value := &transportTestValue{size: 17 << 20}
 	e := newCarrierExtractor(t, carrierVolume{MapFS: fstest.MapFS{"file": {Data: []byte("payload")}}})
-	e.NativeCaptureLimits = &hostmeta.XattrCaptureLimits{NameBytes: hostmeta.MaxXattrListSize, ValueBytes: 16, TotalBytes: 16}
+	e.NativeCaptureLimits = &hostdata.XattrCaptureLimits{NameBytes: hostdata.MaxXattrListSize, ValueBytes: 16, TotalBytes: 16}
 	captured := 0
-	ops := carrierExtractionOps{os.ReadDir, os.OpenRoot, func(ctx context.Context, root *os.Root, name string, limits hostmeta.XattrCaptureLimits) (map[string]appledouble.Value, error) {
+	ops := carrierExtractionOps{os.ReadDir, os.OpenRoot, func(ctx context.Context, root *os.Root, name string, limits hostdata.XattrCaptureLimits) (map[string]appledouble.Value, error) {
 		if root == nil || limits.ValueBytes != 16 {
 			t.Fatal("capture lost held root or explicit limits")
 		}
@@ -615,7 +615,7 @@ func TestCarrierInitialBaselineStreamsValues(t *testing.T) {
 			t.Fatal("capture did not refer to extracted entry")
 		}
 		captured++
-		return map[string]appledouble.Value{hostmeta.ResourceForkName: value}, ctx.Err()
+		return map[string]appledouble.Value{hostdata.ResourceForkName: value}, ctx.Err()
 	}}
 	if err := e.extractCarrierUsing(".", "", ops); err != nil {
 		t.Fatal(err)
@@ -646,7 +646,7 @@ func TestCarrierInitialBaselineStreamsValues(t *testing.T) {
 		}
 		data := make([]byte, 17)
 		offset := value.Size() - int64(len(data))
-		if _, err := values[hostmeta.ResourceForkName].ReadAt(data, offset); err != nil {
+		if _, err := values[hostdata.ResourceForkName].ReadAt(data, offset); err != nil {
 			t.Fatal(err)
 		}
 		for i, b := range data {

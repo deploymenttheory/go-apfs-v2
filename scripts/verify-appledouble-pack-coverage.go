@@ -36,7 +36,7 @@ func verify() error {
 	defer log.Close()
 	var transcript bytes.Buffer
 	profile := filepath.Join(dir, "coverage.out")
-	cmd := exec.Command("go", "test", "-count=1", "-json", "-run", "^TestAppleDoublePack", "-covermode=atomic", "-coverprofile="+profile, "-coverpkg=./pkg/hostmeta", "./pkg/hostmeta")
+	cmd := exec.Command("go", "test", "-count=1", "-json", "-run", "^TestAppleDoublePack", "-covermode=atomic", "-coverprofile="+profile, "-coverpkg=./pkg/hostdata/...", "./pkg/hostdata")
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 	cmd.Stdout = io.MultiWriter(os.Stdout, log, &transcript)
 	cmd.Stderr = io.MultiWriter(os.Stderr, log)
@@ -64,7 +64,7 @@ func verify() error {
 		return e
 	}
 	covered, total := 0, 0
-	coverageFiles := map[string][2]int{"pkg/hostmeta/appledouble_pack.go": {}, "pkg/hostmeta/appledouble_pack_values.go": {}}
+	coverageFiles := map[string][2]int{"pkg/hostdata/appledouble_pack.go": {}, "pkg/hostdata/appledouble_pack_values.go": {}}
 	blocks := map[string][2]int{}
 	for _, line := range strings.Split(string(b), "\n") {
 		fields := strings.Fields(line)
@@ -110,7 +110,7 @@ func verify() error {
 	if passed < 425 {
 		return fmt.Errorf("incomplete packing tests: %d", passed)
 	}
-	files := []string{"pkg/hostmeta/appledouble_pack.go", "pkg/hostmeta/appledouble_pack_values.go", "pkg/hostmeta/appledouble_pack_test.go", "internal/testutil/packnative/oracle.go", "scripts/verify-appledouble-pack.go", "scripts/verify-appledouble-pack-coverage.go", "testdata/appledouble/native/pack.c", "testdata/appledouble/native/pack.json.gz", "testdata/appledouble/native/probe.c", "pkg/hostmeta/copy_pipeline.go", "pkg/appledouble/appledouble.go", "go.mod", "go.sum"}
+	files := []string{"pkg/hostdata/appledouble_pack.go", "pkg/hostdata/appledouble_pack_values.go", "pkg/hostdata/appledouble_pack_test.go", "internal/testutil/packnative/oracle.go", "scripts/verify-appledouble-pack.go", "scripts/verify-appledouble-pack-coverage.go", "testdata/appledouble/native/pack.c", "testdata/appledouble/native/pack.json.gz", "testdata/appledouble/native/probe.c", "pkg/hostdata/copy_pipeline.go", "pkg/appledouble/appledouble.go", "go.mod", "go.sum"}
 	hashes := map[string]string{}
 	for _, path := range files {
 		b, e := os.ReadFile(path)

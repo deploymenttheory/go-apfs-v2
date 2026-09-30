@@ -19,7 +19,7 @@ import (
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfswrite"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/hfsplus"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 )
 
 func TestImageFlagsNativeReplay(t *testing.T) {
@@ -215,11 +215,11 @@ func TestImageFlagsSecurityStages(t *testing.T) {
 	root, _ := imagesecurity.FlagTree()
 	hroot := imagesecurity.HFSTree(root)
 	want := *root.BSDFlags
-	source := hostmeta.SecurityCopySource{UID: 501, GID: 20, Mode: 040700}
-	if _, e := root.CopySecurity(root, source, hostmeta.SecurityCopyOptions{Stat: true}); e != nil {
+	source := hostdata.SecurityCopySource{UID: 501, GID: 20, Mode: 040700}
+	if _, e := root.CopySecurity(root, source, hostdata.SecurityCopyOptions{Stat: true}); e != nil {
 		t.Fatal(e)
 	}
-	if _, e := hroot.CopySecurity(hroot, source, hostmeta.SecurityCopyOptions{Stat: true}); e != nil {
+	if _, e := hroot.CopySecurity(hroot, source, hostdata.SecurityCopyOptions{Stat: true}); e != nil {
 		t.Fatal(e)
 	}
 	if *root.BSDFlags != want || *hroot.BSDFlags != want {

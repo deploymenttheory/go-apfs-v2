@@ -4,21 +4,22 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/fidelity"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
 	"io"
 	"os"
 	"testing"
+
+	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/fidelity"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 )
 
 func TestCarrierNativeValueWalk(t *testing.T) {
 	for _, name := range []string{"disabled", "error", "keep", "drop", "compressed", "decompress-fork", "decompress-inline", "bad-header", "reject-compression"} {
 		t.Run(name, func(t *testing.T) {
-			attrs := map[string]appledouble.Value{"ordinary": bytes.NewReader([]byte{1}), hostmeta.ResourceForkName: bytes.NewReader([]byte("fork")), hostmeta.SecurityName: bytes.NewReader(nil)}
+			attrs := map[string]appledouble.Value{"ordinary": bytes.NewReader([]byte{1}), hostdata.ResourceForkName: bytes.NewReader([]byte("fork")), hostdata.SecurityName: bytes.NewReader(nil)}
 			opts := &Options{Xattrs: true, Compression: true, owner: &treeOwner{ctx: context.Background()}, KeepName: func(string) bool { return true }}
-			opts.CaptureLimits = &hostmeta.XattrCaptureLimits{ValueBytes: 1}
-			opts.nativeValues = func(context.Context, *os.Root, string, hostmeta.XattrCaptureLimits) (map[string]appledouble.Value, error) {
+			opts.CaptureLimits = &hostdata.XattrCaptureLimits{ValueBytes: 1}
+			opts.nativeValues = func(context.Context, *os.Root, string, hostdata.XattrCaptureLimits) (map[string]appledouble.Value, error) {
 				if name == "error" {
 					return nil, io.ErrClosedPipe
 				}
@@ -30,17 +31,17 @@ func TestCarrierNativeValueWalk(t *testing.T) {
 			case "drop":
 				opts.KeepName = nil
 			case "compressed", "decompress-fork", "reject-compression":
-				attrs[hostmeta.DecmpfsName] = bytes.NewReader(compressionHeader(4))
+				attrs[hostdata.DecmpfsName] = bytes.NewReader(compressionHeader(4))
 			case "decompress-inline":
-				attrs[hostmeta.DecmpfsName] = bytes.NewReader(compressionHeader(3))
+				attrs[hostdata.DecmpfsName] = bytes.NewReader(compressionHeader(3))
 			case "bad-header":
-				attrs[hostmeta.DecmpfsName] = bytes.NewReader([]byte{1})
+				attrs[hostdata.DecmpfsName] = bytes.NewReader([]byte{1})
 			}
 			if name == "decompress-fork" || name == "decompress-inline" {
 				opts.Compression = false
 			}
 			if name == "reject-compression" {
-				opts.KeepName = func(s string) bool { return s != hostmeta.DecmpfsName }
+				opts.KeepName = func(s string) bool { return s != hostdata.DecmpfsName }
 			}
 			w := &walker[*carrierNode]{opts: opts, report: &fidelity.Report{}}
 			got, compressed, e := w.collectValueXattrs("file")
@@ -71,7 +72,7 @@ func TestCarrierNativeValueWalk(t *testing.T) {
 				}
 				return
 			}
-			_, fork := got[hostmeta.ResourceForkName]
+			_, fork := got[hostdata.ResourceForkName]
 			if fork != (name != "decompress-fork" && name != "reject-compression") {
 				t.Fatal("resource fork", name, got)
 			}

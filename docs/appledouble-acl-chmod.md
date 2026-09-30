@@ -91,12 +91,12 @@ observations, adjusting only host-specific numeric account IDs. Source/helper
 hashes, full pinned sources, ASTs, raw requests/responses and host/revision data
 are retained in `artifacts/appledouble-filesec`, including `observed-chmod.json`.
 
-All three OS jobs replay the required corpus with no skips. The focused hostmeta
+All three OS jobs replay the required corpus with no skips. The focused hostdata
 coverage gate now requires greater than 95% independently in `acl_restore.go`,
 `acl_attributes.go` and `acl_chmod.go`. Unit tests also check invalid inputs and
 storage ownership; `FuzzDarwinChmodRequest` checks mode narrowing, unchanged
 security bytes, bounded output and independent request storage. This does not
-claim whole-hostmeta coverage or native Darwin syscalls on Windows/Linux.
+claim whole-hostdata coverage or native Darwin syscalls on Windows/Linux.
 
 ## What remains
 

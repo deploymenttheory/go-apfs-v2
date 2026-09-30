@@ -36,7 +36,7 @@ func verify() error {
 	defer log.Close()
 	var transcript bytes.Buffer
 	profile := filepath.Join(dir, "coverage.out")
-	cmd := exec.Command("go", "test", "-count=1", "-json", "-run", "^TestUnpack(Restore|Sequential)", "-covermode=atomic", "-coverprofile="+profile, "-coverpkg=./pkg/hostmeta,./internal/imageacl,./pkg/apfswrite,./pkg/hfsplus", "./pkg/hostmeta")
+	cmd := exec.Command("go", "test", "-count=1", "-json", "-run", "^TestUnpack(Restore|Sequential)", "-covermode=atomic", "-coverprofile="+profile, "-coverpkg=./pkg/hostdata/...,./internal/imageacl,./pkg/apfswrite,./pkg/hfsplus", "./pkg/hostdata")
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 	cmd.Stdout = io.MultiWriter(os.Stdout, log, &transcript)
 	cmd.Stderr = io.MultiWriter(os.Stderr, log)
@@ -64,7 +64,7 @@ func verify() error {
 		return e
 	}
 	covered, total := 0, 0
-	coverageFiles := map[string][2]int{"pkg/hostmeta/appledouble_restore.go": {}}
+	coverageFiles := map[string][2]int{"pkg/hostdata/appledouble_restore.go": {}}
 	blocks := map[string][2]int{}
 	for _, line := range strings.Split(string(b), "\n") {
 		fields := strings.Fields(line)
@@ -110,7 +110,7 @@ func verify() error {
 	if passed < 4018 {
 		return fmt.Errorf("incomplete unpack restoration tests: %d", passed)
 	}
-	files := []string{"pkg/hostmeta/appledouble_restore.go", "pkg/hostmeta/appledouble_restore_test.go", "pkg/hostmeta/appledouble_restore_image_test.go", "internal/testutil/unpackrestore/oracle.go", "scripts/verify-unpack-restore.go", "scripts/verify-unpack-restore-coverage.go", "testdata/appledouble/native/unpack-restore.c", "testdata/appledouble/native/unpack-restore.json.gz", "testdata/appledouble/native/unpack-restore-ci.json.gz", "pkg/hostmeta/xattr_restore.go", "pkg/appledouble/appledouble.go", "pkg/appledouble/acl_update.go", "pkg/appledouble/quarantine_update.go", "pkg/appledouble/quarantine_application.go", "pkg/hostmeta/copy_pipeline.go", "go.mod", "go.sum"}
+	files := []string{"pkg/hostdata/appledouble_restore.go", "pkg/hostdata/appledouble_restore_test.go", "pkg/hostdata/appledouble_restore_image_test.go", "internal/testutil/unpackrestore/oracle.go", "scripts/verify-unpack-restore.go", "scripts/verify-unpack-restore-coverage.go", "testdata/appledouble/native/unpack-restore.c", "testdata/appledouble/native/unpack-restore.json.gz", "testdata/appledouble/native/unpack-restore-ci.json.gz", "pkg/hostdata/xattr_restore.go", "pkg/appledouble/appledouble.go", "pkg/appledouble/acl_update.go", "pkg/appledouble/quarantine_update.go", "pkg/appledouble/quarantine_application.go", "pkg/hostdata/copy_pipeline.go", "go.mod", "go.sum"}
 	hashes := map[string]string{}
 	for _, path := range files {
 		b, e := os.ReadFile(path)

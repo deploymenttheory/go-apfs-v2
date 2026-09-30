@@ -8,13 +8,13 @@ import (
 	"reflect"
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/securitycopy"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 )
 
 type Event struct {
 	securitycopy.Event
 	Source *securitycopy.Source
-	Stat   *hostmeta.SecuritySourceStat
+	Stat   *hostdata.SecuritySourceStat
 }
 type Observation struct {
 	PayloadPermissionCleanups                int
@@ -37,11 +37,11 @@ type Fixture struct {
 	Models, Applications                                                   []Case
 }
 
-func source(v securitycopy.Source) (hostmeta.SecurityCopySource, error) {
+func source(v securitycopy.Source) (hostdata.SecurityCopySource, error) {
 	p, e := v.Properties.Go()
-	return hostmeta.SecurityCopySource{Properties: p, UID: v.UID, GID: v.GID, Mode: v.Mode}, e
+	return hostdata.SecurityCopySource{Properties: p, UID: v.UID, GID: v.GID, Mode: v.Mode}, e
 }
-func sourceFromGo(v hostmeta.SecurityCopySource) securitycopy.Source {
+func sourceFromGo(v hostdata.SecurityCopySource) securitycopy.Source {
 	return securitycopy.Source{Properties: securitycopy.PropertiesFromGo(v.Properties), UID: v.UID, GID: v.GID, Mode: v.Mode}
 }
 func readError(e Event) error {
@@ -51,10 +51,10 @@ func readError(e Event) error {
 	native := securitycopy.NativeError(e.Errno)
 	if e.Operation == "read-security" {
 		if e.Errno == 1 {
-			return errors.Join(native, hostmeta.ErrSecuritySourceNotPermitted)
+			return errors.Join(native, hostdata.ErrSecuritySourceNotPermitted)
 		}
 		if e.Errno == 45 {
-			return errors.Join(native, hostmeta.ErrSecuritySourceNotSupported)
+			return errors.Join(native, hostdata.ErrSecuritySourceNotSupported)
 		}
 	}
 	return native
@@ -62,7 +62,7 @@ func readError(e Event) error {
 
 // Replay compares captured partial state, fallback diagnostics, source type
 // gating and the ordinary copy's exact requests/cache with the native trace.
-func Replay(tc Case) (hostmeta.SecuritySourceCopyResult, []securitycopy.Event, error) {
+func Replay(tc Case) (hostdata.SecuritySourceCopyResult, []securitycopy.Event, error) {
 	n := tc.Native
 	var reads []Event
 	var acquired securitycopy.Source
@@ -73,7 +73,7 @@ func Replay(tc Case) (hostmeta.SecuritySourceCopyResult, []securitycopy.Event, e
 			reads = append(reads, e)
 		case "acquired":
 			if e.Source == nil {
-				return hostmeta.SecuritySourceCopyResult{}, nil, fmt.Errorf("missing acquisition snapshot")
+				return hostdata.SecuritySourceCopyResult{}, nil, fmt.Errorf("missing acquisition snapshot")
 			}
 			acquired = *e.Source
 		default:
@@ -89,14 +89,14 @@ func Replay(tc Case) (hostmeta.SecuritySourceCopyResult, []securitycopy.Event, e
 		index++
 		return e, nil
 	}
-	capture := hostmeta.SecuritySourceCapture{
-		ReadSecurity: func() (hostmeta.SecurityCopySource, error) {
+	capture := hostdata.SecuritySourceCapture{
+		ReadSecurity: func() (hostdata.SecurityCopySource, error) {
 			e, err := next("read-security")
 			if err != nil {
-				return hostmeta.SecurityCopySource{}, err
+				return hostdata.SecurityCopySource{}, err
 			}
 			if e.Source == nil {
-				return hostmeta.SecurityCopySource{}, fmt.Errorf("missing source")
+				return hostdata.SecurityCopySource{}, fmt.Errorf("missing source")
 			}
 			s, err := source(*e.Source)
 			if err != nil {
@@ -104,7 +104,7 @@ func Replay(tc Case) (hostmeta.SecuritySourceCopyResult, []securitycopy.Event, e
 			}
 			return s, readError(e)
 		},
-		ReadStat: func(previous hostmeta.SecuritySourceStat) (hostmeta.SecuritySourceStat, error) {
+		ReadStat: func(previous hostdata.SecuritySourceStat) (hostdata.SecuritySourceStat, error) {
 			e, err := next("read-stat")
 			if err != nil {
 				return previous, err
@@ -113,15 +113,15 @@ func Replay(tc Case) (hostmeta.SecuritySourceCopyResult, []securitycopy.Event, e
 				return previous, fmt.Errorf("missing stat")
 			}
 			first := reads[0].Source
-			if previous != (hostmeta.SecuritySourceStat{UID: first.UID, GID: first.GID, Mode: first.Mode}) {
+			if previous != (hostdata.SecuritySourceStat{UID: first.UID, GID: first.GID, Mode: first.Mode}) {
 				return previous, fmt.Errorf("prior stat mismatch")
 			}
 			return *e.Stat, readError(e)
 		},
 	}
 	backend := securitycopy.NewBackend(copyEvents)
-	result, runErr := hostmeta.CopySecurityFrom(capture, securitycopy.Options(tc.Flags, 0), backend)
-	fail := func(message string) (hostmeta.SecuritySourceCopyResult, []securitycopy.Event, error) {
+	result, runErr := hostdata.CopySecurityFrom(capture, securitycopy.Options(tc.Flags, 0), backend)
+	fail := func(message string) (hostdata.SecuritySourceCopyResult, []securitycopy.Event, error) {
 		return result, backend.Events(), fmt.Errorf("%s: %s (%v)", tc.Name, message, runErr)
 	}
 	if index != len(reads) || backend.Mismatch() != nil || !reflect.DeepEqual(backend.Events(), copyEvents) {
@@ -158,11 +158,11 @@ func Replay(tc Case) (hostmeta.SecuritySourceCopyResult, []securitycopy.Event, e
 		return fail("extra read failure")
 	}
 	if !n.Entered {
-		if runErr == nil || !reflect.DeepEqual(result.Copy, hostmeta.SecurityCopyResult{}) {
+		if runErr == nil || !reflect.DeepEqual(result.Copy, hostdata.SecurityCopyResult{}) {
 			return fail("fatal capture issued copy")
 		}
 		if n.Errno == 45 {
-			if !errors.Is(runErr, hostmeta.ErrSecuritySourceType) {
+			if !errors.Is(runErr, hostdata.ErrSecuritySourceType) {
 				return fail("source type refusal")
 			}
 		} else if !errors.Is(runErr, securitycopy.NativeError(n.Errno)) {

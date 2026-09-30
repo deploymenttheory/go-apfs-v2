@@ -5,7 +5,7 @@ import (
 	"maps"
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/imageacl"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 )
 
 // RestoreXattr applies one ordinary AppleDouble ATTR record to target and all
@@ -17,10 +17,10 @@ import (
 // The writer must still serialize successfully. This is offline staging, not
 // native authorization, kernel normalization or a complete unpack lifecycle.
 // Exclude tree mutation during execution, including from callbacks.
-func (root *Entry) RestoreXattr(target *Entry, name string, value []byte, options hostmeta.XattrRestoreOptions) (hostmeta.XattrRestoreResult, error) {
+func (root *Entry) RestoreXattr(target *Entry, name string, value []byte, options hostdata.XattrRestoreOptions) (hostdata.XattrRestoreResult, error) {
 	return imageacl.RestoreXattr(root, target, name, value, options, (*Entry).imageXattrNode, func(e *Entry, attrs map[string][]byte) {
-		e.ResourceFork = attrs[hostmeta.ResourceForkName]
-		delete(attrs, hostmeta.ResourceForkName)
+		e.ResourceFork = attrs[hostdata.ResourceForkName]
+		delete(attrs, hostdata.ResourceForkName)
 		e.Xattrs = attrs
 	})
 }
@@ -31,7 +31,7 @@ func (e *Entry) imageXattrNode(root bool) (imageacl.Node[*Entry], error) {
 	if err != nil {
 		return n, err
 	}
-	if _, wrong := n.Xattrs[hostmeta.ResourceForkName]; wrong {
+	if _, wrong := n.Xattrs[hostdata.ResourceForkName]; wrong {
 		return n, fs.ErrInvalid
 	}
 	if len(e.ResourceFork) > 0 {
@@ -39,7 +39,7 @@ func (e *Entry) imageXattrNode(root bool) (imageacl.Node[*Entry], error) {
 		if n.Xattrs == nil {
 			n.Xattrs = map[string][]byte{}
 		}
-		n.Xattrs[hostmeta.ResourceForkName] = e.ResourceFork
+		n.Xattrs[hostdata.ResourceForkName] = e.ResourceFork
 	}
 	return n, nil
 }

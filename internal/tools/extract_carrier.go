@@ -19,7 +19,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/metatransport"
 )
 
@@ -113,13 +113,13 @@ func (e *Extractor) planCarrier(root, destBase string) ([]carrierExtractEntry, e
 // metadata blob has been written. An empty destination prevents preexisting
 // symlink redirection, name collisions and accidental overwrite of user files.
 func (e *Extractor) extractCarrier(root, destBase string) (err error) {
-	return e.extractCarrierUsing(root, destBase, carrierExtractionOps{os.ReadDir, os.OpenRoot, hostmeta.CaptureXattrValuesAt})
+	return e.extractCarrierUsing(root, destBase, carrierExtractionOps{os.ReadDir, os.OpenRoot, hostdata.CaptureXattrValuesAt})
 }
 
 type carrierExtractionOps struct {
 	readDir  func(string) ([]os.DirEntry, error)
 	openRoot func(string) (*os.Root, error)
-	capture  func(context.Context, *os.Root, string, hostmeta.XattrCaptureLimits) (map[string]appledouble.Value, error)
+	capture  func(context.Context, *os.Root, string, hostdata.XattrCaptureLimits) (map[string]appledouble.Value, error)
 }
 
 func (e *Extractor) extractCarrierUsing(root, destBase string, ops carrierExtractionOps) (err error) {
@@ -137,13 +137,13 @@ func (e *Extractor) extractCarrierUsing(root, destBase string, ops carrierExtrac
 	}
 	if e.Xattrs {
 		_, byteValues := e.Volume.(XattrVolume)
-		_, streamValues := e.Volume.(hostmeta.ImageXattrValuesFS)
+		_, streamValues := e.Volume.(hostdata.ImageXattrValuesFS)
 		if !byteValues && !streamValues {
 			return errors.New("source does not expose extended attributes")
 		}
 	}
 	if e.PreserveMeta {
-		if _, ok := e.Volume.(hostmeta.ImageMetadataFS); !ok {
+		if _, ok := e.Volume.(hostdata.ImageMetadataFS); !ok {
 			return errors.New("source does not expose complete inode metadata")
 		}
 	}
@@ -242,12 +242,12 @@ func (e *Extractor) extractCarrierUsing(root, destBase string, ops carrierExtrac
 			carriedCount += len(attrs)
 		}
 		if e.PreserveMeta {
-			m, readErr := e.Volume.(hostmeta.ImageMetadataFS).Metadata(entry.source)
+			m, readErr := e.Volume.(hostdata.ImageMetadataFS).Metadata(entry.source)
 			if readErr != nil {
 				return readErr
 			}
 			if !e.Xattrs {
-				m.BSDFlags &^= hostmeta.UFCompressed
+				m.BSDFlags &^= hostdata.UFCompressed
 			}
 			r.Darwin = metatransport.DarwinState{UID: &m.UID, GID: &m.GID, Mode: &m.Mode, Flags: &m.BSDFlags}
 			if m.Times != nil {
@@ -260,12 +260,12 @@ func (e *Extractor) extractCarrierUsing(root, destBase string, ops carrierExtrac
 				r.LinkGroup = strconv.FormatUint(m.LinkID, 10)
 			}
 		}
-		captureLimits := hostmeta.XattrCaptureLimits{NameBytes: hostmeta.MaxXattrListSize, ValueBytes: 64 << 20, TotalBytes: 256 << 20}
+		captureLimits := hostdata.XattrCaptureLimits{NameBytes: hostdata.MaxXattrListSize, ValueBytes: 64 << 20, TotalBytes: 256 << 20}
 		if e.NativeCaptureLimits != nil {
 			captureLimits = *e.NativeCaptureLimits
 		}
 		native, captureErr := ops.capture(ctx, payload, filepath.FromSlash(r.Materialized), captureLimits)
-		if errors.Is(captureErr, hostmeta.ErrXattrUnsupported) {
+		if errors.Is(captureErr, hostdata.ErrXattrUnsupported) {
 			r.NativeUnsupported = true
 		} else if captureErr != nil {
 			return captureErr
@@ -282,11 +282,11 @@ func (e *Extractor) extractCarrierUsing(root, destBase string, ops carrierExtrac
 		manifest.Records = append(manifest.Records, r)
 	}
 	if e.ProjectNative {
-		captureLimits := hostmeta.XattrCaptureLimits{NameBytes: hostmeta.MaxXattrListSize, ValueBytes: 64 << 20, TotalBytes: 256 << 20}
+		captureLimits := hostdata.XattrCaptureLimits{NameBytes: hostdata.MaxXattrListSize, ValueBytes: 64 << 20, TotalBytes: 256 << 20}
 		if e.NativeCaptureLimits != nil {
 			captureLimits = *e.NativeCaptureLimits
 		}
-		if err = e.projectCarrier(ctx, payload, store, manifest.Records, captureLimits, newNativeProjection, hostmeta.CaptureXattrs, captureProjectionValues); err != nil {
+		if err = e.projectCarrier(ctx, payload, store, manifest.Records, captureLimits, newNativeProjection, hostdata.CaptureXattrs, captureProjectionValues); err != nil {
 			return err
 		}
 	}
@@ -340,7 +340,7 @@ func writeCarrierPayloadUsing(ctx context.Context, name string, source io.ReadCl
 }
 
 func captureImageValues(volume VolumeFS, name string) (map[string]appledouble.Value, error) {
-	if source, ok := volume.(hostmeta.ImageXattrValuesFS); ok {
+	if source, ok := volume.(hostdata.ImageXattrValuesFS); ok {
 		return source.XattrValues(name)
 	}
 	attrs, err := volume.(XattrVolume).Xattrs(name)

@@ -34,7 +34,7 @@ to process the bytes.
 
 The package operates on bytes. Filesystem reads/writes, choosing where to store a
 sidecar, resolving filename conflicts and applying permissions belong to the
-surrounding metadata layer. Shared filesystem operations live in `pkg/hostmeta`;
+surrounding metadata layer. Shared filesystem operations live in `pkg/hostdata`;
 `pkg/metatransport` supplies the explicit portable carrier, and APFS/HFS+ readers,
 writers and the CLI bind that carrier to extraction and repacking.
 
@@ -45,7 +45,7 @@ writers and the CLI bind that carrier to extraction and repacking.
 - **Streamed metadata:** `Value`, `StreamFile`, `DecodeStream` and `EncodeTo`
   retain sized borrowed readers and use bounded scratch space. Keep their image,
   file or carrier owners open and exclude mutation until consumption finishes.
-- **Complete metadata operations:** `hostmeta.PackAppleDoubleObject` and
+- **Complete metadata operations:** `hostdata.PackAppleDoubleObject` and
   `UnpackAppleDoubleObject` operate on held objects; `CopyAppleDoublePath` adds
   creation/opening, temporary permission handling, retries and owned-descriptor
   cleanup. Captured source context supplies the same logical policy on Linux
@@ -98,12 +98,12 @@ writers and the CLI bind that carrier to extraction and repacking.
   modification/access times, ownership, permissions and BSD flags. All aliases
   publish together after validation; failed staging leaves the tree unchanged.
   See [image stat staging](../../docs/appledouble-image-stat.md).
-- **Ordered unpack execution:** `hostmeta.RestoreAppleDouble` decodes a captured
+- **Ordered unpack execution:** `hostdata.RestoreAppleDouble` decodes a captured
   sidecar before destination changes, then executes cleanup, ordered records,
   dedicated FinderInfo/fork slots, deferred ACL and final stat through held
   providers. Native return codes remain separate from retained failures. See
   [unpack restoration](../../docs/appledouble-unpack-restoration.md).
-- **Held destination names:** `hostmeta.ListXattrNames` provides bounded native
+- **Held destination names:** `hostdata.ListXattrNames` provides bounded native
   enumeration on Linux, macOS and Windows, retaining descriptor identity, native
   order and failure diagnostics. It is a prerequisite for the complete unpack
   provider. See [held-file listing](../../docs/appledouble-held-xattr-list.md).
@@ -164,7 +164,9 @@ Use `File.Attrs` instead of the map when duplicate record order matters.
 
 ## Roadmap
 
-The remaining work is one consolidated integration phase. The
+The consolidated implementation and qualification completed in merged PR182.
+The remaining sequence is the requested hostdata package refactor, its full CI,
+the maintainer's release and downstream adoption. The
 [completion plan](../../docs/appledouble-completion-plan.md) defines the technical
 work and the [completion matrix](../../docs/appledouble-completion-matrix.md)
 tracks its release gates. Component tests alone do not close an integration gate.
@@ -173,7 +175,7 @@ The architecture has separate operations, without a global compatibility mode:
 
 - The byte codec represents and validates metadata. `Value`, `StreamFile`,
   `DecodeStream` and `EncodeTo` allow bounded-memory access to large values.
-- `hostmeta.RestoreAppleDouble` validates a complete snapshot before mutation.
+- `hostdata.RestoreAppleDouble` validates a complete snapshot before mutation.
   `RestoreAppleDoubleSequential` instead reads records during restoration, so
   late input failures can leave earlier native-style effects in place.
 - `metatransport` stores logical metadata in an explicitly selected directory.
@@ -182,13 +184,13 @@ The architecture has separate operations, without a global compatibility mode:
 - Host adapters perform actual native operations. Portable storage does not
   imply that Linux or Windows enforces Darwin ACL or quarantine policy.
 
-| Area | Implemented in this integration | Still required before completion |
+| Area | Implemented and qualified in PR182 | Retained constraints and release requirements |
 | --- | --- | --- |
-| Codec and allocation | Streamed codec and APFS/HFS endpoints; native pack limits; explicit value/work budgets; borrowed values | Final full-byte large-fork jobs on all three OSes and native foreign-image readback; retain native-style whole-fork allocation constraints |
-| Restoration | Prevalidated and sequential executors; complete object/path composition; ACL/quarantine/stat, inheritance, temporary permissions and cleanup | Final production replay, partial-error and close diagnostics, version-specific native CI |
-| Host capture | Strict held/no-follow capture on all three OSes; native Darwin source/process/identity/protection observations | Live privileged/nonowner and signed-sandbox CI with explicit prerequisites; unknown observations remain errors |
-| Portable transport | Streamed carrier with hashes/generations/conflict detection; extraction/repacking and native projection/readback; roots, names, links, hardlinks and four times | Final three-OS transport and large-value matrices; independent Mac validation of Linux/Windows images |
-| Evidence | Retained C/native corpus, Clang ASTs, image oracles, four vendor DMGs, strict 23-report coverage inventory | Final committed revision's complete CI, greater than 95% for each selected file, fuzz/race/lint/build checks and no unexplained mismatches |
+| Codec and allocation | Streamed codec and APFS/HFS endpoints; native pack limits; explicit value/work budgets; borrowed values | Keep full-byte three-OS/native readback qualification; native-style sequential restoration retains its whole-fork allocation constraints |
+| Restoration | Prevalidated and sequential executors; complete object/path composition; ACL/quarantine/stat, inheritance, temporary permissions and cleanup | Retain production replay, partial-error/close diagnostics and qualification against measured native versions |
+| Host capture | Strict held/no-follow capture on all three OSes; native Darwin source/process/identity/protection observations | Keep real privileged/nonowner and signed-sandbox CI; unknown observations remain explicit errors |
+| Portable transport | Streamed carrier with hashes/generations/conflict detection; extraction/repacking and native projection/readback; roots, names, links, hardlinks and four times | Keep three-OS transport/large-value matrices and independent Mac validation of foreign images |
+| Evidence | Retained C/native corpus, Clang ASTs, image oracles, four vendor DMGs, strict 23-report coverage inventory | Run complete CI again for the refactor, retaining every greater-than-95% file gate and fuzz/race/lint/build check |
 | Consumers | APFS owns the codec and transport; package PR72 remains draft | Qualified APFS release, downstream adoption in PR72, then codesign work |
 
 Use `apfs extract IMAGE -C PAYLOAD --xattrs --preserve-meta --metadata-root METADATA`
@@ -206,6 +208,7 @@ whole-fork allocation; AppleDouble's own unsigned 32-bit fork length remains a
 format limit. See [large resource forks](../../docs/appledouble-large-values.md)
 for the real 4 GiB + 17 byte qualification and foreign-image checks.
 
-The consolidated PR remains draft while qualification is incomplete. The
-maintainer merges it and the release PR; package adoption and codesign remain
-blocked until the completion gates pass.
+The implementation PR is merged. The refactor PR remains draft until its full
+qualification passes. The maintainer merges it and the release PR; package PR72
+then adopts the published qualified version and runs its downstream checks before
+codesign work resumes.

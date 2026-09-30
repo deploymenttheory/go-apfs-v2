@@ -99,7 +99,7 @@ func main() {
 		hashes[path] = sum(b)
 	}
 	for _, path := range []string{
-		"pkg/hostmeta/appledouble_sequential.go", "pkg/hostmeta/appledouble_restore.go", "pkg/hostmeta/xattr_restore.go",
+		"pkg/hostdata/appledouble_sequential.go", "pkg/hostdata/appledouble_restore.go", "pkg/hostdata/xattr_restore.go",
 		"internal/testutil/unpackrestore/oracle.go", "internal/testutil/unpackrestore/sequential.go", "testdata/appledouble/native/unpack-restore.c", "scripts/verify-unpack-sequential.go",
 	} {
 		hashes[path] = sum(read(path))

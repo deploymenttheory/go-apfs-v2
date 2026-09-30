@@ -7,7 +7,8 @@ import (
 	"github.com/deploymenttheory/go-apfs-v2/internal/imageacl"
 	"github.com/deploymenttheory/go-apfs-v2/internal/unixmode"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
+	aclmeta "github.com/deploymenttheory/go-apfs-v2/pkg/hostdata/acl"
 )
 
 // RestoreACL stages a deferred AppleDouble replacement on target within root.
@@ -20,12 +21,12 @@ import (
 // unrelated attributes are retained. Applied means staged in the tree, not yet
 // written to disk: CreateContainer must still succeed. This pure-Go operation
 // does not authorize native filesystem access. Exclude concurrent tree mutation.
-func (root *Entry) RestoreACL(target *Entry, update appledouble.ACLUpdate) (hostmeta.ACLRestoreResult, error) {
+func (root *Entry) RestoreACL(target *Entry, update appledouble.ACLUpdate) (aclmeta.ACLRestoreResult, error) {
 	return imageacl.Restore(root, target, update, (*Entry).imageSecurityNode, func(e *Entry, attrs map[string][]byte) { e.Xattrs = attrs })
 }
 
 func (e *Entry) imageSecurityNode(isRoot bool) (imageacl.Node[*Entry], error) {
-	if hostmeta.IsSpecial(e.Mode) || (isRoot && e.Mode.Type() != 0 && e.Mode.Type() != os.ModeDir) {
+	if hostdata.IsSpecial(e.Mode) || (isRoot && e.Mode.Type() != 0 && e.Mode.Type() != os.ModeDir) {
 		return imageacl.Node[*Entry]{}, fs.ErrInvalid
 	}
 	mode := e.resolvedMode()

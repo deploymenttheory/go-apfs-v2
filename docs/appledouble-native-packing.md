@@ -1,6 +1,6 @@
 # Explicit native AppleDouble packing
 
-`hostmeta.PackAppleDouble` provides native-compatible packing through held source
+`hostdata.PackAppleDouble` provides native-compatible packing through held source
 and destination providers. Use it when copyfile's callback sequence, size policy
 and partial output effects matter. `appledouble.StreamFile.EncodeTo` remains the
 lossless canonical encoding operation; its behavior is unchanged.

@@ -1,12 +1,12 @@
 # Held-file attribute writes
 
-`hostmeta.SetXattr(file, name, value)` creates or updates one native extended
+`hostdata.SetXattr(file, name, value)` creates or updates one native extended
 attribute on an already-open object. Restoration providers use it when a rename
 or replacement of the original pathname must not redirect a metadata write.
 It works on Linux, macOS and Windows with pure Go production code.
 
 ```go
-err := hostmeta.SetXattr(file, "user.example", []byte{0, 1, 255})
+err := hostdata.SetXattr(file, "user.example", []byte{0, 1, 255})
 if err != nil {
     return err
 }

@@ -10,7 +10,8 @@ import (
 	"strings"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
+	aclmeta "github.com/deploymenttheory/go-apfs-v2/pkg/hostdata/acl"
 )
 
 type Properties struct {
@@ -31,7 +32,7 @@ type Event struct {
 	Code, Errno      int
 	UID, GID         uint32
 	Mode             int32
-	SecurityArgument hostmeta.DarwinSecurityArgument
+	SecurityArgument aclmeta.DarwinSecurityArgument
 	Security, ACL    *string
 }
 type Observation struct {
@@ -88,8 +89,8 @@ func ACLBytes(a *appledouble.ACL) *string {
 	}
 	return Encode(b)
 }
-func (p Properties) Go() (hostmeta.DarwinChmodProperties, error) {
-	out := hostmeta.DarwinChmodProperties{UID: p.UID, GID: p.GID, Mode: p.Mode}
+func (p Properties) Go() (aclmeta.DarwinChmodProperties, error) {
+	out := aclmeta.DarwinChmodProperties{UID: p.UID, GID: p.GID, Mode: p.Mode}
 	for _, pair := range []struct {
 		in  *string
 		out **[16]byte
@@ -115,7 +116,7 @@ func (p Properties) Go() (hostmeta.DarwinChmodProperties, error) {
 	}
 	return out, nil
 }
-func PropertiesFromGo(p hostmeta.DarwinChmodProperties) Properties {
+func PropertiesFromGo(p aclmeta.DarwinChmodProperties) Properties {
 	out := Properties{UID: p.UID, GID: p.GID, Mode: p.Mode}
 	if p.OwnerUUID != nil {
 		out.OwnerUUID = Encode(p.OwnerUUID[:])
@@ -132,8 +133,8 @@ func PropertiesFromGo(p hostmeta.DarwinChmodProperties) Properties {
 	}
 	return out
 }
-func Options(flags, filter int) hostmeta.SecurityCopyOptions {
-	return hostmeta.SecurityCopyOptions{ACL: flags&1 != 0, Stat: flags&2 != 0, ForbidCopySetID: filter == 1 || filter == 2, AlwaysCopySetID: filter == 2, SourceNoSetID: filter == 3, DestinationNoSetID: filter == 4}
+func Options(flags, filter int) hostdata.SecurityCopyOptions {
+	return hostdata.SecurityCopyOptions{ACL: flags&1 != 0, Stat: flags&2 != 0, ForbidCopySetID: filter == 1 || filter == 2, AlwaysCopySetID: filter == 2, SourceNoSetID: filter == 3, DestinationNoSetID: filter == 4}
 }
 
 type backend struct {
@@ -176,7 +177,7 @@ func (b *backend) CaptureDestinationACL() (*appledouble.ACL, error) {
 	}
 	return a, b.record(Event{Operation: "capture", ACL: ACLBytes(a)})
 }
-func (b *backend) WriteSecurity(a hostmeta.DarwinChmodArguments) error {
+func (b *backend) WriteSecurity(a aclmeta.DarwinChmodArguments) error {
 	return b.record(Event{Operation: "security", UID: a.UID, GID: a.GID, Mode: a.Mode, SecurityArgument: a.SecurityArgument, Security: Encode(a.Security)})
 }
 func (b *backend) Chmod(mode uint16) error {
@@ -189,7 +190,7 @@ func (b *backend) SetACL(a *appledouble.ACL) error {
 	return b.record(Event{Operation: "acl", ACL: ACLBytes(a)})
 }
 
-func (b *backend) NoSetID(volume hostmeta.SecurityCopyVolume) (bool, error) {
+func (b *backend) NoSetID(volume hostdata.SecurityCopyVolume) (bool, error) {
 	i := len(b.got)
 	e := Event{Operation: "volume-" + string(volume)}
 	if i < len(b.want) {
@@ -201,18 +202,18 @@ func (b *backend) NoSetID(volume hostmeta.SecurityCopyVolume) (bool, error) {
 
 // Replay uses observed errors as backend responses and independently checks the
 // Go executor's decisions and exact requests, including source-cache effects.
-func Replay(tc Case) (hostmeta.SecurityCopyResult, []Event, error) {
+func Replay(tc Case) (hostdata.SecurityCopyResult, []Event, error) {
 	n := tc.Native
 	p, e := n.Source.Properties.Go()
 	if e != nil {
-		return hostmeta.SecurityCopyResult{}, nil, e
+		return hostdata.SecurityCopyResult{}, nil, e
 	}
 	b := &backend{want: n.Events}
 	options := Options(tc.Flags, tc.Filter)
 	if tc.QueryVolumes {
 		options.VolumePolicy = b
 	}
-	result, runErr := hostmeta.CopySecurity(hostmeta.SecurityCopySource{Properties: p, UID: n.Source.UID, GID: n.Source.GID, Mode: n.Source.Mode}, options, b)
+	result, runErr := hostdata.CopySecurity(hostdata.SecurityCopySource{Properties: p, UID: n.Source.UID, GID: n.Source.GID, Mode: n.Source.Mode}, options, b)
 	if b.mismatch != nil {
 		return result, b.got, b.mismatch
 	}
@@ -233,11 +234,11 @@ func Replay(tc Case) (hostmeta.SecurityCopyResult, []Event, error) {
 	}
 	writes := 0
 	fallback := false
-	var failures []hostmeta.SecurityCopyFailure
-	var queries []hostmeta.SecurityCopyVolumeQuery
+	var failures []hostdata.SecurityCopyFailure
+	var queries []hostdata.SecurityCopyVolumeQuery
 	for _, v := range n.Events {
 		if strings.HasPrefix(v.Operation, "volume-") {
-			q := hostmeta.SecurityCopyVolumeQuery{Volume: hostmeta.SecurityCopyVolume(strings.TrimPrefix(v.Operation, "volume-")), NoSetID: v.NoSetID}
+			q := hostdata.SecurityCopyVolumeQuery{Volume: hostdata.SecurityCopyVolume(strings.TrimPrefix(v.Operation, "volume-")), NoSetID: v.NoSetID}
 			if v.Code != 0 {
 				q.NoSetID, q.Err = false, NativeError(v.Errno)
 			}
@@ -248,7 +249,7 @@ func Replay(tc Case) (hostmeta.SecurityCopyResult, []Event, error) {
 				fallback = true
 			}
 			if v.Code != 0 {
-				failures = append(failures, hostmeta.SecurityCopyFailure{Operation: v.Operation, Err: NativeError(v.Errno)})
+				failures = append(failures, hostdata.SecurityCopyFailure{Operation: v.Operation, Err: NativeError(v.Errno)})
 			}
 		}
 	}

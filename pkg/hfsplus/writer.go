@@ -27,7 +27,7 @@ import (
 	"time"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 )
 
 // Entry is one node of the directory tree to be written. A directory has
@@ -49,7 +49,7 @@ type Entry struct {
 	// Times overrides ModTime for all four inode times. Nil keeps legacy
 	// defaults; HFS stores whole seconds in its 1904–2040 range. Only Modify
 	// is clamped by ClampModTimes. Explicit out-of-range values fail.
-	Times *hostmeta.FileTimes
+	Times *hostdata.FileTimes
 	// BSDFlags selects owner/admin catalog flags plus Finder invisibility.
 	// Nil retains legacy compression inference. UF_COMPRESSED must agree with
 	// decmpfs storage. Unrepresentable bits fail before output writes. The

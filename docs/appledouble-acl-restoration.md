@@ -1,6 +1,6 @@
 # Executing an AppleDouble ACL replacement
 
-`hostmeta.RestoreACL` executes the deferred update returned by
+`acl.RestoreACL` executes the deferred update returned by
 `appledouble.File.ACLUpdate`. Use it after restoring other metadata, with an
 explicit backend bound to the destination and the copy operation's cached source
 security. The algorithm is pure Go and identical on Linux, macOS and Windows.
@@ -88,10 +88,10 @@ hashes, source files, ASTs, host/tool/revision information and the disk image.
 security conversion and application matrices.
 
 All three OS jobs replay the required archived corpus and enforce greater than
-95% statement coverage independently of `pkg/hostmeta/acl_restore.go`,
-`pkg/hostmeta/acl_attributes.go` and `pkg/hostmeta/acl_chmod.go` using
+95% statement coverage independently of `pkg/hostdata/acl/acl_restore.go`,
+`pkg/hostdata/acl/acl_attributes.go` and `pkg/hostdata/acl/acl_chmod.go` using
 `scripts/verify-acl-restore.go`. This is a focused restoration coverage gate, not
-a claim of whole-package `hostmeta` coverage. The existing independent AppleDouble
+a claim of whole-package `hostdata` coverage. The existing independent AppleDouble
 coverage gate remains. Unit tests additionally cover capture failure, reset
 failure, retry success, changed second-write errors, invalid inputs and callback
 mutation. Those failure-injection tests are not represented as measured native

@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/fidelity"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 )
 
 // testEntry is a minimal stand-in for the writers' Entry types, so the walk can
@@ -128,7 +128,7 @@ func TestWalkReportsHardLinks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := hostmeta.Link(info); !ok {
+	if _, ok := hostdata.Link(info); !ok {
 		t.Skip("this platform does not expose inode identity, so hard links cannot be recognized")
 	}
 	// A separate file with identical content must not be reported.
@@ -153,7 +153,7 @@ func TestWalkReportsHardLinks(t *testing.T) {
 // costs syscalls per entry, so a caller that does not ask gets no attribute
 // counts rather than a false zero.
 func TestWalkReportsXattrsOnlyWhenAsked(t *testing.T) {
-	if !hostmeta.XattrsSupported {
+	if !hostdata.XattrsSupported {
 		t.Skip("extended attributes are not readable on this platform")
 	}
 	dir := t.TempDir()
@@ -184,13 +184,13 @@ func TestWalkReportsXattrsOnlyWhenAsked(t *testing.T) {
 // separately from ordinary attributes: losing file content is a different
 // statement to losing metadata.
 func TestWalkClassifiesAttributes(t *testing.T) {
-	if !hostmeta.XattrsSupported {
+	if !hostdata.XattrsSupported {
 		t.Skip("extended attributes are not readable on this platform")
 	}
 	dir := t.TempDir()
 	path := filepath.Join(dir, "forked.txt")
 	mustWrite(t, path, "content\n")
-	if !setXattr(t, path, hostmeta.ResourceForkName, []byte("fork content")) {
+	if !setXattr(t, path, hostdata.ResourceForkName, []byte("fork content")) {
 		t.Skip("unable to set a resource fork attribute")
 	}
 

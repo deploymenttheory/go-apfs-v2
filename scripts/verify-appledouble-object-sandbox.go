@@ -27,7 +27,8 @@ import (
 	"github.com/deploymenttheory/go-apfs-v2/internal/evidenceaudit"
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/quarantinetime"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
+	sandbox "github.com/deploymenttheory/go-apfs-v2/pkg/hostdata/sandbox"
 )
 
 const artifactDir = "artifacts/appledouble-object-sandbox"
@@ -233,16 +234,16 @@ func main() {
 					files[key] = file
 				}
 				src := files["source"]
-				must(hostmeta.SetXattr(src, "user.object", []byte("sandbox fixture")))
-				must(hostmeta.SetXattr(src, "user.empty", nil))
+				must(hostdata.SetXattr(src, "user.object", []byte("sandbox fixture")))
+				must(hostdata.SetXattr(src, "user.empty", nil))
 				finder := make([]byte, 32)
 				copy(finder, "TEXTttxt")
-				must(hostmeta.SetXattr(src, appledouble.FinderInfoName, finder))
-				must(hostmeta.SetXattr(src, appledouble.QuarantineName, []byte("0080;6553f100;Fixture;")))
+				must(hostdata.SetXattr(src, appledouble.FinderInfoName, finder))
+				must(hostdata.SetXattr(src, appledouble.QuarantineName, []byte("0080;6553f100;Fixture;")))
 				if fork {
-					must(hostmeta.SetXattr(src, appledouble.ResourceForkName, []byte("sandbox fork")))
+					must(hostdata.SetXattr(src, appledouble.ResourceForkName, []byte("sandbox fork")))
 				}
-				held, err := hostmeta.NewHeldMetadata(src)
+				held, err := hostdata.NewHeldMetadata(src)
 				must(err)
 				if acl {
 					must(held.SetACL(&appledouble.ACL{Entries: []appledouble.ACLEntry{{Principal: [16]byte{1}, Flags: 1, Rights: 2}}}))
@@ -258,7 +259,7 @@ func main() {
 						sourceGo, sourceC = targetGo, targetC
 						targetGo, targetC = files["go-target"].Name(), files["native-target"].Name()
 						for _, key := range []string{"go-target", "native-target"} {
-							must(hostmeta.SetXattr(files[key], "user.stale", []byte("remove")))
+							must(hostdata.SetXattr(files[key], "user.stale", []byte("remove")))
 							must(files[key].Chmod(0400))
 							must(os.Chtimes(files[key].Name(), time.Unix(1600000000, 0), time.Unix(1600000001, 0)))
 						}
@@ -323,7 +324,7 @@ func main() {
 	if len(cases) != 18 {
 		panic("incomplete signed object matrix")
 	}
-	hashes, err := evidenceaudit.SourceHashes(os.DirFS("."), []string{nativeSource, "testdata/appledouble/native/appledouble-object.c", "scripts/verify-appledouble-object-sandbox.go", "internal/testutil/quarantinetime/*.go", "pkg/hostmeta/appledouble_object*.go", "pkg/hostmeta/held*.go", "pkg/hostmeta/quarantine*.go", "pkg/hostmeta/sandbox*.go", "pkg/hostmeta/xattr_intent*.go", "pkg/hostmeta/libsystem*.go", "go.mod", "go.sum"})
+	hashes, err := evidenceaudit.SourceHashes(os.DirFS("."), []string{nativeSource, "testdata/appledouble/native/appledouble-object.c", "scripts/verify-appledouble-object-sandbox.go", "internal/testutil/quarantinetime/*.go", "pkg/hostdata/appledouble_object*.go", "pkg/hostdata/held*.go", "pkg/hostdata/quarantine*.go", "pkg/hostdata/sandbox/sandbox*.go", "pkg/hostdata/xattrintent/xattr_intent*.go", "pkg/hostdata/libsystem*.go", "go.mod", "go.sum"})
 	must(err)
 	must(os.RemoveAll(work))
 	must(os.RemoveAll(denied))
@@ -345,7 +346,7 @@ func operate(args []string) {
 	if len(args) != 5 {
 		panic("invalid child arguments")
 	}
-	sandboxed, err := hostmeta.CaptureAppSandbox()
+	sandboxed, err := sandbox.CaptureAppSandbox()
 	must(err)
 	if !sandboxed {
 		panic("child is not actually sandboxed")
@@ -376,23 +377,23 @@ func operate(args []string) {
 		return
 	}
 	defer target.Close()
-	a, err := hostmeta.NewHostAppleDoubleObject(context.Background(), source)
+	a, err := hostdata.NewHostAppleDoubleObject(context.Background(), source)
 	must(err)
-	b, err := hostmeta.NewHostAppleDoubleObject(context.Background(), target)
+	b, err := hostdata.NewHostAppleDoubleObject(context.Background(), target)
 	must(err)
-	var lifecycle hostmeta.HeldLifecycleResult
+	var lifecycle hostdata.HeldLifecycleResult
 	if args[0] == "pack" {
-		options := hostmeta.DefaultObjectPackOptions()
+		options := hostdata.DefaultObjectPackOptions()
 		options.CopyACL = args[3] == "1"
 		options.Stat = args[4] == "1"
-		r, e := hostmeta.PackAppleDoubleObject(context.Background(), a, b, target, options)
+		r, e := hostdata.PackAppleDoubleObject(context.Background(), a, b, target, options)
 		lifecycle, err = r.Lifecycle, e
 	} else {
 		info, e := source.Stat()
 		must(e)
-		options := hostmeta.DefaultObjectUnpackOptions()
+		options := hostdata.DefaultObjectUnpackOptions()
 		options.Stat = args[4] == "1"
-		r, e := hostmeta.UnpackAppleDoubleObject(context.Background(), io.NewSectionReader(source, 0, info.Size()), a, b, options)
+		r, e := hostdata.UnpackAppleDoubleObject(context.Background(), io.NewSectionReader(source, 0, info.Size()), a, b, options)
 		lifecycle, err = r.Lifecycle, e
 	}
 	result.Code, result.Stage = lifecycle.Code, "operation"

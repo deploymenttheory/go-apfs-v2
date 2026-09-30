@@ -29,7 +29,7 @@ import (
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfswrite"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/hfsplus"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	aclmeta "github.com/deploymenttheory/go-apfs-v2/pkg/hostdata/acl"
 )
 
 type metadata struct {
@@ -366,7 +366,7 @@ type restorationCase struct {
 	Text                   []byte
 	Before                 metadata
 	Native                 restoreObservation
-	GoResult               hostmeta.ACLRestoreResult
+	GoResult               aclmeta.ACLRestoreResult
 }
 type restorationFixture struct {
 	Revision, Host, HelperSHA256, ParentHelperSHA256, CopyfileSHA256, XNUSHA256 string
@@ -390,13 +390,13 @@ func (p restorePipe) exchange(request string) []byte {
 	p.output.WriteByte('\n')
 	return b
 }
-func (p restorePipe) CaptureACL() (hostmeta.ACLMetadata, error) {
+func (p restorePipe) CaptureACL() (aclmeta.ACLMetadata, error) {
 	var r struct{ Captured metadata }
 	must(json.Unmarshal(p.exchange("C"), &r))
 	b, e := hex.DecodeString(r.Captured.Security)
 	must(e)
 	sec, e := appledouble.ParseDarwinFileSecurity(b)
-	return hostmeta.ACLMetadata{Security: sec, UID: r.Captured.UID, GID: r.Captured.GID, Mode: r.Captured.Mode}, e
+	return aclmeta.ACLMetadata{Security: sec, UID: r.Captured.UID, GID: r.Captured.GID, Mode: r.Captured.Mode}, e
 }
 func nativeRestoreError(b []byte) error {
 	var r struct{ Errno int }
@@ -410,7 +410,7 @@ func nativeRestoreError(b []byte) error {
 	}
 	return err
 }
-func (p restorePipe) WriteACL(m hostmeta.ACLMetadata) error {
+func (p restorePipe) WriteACL(m aclmeta.ACLMetadata) error {
 	b, e := m.Security.MarshalDarwinBinary()
 	if e != nil {
 		return e
@@ -533,7 +533,7 @@ func verifyRestoration(root string, f *restorationFixture, capture bool) {
 	}
 	fmt.Printf("Qualified %d actual filesystem restoration pairs\n", len(f.Cases))
 }
-func restoreRun(helper, dir, destination, input string, tc restorationCase, kind string) (metadata, restoreObservation, hostmeta.ACLRestoreResult) {
+func restoreRun(helper, dir, destination, input string, tc restorationCase, kind string) (metadata, restoreObservation, aclmeta.ACLRestoreResult) {
 	setup := "baseline"
 	if tc.Filesystem == "msdos" {
 		setup = "plain"
@@ -558,13 +558,13 @@ func restoreRun(helper, dir, destination, input string, tc restorationCase, kind
 	output.WriteByte('\n')
 	var before struct{ Before metadata }
 	must(json.Unmarshal(scan.Bytes(), &before))
-	var result hostmeta.ACLRestoreResult
+	var result aclmeta.ACLRestoreResult
 	var restoreErr error
 	if kind == "go" {
 		f := appledouble.File{Attrs: []appledouble.Attr{{Name: appledouble.ACLTextName, Value: tc.Text}}}
 		u, e := f.ACLUpdate(nil)
 		must(e)
-		result, restoreErr = hostmeta.RestoreACL(u, restorePipe{stdin, scan, &requests, &output})
+		result, restoreErr = aclmeta.RestoreACL(u, restorePipe{stdin, scan, &requests, &output})
 		requests.WriteString("D\n")
 		_, e = io.WriteString(stdin, "D\n")
 		must(e)
@@ -665,7 +665,7 @@ func verifyAttributes(root string, f *attributeFixture, capture bool) {
 				var expected metadata
 				must(json.Unmarshal(out, &expected))
 				tc := attributeConversion{Name: name, Input: input, Response: read(get), Request: read(set), Expected: expected}
-				m, e := hostmeta.ParseDarwinACLAttributes(tc.Response)
+				m, e := aclmeta.ParseDarwinACLAttributes(tc.Response)
 				must(e)
 				verifyAttributeMetadata(m, expected)
 				encoded, e := m.MarshalDarwinACLAttributes()
@@ -766,7 +766,7 @@ func verifyAttributes(root string, f *attributeFixture, capture bool) {
 	}
 	fmt.Printf("Qualified %d attribute conversions and %d native write pairs\n", len(f.Conversions), len(f.Applications))
 }
-func verifyAttributeMetadata(m hostmeta.ACLMetadata, want metadata) {
+func verifyAttributeMetadata(m aclmeta.ACLMetadata, want metadata) {
 	// fgetattrlist may return a present empty ACL where fstatx_np reports NOACL.
 	// fstatx_np also hides no_inherit on an empty ACL. This comparison only
 	// checks the common view; raw attribute frames (including flags) are compared
@@ -787,7 +787,7 @@ func verifyAttributeMetadata(m hostmeta.ACLMetadata, want metadata) {
 		panic(fmt.Sprintf("attribute capture differs: %+v vs %+v security=%x", m, want, b))
 	}
 }
-func attributeRun(helper, dir, input string, tc attributeApplication, kind string, encode func(hostmeta.ACLMetadata) ([]byte, string, error)) (metadata, []byte, result, []byte, []byte) {
+func attributeRun(helper, dir, input string, tc attributeApplication, kind string, encode func(aclmeta.ACLMetadata) ([]byte, string, error)) (metadata, []byte, result, []byte, []byte) {
 	args := []string{filepath.Join(dir, kind), tc.Kind, fmt.Sprintf("%o", tc.Mode), fmt.Sprint(tc.Flags), input, kind, fmt.Sprint(tc.Initial)}
 	cmd := exec.Command(helper, args...)
 	stdin, e := cmd.StdinPipe()
@@ -813,7 +813,7 @@ func attributeRun(helper, dir, input string, tc attributeApplication, kind strin
 	must(json.Unmarshal(scan.Bytes(), &before))
 	response, e := hex.DecodeString(before.Attributes)
 	must(e)
-	m, e := hostmeta.ParseDarwinACLAttributes(response)
+	m, e := aclmeta.ParseDarwinACLAttributes(response)
 	must(e)
 	verifyAttributeMetadata(m, before.Before)
 	var request []byte
@@ -851,7 +851,7 @@ func attributeRun(helper, dir, input string, tc attributeApplication, kind strin
 	must(cmd.Wait())
 	afterResponse, e := hex.DecodeString(after.Attributes)
 	must(e)
-	decoded, e := hostmeta.ParseDarwinACLAttributes(afterResponse)
+	decoded, e := aclmeta.ParseDarwinACLAttributes(afterResponse)
 	must(e)
 	verifyAttributeMetadata(decoded, after.After)
 	commands = append(commands, command{Args: append([]string{helper}, args...), Input: line, Output: raw.String(), Error: stderr.String()})
@@ -860,11 +860,11 @@ func attributeRun(helper, dir, input string, tc attributeApplication, kind strin
 	return before.Before, response, after.result, afterResponse, request
 }
 
-func attributeWriteRequest(m hostmeta.ACLMetadata) ([]byte, string, error) {
+func attributeWriteRequest(m aclmeta.ACLMetadata) ([]byte, string, error) {
 	b, e := m.MarshalDarwinACLAttributes()
 	return b, hex.EncodeToString(b), e
 }
-func chmodWriteRequest(m hostmeta.ACLMetadata) ([]byte, string, error) {
+func chmodWriteRequest(m aclmeta.ACLMetadata) ([]byte, string, error) {
 	r, e := m.DarwinChmodRequest()
 	if e != nil {
 		return nil, "", e
@@ -875,7 +875,7 @@ func chmodWriteRequest(m hostmeta.ACLMetadata) ([]byte, string, error) {
 type chmodConversion struct {
 	Name    string
 	Input   metadata
-	Request hostmeta.DarwinChmodRequest
+	Request aclmeta.DarwinChmodRequest
 }
 type chmodApplication struct {
 	Name, Kind              string
@@ -884,7 +884,7 @@ type chmodApplication struct {
 	Text                    []byte
 	Before                  metadata
 	Response, AfterResponse []byte
-	Request                 *hostmeta.DarwinChmodRequest
+	Request                 *aclmeta.DarwinChmodRequest
 	Native                  result
 }
 type chmodFixture struct {
@@ -921,12 +921,12 @@ func verifyChmod(root string, f *chmodFixture, attributes *attributeFixture, cap
 		expected := tc.Expected
 		expected.Security = hex.EncodeToString(tc.Input)
 		out := run(helper, "pack", input, output, fmt.Sprint(expected.UID), fmt.Sprint(expected.GID), fmt.Sprint(expected.Mode))
-		var native hostmeta.DarwinChmodRequest
+		var native aclmeta.DarwinChmodRequest
 		must(json.Unmarshal(out, &native))
 		native.Security = read(output)
 		sec, e := appledouble.ParseDarwinFileSecurity(tc.Input)
 		must(e)
-		m := hostmeta.ACLMetadata{Security: sec, UID: expected.UID, GID: expected.GID, Mode: expected.Mode}
+		m := aclmeta.ACLMetadata{Security: sec, UID: expected.UID, GID: expected.GID, Mode: expected.Mode}
 		request, e := m.DarwinChmodRequest()
 		must(e)
 		if !reflect.DeepEqual(request, native) {
@@ -944,9 +944,9 @@ func verifyChmod(root string, f *chmodFixture, attributes *attributeFixture, cap
 		if before != goBefore || before != tc.Before || !bytes.Equal(response, goResponse) || !bytes.Equal(response, tc.Response) || native != goNative || native != tc.Reference || !bytes.Equal(after, goAfter) || !bytes.Equal(after, tc.ReferenceAfterResponse) || !native.IdentityUnchanged {
 			panic("copyfile chmod mismatch: " + tc.Name)
 		}
-		var prepared *hostmeta.DarwinChmodRequest
+		var prepared *aclmeta.DarwinChmodRequest
 		if len(request) > 0 {
-			prepared = &hostmeta.DarwinChmodRequest{UID: goBefore.UID, GID: goBefore.GID, Mode: uint16(goBefore.Mode), Security: request}
+			prepared = &aclmeta.DarwinChmodRequest{UID: goBefore.UID, GID: goBefore.GID, Mode: uint16(goBefore.Mode), Security: request}
 		}
 		f.Applications = append(f.Applications, chmodApplication{Name: tc.Name, Kind: tc.Kind, Initial: tc.Initial, Mode: tc.Mode, Flags: tc.Flags, Text: tc.Text, Before: before, Response: response, AfterResponse: after, Request: prepared, Native: native})
 	}
@@ -1013,8 +1013,8 @@ type principalCase struct {
 	Text, AfterDisk              []byte
 	Before                       principalRead
 	Native                       principalObservation
-	Request                      *hostmeta.DarwinChmodRequest
-	GoResult                     hostmeta.ACLRestoreResult
+	Request                      *aclmeta.DarwinChmodRequest
+	GoResult                     aclmeta.ACLRestoreResult
 }
 type principalImage struct{ Filesystem, BeforeSHA256, AfterSHA256 string }
 type nonOwnerFixture struct {
@@ -1027,22 +1027,22 @@ type nonOwnerFixture struct {
 }
 type principalPipe struct {
 	restorePipe
-	request **hostmeta.DarwinChmodRequest
+	request **aclmeta.DarwinChmodRequest
 }
 
-func (p principalPipe) CaptureACL() (hostmeta.ACLMetadata, error) {
+func (p principalPipe) CaptureACL() (aclmeta.ACLMetadata, error) {
 	b := p.exchange("C")
 	if e := nativeRestoreError(b); e != nil {
-		return hostmeta.ACLMetadata{}, e
+		return aclmeta.ACLMetadata{}, e
 	}
 	var r struct{ Captured metadata }
 	must(json.Unmarshal(b, &r))
 	raw, e := hex.DecodeString(r.Captured.Security)
 	must(e)
 	sec, e := appledouble.ParseDarwinFileSecurity(raw)
-	return hostmeta.ACLMetadata{Security: sec, UID: r.Captured.UID, GID: r.Captured.GID, Mode: r.Captured.Mode}, e
+	return aclmeta.ACLMetadata{Security: sec, UID: r.Captured.UID, GID: r.Captured.GID, Mode: r.Captured.Mode}, e
 }
-func (p principalPipe) WriteACL(m hostmeta.ACLMetadata) error {
+func (p principalPipe) WriteACL(m aclmeta.ACLMetadata) error {
 	r, e := m.DarwinChmodRequest()
 	if e != nil {
 		return e
@@ -1050,7 +1050,7 @@ func (p principalPipe) WriteACL(m hostmeta.ACLMetadata) error {
 	*p.request = &r
 	return nativeRestoreError(p.exchange(fmt.Sprintf("W %d %d %d %x", r.UID, r.GID, r.Mode, r.Security)))
 }
-func principalRun(helper, dir, destination, input string, tc principalCase, kind string) (principalRead, principalObservation, *hostmeta.DarwinChmodRequest, hostmeta.ACLRestoreResult) {
+func principalRun(helper, dir, destination, input string, tc principalCase, kind string) (principalRead, principalObservation, *aclmeta.DarwinChmodRequest, aclmeta.ACLRestoreResult) {
 	args := []string{destination, input, kind, fmt.Sprint(tc.UID), fmt.Sprint(tc.GID), tc.Filesystem}
 	cmd := exec.Command(helper, args...)
 	stdin, e := cmd.StdinPipe()
@@ -1071,14 +1071,14 @@ func principalRun(helper, dir, destination, input string, tc principalCase, kind
 	output.WriteByte('\n')
 	var before struct{ Before principalRead }
 	must(json.Unmarshal(scan.Bytes(), &before))
-	var result hostmeta.ACLRestoreResult
-	var request *hostmeta.DarwinChmodRequest
+	var result aclmeta.ACLRestoreResult
+	var request *aclmeta.DarwinChmodRequest
 	var restoreErr error
 	if kind == "go" {
 		file := appledouble.File{Attrs: []appledouble.Attr{{Name: appledouble.ACLTextName, Value: tc.Text}}}
 		update, e := file.ACLUpdate(nil)
 		must(e)
-		result, restoreErr = hostmeta.RestoreACL(update, principalPipe{restorePipe{stdin, scan, &requests, &output}, &request})
+		result, restoreErr = aclmeta.RestoreACL(update, principalPipe{restorePipe{stdin, scan, &requests, &output}, &request})
 		requests.WriteString("D\n")
 		_, e = io.WriteString(stdin, "D\n")
 		must(e)
@@ -1363,8 +1363,8 @@ type chmodPropertyInput struct {
 	RemoveACL            bool
 }
 
-func (p chmodPropertyInput) properties() hostmeta.DarwinChmodProperties {
-	out := hostmeta.DarwinChmodProperties{UID: p.UID, GID: p.GID, Mode: p.Mode, OwnerUUID: p.OwnerUUID, GroupUUID: p.GroupUUID, RemoveACL: p.RemoveACL}
+func (p chmodPropertyInput) properties() aclmeta.DarwinChmodProperties {
+	out := aclmeta.DarwinChmodProperties{UID: p.UID, GID: p.GID, Mode: p.Mode, OwnerUUID: p.OwnerUUID, GroupUUID: p.GroupUUID, RemoveACL: p.RemoveACL}
 	if p.RawSecurity != nil {
 		s, e := appledouble.ParseDarwinFileSecurity(p.RawSecurity)
 		must(e)
@@ -1398,7 +1398,7 @@ func (p chmodPropertyInput) arguments(dir string) []string {
 type propertyConversion struct {
 	Name    string
 	Input   chmodPropertyInput
-	Request hostmeta.DarwinChmodArguments
+	Request aclmeta.DarwinChmodArguments
 }
 type propertyResult struct {
 	result
@@ -1413,7 +1413,7 @@ type propertyApplication struct {
 	Before                               metadata
 	Response                             []byte
 	Native                               propertyResult
-	Request                              hostmeta.DarwinChmodArguments
+	Request                              aclmeta.DarwinChmodArguments
 }
 type propertyFixture struct {
 	Revision, Host, HelperSHA256, ParentHelperSHA256, LibcSHA256, XNUSHA256, HeaderSHA256 string
@@ -1422,9 +1422,9 @@ type propertyFixture struct {
 	Applications                                                                          []propertyApplication
 }
 
-func propertyRequestLine(r hostmeta.DarwinChmodArguments) string {
+func propertyRequestLine(r aclmeta.DarwinChmodArguments) string {
 	security := "-"
-	if r.SecurityArgument == hostmeta.DarwinSecurityRecord {
+	if r.SecurityArgument == aclmeta.DarwinSecurityRecord {
 		security = hex.EncodeToString(r.Security)
 	}
 	return fmt.Sprintf("%d %d %d %d %s\n", r.UID, r.GID, r.Mode, r.SecurityArgument, security)
@@ -1539,9 +1539,9 @@ func verifyChmodProperties(root string, f *propertyFixture, capture bool) {
 				output := filepath.Join(dir, "request.bin")
 				args := []string{helper, "pack", output}
 				args = append(args, p.arguments(dir)...)
-				var observed hostmeta.DarwinChmodArguments
+				var observed aclmeta.DarwinChmodArguments
 				must(json.Unmarshal(run(args...), &observed))
-				if observed.SecurityArgument == hostmeta.DarwinSecurityRecord {
+				if observed.SecurityArgument == aclmeta.DarwinSecurityRecord {
 					observed.Security = read(output)
 				}
 				got, e := p.properties().ChmodArguments()

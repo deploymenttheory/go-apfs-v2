@@ -2,7 +2,7 @@ package apfswrite
 
 import (
 	"github.com/deploymenttheory/go-apfs-v2/internal/imageacl"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 )
 
 // RestoreXattr applies one ordinary AppleDouble ATTR record to target and all
@@ -14,6 +14,6 @@ import (
 // The writer must still serialize successfully. This is offline staging, not
 // native authorization, kernel normalization or a complete unpack lifecycle.
 // Exclude tree mutation during execution, including from callbacks.
-func (root *Entry) RestoreXattr(target *Entry, name string, value []byte, options hostmeta.XattrRestoreOptions) (hostmeta.XattrRestoreResult, error) {
+func (root *Entry) RestoreXattr(target *Entry, name string, value []byte, options hostdata.XattrRestoreOptions) (hostdata.XattrRestoreResult, error) {
 	return imageacl.RestoreXattr(root, target, name, value, options, (*Entry).imageSecurityNode, func(e *Entry, attrs map[string][]byte) { e.Xattrs = attrs })
 }

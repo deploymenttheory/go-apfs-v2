@@ -23,7 +23,7 @@ import (
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfswrite"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/hfsplus"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 )
 
 func fixture(t *testing.T) imagesecurity.Fixture {
@@ -206,14 +206,14 @@ func TestImageStatAPIBindingAndMetadataIndependence(t *testing.T) {
 			if e != nil {
 				t.Fatal(e)
 			}
-			root := &apfswrite.Entry{Times: &times, BSDFlags: &flags, Xattrs: map[string][]byte{hostmeta.SecurityName: raw, "keep": {1}}}
+			root := &apfswrite.Entry{Times: &times, BSDFlags: &flags, Xattrs: map[string][]byte{hostdata.SecurityName: raw, "keep": {1}}}
 			hroot := imagesecurity.HFSTree(root)
-			source := hostmeta.StatCopySource{UID: 17, GID: 18, Mode: 0100000, Times: hostmeta.FileTimes{Modify: time.Unix(0, 0), Access: time.Unix(0, 0)}}
-			var r hostmeta.ImageStatCopyResult
+			source := hostdata.StatCopySource{UID: 17, GID: 18, Mode: 0100000, Times: hostdata.FileTimes{Modify: time.Unix(0, 0), Access: time.Unix(0, 0)}}
+			var r hostdata.ImageStatCopyResult
 			if hfs {
-				r, e = hroot.CopyStat(hroot, source, hostmeta.StatCopyOptions{})
+				r, e = hroot.CopyStat(hroot, source, hostdata.StatCopyOptions{})
 			} else {
-				r, e = root.CopyStat(root, source, hostmeta.StatCopyOptions{})
+				r, e = root.CopyStat(root, source, hostdata.StatCopyOptions{})
 			}
 			if e != nil || !r.Applied {
 				t.Fatal(r, e)
@@ -226,7 +226,7 @@ func TestImageStatAPIBindingAndMetadataIndependence(t *testing.T) {
 			} else {
 				attrs, mode, explicit = root.Xattrs, root.Mode, root.ModeExplicit
 			}
-			if mode != os.ModeDir || !explicit || !bytes.Equal(attrs[hostmeta.SecurityName], raw) || !bytes.Equal(attrs["keep"], []byte{1}) {
+			if mode != os.ModeDir || !explicit || !bytes.Equal(attrs[hostdata.SecurityName], raw) || !bytes.Equal(attrs["keep"], []byte{1}) {
 				t.Fatal("unselected metadata or explicit root mode")
 			}
 			replacement := appledouble.ACLUpdate{ACL: &appledouble.ACL{Entries: []appledouble.ACLEntry{{Flags: 1, Rights: 2}}}}
@@ -249,7 +249,7 @@ func TestImageStatAPIBindingAndMetadataIndependence(t *testing.T) {
 					t.Fatal("deferred replacement changed stat")
 				}
 			}
-			stored, e := appledouble.ParseFileSecurity(attrs[hostmeta.SecurityName])
+			stored, e := appledouble.ParseFileSecurity(attrs[hostdata.SecurityName])
 			if e != nil || stored.ACL.Entries[0].Rights != 2 || stored.OwnerUUID != security.OwnerUUID {
 				t.Fatal("deferred ACL", e)
 			}
@@ -259,10 +259,10 @@ func TestImageStatAPIBindingAndMetadataIndependence(t *testing.T) {
 		var err error
 		if hfs {
 			var root *hfsplus.Entry
-			_, err = root.CopyStat(nil, hostmeta.StatCopySource{}, hostmeta.StatCopyOptions{})
+			_, err = root.CopyStat(nil, hostdata.StatCopySource{}, hostdata.StatCopyOptions{})
 		} else {
 			var root *apfswrite.Entry
-			_, err = root.CopyStat(nil, hostmeta.StatCopySource{}, hostmeta.StatCopyOptions{})
+			_, err = root.CopyStat(nil, hostdata.StatCopySource{}, hostdata.StatCopyOptions{})
 		}
 		if !errors.Is(err, fs.ErrInvalid) {
 			t.Fatal(err)

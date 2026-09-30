@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/metatransport"
 )
 
@@ -125,7 +125,7 @@ func TestOpenWalkCarrierLargeAttributesAndEdits(t *testing.T) {
 	p, m, s := carrierFixture(t)
 	r := carrierFile(t, p, "mapped", "original")
 	attr := bytes.Repeat([]byte{3}, 1<<20)
-	r.Attributes = attrsCarrier(t, s, map[string][]byte{"large": attr, hostmeta.ResourceForkName: {1, 2, 3}})
+	r.Attributes = attrsCarrier(t, s, map[string][]byte{"large": attr, hostdata.ResourceForkName: {1, 2, 3}})
 	commitCarrier(t, s, []metatransport.Record{r})
 	os.WriteFile(filepath.Join(p, "mapped"), []byte("edited body"), 0600)
 	tree, e := OpenWalk(p, &Options{MetadataRoot: m, KeepName: func(string) bool { return true }}, makeCarrierNode)
@@ -165,11 +165,11 @@ func TestLazyCarrierBranches(t *testing.T) {
 				records[0].NativeCaptured = true
 				records[0].NativeAttributes = attrsCarrier(t, s, map[string][]byte{"native": {9}})
 			case "native-conflict":
-				capture = func(context.Context, string, hostmeta.XattrCaptureLimits) (map[string][]byte, error) {
+				capture = func(context.Context, string, hostdata.XattrCaptureLimits) (map[string][]byte, error) {
 					return map[string][]byte{"case": {2}}, nil
 				}
 			case "compressed", "decompress":
-				records[0].Attributes = attrsCarrier(t, s, map[string][]byte{hostmeta.DecmpfsName: compressionHeader(4), hostmeta.ResourceForkName: {3}})
+				records[0].Attributes = attrsCarrier(t, s, map[string][]byte{hostdata.DecmpfsName: compressionHeader(4), hostdata.ResourceForkName: {3}})
 				o.Compression = name == "compressed"
 			case "alias", "alias-body", "alias-read":
 				records[0].LinkGroup = "shared"
@@ -196,10 +196,10 @@ func TestLazyCarrierBranches(t *testing.T) {
 			o.owner = owner
 			defer owner.close()
 			if name == "baseline-corrupt" {
-				o.CaptureLimits = &hostmeta.XattrCaptureLimits{}
+				o.CaptureLimits = &hostdata.XattrCaptureLimits{}
 			}
 			if name == "alias-read" {
-				capture = func(ctx context.Context, path string, l hostmeta.XattrCaptureLimits) (map[string][]byte, error) {
+				capture = func(ctx context.Context, path string, l hostdata.XattrCaptureLimits) (map[string][]byte, error) {
 					if filepath.Base(path) == "second" {
 						os.Remove(filepath.Join(p, "file"))
 					}
@@ -306,7 +306,7 @@ func TestCarrierDecompressRetainsIndependentFork(t *testing.T) {
 			t.Run(fmt.Sprintf("%t/%d", lazy, method), func(t *testing.T) {
 				p, m, s := carrierFixture(t)
 				r := carrierFile(t, p, "file", "file")
-				r.Attributes = attrsCarrier(t, s, map[string][]byte{hostmeta.DecmpfsName: append(compressionHeader(method), 0xff), hostmeta.ResourceForkName: []byte("fork"), "other": {9}})
+				r.Attributes = attrsCarrier(t, s, map[string][]byte{hostdata.DecmpfsName: append(compressionHeader(method), 0xff), hostdata.ResourceForkName: []byte("fork"), "other": {9}})
 				commitCarrier(t, s, []metatransport.Record{r})
 				opts := &Options{MetadataRoot: m}
 				if lazy {
@@ -328,7 +328,7 @@ func TestCarrierDecompressRetainsIndependentFork(t *testing.T) {
 					t.Fatal(err)
 				}
 				attrs := nodeValues(got.Children[0].Node)
-				_, present := attrs[hostmeta.ResourceForkName]
+				_, present := attrs[hostdata.ResourceForkName]
 				if present != (method == 3) {
 					t.Fatal("independent fork lost", attrs)
 				}

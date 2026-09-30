@@ -116,7 +116,7 @@ Native libraries supply low-level host operations only. Production must not dele
 
 ### D. Implement portable metadata transport and carrier storage
 
-Add a transport layer depending on `appledouble`, `hostmeta` and existing fidelity reporting. It must not import concrete image writers or host-walking code. Concrete image packages implement shared endpoint interfaces.
+Add a transport layer depending on `appledouble`, `hostdata` and existing fidelity reporting. It must not import concrete image writers or host-walking code. Concrete image packages implement shared endpoint interfaces.
 
 Use the agreed separate, caller-selected metadata root. It contains:
 

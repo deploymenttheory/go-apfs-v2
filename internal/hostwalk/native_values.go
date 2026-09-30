@@ -6,14 +6,14 @@ import (
 	"github.com/deploymenttheory/go-apfs-v2/internal/decmpfs"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/fidelity"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 )
 
 func (w *walker[E]) collectValueXattrs(rel string) (kept map[string]appledouble.Value, compressed bool, err error) {
 	if !w.opts.Xattrs {
 		return nil, false, nil
 	}
-	limits := hostmeta.XattrCaptureLimits{NameBytes: hostmeta.MaxXattrListSize, ValueBytes: 64 << 20, TotalBytes: 256 << 20}
+	limits := hostdata.XattrCaptureLimits{NameBytes: hostdata.MaxXattrListSize, ValueBytes: 64 << 20, TotalBytes: 256 << 20}
 	if w.opts.CaptureLimits != nil {
 		limits = *w.opts.CaptureLimits
 	}
@@ -22,16 +22,16 @@ func (w *walker[E]) collectValueXattrs(rel string) (kept map[string]appledouble.
 		return nil, false, err
 	}
 	accepts := func(name string) bool { return w.opts.KeepName != nil && w.opts.KeepName(name) }
-	if value, present := attrs[hostmeta.DecmpfsName]; present {
+	if value, present := attrs[hostdata.DecmpfsName]; present {
 		forkBacked, e := decmpfs.UsesResourceFork(value)
 		if e != nil {
 			return nil, false, e
 		}
-		compressed = w.opts.Compression && accepts(hostmeta.DecmpfsName) && (!forkBacked || accepts(hostmeta.ResourceForkName))
+		compressed = w.opts.Compression && accepts(hostdata.DecmpfsName) && (!forkBacked || accepts(hostdata.ResourceForkName))
 		if !compressed {
-			delete(attrs, hostmeta.DecmpfsName)
+			delete(attrs, hostdata.DecmpfsName)
 			if forkBacked {
-				delete(attrs, hostmeta.ResourceForkName)
+				delete(attrs, hostdata.ResourceForkName)
 			}
 		}
 	}
@@ -42,9 +42,9 @@ func (w *walker[E]) collectValueXattrs(rel string) (kept map[string]appledouble.
 			continue
 		}
 		switch {
-		case name == hostmeta.ResourceForkName:
+		case name == hostdata.ResourceForkName:
 			w.warn(rel, fidelity.ResourceFork, name)
-		case hostmeta.IsACLName(name):
+		case hostdata.IsACLName(name):
 			w.warn(rel, fidelity.ACL, name)
 		default:
 			w.warn(rel, fidelity.Xattr, name)

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 )
 
 type Event struct {
@@ -75,22 +75,22 @@ func (e *endpoint) log(operation string, value uint32, code int) error {
 	*e.events = append(*e.events, Event{operation, value, code})
 	return nativeError(code)
 }
-func (e *endpoint) CaptureSecurity() (hostmeta.SecurityCopySource, error) {
-	result := hostmeta.SecurityCopySource{UID: 501, GID: 20, Mode: uint32(e.c.SourceMode)}
+func (e *endpoint) CaptureSecurity() (hostdata.SecurityCopySource, error) {
+	result := hostdata.SecurityCopySource{UID: 501, GID: 20, Mode: uint32(e.c.SourceMode)}
 	err := e.log("source-security", 0, e.c.SourceError)
 	if e.c.SourceError == 1 {
-		err = errors.Join(hostmeta.ErrSecuritySourceNotPermitted, err)
+		err = errors.Join(hostdata.ErrSecuritySourceNotPermitted, err)
 	}
 	if e.c.SourceError == 45 {
-		err = errors.Join(hostmeta.ErrSecuritySourceNotSupported, err)
+		err = errors.Join(hostdata.ErrSecuritySourceNotSupported, err)
 	}
 	return result, err
 }
-func (e *endpoint) CaptureStat() (hostmeta.StatCopySource, error) {
+func (e *endpoint) CaptureStat() (hostdata.StatCopySource, error) {
 	if e.source {
-		return hostmeta.StatCopySource{UID: 501, GID: 20, Mode: uint32(e.c.SourceMode)}, e.log("source-stat", 0, e.c.FallbackError)
+		return hostdata.StatCopySource{UID: 501, GID: 20, Mode: uint32(e.c.SourceMode)}, e.log("source-stat", 0, e.c.FallbackError)
 	}
-	return hostmeta.StatCopySource{UID: 501, GID: 20, Mode: e.mode}, e.log("destination-stat", 0, 0)
+	return hostdata.StatCopySource{UID: 501, GID: 20, Mode: e.mode}, e.log("destination-stat", 0, 0)
 }
 func (e *endpoint) Chmod(mode uint16) error {
 	mask := 1
@@ -124,11 +124,11 @@ func Replay(c Case) error {
 	events := make([]Event, 0)
 	source := &endpoint{c: c, source: true, events: &events}
 	destination := &endpoint{c: c, mode: 0100400, events: &events}
-	options := hostmeta.HeldLifecycleOptions{Stat: c.Selected&1 != 0, NoCache: c.Selected&2 != 0}
+	options := hostdata.HeldLifecycleOptions{Stat: c.Selected&1 != 0, NoCache: c.Selected&2 != 0}
 	if c.Cached != 0 {
-		options.SourceCache = &hostmeta.SecurityCopySource{UID: 501, GID: 20, Mode: uint32(c.SourceMode)}
+		options.SourceCache = &hostdata.SecurityCopySource{UID: 501, GID: 20, Mode: uint32(c.SourceMode)}
 	}
-	result, _ := hostmeta.CopyHeldMetadata(source, destination, options, hostmeta.HeldLifecycleStages{
+	result, _ := hostdata.CopyHeldMetadata(source, destination, options, hostdata.HeldLifecycleStages{
 		CaptureQuarantine: func() error {
 			code := 0
 			if c.Failures&2 != 0 {
@@ -136,12 +136,12 @@ func Replay(c Case) error {
 			}
 			return source.log("quarantine", 0, code)
 		},
-		Run: func(hostmeta.SecurityCopySource) hostmeta.CopyStageResult {
+		Run: func(hostdata.SecurityCopySource) hostdata.CopyStageResult {
 			code := 0
 			if c.StageCode < 0 {
 				code = 5
 			}
-			return hostmeta.CopyStageResult{Code: c.StageCode, Err: source.log("route", 0, code)}
+			return hostdata.CopyStageResult{Code: c.StageCode, Err: source.log("route", 0, code)}
 		},
 	})
 	// Ambient thread-local errno is retained as native evidence, not synthesized

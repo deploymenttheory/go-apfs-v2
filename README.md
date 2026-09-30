@@ -449,7 +449,7 @@ data, _ := fs.ReadFile(vol, "Applications/Some.app/Contents/Info.plist")
 Key packages: `pkg/apfs` (APFS reader), `pkg/hfsplus` (HFS+ reader and writer),
 `pkg/disk` (DMG/UDIF reader and writer, partition tables), and `pkg/apfswrite`
 (APFS container writer), `pkg/appledouble` (shared AppleDouble codec), and
-`pkg/hostmeta` (shared host metadata operations). See the
+`pkg/hostdata` (shared host metadata operations). See the
 [AppleDouble migration plan](docs/appledouble-migration.md) for the codec and
 metadata transport release gates.
 

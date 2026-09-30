@@ -5,7 +5,8 @@ import (
 	"maps"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
+	aclmeta "github.com/deploymenttheory/go-apfs-v2/pkg/hostdata/acl"
 )
 
 // Change contains the staged security fields. ModeSelected distinguishes an
@@ -20,25 +21,25 @@ type Change struct {
 // Copy stages the ordinary security-copy sequence in a validated image tree.
 // It shares target/alias binding with Restore. There is no native authorization,
 // fallback capability failure or timestamp synthesis in an offline image tree.
-func Copy[T comparable](root, target T, source hostmeta.SecurityCopySource, options hostmeta.SecurityCopyOptions, read func(T, bool) (Node[T], error), write func(T, Change)) (hostmeta.SecurityCopyResult, error) {
+func Copy[T comparable](root, target T, source hostdata.SecurityCopySource, options hostdata.SecurityCopyOptions, read func(T, bool) (Node[T], error), write func(T, Change)) (hostdata.SecurityCopyResult, error) {
 	if !options.ACL && !options.Stat {
-		return hostmeta.CopySecurity(source, options, nil)
+		return hostdata.CopySecurity(source, options, nil)
 	}
 	if source.Properties.RemoveACL {
-		return hostmeta.SecurityCopyResult{}, appledouble.ErrFileSecurity
+		return hostdata.SecurityCopyResult{}, appledouble.ErrFileSecurity
 	}
 	if _, err := source.Properties.ChmodArguments(); err != nil {
-		return hostmeta.SecurityCopyResult{}, err
+		return hostdata.SecurityCopyResult{}, err
 	}
-	return stageCopy(root, target, read, write, func(backend *copier) (hostmeta.SecurityCopyResult, error) {
-		return hostmeta.CopySecurity(source, options, backend)
+	return stageCopy(root, target, read, write, func(backend *copier) (hostdata.SecurityCopyResult, error) {
+		return hostdata.CopySecurity(source, options, backend)
 	})
 }
 
-func stageCopy[T comparable](root, target T, read func(T, bool) (Node[T], error), write func(T, Change), execute func(*copier) (hostmeta.SecurityCopyResult, error)) (hostmeta.SecurityCopyResult, error) {
+func stageCopy[T comparable](root, target T, read func(T, bool) (Node[T], error), write func(T, Change), execute func(*copier) (hostdata.SecurityCopyResult, error)) (hostdata.SecurityCopyResult, error) {
 	aliases, nodes, destination, err := bind(root, target, read)
 	if err != nil {
-		return hostmeta.SecurityCopyResult{}, err
+		return hostdata.SecurityCopyResult{}, err
 	}
 	backend := &copier{Change: Change{UID: destination.UID, GID: destination.GID, Mode: destination.Mode, Xattrs: destination.Xattrs}}
 	result, err := execute(backend)
@@ -55,9 +56,9 @@ func stageCopy[T comparable](root, target T, read func(T, bool) (Node[T], error)
 				change.Xattrs = map[string][]byte{}
 			}
 			if backend.output == nil {
-				delete(change.Xattrs, hostmeta.SecurityName)
+				delete(change.Xattrs, hostdata.SecurityName)
 			} else {
-				change.Xattrs[hostmeta.SecurityName] = bytes.Clone(backend.output)
+				change.Xattrs[hostdata.SecurityName] = bytes.Clone(backend.output)
 			}
 		}
 		prepared[i] = change
@@ -75,22 +76,22 @@ type copier struct {
 }
 
 func (c *copier) CaptureDestinationACL() (*appledouble.ACL, error) {
-	raw, present := c.Xattrs[hostmeta.SecurityName]
+	raw, present := c.Xattrs[hostdata.SecurityName]
 	if present && raw == nil {
 		raw = []byte{}
 	}
-	snapshot := hostmeta.DecodeImageSecurity(c.UID, c.GID, c.Mode, raw)
+	snapshot := hostdata.DecodeImageSecurity(c.UID, c.GID, c.Mode, raw)
 	if snapshot.Source.Properties.RawSecurity == nil {
 		return nil, nil
 	}
 	return snapshot.Source.Properties.RawSecurity.ACL, nil
 }
 
-func (c *copier) WriteSecurity(args hostmeta.DarwinChmodArguments) error {
-	if args.SecurityArgument != hostmeta.DarwinSecurityNone {
+func (c *copier) WriteSecurity(args aclmeta.DarwinChmodArguments) error {
+	if args.SecurityArgument != aclmeta.DarwinSecurityNone {
 		var acl *appledouble.ACL
 		var flags [4]byte
-		if args.SecurityArgument == hostmeta.DarwinSecurityRecord {
+		if args.SecurityArgument == aclmeta.DarwinSecurityRecord {
 			security, err := appledouble.ParseDarwinFileSecurity(args.Security)
 			if err != nil {
 				return err
@@ -143,8 +144,8 @@ func (c *copier) setSecurity(acl *appledouble.ACL, flags [4]byte) error {
 	// Extended chmod selects va_acl only: UUID arguments do not replace the
 	// stored UUID slots. Invalid stored records supply no UUID ownership.
 	record := &appledouble.FileSecurity{ACL: acl, NoACLFlags: flags}
-	raw := c.Xattrs[hostmeta.SecurityName]
-	if hostmeta.SecurityRecordSizeValid(uint64(len(raw))) {
+	raw := c.Xattrs[hostdata.SecurityName]
+	if hostdata.SecurityRecordSizeValid(uint64(len(raw))) {
 		if stored, err := appledouble.ParseFileSecurity(raw); err == nil {
 			record.OwnerUUID, record.GroupUUID = stored.OwnerUUID, stored.GroupUUID
 		}

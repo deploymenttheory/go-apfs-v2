@@ -12,7 +12,7 @@ import (
 	"strings"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 )
 
 type Event struct {
@@ -200,10 +200,10 @@ func diagnostic(code int) error {
 	}
 	e := fmt.Errorf("native code %d", code)
 	if code == 1 {
-		return errors.Join(hostmeta.ErrXattrRestoreNotPermitted, e)
+		return errors.Join(hostdata.ErrXattrRestoreNotPermitted, e)
 	}
 	if code == 45 {
-		return errors.Join(hostmeta.ErrXattrUnsupported, e)
+		return errors.Join(hostdata.ErrXattrUnsupported, e)
 	}
 	return e
 }
@@ -221,7 +221,7 @@ func (r *replay) XattrNames(_ int) ([]string, error) {
 	e := r.events[r.pos]
 	if e.Kind == "list-allocation" {
 		r.next("list-allocation", "", nil, 0, false)
-		return nil, errors.Join(hostmeta.ErrUnpackListAllocation, diagnostic(e.Code))
+		return nil, errors.Join(hostdata.ErrUnpackListAllocation, diagnostic(e.Code))
 	}
 	b, _ := hex.DecodeString(e.Value)
 	r.next("list-names", "", b, 0, false)
@@ -246,19 +246,19 @@ func (r *replay) WriteXattr(n string, v []byte) error {
 	}
 	return diagnostic(r.next(kind, n, v, 0, false).Code)
 }
-func (r *replay) CaptureForkState() (hostmeta.UnpackForkState, error) {
-	return hostmeta.UnpackForkState{Directory: r.c.Directory}, diagnostic(r.next("fork-stat", "", nil, 0, false).Code)
+func (r *replay) CaptureForkState() (hostdata.UnpackForkState, error) {
+	return hostdata.UnpackForkState{Directory: r.c.Directory}, diagnostic(r.next("fork-stat", "", nil, 0, false).Code)
 }
-func (r *replay) RestoreForkTimes(hostmeta.UnpackForkState) error {
+func (r *replay) RestoreForkTimes(hostdata.UnpackForkState) error {
 	return diagnostic(r.next("fork-times", "", nil, 0, false).Code)
 }
-func (r *replay) stage(s string, b []byte, copied uint64) hostmeta.CopyStageResult {
+func (r *replay) stage(s string, b []byte, copied uint64) hostdata.CopyStageResult {
 	e := r.next(s, "", b, copied, true)
-	return hostmeta.CopyStageResult{Code: e.Code, Err: diagnostic(e.Code)}
+	return hostdata.CopyStageResult{Code: e.Code, Err: diagnostic(e.Code)}
 }
-func (r *replay) Quarantine(b []byte) hostmeta.CopyStageResult { return r.stage("quarantine", b, 0) }
-func (r *replay) ACL(b []byte) hostmeta.CopyStageResult        { return r.stage("acl", b, 0) }
-func (r *replay) Stat(invisible bool) hostmeta.CopyStageResult {
+func (r *replay) Quarantine(b []byte) hostdata.CopyStageResult { return r.stage("quarantine", b, 0) }
+func (r *replay) ACL(b []byte) hostdata.CopyStageResult        { return r.stage("acl", b, 0) }
+func (r *replay) Stat(invisible bool) hostdata.CopyStageResult {
 	var n uint64
 	if invisible {
 		n = 1
@@ -281,13 +281,13 @@ func replayCase(c Case, images []string, sequential bool) error {
 		return e
 	}
 	r := &replay{c: c, events: c.Native.Events}
-	opts := hostmeta.UnpackOptions{InitialCopied: 77, Stat: c.StatFlag, CopyIntent: c.Intent}
+	opts := hostdata.UnpackOptions{InitialCopied: 77, Stat: c.StatFlag, CopyIntent: c.Intent}
 	if c.Callback {
-		opts.Callback = func(n hostmeta.UnpackNotice) hostmeta.CopyPipelineAction {
+		opts.Callback = func(n hostdata.UnpackNotice) hostdata.CopyPipelineAction {
 			kind := string(n.Stage) + "-" + string(n.Event)
 			e := r.next(kind, n.Name, nil, n.Copied, true)
-			stage := map[hostmeta.UnpackStage]int{hostmeta.UnpackOrdinary: 1, hostmeta.UnpackFinderInfo: 2, hostmeta.UnpackResourceFork: 3}[n.Stage]
-			index := map[hostmeta.XattrRestoreEvent]int{hostmeta.XattrRestoreStart: 0, hostmeta.XattrRestoreError: 1, hostmeta.XattrRestoreFinish: 2}[n.Event]
+			stage := map[hostdata.UnpackStage]int{hostdata.UnpackOrdinary: 1, hostdata.UnpackFinderInfo: 2, hostdata.UnpackResourceFork: 3}[n.Stage]
+			index := map[hostdata.XattrRestoreEvent]int{hostdata.XattrRestoreStart: 0, hostdata.XattrRestoreError: 1, hostdata.XattrRestoreFinish: 2}[n.Event]
 			action := 0
 			if c.Target == 0 || c.Target == stage {
 				action = c.Actions[index]
@@ -295,17 +295,17 @@ func replayCase(c Case, images []string, sequential bool) error {
 			if e.Code != action {
 				r.err = fmt.Errorf("callback action %d != native %d", action, e.Code)
 			}
-			return hostmeta.CopyPipelineAction(action)
+			return hostdata.CopyPipelineAction(action)
 		}
 	}
-	var got hostmeta.UnpackResult
+	var got hostdata.UnpackResult
 	var err error
 	if sequential {
-		got, err = hostmeta.RestoreAppleDoubleSequential(context.Background(), bytes.NewReader(b), hostmeta.UnpackSequentialOptions{
+		got, err = hostdata.RestoreAppleDoubleSequential(context.Background(), bytes.NewReader(b), hostdata.UnpackSequentialOptions{
 			UnpackOptions: opts, Limits: appledouble.DefaultStreamLimits(), MaxActiveBytes: 1 << 20,
 		}, r)
 	} else {
-		got, err = hostmeta.RestoreAppleDouble(b, opts, r)
+		got, err = hostdata.RestoreAppleDouble(b, opts, r)
 	}
 	if r.err != nil {
 		return r.err
@@ -319,7 +319,7 @@ func replayCase(c Case, images []string, sequential bool) error {
 	if !c.Native.CallbackCleared {
 		return errors.New("native callback leak")
 	}
-	if c.Native.StateError == 89 && !errors.Is(err, hostmeta.ErrXattrRestoreCanceled) {
+	if c.Native.StateError == 89 && !errors.Is(err, hostdata.ErrXattrRestoreCanceled) {
 		return fmt.Errorf("missing cancellation: %v", err)
 	}
 	if c.Native.Code == 0 && err != nil {

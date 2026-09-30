@@ -19,7 +19,7 @@ import (
 	"time"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 )
 
 type observation struct {
@@ -87,11 +87,11 @@ func verify() error {
 	}
 	observations := map[string]observation{}
 	for _, name := range []string{"file", "directory", "link", "dangling"} {
-		f, err := hostmeta.OpenMetadataFile(root, name)
+		f, err := hostdata.OpenMetadataFile(root, name)
 		if err != nil {
 			return err
 		}
-		h, err := hostmeta.NewHeldMetadata(f)
+		h, err := hostdata.NewHeldMetadata(f)
 		if err != nil {
 			_ = f.Close()
 			return err
@@ -141,7 +141,7 @@ func verify() error {
 		}
 	}
 	hashes := map[string]string{}
-	for _, path := range []string{source, "scripts/verify-held-metadata-native.go", "pkg/hostmeta/libsystem_security_darwin.go", "pkg/hostmeta/held_metadata_darwin.go", "pkg/hostmeta/held_metadata.go", "pkg/hostmeta/metadata_open.go", "pkg/hostmeta/metadata_open_darwin.go"} {
+	for _, path := range []string{source, "scripts/verify-held-metadata-native.go", "pkg/hostdata/libsystem_security_darwin.go", "pkg/hostdata/held_metadata_darwin.go", "pkg/hostdata/held_metadata.go", "pkg/hostdata/metadata_open.go", "pkg/hostdata/metadata_open_darwin.go"} {
 		b, e := os.ReadFile(path)
 		if e != nil {
 			return e
@@ -171,7 +171,7 @@ func verify() error {
 	fmt.Printf("Qualified %d native descriptor metadata readbacks; both architecture SDK ASTs retained\n", len(observations))
 	return nil
 }
-func capture(h *hostmeta.HeldMetadata) (observation, error) {
+func capture(h *hostdata.HeldMetadata) (observation, error) {
 	s, err := h.CaptureSecurity()
 	if err != nil {
 		return observation{}, err

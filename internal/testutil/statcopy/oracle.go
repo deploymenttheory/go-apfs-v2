@@ -4,10 +4,11 @@ package statcopy
 import (
 	"errors"
 	"fmt"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
 	"reflect"
 	"strings"
 	"time"
+
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 )
 
 type Source struct {
@@ -53,15 +54,15 @@ func nativeError(e Event) error {
 	}
 	err := error(NativeError(e.Errno))
 	if e.Operation == "compare-flags" && e.Errno == 35 {
-		err = errors.Join(hostmeta.ErrStatFlagsAgain, err)
+		err = errors.Join(hostdata.ErrStatFlagsAgain, err)
 	}
 	return err
 }
-func Options(o int) hostmeta.StatCopyOptions {
-	return hostmeta.StatCopyOptions{AlwaysCopySetID: o&1 != 0, ForbidCopySetID: o&2 != 0, MakeInvisible: o&4 != 0, PreserveDestinationTracked: o&8 != 0}
+func Options(o int) hostdata.StatCopyOptions {
+	return hostdata.StatCopyOptions{AlwaysCopySetID: o&1 != 0, ForbidCopySetID: o&2 != 0, MakeInvisible: o&4 != 0, PreserveDestinationTracked: o&8 != 0}
 }
-func (s Source) Go() hostmeta.StatCopySource {
-	return hostmeta.StatCopySource{UID: s.UID, GID: s.GID, Mode: s.Mode, Flags: s.Flags, Times: hostmeta.FileTimes{Modify: time.Unix(s.Times[0], s.Times[1]), Access: time.Unix(s.Times[2], s.Times[3])}}
+func (s Source) Go() hostdata.StatCopySource {
+	return hostdata.StatCopySource{UID: s.UID, GID: s.GID, Mode: s.Mode, Flags: s.Flags, Times: hostdata.FileTimes{Modify: time.Unix(s.Times[0], s.Times[1]), Access: time.Unix(s.Times[2], s.Times[3])}}
 }
 
 type backend struct {
@@ -114,15 +115,15 @@ func (b *backend) Chflags(f uint32) error {
 	_, err := b.record(Event{Operation: "flags", Flags: f})
 	return err
 }
-func (b *backend) NoSetID(v hostmeta.SecurityCopyVolume) (bool, error) {
+func (b *backend) NoSetID(v hostdata.SecurityCopyVolume) (bool, error) {
 	e, err := b.record(Event{Operation: "volume-" + string(v)})
 	return e.NoSetID, err
 }
-func Replay(tc Case) (hostmeta.StatCopyResult, []Event, error) {
+func Replay(tc Case) (hostdata.StatCopyResult, []Event, error) {
 	b := &backend{want: tc.Native.Events}
 	options := Options(tc.Options)
 	options.VolumePolicy = b
-	result, err := hostmeta.CopyStat(tc.Native.Source.Go(), options, b)
+	result, err := hostdata.CopyStat(tc.Native.Source.Go(), options, b)
 	if err != nil || b.mismatch != nil {
 		return result, b.got, fmt.Errorf("execute: %v; requests: %v", err, b.mismatch)
 	}
@@ -131,12 +132,12 @@ func Replay(tc Case) (hostmeta.StatCopyResult, []Event, error) {
 	}
 	writes, comparisons := 0, 0
 	fallback, applied := false, false
-	var failures []hostmeta.StatCopyFailure
-	var queries []hostmeta.SecurityCopyVolumeQuery
+	var failures []hostdata.StatCopyFailure
+	var queries []hostdata.SecurityCopyVolumeQuery
 	for _, e := range tc.Native.Events {
 		err := nativeError(e)
 		if strings.HasPrefix(e.Operation, "volume-") {
-			q := hostmeta.SecurityCopyVolumeQuery{Volume: hostmeta.SecurityCopyVolume(strings.TrimPrefix(e.Operation, "volume-")), NoSetID: e.NoSetID, Err: err}
+			q := hostdata.SecurityCopyVolumeQuery{Volume: hostdata.SecurityCopyVolume(strings.TrimPrefix(e.Operation, "volume-")), NoSetID: e.NoSetID, Err: err}
 			if err != nil {
 				q.NoSetID = false
 			}
@@ -147,7 +148,7 @@ func Replay(tc Case) (hostmeta.StatCopyResult, []Event, error) {
 			writes++
 		}
 		if err != nil {
-			failures = append(failures, hostmeta.StatCopyFailure{Operation: e.Operation, Err: err})
+			failures = append(failures, hostdata.StatCopyFailure{Operation: e.Operation, Err: err})
 		}
 		if e.Operation == "compare-flags" {
 			comparisons++

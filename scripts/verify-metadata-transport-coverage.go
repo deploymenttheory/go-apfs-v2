@@ -36,7 +36,7 @@ func verify() error {
 	defer log.Close()
 	var transcript bytes.Buffer
 	profile := filepath.Join(dir, "coverage.out")
-	cmd := exec.Command("go", "test", "-count=1", "-json", "-run", "^(TestCarrier|TestCaptureXattrs|TestLibSystem|TestRecordAttribute|TestNativeBaseline|TestOpenWalk|TestLazyCarrier|TestNodeAndValue|TestValue|TestXattrValue|TestVolumeXattrValues|TestStreamedValues|TestOpenEntryTree|TestHFSValues|TestProjection|TestQuarantineCapture|TestQuarantineFile|TestACLIdentityCapture|TestAppleDoubleObject|TestPathCapturedRemoval|TestPathCapturedWrite|TestXattrIntent|TestSandboxCapture)", "-covermode=atomic", "-coverprofile="+profile, "-coverpkg=./pkg/metatransport,./pkg/hostmeta,./internal/hostwalk,./internal/tools,./pkg/apfs,./pkg/apfswrite,./pkg/hfsplus,./internal/decmpfs,./internal/testutil/largefork", "./pkg/metatransport", "./pkg/hostmeta", "./internal/hostwalk", "./internal/tools", "./pkg/apfs", "./pkg/apfswrite", "./pkg/hfsplus", "./internal/decmpfs", "./internal/testutil/largefork")
+	cmd := exec.Command("go", "test", "-count=1", "-json", "-run", "^(TestCarrier|TestCopyAccessTime(Invalid|Darwin)|TestRecordReadAccess(Invalid|Darwin)|TestCaptureXattrs|TestLibSystem|TestRecordAttribute|TestNativeBaseline|TestOpenWalk|TestLazyCarrier|TestNodeAndValue|TestValue|TestXattrValue|TestVolumeXattrValues|TestStreamedValues|TestOpenEntryTree|TestHFSValues|TestProjection|TestQuarantineCapture|TestQuarantineFile|TestACLIdentityCapture|TestAppleDoubleObject|TestPathCapturedRemoval|TestPathCapturedWrite|TestXattrIntent|TestSandboxCapture)", "-covermode=atomic", "-coverprofile="+profile, "-coverpkg=./internal/hosttime,./pkg/metatransport,./pkg/hostdata/...,./internal/hostwalk,./internal/tools,./pkg/apfs,./pkg/apfswrite,./pkg/hfsplus,./internal/decmpfs,./internal/testutil/largefork", "./pkg/metatransport", "./pkg/hostdata", "./pkg/hostdata/acl", "./pkg/hostdata/accesstime", "./pkg/hostdata/sandbox", "./pkg/hostdata/xattrintent", "./internal/hosttime", "./internal/hostwalk", "./internal/tools", "./pkg/apfs", "./pkg/apfswrite", "./pkg/hfsplus", "./internal/decmpfs", "./internal/testutil/largefork")
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 	cmd.Stdout = io.MultiWriter(os.Stdout, log, &transcript)
 	cmd.Stderr = io.MultiWriter(os.Stderr, log)
@@ -64,60 +64,63 @@ func verify() error {
 		return e
 	}
 	covered, total := 0, 0
-	coverageFiles := map[string][2]int{"pkg/metatransport/carrier.go": {}, "pkg/metatransport/attributes.go": {}, "pkg/metatransport/values.go": {}, "internal/hostwalk/open.go": {}, "pkg/apfs/xattr_values.go": {}, "pkg/apfswrite/values.go": {}, "pkg/hostmeta/xattr_capture.go": {}, "internal/hostwalk/carrier.go": {}, "internal/tools/extract_carrier.go": {}, "internal/tools/extract_projection.go": {}}
-	coverageFiles["pkg/hostmeta/xattr_capture_path_"+runtime.GOOS+".go"] = [2]int{}
+	coverageFiles := map[string][2]int{"pkg/metatransport/carrier.go": {}, "pkg/metatransport/attributes.go": {}, "pkg/metatransport/values.go": {}, "internal/hostwalk/open.go": {}, "pkg/apfs/xattr_values.go": {}, "pkg/apfswrite/values.go": {}, "pkg/hostdata/xattr_capture.go": {}, "internal/hostwalk/carrier.go": {}, "internal/tools/extract_carrier.go": {}, "internal/tools/extract_projection.go": {}}
+	coverageFiles["pkg/hostdata/xattr_capture_path_"+runtime.GOOS+".go"] = [2]int{}
 	coverageFiles["pkg/hfsplus/writer_values.go"] = [2]int{}
 	coverageFiles["pkg/hfsplus/attribute_values.go"] = [2]int{}
-	for _, file := range []string{"internal/testutil/largefork/value.go", "pkg/hostmeta/appledouble_object.go", "pkg/hostmeta/appledouble_object_backends.go", "pkg/hostmeta/appledouble_object_values.go"} {
+	for _, file := range []string{"internal/testutil/largefork/value.go", "pkg/hostdata/appledouble_object.go", "pkg/hostdata/appledouble_object_backends.go", "pkg/hostdata/appledouble_object_values.go"} {
 		coverageFiles[file] = [2]int{}
 	}
 	if runtime.GOOS == "darwin" {
-		coverageFiles["pkg/hostmeta/appledouble_object_darwin.go"] = [2]int{}
+		coverageFiles["pkg/hostdata/appledouble_object_darwin.go"] = [2]int{}
 	} else {
-		coverageFiles["pkg/hostmeta/appledouble_object_other.go"] = [2]int{}
+		coverageFiles["pkg/hostdata/appledouble_object_other.go"] = [2]int{}
 	}
-	coverageFiles["pkg/hostmeta/filetime.go"] = [2]int{}
-	coverageFiles["pkg/hostmeta/xattr_intent.go"] = [2]int{}
-	coverageFiles["pkg/hostmeta/sandbox_capture.go"] = [2]int{}
+	coverageFiles["internal/hosttime/filetime.go"] = [2]int{}
+	coverageFiles["pkg/hostdata/xattrintent/xattr_intent.go"] = [2]int{}
+	coverageFiles["pkg/hostdata/sandbox/sandbox_capture.go"] = [2]int{}
 	if runtime.GOOS == "darwin" {
-		coverageFiles["pkg/hostmeta/sandbox_capture_darwin.go"] = [2]int{}
+		coverageFiles["pkg/hostdata/sandbox/sandbox_capture_darwin.go"] = [2]int{}
 	} else {
-		coverageFiles["pkg/hostmeta/sandbox_capture_other.go"] = [2]int{}
+		coverageFiles["pkg/hostdata/sandbox/sandbox_capture_other.go"] = [2]int{}
 	}
-	coverageFiles["pkg/hostmeta/file_times.go"] = [2]int{}
+	coverageFiles["pkg/hostdata/file_times.go"] = [2]int{}
 	coverageFiles["internal/decmpfs/carrier_storage.go"] = [2]int{}
 	coverageFiles["internal/tools/extract_projection_readback.go"] = [2]int{}
 	coverageFiles["internal/tools/extract_projection_capture.go"] = [2]int{}
-	coverageFiles["pkg/hostmeta/appledouble_object_removal.go"] = [2]int{}
-	coverageFiles["pkg/hostmeta/quarantine_capture.go"] = [2]int{}
-	for _, file := range []string{"pkg/hostmeta/acl_identity_capture.go", "pkg/hostmeta/quarantine_file.go", "pkg/hostmeta/resource_fork.go", "pkg/hostmeta/xattr_values.go", "pkg/metatransport/native_values.go", "internal/hostwalk/native_values.go"} {
+	coverageFiles["pkg/hostdata/appledouble_object_removal.go"] = [2]int{}
+	coverageFiles["pkg/hostdata/quarantine_capture.go"] = [2]int{}
+	for _, file := range []string{"pkg/hostdata/acl/acl_identity_capture.go", "pkg/hostdata/quarantine_file.go", "pkg/hostdata/resource_fork.go", "pkg/hostdata/xattr_values.go", "pkg/metatransport/native_values.go", "internal/hostwalk/native_values.go"} {
 		coverageFiles[file] = [2]int{}
 	}
 	if runtime.GOOS == "darwin" {
-		coverageFiles["pkg/hostmeta/quarantine_capture_darwin.go"] = [2]int{}
-		coverageFiles["pkg/hostmeta/acl_identity_capture_darwin.go"] = [2]int{}
-		coverageFiles["pkg/hostmeta/quarantine_file_darwin.go"] = [2]int{}
-		coverageFiles["pkg/hostmeta/resource_fork_darwin.go"] = [2]int{}
+		coverageFiles["pkg/hostdata/quarantine_capture_darwin.go"] = [2]int{}
+		coverageFiles["pkg/hostdata/acl/acl_identity_capture_darwin.go"] = [2]int{}
+		coverageFiles["pkg/hostdata/quarantine_file_darwin.go"] = [2]int{}
+		coverageFiles["pkg/hostdata/resource_fork_darwin.go"] = [2]int{}
 	} else {
-		coverageFiles["pkg/hostmeta/quarantine_capture_other.go"] = [2]int{}
-		coverageFiles["pkg/hostmeta/acl_identity_capture_other.go"] = [2]int{}
-		coverageFiles["pkg/hostmeta/quarantine_file_other.go"] = [2]int{}
-		coverageFiles["pkg/hostmeta/resource_fork_other.go"] = [2]int{}
+		coverageFiles["pkg/hostdata/quarantine_capture_other.go"] = [2]int{}
+		coverageFiles["pkg/hostdata/acl/acl_identity_capture_other.go"] = [2]int{}
+		coverageFiles["pkg/hostdata/quarantine_file_other.go"] = [2]int{}
+		coverageFiles["pkg/hostdata/resource_fork_other.go"] = [2]int{}
 	}
 	if runtime.GOOS == "linux" {
-		coverageFiles["pkg/hostmeta/access_time_linux.go"] = [2]int{}
-		coverageFiles["pkg/hostmeta/xattr_values_bound_linux.go"] = [2]int{}
+		coverageFiles["pkg/hostdata/accesstime/access_time_linux.go"] = [2]int{}
+		coverageFiles["pkg/hostdata/file_times_linux.go"] = [2]int{}
+		coverageFiles["internal/hosttime/set_linux.go"] = [2]int{}
+		coverageFiles["pkg/hostdata/xattr_values_bound_linux.go"] = [2]int{}
 	} else {
-		coverageFiles["pkg/hostmeta/xattr_values_bound_other.go"] = [2]int{}
+		coverageFiles["pkg/hostdata/xattr_values_bound_other.go"] = [2]int{}
 	}
 	if runtime.GOOS == "windows" {
-		coverageFiles["pkg/hostmeta/creation_time_windows.go"] = [2]int{}
-		coverageFiles["pkg/hostmeta/access_time_windows.go"] = [2]int{}
+		coverageFiles["pkg/hostdata/creation_time_windows.go"] = [2]int{}
+		coverageFiles["internal/hosttime/set_windows.go"] = [2]int{}
+		coverageFiles["pkg/hostdata/accesstime/access_time_windows.go"] = [2]int{}
 	}
 	if runtime.GOOS == "darwin" {
-		coverageFiles["pkg/hostmeta/libsystem_xattr_darwin.go"] = [2]int{}
+		coverageFiles["pkg/hostdata/libsystem_xattr_darwin.go"] = [2]int{}
 	} else {
-		coverageFiles["pkg/hostmeta/xattr_capture_other.go"] = [2]int{}
+		coverageFiles["pkg/hostdata/xattr_capture_other.go"] = [2]int{}
 	}
 	blocks := map[string][2]int{}
 	for _, line := range strings.Split(string(b), "\n") {
@@ -165,13 +168,13 @@ func verify() error {
 		return fmt.Errorf("incomplete image stat restoration tests: %d", passed)
 	}
 	files := []string{"scripts/verify-metadata-transport-coverage.go", "scripts/verify-metadata-transport.go", "go.mod", "go.sum"}
-	for _, pattern := range []string{"pkg/hostmeta/acl_identity_capture*.go", "pkg/hostmeta/quarantine_file*.go", "pkg/hostmeta/resource_fork*.go", "pkg/hostmeta/xattr_values*.go", "internal/hostwalk/native_values*.go", "pkg/hfsplus/root_values_test.go", "testdata/appledouble/native/acl-identity*.c", "testdata/appledouble/native/acl-identity-capture.json.gz", "scripts/verify-acl-identity-capture-native.go"} {
+	for _, pattern := range []string{"pkg/hostdata/acl/acl_identity_capture*.go", "pkg/hostdata/quarantine_file*.go", "pkg/hostdata/resource_fork*.go", "pkg/hostdata/xattr_values*.go", "internal/hostwalk/native_values*.go", "pkg/hfsplus/root_values_test.go", "testdata/appledouble/native/acl-identity*.c", "testdata/appledouble/native/acl-identity-capture.json.gz", "scripts/verify-acl-identity-capture-native.go"} {
 		files = append(files, pattern)
 	}
-	for _, pattern := range []string{"pkg/metatransport/*.go", "pkg/hostmeta/xattr_capture*.go", "pkg/hostmeta/libsystem_xattr*.go", "internal/hostwalk/carrier*.go", "internal/hostwalk/open*.go", "pkg/apfs/xattr_values*.go", "pkg/apfswrite/values*.go", "pkg/hfsplus/*values*.go", "pkg/hfsplus/values_test.go", "pkg/hfsplus/writer.go", "pkg/hfsplus/validate.go", "pkg/hostmeta/filetime*.go", "pkg/hostmeta/quarantine_capture*.go", "internal/decmpfs/*.go", "pkg/hostmeta/file_times*.go", "pkg/hostmeta/access_time*.go", "pkg/hostmeta/creation_time*.go", "internal/tools/extract_carrier*.go", "internal/tools/extract_projection*.go"} {
+	for _, pattern := range []string{"pkg/metatransport/*.go", "pkg/hostdata/xattr_capture*.go", "pkg/hostdata/libsystem_xattr*.go", "internal/hostwalk/carrier*.go", "internal/hostwalk/open*.go", "pkg/apfs/xattr_values*.go", "pkg/apfswrite/values*.go", "pkg/hfsplus/*values*.go", "pkg/hfsplus/values_test.go", "pkg/hfsplus/writer.go", "pkg/hfsplus/validate.go", "internal/hosttime/filetime*.go", "pkg/hostdata/quarantine_capture*.go", "internal/decmpfs/*.go", "pkg/hostdata/file_times*.go", "pkg/hostdata/accesstime/access_time*.go", "pkg/hostdata/creation_time*.go", "internal/tools/extract_carrier*.go", "internal/tools/extract_projection*.go"} {
 		files = append(files, pattern)
 	}
-	files = append(files, "internal/evidenceaudit/*.go", "internal/testutil/largefork/*.go", "pkg/hostmeta/*.go")
+	files = append(files, "internal/evidenceaudit/*.go", "internal/testutil/largefork/*.go", "pkg/hostdata/*.go", "pkg/hostdata/*/*.go", "internal/hosttime/*.go", "internal/testutil/heldfixture/*.go")
 	hashes, e := evidenceaudit.SourceHashes(os.DirFS("."), files)
 	if e != nil {
 		return e

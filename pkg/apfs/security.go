@@ -4,7 +4,7 @@ import (
 	"io"
 	"io/fs"
 
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 )
 
 // Security captures native-statx-compatible security properties from an APFS
@@ -15,10 +15,10 @@ import (
 // unrelated resource forks and attribute streams are not read. Corrupt/empty
 // security storage is distinguished from absence through Disposition. Image
 // I/O and lookup failures remain errors, never absent-ACL success.
-func (v *Volume) Security(name string) (out hostmeta.ImageSecurity, err error) {
+func (v *Volume) Security(name string) (out hostdata.ImageSecurity, err error) {
 	defer func() {
 		if err != nil {
-			out = hostmeta.ImageSecurity{}
+			out = hostdata.ImageSecurity{}
 			err = &fs.PathError{Op: "security", Path: name, Err: err}
 		}
 	}()
@@ -36,24 +36,24 @@ func (v *Volume) Security(name string) (out hostmeta.ImageSecurity, err error) {
 	return entry.security()
 }
 
-func (fe *FileEntry) security() (hostmeta.ImageSecurity, error) {
+func (fe *FileEntry) security() (hostdata.ImageSecurity, error) {
 	inode := fe.Inode
-	present, err := fe.HasExtendedAttributeByName(hostmeta.SecurityName)
+	present, err := fe.HasExtendedAttributeByName(hostdata.SecurityName)
 	if err != nil {
-		return hostmeta.ImageSecurity{}, err
+		return hostdata.ImageSecurity{}, err
 	}
 	var value []byte
 	if present {
-		attr, err := fe.ExtendedAttributeByName(hostmeta.SecurityName)
+		attr, err := fe.ExtendedAttributeByName(hostdata.SecurityName)
 		if err != nil {
-			return hostmeta.ImageSecurity{}, err
+			return hostdata.ImageSecurity{}, err
 		}
 		value, err = imageSecurityValue(attr)
 		if err != nil {
-			return hostmeta.ImageSecurity{}, err
+			return hostdata.ImageSecurity{}, err
 		}
 	}
-	return hostmeta.DecodeImageSecurity(inode.OwnerIdentifier, inode.GroupIdentifier, inode.FileMode, value), nil
+	return hostdata.DecodeImageSecurity(inode.OwnerIdentifier, inode.GroupIdentifier, inode.FileMode, value), nil
 }
 
 // imageSecurityValue bounds the allocation independently of the image reader
@@ -63,7 +63,7 @@ func imageSecurityValue(attr *ExtendedAttribute) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if !hostmeta.SecurityRecordSizeValid(size) {
+	if !hostdata.SecurityRecordSizeValid(size) {
 		return []byte{}, nil
 	}
 	value := make([]byte, int(size))

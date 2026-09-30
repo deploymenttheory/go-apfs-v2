@@ -4,11 +4,11 @@ The application planner needs the actual effective process flags and raw agent,
 or an explicit confirmation that no process quarantine label exists. A failed
 serialized snapshot is not enough to select either state. The portable AppleDouble
 planner contains no macOS calls. Host acquisition is provided separately by
-`hostmeta.CaptureQuarantineProcess`.
+`hostdata.CaptureQuarantineProcess`.
 
 ## Production capture
 
-`hostmeta.CaptureQuarantineProcess(ctx)` reads the current process on qualified
+`hostdata.CaptureQuarantineProcess(ctx)` reads the current process on qualified
 macOS 26/27 hosts. It uses the fixed libSystem wrapper ABI measured below and
 returns owned raw agent, metadata and tracking byte slices. It never changes a
 label, queries another PID or infers effective state from a request. Two raw
@@ -114,7 +114,7 @@ cannot silently qualify the new behavior.
 
 ## Held-file quarantine I/O
 
-`hostmeta.CaptureQuarantineFile` reads through the held descriptor and parses the
+`hostdata.CaptureQuarantineFile` reads through the held descriptor and parses the
 returned envelope in Go. `ApplyQuarantineFile` checks that the captured process
 context still matches, serializes the source model in Go, and submits it through
 the libSystem MAC wrapper. The kernel performs destination authorization and

@@ -1,18 +1,18 @@
 # Security source acquisition
 
-`hostmeta.CaptureSecuritySource` implements fresh descriptor-style source
+`hostdata.CaptureSecuritySource` implements fresh descriptor-style source
 acquisition before ordinary security copying. It preserves the distinction
 between optional filesec properties, independent stat fields, and read failures.
 `CopySecurityFrom` connects acquisition to copying on Linux, macOS and Windows.
 Both image writers expose the same operation and use the existing graph,
 hard-link and staged-publication implementation.
 
-Use `hostmeta.ImageSecurityCapture(sourceVolume, name)` to bind an APFS/HFS+
+Use `hostdata.ImageSecurityCapture(sourceVolume, name)` to bind an APFS/HFS+
 reader directly to either writer:
 
 ```go
-capture := hostmeta.ImageSecurityCapture(sourceVolume, "Payload/file")
-result, err := root.CopySecurityFrom(target, capture, hostmeta.SecurityCopyOptions{
+capture := hostdata.ImageSecurityCapture(sourceVolume, "Payload/file")
+result, err := root.CopySecurityFrom(target, capture, hostdata.SecurityCopyOptions{
     ACL: true,
     Stat: true,
 })

@@ -36,7 +36,7 @@ func verify() error {
 	defer log.Close()
 	var transcript bytes.Buffer
 	profile := filepath.Join(dir, "coverage.out")
-	cmd := exec.Command("go", "test", "-count=1", "-json", "-run", "^(TestStatCopy|TestNativeStatCopy)", "-covermode=atomic", "-coverprofile="+profile, "-coverpkg=./pkg/hostmeta", "./pkg/hostmeta")
+	cmd := exec.Command("go", "test", "-count=1", "-json", "-run", "^(TestStatCopy|TestNativeStatCopy)", "-covermode=atomic", "-coverprofile="+profile, "-coverpkg=./pkg/hostdata/...", "./pkg/hostdata")
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 	cmd.Stdout = io.MultiWriter(os.Stdout, log, &transcript)
 	cmd.Stderr = io.MultiWriter(os.Stderr, log)
@@ -64,7 +64,7 @@ func verify() error {
 		return e
 	}
 	covered, total := 0, 0
-	coverageFiles := map[string][2]int{"pkg/hostmeta/stat_copy.go": {}, "pkg/hostmeta/stat_flags.go": {}}
+	coverageFiles := map[string][2]int{"pkg/hostdata/stat_copy.go": {}, "pkg/hostdata/stat_flags.go": {}}
 	blocks := map[string][2]int{}
 	for _, line := range strings.Split(string(b), "\n") {
 		fields := strings.Fields(line)
@@ -110,7 +110,7 @@ func verify() error {
 	if passed < 1233 {
 		return fmt.Errorf("incomplete ordered stat tests: %d", passed)
 	}
-	files := []string{"pkg/hostmeta/stat_copy.go", "pkg/hostmeta/stat_flags.go", "pkg/hostmeta/stat_copy_test.go", "pkg/hostmeta/stat_copy_native_test.go", "pkg/hostmeta/security_copy_volume.go", "pkg/hostmeta/file_times.go", "internal/testutil/statcopy/oracle.go", "scripts/verify-stat-copy.go", "scripts/verify-stat-copy-coverage.go", "testdata/appledouble/native/stat-copy.c", "testdata/appledouble/native/stat-copy.json.gz", "go.mod", "go.sum"}
+	files := []string{"pkg/hostdata/stat_copy.go", "pkg/hostdata/stat_flags.go", "pkg/hostdata/stat_copy_test.go", "pkg/hostdata/stat_copy_native_test.go", "pkg/hostdata/security_copy_volume.go", "pkg/hostdata/file_times.go", "internal/testutil/statcopy/oracle.go", "scripts/verify-stat-copy.go", "scripts/verify-stat-copy-coverage.go", "testdata/appledouble/native/stat-copy.c", "testdata/appledouble/native/stat-copy.json.gz", "go.mod", "go.sum"}
 	hashes := map[string]string{}
 	for _, path := range files {
 		b, e := os.ReadFile(path)

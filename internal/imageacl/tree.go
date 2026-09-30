@@ -3,8 +3,9 @@ package imageacl
 import (
 	"bytes"
 	"fmt"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
 	"io/fs"
+
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 )
 
 // bind validates the complete graph before selecting a target and all aliases.
@@ -38,8 +39,8 @@ func bind[T comparable](root, target T, read func(T, bool) (Node[T], error)) ([]
 			if entry == target || node.Mode&0170000 != 0100000 || node.LinkGroup != destination.LinkGroup {
 				continue
 			}
-			a, ap := destination.Xattrs[hostmeta.SecurityName]
-			b, bp := node.Xattrs[hostmeta.SecurityName]
+			a, ap := destination.Xattrs[hostdata.SecurityName]
+			b, bp := node.Xattrs[hostdata.SecurityName]
 			if node.UID != destination.UID || node.GID != destination.GID || node.Mode != destination.Mode || ap != bp || !bytes.Equal(a, b) {
 				return nil, nil, Node[T]{}, fmt.Errorf("image ACL: conflicting hard-link security: %w", fs.ErrInvalid)
 			}

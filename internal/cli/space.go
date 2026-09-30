@@ -6,7 +6,7 @@ import (
 	"io/fs"
 	"path/filepath"
 
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	diskspace "github.com/deploymenttheory/go-apfs-v2/pkg/hostdata/diskspace"
 )
 
 // spaceHeadroom is the fraction added to an estimate before checking it, to
@@ -29,7 +29,7 @@ func ensureScratchSpace(scratchDir, dstPath string, imageBytes uint64) error {
 	if imageBytes == 0 {
 		return nil
 	}
-	available, ok, err := hostmeta.AvailableSpace(scratchDir)
+	available, ok, err := diskspace.AvailableSpace(scratchDir)
 	if err != nil || !ok {
 		return nil
 	}

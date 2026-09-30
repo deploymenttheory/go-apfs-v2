@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 )
 
 type statEntry struct {
@@ -17,14 +17,14 @@ type statEntry struct {
 }
 
 func statTree() (*statEntry, *statEntry, *statEntry) {
-	times := hostmeta.FileTimes{Birth: time.Unix(1, 0), Modify: time.Unix(2, 0), Change: time.Unix(3, 0), Access: time.Unix(4, 0)}
+	times := hostdata.FileTimes{Birth: time.Unix(1, 0), Modify: time.Unix(2, 0), Change: time.Unix(3, 0), Access: time.Unix(4, 0)}
 	flags := uint32(0x1800c0)
 	a := &statEntry{node: Node[*statEntry]{UID: 41, GID: 42, Mode: 0106755, LinkGroup: 7, Xattrs: map[string][]byte{"keep": {1}}}, metadata: StatMetadata{Times: &times, Flags: &flags}}
 	b := &statEntry{node: a.node, metadata: a.metadata}
 	root := &statEntry{node: Node[*statEntry]{Mode: 040755, Children: []*statEntry{a, b}}}
 	return root, a, b
 }
-func stageStat(root, target *statEntry, source hostmeta.StatCopySource, options hostmeta.StatCopyOptions, hfs bool) (hostmeta.ImageStatCopyResult, error) {
+func stageStat(root, target *statEntry, source hostdata.StatCopySource, options hostdata.StatCopyOptions, hfs bool) (hostdata.ImageStatCopyResult, error) {
 	return CopyStat(root, target, source, options, hfs, func(e *statEntry, _ bool) (Node[*statEntry], error) { return e.node, nil }, func(e *statEntry) StatMetadata { return e.metadata }, func(e *statEntry, c StatChange) {
 		e.changed = true
 		e.node.UID, e.node.GID, e.node.Mode = c.UID, c.GID, c.Mode
@@ -32,12 +32,12 @@ func stageStat(root, target *statEntry, source hostmeta.StatCopySource, options 
 		e.metadata = StatMetadata{&times, &flags}
 	})
 }
-func statSource() hostmeta.StatCopySource {
-	return hostmeta.StatCopySource{UID: 51, GID: 52, Mode: 0106644, Flags: 0x1800c1, Times: hostmeta.FileTimes{Modify: time.Unix(20, 1), Access: time.Unix(30, 2)}}
+func statSource() hostdata.StatCopySource {
+	return hostdata.StatCopySource{UID: 51, GID: 52, Mode: 0106644, Flags: 0x1800c1, Times: hostdata.FileTimes{Modify: time.Unix(20, 1), Access: time.Unix(30, 2)}}
 }
 func TestImageStatStageAliases(t *testing.T) {
 	for _, hfs := range []bool{false, true} {
-		for _, options := range []hostmeta.StatCopyOptions{{}, {ForbidCopySetID: true}, {MakeInvisible: true, PreserveDestinationTracked: true}} {
+		for _, options := range []hostdata.StatCopyOptions{{}, {ForbidCopySetID: true}, {MakeInvisible: true, PreserveDestinationTracked: true}} {
 			root, a, b := statTree()
 			oldTimes, oldFlags := *a.metadata.Times, *a.metadata.Flags
 			r, e := stageStat(root, a, statSource(), options, hfs)
@@ -75,7 +75,7 @@ func TestImageStatStageRefusals(t *testing.T) {
 			t.Run(kind+map[bool]string{true: "-hfs", false: "-apfs"}[hfs], func(t *testing.T) {
 				root, a, b := statTree()
 				source := statSource()
-				options := hostmeta.StatCopyOptions{}
+				options := hostdata.StatCopyOptions{}
 				switch kind {
 				case "nil":
 					root = nil
@@ -138,7 +138,7 @@ func TestImageStatStageRefusals(t *testing.T) {
 
 type statPolicy struct{ err error }
 
-func (p statPolicy) NoSetID(hostmeta.SecurityCopyVolume) (bool, error) { return false, p.err }
+func (p statPolicy) NoSetID(hostdata.SecurityCopyVolume) (bool, error) { return false, p.err }
 func TestImageStatStageSentinelsAndQueries(t *testing.T) {
 	root, a, b := statTree()
 	times := *b.metadata.Times
@@ -148,7 +148,7 @@ func TestImageStatStageSentinelsAndQueries(t *testing.T) {
 	source.UID, source.GID = 0xffffffff, 0xffffffff
 	source.Mode = 0
 	sentinel := errors.New("volume lookup failed")
-	r, e := stageStat(root, a, source, hostmeta.StatCopyOptions{VolumePolicy: statPolicy{sentinel}}, false)
+	r, e := stageStat(root, a, source, hostdata.StatCopyOptions{VolumePolicy: statPolicy{sentinel}}, false)
 	if e != nil || !r.Applied || a.node.UID != 41 || a.node.GID != 42 || a.node.Mode != 0100000 || len(r.Execution.VolumeQueries) != 2 {
 		t.Fatal(r, e, a.node)
 	}

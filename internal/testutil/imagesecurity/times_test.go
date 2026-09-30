@@ -19,7 +19,7 @@ import (
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfswrite"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/hfsplus"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 )
 
 func TestImageTimesNativeReplay(t *testing.T) {
@@ -160,7 +160,7 @@ func (w *refuseWrite) WriteAt([]byte, int64) (int, error) {
 func TestImageTimesInvalidBeforeWrite(t *testing.T) {
 	for _, rootTime := range []bool{false, true} {
 		for _, hfs := range []bool{false, true} {
-			invalid := hostmeta.FileTimes{Birth: time.Date(3000, 1, 1, 0, 0, 0, 0, time.UTC)}
+			invalid := hostdata.FileTimes{Birth: time.Date(3000, 1, 1, 0, 0, 0, 0, time.UTC)}
 			root := &apfswrite.Entry{Children: []*apfswrite.Entry{{Name: "file", Data: []byte("payload")}}}
 			if rootTime {
 				root.Times = &invalid
@@ -182,7 +182,7 @@ func TestImageTimesInvalidBeforeWrite(t *testing.T) {
 	var a *apfs.Volume
 	var h *hfsplus.Volume
 	for _, v := range []interface {
-		FileTimes(string) (hostmeta.FileTimes, error)
+		FileTimes(string) (hostdata.FileTimes, error)
 	}{a, h} {
 		if _, e := v.FileTimes("."); !errors.Is(e, fs.ErrInvalid) {
 			t.Fatal(e)
@@ -194,14 +194,14 @@ func TestImageTimesSecurityStages(t *testing.T) {
 	root, _ := imagesecurity.TimeTree(false)
 	hroot := imagesecurity.HFSTree(root)
 	before, _ := json.Marshal(root.Times)
-	source := hostmeta.SecurityCopySource{UID: 501, GID: 20, Mode: 040700}
-	if _, e := root.CopySecurity(root, source, hostmeta.SecurityCopyOptions{Stat: true}); e != nil {
+	source := hostdata.SecurityCopySource{UID: 501, GID: 20, Mode: 040700}
+	if _, e := root.CopySecurity(root, source, hostdata.SecurityCopyOptions{Stat: true}); e != nil {
 		t.Fatal(e)
 	}
-	if _, e := hroot.CopySecurity(hroot, source, hostmeta.SecurityCopyOptions{Stat: true}); e != nil {
+	if _, e := hroot.CopySecurity(hroot, source, hostdata.SecurityCopyOptions{Stat: true}); e != nil {
 		t.Fatal(e)
 	}
-	for _, times := range []*hostmeta.FileTimes{root.Times, hroot.Times} {
+	for _, times := range []*hostdata.FileTimes{root.Times, hroot.Times} {
 		after, _ := json.Marshal(times)
 		if !bytes.Equal(before, after) {
 			t.Fatal("security copy changed timestamps")

@@ -20,7 +20,7 @@ import (
 	"time"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/metatransport"
 	"github.com/schollz/progressbar/v3"
 )
@@ -71,7 +71,7 @@ type Extractor struct {
 	projectionResults   []ProjectionResult
 	MetadataRoot        string
 	MetadataLimits      *metatransport.Limits
-	NativeCaptureLimits *hostmeta.XattrCaptureLimits
+	NativeCaptureLimits *hostdata.XattrCaptureLimits
 	Context             context.Context
 	Volume              VolumeFS
 	Destination         string
@@ -400,7 +400,7 @@ func (e *Extractor) applyXattrs(name, destPath string) {
 		return
 	}
 
-	written, failed := hostmeta.SetXattrs(destPath, attrs)
+	written, failed := hostdata.SetXattrs(destPath, attrs)
 	e.xattrsRestored += written
 	e.xattrsUnwritable += len(failed)
 	if len(failed) > 0 && e.Verbose {
@@ -421,12 +421,12 @@ func (e *Extractor) applyXattrs(name, destPath string) {
 //
 // A resource fork without decmpfs is a genuine one and is restored.
 func withoutCompressionMetadata(attrs map[string][]byte) map[string][]byte {
-	if _, compressed := attrs[hostmeta.DecmpfsName]; !compressed {
+	if _, compressed := attrs[hostdata.DecmpfsName]; !compressed {
 		return attrs
 	}
 	kept := make(map[string][]byte, len(attrs))
 	for name, value := range attrs {
-		if name == hostmeta.DecmpfsName || name == hostmeta.ResourceForkName {
+		if name == hostdata.DecmpfsName || name == hostdata.ResourceForkName {
 			continue
 		}
 		kept[name] = value

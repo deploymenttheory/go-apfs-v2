@@ -1,6 +1,6 @@
 # Inner copy routing and stage order
 
-`hostmeta.RunCopyPipeline` coordinates operations on an already held source and
+`hostdata.RunCopyPipeline` coordinates operations on an already held source and
 destination. Use it to compose metadata/data providers without duplicating
 Apple's route selection, failure exits and cleanup policy. It is pure Go and
 runs the same implementation on Linux, macOS and Windows.
@@ -35,7 +35,7 @@ documentation's suggestion that deferred ACL replacement should follow stat.
 ## Provider contract
 
 ```go
-result, err := hostmeta.RunCopyPipeline(hostmeta.CopyPipelineOptions{
+result, err := hostdata.RunCopyPipeline(hostdata.CopyPipelineOptions{
     SourceReady: true,      // Set only after successful source acquisition.
     DestinationReady: true, // A held destination, not merely an existing path.
     Xattrs: true,

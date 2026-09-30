@@ -19,19 +19,20 @@ import (
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/fidelity"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
+	hostflags "github.com/deploymenttheory/go-apfs-v2/pkg/hostdata/bsdflags"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/metatransport"
 )
 
 // Options tunes a walk.
 type Options struct {
 	owner        *treeOwner
-	nativeValues func(context.Context, *os.Root, string, hostmeta.XattrCaptureLimits) (map[string]appledouble.Value, error)
+	nativeValues func(context.Context, *os.Root, string, hostdata.XattrCaptureLimits) (map[string]appledouble.Value, error)
 	// KeepName selects names without reading a borrowed value.
 	KeepName       func(string) bool
 	MetadataRoot   string
 	MetadataLimits *metatransport.Limits
-	CaptureLimits  *hostmeta.XattrCaptureLimits
+	CaptureLimits  *hostdata.XattrCaptureLimits
 	Context        context.Context
 	// Xattrs reads each entry's extended attributes so they can be counted,
 	// and carried when Keep accepts them. It costs a syscall or two per entry,
@@ -68,7 +69,7 @@ type Options struct {
 // link's target; it is nil for a directory.
 type Node struct {
 	ModeExplicit bool
-	Times        *hostmeta.FileTimes
+	Times        *hostdata.FileTimes
 	BSDFlags     *uint32
 	Name         string
 	Mode         os.FileMode
@@ -102,8 +103,8 @@ func Walk[E any](dir string, opts *Options, mk func(Node, []E) E) (E, *fidelity.
 	w := &walker[E]{
 		opts:       opts,
 		report:     &fidelity.Report{},
-		inodes:     map[hostmeta.LinkIdentity]string{},
-		linkGroups: map[hostmeta.LinkIdentity]uint64{},
+		inodes:     map[hostdata.LinkIdentity]string{},
+		linkGroups: map[hostdata.LinkIdentity]uint64{},
 		mk:         mk,
 	}
 
@@ -121,12 +122,12 @@ func Walk[E any](dir string, opts *Options, mk func(Node, []E) E) (E, *fidelity.
 type walker[E any] struct {
 	opts   *Options
 	report *fidelity.Report
-	inodes map[hostmeta.LinkIdentity]string
+	inodes map[hostdata.LinkIdentity]string
 	mk     func(Node, []E) E
 
 	// Grouping keys handed to a writer that can represent hard links, one per
 	// inode. Numbered from one so zero can mean "not linked".
-	linkGroups    map[hostmeta.LinkIdentity]uint64
+	linkGroups    map[hostdata.LinkIdentity]uint64
 	nextLinkGroup uint64
 }
 
@@ -179,7 +180,7 @@ func (w *walker[E]) readDir(dir, rel string) ([]E, error) {
 		// wrong entry, it breaks the run: opening a FIFO blocks until a writer
 		// appears, a character device such as /dev/zero reads until memory runs
 		// out, and a socket fails outright.
-		if hostmeta.IsSpecial(info.Mode()) {
+		if hostdata.IsSpecial(info.Mode()) {
 			w.warn(childRel, fidelity.SpecialFile, describeSpecial(info.Mode()))
 			continue
 		}
@@ -273,7 +274,7 @@ func (w *walker[E]) collectXattrs(full, rel string) (kept map[string][]byte, com
 	if !w.opts.Xattrs {
 		return nil, false
 	}
-	attrs, err := hostmeta.ListXattrs(full)
+	attrs, err := hostdata.ListXattrs(full)
 	if err != nil || len(attrs) == 0 {
 		return nil, false
 	}
@@ -283,20 +284,20 @@ func (w *walker[E]) collectXattrs(full, rel string) (kept map[string][]byte, com
 	// to be decided together: keeping the fork alone would write the compressed
 	// bytes beside a decompressed data fork, and keeping the header alone would
 	// describe content that is not there.
-	decmpfs, isCompressed := attrs[hostmeta.DecmpfsName]
+	decmpfs, isCompressed := attrs[hostdata.DecmpfsName]
 	if isCompressed {
-		fork, hasFork := attrs[hostmeta.ResourceForkName]
+		fork, hasFork := attrs[hostdata.ResourceForkName]
 		compressed = w.opts.Compression &&
 			w.opts.Keep != nil &&
-			w.opts.Keep(hostmeta.DecmpfsName, decmpfs) &&
-			(!hasFork || w.opts.Keep(hostmeta.ResourceForkName, fork))
+			w.opts.Keep(hostdata.DecmpfsName, decmpfs) &&
+			(!hasFork || w.opts.Keep(hostdata.ResourceForkName, fork))
 
-		delete(attrs, hostmeta.DecmpfsName)
-		delete(attrs, hostmeta.ResourceForkName)
+		delete(attrs, hostdata.DecmpfsName)
+		delete(attrs, hostdata.ResourceForkName)
 		if compressed {
-			kept = map[string][]byte{hostmeta.DecmpfsName: decmpfs}
+			kept = map[string][]byte{hostdata.DecmpfsName: decmpfs}
 			if hasFork {
-				kept[hostmeta.ResourceForkName] = fork
+				kept[hostdata.ResourceForkName] = fork
 			}
 		}
 		// Not carrying it is reported by noteCompression, which owns that fact
@@ -312,9 +313,9 @@ func (w *walker[E]) collectXattrs(full, rel string) (kept map[string][]byte, com
 			continue
 		}
 		switch {
-		case name == hostmeta.ResourceForkName:
+		case name == hostdata.ResourceForkName:
 			w.warn(rel, fidelity.ResourceFork, name)
-		case hostmeta.IsACLName(name):
+		case hostdata.IsACLName(name):
 			w.warn(rel, fidelity.ACL, name)
 		default:
 			w.warn(rel, fidelity.Xattr, name)
@@ -332,8 +333,8 @@ func (w *walker[E]) noteCompression(rel string, info os.FileInfo, carried bool) 
 	if carried {
 		return
 	}
-	if flags, ok := hostmeta.Flags(info); ok && flags&hostmeta.UFCompressed != 0 {
-		w.warn(rel, fidelity.Compression, hostmeta.DecmpfsName)
+	if flags, ok := hostflags.Flags(info); ok && flags&hostdata.UFCompressed != 0 {
+		w.warn(rel, fidelity.Compression, hostdata.DecmpfsName)
 	}
 }
 
@@ -344,11 +345,11 @@ func (w *walker[E]) noteCompression(rel string, info os.FileInfo, carried bool) 
 // not, the file is written out in full and fidelity.Compression already says
 // so. Counting the same fact twice under two names helps nobody.
 func (w *walker[E]) noteBSDFlags(rel string, info os.FileInfo) {
-	flags, ok := hostmeta.Flags(info)
+	flags, ok := hostflags.Flags(info)
 	if !ok {
 		return
 	}
-	if flags &^= hostmeta.UFCompressed; flags != 0 {
+	if flags &^= hostdata.UFCompressed; flags != 0 {
 		w.warn(rel, fidelity.BSDFlags, fmt.Sprintf("st_flags=%#x", flags))
 	}
 }
@@ -364,7 +365,7 @@ func (w *walker[E]) noteLinks(rel string, info os.FileInfo) uint64 {
 	if !info.Mode().IsRegular() {
 		return 0
 	}
-	id, ok := hostmeta.Link(info)
+	id, ok := hostdata.Link(info)
 	if !ok || id.Links <= 1 {
 		return 0
 	}

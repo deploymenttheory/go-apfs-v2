@@ -12,6 +12,12 @@ Neither high coverage nor successful component tests closes an unfinished gate.
 Package PR72 stays draft until a qualified APFS release is published and adopted;
 codesign remains paused until that downstream qualification succeeds.
 
+The consolidated implementation and native qualification completed in merged PR182.
+The current follow-up is package organization and documentation reconciliation;
+all gates below must also pass for the refactor before the maintainer releases it.
+See the [current completion matrix](appledouble-completion-matrix.md) and
+[package migration](hostdata-packages.md).
+
 ## 1. Establish the behavioral contract and prerequisites
 
 Audit every existing roadmap assertion against code, native fixtures and tests.

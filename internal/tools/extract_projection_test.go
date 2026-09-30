@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/metatransport"
 )
 
@@ -36,7 +36,7 @@ func (p *projectionRecorder) SetTimes(time.Time, time.Time) error      { return 
 func (p *projectionRecorder) SetBirth(time.Time) error                 { return p.call("birth") }
 func (p *projectionRecorder) Chflags(uint32) error                     { return p.call("flags") }
 func projectionRecord() metatransport.Record {
-	u, g, m, f := uint32(1), uint32(2), uint32(06754), uint32(hostmeta.UFCompressed)
+	u, g, m, f := uint32(1), uint32(2), uint32(06754), uint32(hostdata.UFCompressed)
 	tm := time.Unix(100, 0)
 	return metatransport.Record{Original: "file", Materialized: "file", Kind: "file", MaterializedKind: "file", Darwin: metatransport.DarwinState{UID: &u, GID: &g, Mode: &m, Flags: &f, Birth: &tm, Modify: &tm, Access: &tm, Change: &tm}}
 }
@@ -48,7 +48,7 @@ func TestProjectionExecutionAndOutcomes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	attrs := map[string]appledouble.Value{"z": bytes.NewReader([]byte{1}), hostmeta.SecurityName: bytes.NewReader(security), hostmeta.DecmpfsName: bytes.NewReader(projectionCompression(4)), hostmeta.ResourceForkName: bytes.NewReader([]byte{4})}
+	attrs := map[string]appledouble.Value{"z": bytes.NewReader([]byte{1}), hostdata.SecurityName: bytes.NewReader(security), hostdata.DecmpfsName: bytes.NewReader(projectionCompression(4)), hostdata.ResourceForkName: bytes.NewReader([]byte{4})}
 	r := projectionRecord()
 	if err = e.applyProjection(ctx, r, attrs, 1024, b); err != nil {
 		t.Fatal(err)
@@ -78,7 +78,7 @@ func TestProjectionExecutionAndOutcomes(t *testing.T) {
 		t.Fatal(err)
 	}
 	e = &Extractor{}
-	if err = e.applyProjection(context.Background(), metatransport.Record{}, map[string]appledouble.Value{hostmeta.SecurityName: bytes.NewReader([]byte{1}), "large": bytes.NewReader([]byte{1, 2})}, 1, &projectionRecorder{}); err != nil {
+	if err = e.applyProjection(context.Background(), metatransport.Record{}, map[string]appledouble.Value{hostdata.SecurityName: bytes.NewReader([]byte{1}), "large": bytes.NewReader([]byte{1, 2})}, 1, &projectionRecorder{}); err != nil {
 		t.Fatal(err)
 	}
 	for _, r := range e.NativeProjectionResults() {
@@ -199,7 +199,7 @@ func TestProjectionCarrierFailures(t *testing.T) {
 			r := metatransport.Record{Original: "file", Materialized: "file", Kind: "file", MaterializedKind: "file"}
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			capture := func(context.Context, *os.File, hostmeta.XattrCaptureLimits) (map[string][]byte, error) {
+			capture := func(context.Context, *os.File, hostdata.XattrCaptureLimits) (map[string][]byte, error) {
 				return map[string][]byte{}, nil
 			}
 			maker := func(*os.File) projectionBackend { return &projectionRecorder{} }
@@ -216,21 +216,21 @@ func TestProjectionCarrierFailures(t *testing.T) {
 				r.Attributes, _ = s.StoreAttributes(ctx, map[string][]byte{"a": {1}})
 				maker = func(*os.File) projectionBackend { cancel(); return &projectionRecorder{} }
 			case "unsupported":
-				capture = func(context.Context, *os.File, hostmeta.XattrCaptureLimits) (map[string][]byte, error) {
-					return nil, hostmeta.ErrXattrUnsupported
+				capture = func(context.Context, *os.File, hostdata.XattrCaptureLimits) (map[string][]byte, error) {
+					return nil, hostdata.ErrXattrUnsupported
 				}
 			case "capture":
-				capture = func(context.Context, *os.File, hostmeta.XattrCaptureLimits) (map[string][]byte, error) {
+				capture = func(context.Context, *os.File, hostdata.XattrCaptureLimits) (map[string][]byte, error) {
 					return nil, io.ErrClosedPipe
 				}
 			case "store":
-				capture = func(context.Context, *os.File, hostmeta.XattrCaptureLimits) (map[string][]byte, error) {
+				capture = func(context.Context, *os.File, hostdata.XattrCaptureLimits) (map[string][]byte, error) {
 					s.Close()
 					return map[string][]byte{"a": {1}}, nil
 				}
 			}
 			records := []metatransport.Record{r}
-			err = e.projectCarrier(ctx, root, s, records, hostmeta.XattrCaptureLimits{ValueBytes: 100}, maker, capture)
+			err = e.projectCarrier(ctx, root, s, records, hostdata.XattrCaptureLimits{ValueBytes: 100}, maker, capture)
 			wantError := test == "cancel" || test == "attrs" || test == "apply" || test == "store"
 			if (err != nil) != wantError {
 				t.Fatal(test, err)
@@ -289,7 +289,7 @@ func TestProjectionIndependentResourceFork(t *testing.T) {
 	for _, method := range []uint32{3, 4, 5} {
 		e := &Extractor{}
 		b := &projectionRecorder{}
-		attrs := map[string]appledouble.Value{hostmeta.DecmpfsName: bytes.NewReader(projectionCompression(method)), hostmeta.ResourceForkName: bytes.NewReader([]byte("fork"))}
+		attrs := map[string]appledouble.Value{hostdata.DecmpfsName: bytes.NewReader(projectionCompression(method)), hostdata.ResourceForkName: bytes.NewReader([]byte("fork"))}
 		if err := e.applyProjection(context.Background(), metatransport.Record{}, attrs, 1024, b); err != nil {
 			t.Fatal(err)
 		}
@@ -310,13 +310,13 @@ func TestProjectionStreamFallbackAndReadback(t *testing.T) {
 	}
 	defer dir.Close()
 	p := nativeProjection{file: dir, heldErr: errors.ErrUnsupported}
-	if err := p.ResourceFork(ctx, bytes.NewReader([]byte{1}), 0); !errors.Is(err, hostmeta.ErrXattrTooLarge) {
+	if err := p.ResourceFork(ctx, bytes.NewReader([]byte{1}), 0); !errors.Is(err, hostdata.ErrXattrTooLarge) {
 		t.Fatal(err)
 	}
 	// A directory has no native fork descriptor. The bounded xattr fallback must
 	// report the host's real result instead of pretending the fork was applied.
 	got := p.ResourceFork(ctx, bytes.NewReader([]byte{1}), 1)
-	want := p.SetXattr(hostmeta.ResourceForkName, []byte{1})
+	want := p.SetXattr(hostdata.ResourceForkName, []byte{1})
 	if (got == nil) != (want == nil) {
 		t.Fatal(got, want)
 	}

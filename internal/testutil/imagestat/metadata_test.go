@@ -16,7 +16,7 @@ import (
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfswrite"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/hfsplus"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 )
 
 // Reuse the independently mounted/read native stat corpus and reproduce its image
@@ -38,7 +38,7 @@ func TestImageMetadataNativeReplay(t *testing.T) {
 				t.Fatal(e)
 			}
 			defer file.Close()
-			var v hostmeta.ImageMetadataFS
+			var v hostdata.ImageMetadataFS
 			if strings.HasPrefix(kind, "hfs") {
 				if e = hfsplus.CreateImage(file, 64<<20, "SECURITY", hroot, &hfsplus.CreateOptions{CaseInsensitive: kind == "hfsplus"}); e != nil {
 					t.Fatal(e)
@@ -93,7 +93,7 @@ func TestImageMetadataNativeReplay(t *testing.T) {
 			for _, name := range []string{"", "/", "../escape", "missing"} {
 				got, e := v.Metadata(name)
 				var pe *fs.PathError
-				if !errors.As(e, &pe) || pe.Op != "metadata" || got != (hostmeta.ImageMetadata{}) {
+				if !errors.As(e, &pe) || pe.Op != "metadata" || got != (hostdata.ImageMetadata{}) {
 					t.Fatalf("%q: %+v %v", name, got, e)
 				}
 			}

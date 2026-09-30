@@ -2,8 +2,9 @@ package decmpfs
 
 import (
 	"fmt"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/compression/lzbitmap"
 	"io"
+
+	"github.com/deploymenttheory/go-apfs-v2/pkg/compression/lzbitmap"
 )
 
 // decompressStorage handles Apple's raw storage and LZBITMAP chunk payloads.

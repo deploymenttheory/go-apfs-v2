@@ -36,7 +36,7 @@ func verify() error {
 	defer log.Close()
 	var transcript bytes.Buffer
 	profile := filepath.Join(dir, "coverage.out")
-	cmd := exec.Command("go", "test", "-count=1", "-json", "-run", "^TestXattrRestore", "-covermode=atomic", "-coverprofile="+profile, "-coverpkg=./pkg/hostmeta,./internal/imageacl,./pkg/apfswrite,./pkg/hfsplus", "./pkg/hostmeta")
+	cmd := exec.Command("go", "test", "-count=1", "-json", "-run", "^TestXattrRestore", "-covermode=atomic", "-coverprofile="+profile, "-coverpkg=./pkg/hostdata/...,./internal/imageacl,./pkg/apfswrite,./pkg/hfsplus", "./pkg/hostdata")
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 	cmd.Stdout = io.MultiWriter(os.Stdout, log, &transcript)
 	cmd.Stderr = io.MultiWriter(os.Stderr, log)
@@ -64,7 +64,7 @@ func verify() error {
 		return e
 	}
 	covered, total := 0, 0
-	coverageFiles := map[string][2]int{"pkg/hostmeta/xattr_restore.go": {}, "internal/imageacl/xattr.go": {}, "pkg/apfswrite/xattr_restore.go": {}, "pkg/hfsplus/writer_xattr_restore.go": {}}
+	coverageFiles := map[string][2]int{"pkg/hostdata/xattr_restore.go": {}, "internal/imageacl/xattr.go": {}, "pkg/apfswrite/xattr_restore.go": {}, "pkg/hfsplus/writer_xattr_restore.go": {}}
 	blocks := map[string][2]int{}
 	for _, line := range strings.Split(string(b), "\n") {
 		fields := strings.Fields(line)
@@ -110,7 +110,7 @@ func verify() error {
 	if passed < 4278 {
 		return fmt.Errorf("incomplete xattr restoration tests: %d", passed)
 	}
-	files := []string{"pkg/hostmeta/xattr_restore.go", "internal/imageacl/xattr.go", "pkg/apfswrite/xattr_restore.go", "pkg/hfsplus/writer_xattr_restore.go", "pkg/hostmeta/xattr_restore_test.go", "pkg/hostmeta/xattr_restore_image_test.go", "internal/testutil/xattrrestore/oracle.go", "scripts/verify-xattr-restore.go", "scripts/verify-xattr-restore-coverage.go", "testdata/appledouble/native/xattr-restore.c", "testdata/appledouble/native/xattr-restore.json.gz", "internal/imageacl/tree.go", "pkg/apfswrite/acl_restore.go", "pkg/hfsplus/writer_acl_restore.go", "pkg/hostmeta/copy_pipeline.go", "go.mod", "go.sum"}
+	files := []string{"pkg/hostdata/xattr_restore.go", "internal/imageacl/xattr.go", "pkg/apfswrite/xattr_restore.go", "pkg/hfsplus/writer_xattr_restore.go", "pkg/hostdata/xattr_restore_test.go", "pkg/hostdata/xattr_restore_image_test.go", "internal/testutil/xattrrestore/oracle.go", "scripts/verify-xattr-restore.go", "scripts/verify-xattr-restore-coverage.go", "testdata/appledouble/native/xattr-restore.c", "testdata/appledouble/native/xattr-restore.json.gz", "internal/imageacl/tree.go", "pkg/apfswrite/acl_restore.go", "pkg/hfsplus/writer_acl_restore.go", "pkg/hostdata/copy_pipeline.go", "go.mod", "go.sum"}
 	hashes := map[string]string{}
 	for _, path := range files {
 		b, e := os.ReadFile(path)

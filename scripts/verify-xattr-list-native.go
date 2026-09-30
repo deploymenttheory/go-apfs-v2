@@ -18,7 +18,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 )
 
 type native struct {
@@ -62,7 +62,7 @@ func main() {
 	passed := false
 	observations := []observation{}
 	hashes := map[string]string{}
-	paths, e := filepath.Glob("pkg/hostmeta/xattr_strict*.go")
+	paths, e := filepath.Glob("pkg/hostdata/xattr_strict*.go")
 	must(e)
 	paths = append(paths, source, "scripts/verify-xattr-list-native.go", "go.mod", "go.sum")
 	for _, p := range paths {
@@ -132,7 +132,7 @@ func main() {
 		}
 		var n native
 		must(json.Unmarshal(run(helper, path, kind), &n))
-		names, e := hostmeta.ListXattrNames(f, hostmeta.MaxXattrListSize)
+		names, e := hostdata.ListXattrNames(f, hostdata.MaxXattrListSize)
 		o := observation{Name: name, Native: n, Names: names}
 		if e != nil {
 			o.Error = e.Error()
@@ -155,14 +155,14 @@ func main() {
 		if !bytes.Equal(raw, actual) || len(raw) != n.Size || n.Read != n.Size {
 			panic(fmt.Sprintf("%s: native %+v vs Go %q", name, n, names))
 		}
-		exact, e := hostmeta.ListXattrNames(f, n.Size)
+		exact, e := hostdata.ListXattrNames(f, n.Size)
 		must(e)
 		if !reflect.DeepEqual(exact, names) {
 			panic("exact budget differs")
 		}
 		if n.Size > 0 {
-			got, e := hostmeta.ListXattrNames(f, n.Size-1)
-			if got != nil || !errors.Is(e, hostmeta.ErrXattrTooLarge) {
+			got, e := hostdata.ListXattrNames(f, n.Size-1)
+			if got != nil || !errors.Is(e, hostdata.ErrXattrTooLarge) {
 				panic("budget refusal lost")
 			}
 		}
@@ -187,19 +187,19 @@ func main() {
 	clear(fi)
 	set(path, "com.apple.FinderInfo", fi)
 	capture("finder-zero", path, f, false)
-	set(path, hostmeta.ResourceForkName, nil)
+	set(path, hostdata.ResourceForkName, nil)
 	capture("fork-empty-absent", path, f, false)
-	set(path, hostmeta.ResourceForkName, []byte{7, 8})
+	set(path, hostdata.ResourceForkName, []byte{7, 8})
 	capture("fork-present", path, f, false)
-	set(path, hostmeta.ResourceForkName, nil)
+	set(path, hostdata.ResourceForkName, nil)
 	capture("fork-empty-overwrite", path, f, false)
-	forkHex := strings.Join(strings.Fields(string(run("/usr/bin/xattr", "-px", hostmeta.ResourceForkName, path))), "")
+	forkHex := strings.Join(strings.Fields(string(run("/usr/bin/xattr", "-px", hostdata.ResourceForkName, path))), "")
 	retained, e := hex.DecodeString(forkHex)
 	must(e)
 	if !bytes.Equal(retained, []byte{7, 8}) {
 		panic("empty assignment changed existing fork bytes")
 	}
-	run("/usr/bin/xattr", "-d", hostmeta.ResourceForkName, path)
+	run("/usr/bin/xattr", "-d", hostdata.ResourceForkName, path)
 	capture("fork-removed", path, f, false)
 	run("/bin/chmod", "+a", "everyone allow read", path)
 	defer exec.Command("/bin/chmod", "-N", path).Run()

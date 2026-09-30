@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfswrite"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 )
 
 // RootTree exercises special inode metadata separately from user inode counts.
@@ -22,7 +22,7 @@ func Roots(uid, gid uint32) []RootTree {
 	var result []RootTree
 	for _, name := range []string{"default", "owner-mode", "inline-acl", "empty-acl", "max-acl", "streamed-empty-tree", "streamed-with-children", "empty-fork", "fork", "wide-snapshot", "special-mode", "zero-permissions", "epoch"} {
 		root := &apfswrite.Entry{Mode: os.ModeDir | 0755, UID: uid, GID: gid, ModTime: time.Unix(1600000000, 123456789), Xattrs: map[string][]byte{"user.empty": {}, "user.root": []byte("root-metadata")}}
-		tc := Case{Name: ".", Profile: name, Kind: "directory", UID: uid, GID: gid, Mode: 040755, Disposition: hostmeta.SecurityRecordAbsent}
+		tc := Case{Name: ".", Profile: name, Kind: "directory", UID: uid, GID: gid, Mode: 040755, Disposition: hostdata.SecurityRecordAbsent}
 		var snaps []apfswrite.SnapshotSpec
 		switch name {
 		case "zero-permissions":
@@ -40,18 +40,18 @@ func Roots(uid, gid uint32) []RootTree {
 			root.UID, root.GID = 42, 43
 			tc.UID, tc.GID = 42, 43
 		case "inline-acl":
-			root.Xattrs[hostmeta.SecurityName] = Profiles()[7].Data
-			tc.Disposition = hostmeta.SecurityRecordACL
+			root.Xattrs[hostdata.SecurityName] = Profiles()[7].Data
+			tc.Disposition = hostdata.SecurityRecordACL
 		case "empty-acl":
-			root.Xattrs[hostmeta.SecurityName] = Profiles()[5].Data
-			tc.Disposition = hostmeta.SecurityRecordEmpty
+			root.Xattrs[hostdata.SecurityName] = Profiles()[5].Data
+			tc.Disposition = hostdata.SecurityRecordEmpty
 		case "max-acl":
-			root.Xattrs[hostmeta.SecurityName] = Profiles()[12].Data
-			tc.Disposition = hostmeta.SecurityRecordACL
+			root.Xattrs[hostdata.SecurityName] = Profiles()[12].Data
+			tc.Disposition = hostdata.SecurityRecordACL
 		case "streamed-empty-tree", "streamed-with-children":
 			root.Xattrs["user.large"] = bytes.Repeat([]byte{0x5a}, 32769)
-			root.Xattrs[hostmeta.SecurityName] = Profiles()[7].Data
-			tc.Disposition = hostmeta.SecurityRecordACL
+			root.Xattrs[hostdata.SecurityName] = Profiles()[7].Data
+			tc.Disposition = hostdata.SecurityRecordACL
 			if name == "streamed-with-children" {
 				root.Children = []*apfswrite.Entry{{Name: "a", Data: []byte("payload"), LinkGroup: 1}, {Name: "b", Data: []byte("payload"), LinkGroup: 1}, {Name: "dir", Mode: os.ModeDir | 0755}}
 			}

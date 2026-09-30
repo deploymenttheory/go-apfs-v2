@@ -12,10 +12,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/imagerestore"
-	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/imagesecurity"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/apfswrite"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hfsplus"
 	"io"
 	"net/http"
 	"os"
@@ -26,6 +22,11 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/imagerestore"
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/imagesecurity"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/apfswrite"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hfsplus"
 )
 
 type command struct {

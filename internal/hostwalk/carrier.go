@@ -13,14 +13,14 @@ import (
 	"github.com/deploymenttheory/go-apfs-v2/internal/decmpfs"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/fidelity"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/metatransport"
 )
 
 // walkCarrier is explicitly selected; arbitrary payload files, including ._
 // names, are always content. The caller excludes concurrent tree mutation.
 func walkCarrier[E any](dir string, opts *Options, mk func(Node, []E) E) (E, *fidelity.Report, error) {
-	return walkCarrierUsing(dir, opts, mk, hostmeta.CaptureXattrsNoFollow)
+	return walkCarrierUsing(dir, opts, mk, hostdata.CaptureXattrsNoFollow)
 }
 
 type carrierTree interface {
@@ -31,10 +31,10 @@ type carrierTree interface {
 	Close() error
 }
 
-func walkCarrierUsing[E any](dir string, opts *Options, mk func(Node, []E) E, captureAttrs func(context.Context, string, hostmeta.XattrCaptureLimits) (map[string][]byte, error)) (E, *fidelity.Report, error) {
+func walkCarrierUsing[E any](dir string, opts *Options, mk func(Node, []E) E, captureAttrs func(context.Context, string, hostdata.XattrCaptureLimits) (map[string][]byte, error)) (E, *fidelity.Report, error) {
 	return walkCarrierBound(dir, opts, mk, captureAttrs, func(p string) (carrierTree, error) { return os.OpenRoot(p) })
 }
-func walkCarrierBound[E any](dir string, opts *Options, mk func(Node, []E) E, captureAttrs func(context.Context, string, hostmeta.XattrCaptureLimits) (map[string][]byte, error), openRoot func(string) (carrierTree, error)) (out E, report *fidelity.Report, err error) {
+func walkCarrierBound[E any](dir string, opts *Options, mk func(Node, []E) E, captureAttrs func(context.Context, string, hostdata.XattrCaptureLimits) (map[string][]byte, error), openRoot func(string) (carrierTree, error)) (out E, report *fidelity.Report, err error) {
 
 	report = &fidelity.Report{}
 	ctx := opts.Context
@@ -45,7 +45,7 @@ func walkCarrierBound[E any](dir string, opts *Options, mk func(Node, []E) E, ca
 	if opts.MetadataLimits != nil {
 		limits = *opts.MetadataLimits
 	}
-	capture := hostmeta.XattrCaptureLimits{NameBytes: hostmeta.MaxXattrListSize, ValueBytes: 64 << 20, TotalBytes: 256 << 20}
+	capture := hostdata.XattrCaptureLimits{NameBytes: hostdata.MaxXattrListSize, ValueBytes: 64 << 20, TotalBytes: 256 << 20}
 	if opts.CaptureLimits != nil {
 		capture = *opts.CaptureLimits
 	}
@@ -84,7 +84,7 @@ func walkCarrierBound[E any](dir string, opts *Options, mk func(Node, []E) E, ca
 		if e != nil {
 			return zero, e
 		}
-		if hostmeta.IsSpecial(info.Mode()) {
+		if hostdata.IsSpecial(info.Mode()) {
 			return zero, fmt.Errorf("carrier payload %q is special: %w", rel, metatransport.ErrConflict)
 		}
 		node := Node{Name: path.Base(rel), Mode: info.Mode(), ModeExplicit: true, ModTime: info.ModTime()}
@@ -130,7 +130,7 @@ func walkCarrierBound[E any](dir string, opts *Options, mk func(Node, []E) E, ca
 		} else {
 			native, e = captureAttrs(ctx, filepath.Join(dir, filepath.FromSlash(rel)), capture)
 		}
-		if errors.Is(e, hostmeta.ErrXattrUnsupported) {
+		if errors.Is(e, hostdata.ErrXattrUnsupported) {
 			native = map[string][]byte{}
 		} else if e != nil {
 			return zero, e
@@ -231,8 +231,8 @@ func walkCarrierBound[E any](dir string, opts *Options, mk func(Node, []E) E, ca
 				children = append(children, child)
 			}
 		default:
-			_, compressed := node.Xattrs[hostmeta.DecmpfsName]
-			if _, ok := node.XattrValues[hostmeta.DecmpfsName]; ok {
+			_, compressed := node.Xattrs[hostdata.DecmpfsName]
+			if _, ok := node.XattrValues[hostdata.DecmpfsName]; ok {
 				compressed = true
 			}
 			if compressed && opts.Compression {
@@ -244,22 +244,22 @@ func walkCarrierBound[E any](dir string, opts *Options, mk func(Node, []E) E, ca
 				node.Data = nil
 			} else {
 				if compressed {
-					value := node.XattrValues[hostmeta.DecmpfsName]
+					value := node.XattrValues[hostdata.DecmpfsName]
 					if value == nil {
-						value = bytes.NewReader(node.Xattrs[hostmeta.DecmpfsName])
+						value = bytes.NewReader(node.Xattrs[hostdata.DecmpfsName])
 					}
 					forkBacked, shapeErr := decmpfs.UsesResourceFork(value)
 					if shapeErr != nil {
 						return zero, shapeErr
 					}
-					delete(node.Xattrs, hostmeta.DecmpfsName)
-					delete(node.XattrValues, hostmeta.DecmpfsName)
+					delete(node.Xattrs, hostdata.DecmpfsName)
+					delete(node.XattrValues, hostdata.DecmpfsName)
 					if forkBacked {
-						delete(node.Xattrs, hostmeta.ResourceForkName)
-						delete(node.XattrValues, hostmeta.ResourceForkName)
+						delete(node.Xattrs, hostdata.ResourceForkName)
+						delete(node.XattrValues, hostdata.ResourceForkName)
 					}
 					if node.BSDFlags != nil {
-						flags := *node.BSDFlags &^ hostmeta.UFCompressed
+						flags := *node.BSDFlags &^ hostdata.UFCompressed
 						node.BSDFlags = &flags
 					}
 					report.Add(fidelity.Compression, logical)
@@ -363,7 +363,7 @@ func applyCarrierState(node *Node, r metatransport.Record) error {
 		node.ModTime = *r.Darwin.Modify
 	}
 	if allTimes {
-		node.Times = &hostmeta.FileTimes{Birth: *r.Darwin.Birth, Modify: *r.Darwin.Modify, Change: *r.Darwin.Change, Access: *r.Darwin.Access}
+		node.Times = &hostdata.FileTimes{Birth: *r.Darwin.Birth, Modify: *r.Darwin.Modify, Change: *r.Darwin.Change, Access: *r.Darwin.Access}
 	}
 	return nil
 }

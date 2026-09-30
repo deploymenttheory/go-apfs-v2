@@ -17,7 +17,7 @@ Linux authorization rules.
 | --- | --- | --- |
 | Create a new object beneath a parent | `InheritACL` | Derives eligible inherited entries, adjusting propagation flags |
 | Copy an existing object's ACL | `CopyACL` | Explicit source entries, then already-inherited destination entries |
-| Restore a valid AppleDouble ACL record | `ACLUpdate.FileSecurity` / `hostmeta.RestoreACL` | Replaces the destination ACL, retaining captured ownership |
+| Restore a valid AppleDouble ACL record | `ACLUpdate.FileSecurity` / `acl.RestoreACL` | Replaces the destination ACL, retaining captured ownership |
 
 These operations are not interchangeable. In particular, an AppleDouble
 replacement after a copy must not retain the merged inherited entries.
@@ -86,7 +86,7 @@ round-trips, input immutability and discarded-entry behavior.
 
 ## Remaining work
 
-This provides selection policy. [`hostmeta.CopySecurity`](appledouble-security-copy.md)
+This provides selection policy. [`hostdata.CopySecurity`](appledouble-security-copy.md)
 now coordinates ordinary security properties, source-cache changes, set-ID
 filtering and fallback writes with explicit failure diagnostics. It is not a
 complete `COPYFILE_SECURITY` backend or final AppleDouble restoration ordering.

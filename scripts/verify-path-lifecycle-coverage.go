@@ -37,7 +37,7 @@ func verify() error {
 	defer log.Close()
 	var transcript bytes.Buffer
 	profile := filepath.Join(dir, "coverage.out")
-	cmd := exec.Command("go", "test", "-count=1", "-json", "-run", "^(TestPath|TestAppleDoublePath|TestPreparePathSecurity|TestResetPathSecurity|TestDarwinCall)", "-covermode=atomic", "-coverprofile="+profile, "-coverpkg=./pkg/hostmeta,./internal/testutil/pathnative,./internal/testutil/pathsecurity", "./pkg/hostmeta", "./internal/testutil/pathnative", "./internal/testutil/pathsecurity")
+	cmd := exec.Command("go", "test", "-count=1", "-json", "-run", "^(TestPath|TestAppleDoublePath|TestPreparePathSecurity|TestResetPathSecurity|TestDarwinCall)", "-covermode=atomic", "-coverprofile="+profile, "-coverpkg=./pkg/hostdata/...,./internal/testutil/pathnative,./internal/testutil/pathsecurity", "./pkg/hostdata", "./internal/testutil/pathnative", "./internal/testutil/pathsecurity")
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 	cmd.Stdout = io.MultiWriter(os.Stdout, log, &transcript)
 	cmd.Stderr = io.MultiWriter(os.Stderr, log)
@@ -69,21 +69,21 @@ func verify() error {
 	coverageFiles["internal/testutil/pathnative/oracle.go"] = [2]int{}
 	coverageFiles["internal/testutil/pathsecurity/oracle.go"] = [2]int{}
 	for _, file := range []string{"appledouble_path.go", "appledouble_path_backing.go", "appledouble_path_fork.go", "appledouble_path_open.go", "path_lifecycle.go", "path_security.go"} {
-		coverageFiles["pkg/hostmeta/"+file] = [2]int{}
+		coverageFiles["pkg/hostdata/"+file] = [2]int{}
 	}
 	suffix := "other"
 	if runtime.GOOS == "darwin" {
 		suffix = "darwin"
-		coverageFiles["pkg/hostmeta/libsystem_call_darwin.go"] = [2]int{}
+		coverageFiles["pkg/hostdata/libsystem_call_darwin.go"] = [2]int{}
 	}
-	coverageFiles["pkg/hostmeta/appledouble_path_io_"+suffix+".go"] = [2]int{}
-	coverageFiles["pkg/hostmeta/appledouble_path_fork_"+suffix+".go"] = [2]int{}
-	coverageFiles["pkg/hostmeta/path_native_"+suffix+".go"] = [2]int{}
+	coverageFiles["pkg/hostdata/appledouble_path_io_"+suffix+".go"] = [2]int{}
+	coverageFiles["pkg/hostdata/appledouble_path_fork_"+suffix+".go"] = [2]int{}
+	coverageFiles["pkg/hostdata/path_native_"+suffix+".go"] = [2]int{}
 	handleSuffix := "unix"
 	if runtime.GOOS == "windows" {
 		handleSuffix = "windows"
 	}
-	coverageFiles["pkg/hostmeta/appledouble_path_handle_"+handleSuffix+".go"] = [2]int{}
+	coverageFiles["pkg/hostdata/appledouble_path_handle_"+handleSuffix+".go"] = [2]int{}
 	blocks := map[string][2]int{}
 	for _, line := range strings.Split(string(b), "\n") {
 		fields := strings.Fields(line)
@@ -133,7 +133,7 @@ func verify() error {
 	if passed < 50 {
 		return fmt.Errorf("incomplete path lifecycle tests: %d", passed)
 	}
-	files := []string{"scripts/verify-path-lifecycle-coverage.go", "go.mod", "go.sum", "pkg/hostmeta/*.go", "internal/evidenceaudit/*.go", "internal/testutil/pathnative/*.go", "internal/testutil/pathsecurity/*.go", "testdata/appledouble/native/path-*.c", "testdata/appledouble/native/path-*.json.gz", "testdata/appledouble/native/xattr-provider-context.h", "testdata/appledouble/native/xattr-remove-effects*"}
+	files := []string{"scripts/verify-path-lifecycle-coverage.go", "go.mod", "go.sum", "pkg/hostdata/*.go", "pkg/hostdata/*/*.go", "internal/hosttime/*.go", "internal/testutil/heldfixture/*.go", "internal/evidenceaudit/*.go", "internal/testutil/pathnative/*.go", "internal/testutil/pathsecurity/*.go", "testdata/appledouble/native/path-*.c", "testdata/appledouble/native/path-*.json.gz", "testdata/appledouble/native/xattr-provider-context.h", "testdata/appledouble/native/xattr-remove-effects*"}
 	hashes, e := evidenceaudit.SourceHashes(os.DirFS("."), files)
 	if e != nil {
 		return e

@@ -10,7 +10,8 @@ import (
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfswrite"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/hfsplus"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
+	aclmeta "github.com/deploymenttheory/go-apfs-v2/pkg/hostdata/acl"
 )
 
 type Case struct {
@@ -38,7 +39,7 @@ type NativeCase struct {
 	Filesystem      string
 	Case            Case
 	Native, Written Observation
-	GoResult        hostmeta.ACLRestoreResult
+	GoResult        aclmeta.ACLRestoreResult
 }
 type Fixture struct {
 	Revision, Host                                             string
@@ -70,7 +71,7 @@ func Trees(uid, gid uint32) []Tree {
 				}
 				e := &apfswrite.Entry{Name: name, Mode: mode, ModeExplicit: true, UID: uid, GID: gid, Data: []byte("payload"), Xattrs: map[string][]byte{"user.unrelated": []byte("retained")}}
 				if p.Data != nil {
-					e.Xattrs[hostmeta.SecurityName] = append([]byte{}, p.Data...)
+					e.Xattrs[hostdata.SecurityName] = append([]byte{}, p.Data...)
 				}
 				c := Case{Name: name, Target: name, Text: []byte(update.text)}
 				switch kind {
@@ -106,7 +107,7 @@ func Update(text []byte) (appledouble.ACLUpdate, error) {
 	return (&appledouble.File{Attrs: []appledouble.Attr{{Name: appledouble.ACLTextName, Value: text}}}).ACLUpdate(nil)
 }
 
-func ApplyAPFS(root *apfswrite.Entry, c Case) (hostmeta.ACLRestoreResult, error) {
+func ApplyAPFS(root *apfswrite.Entry, c Case) (aclmeta.ACLRestoreResult, error) {
 	target := root
 	if c.Target != "." {
 		target = nil
@@ -117,15 +118,15 @@ func ApplyAPFS(root *apfswrite.Entry, c Case) (hostmeta.ACLRestoreResult, error)
 		}
 	}
 	if target == nil {
-		return hostmeta.ACLRestoreResult{}, fmt.Errorf("missing target %s", c.Target)
+		return aclmeta.ACLRestoreResult{}, fmt.Errorf("missing target %s", c.Target)
 	}
 	update, err := Update(c.Text)
 	if err != nil {
-		return hostmeta.ACLRestoreResult{}, err
+		return aclmeta.ACLRestoreResult{}, err
 	}
 	return root.RestoreACL(target, update)
 }
-func ApplyHFS(root *hfsplus.Entry, c Case) (hostmeta.ACLRestoreResult, error) {
+func ApplyHFS(root *hfsplus.Entry, c Case) (aclmeta.ACLRestoreResult, error) {
 	target := root
 	if c.Target != "." {
 		target = nil
@@ -136,11 +137,11 @@ func ApplyHFS(root *hfsplus.Entry, c Case) (hostmeta.ACLRestoreResult, error) {
 		}
 	}
 	if target == nil {
-		return hostmeta.ACLRestoreResult{}, fmt.Errorf("missing target %s", c.Target)
+		return aclmeta.ACLRestoreResult{}, fmt.Errorf("missing target %s", c.Target)
 	}
 	update, err := Update(c.Text)
 	if err != nil {
-		return hostmeta.ACLRestoreResult{}, err
+		return aclmeta.ACLRestoreResult{}, err
 	}
 	return root.RestoreACL(target, update)
 }

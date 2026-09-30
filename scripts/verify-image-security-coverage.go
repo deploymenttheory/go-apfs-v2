@@ -36,7 +36,7 @@ func verify() error {
 	defer log.Close()
 	var transcript bytes.Buffer
 	profile := filepath.Join(dir, "coverage.out")
-	cmd := exec.Command("go", "test", "-count=1", "-json", "-run", "^(TestImageSecurity|FuzzImageSecurity)", "-covermode=atomic", "-coverpkg=./pkg/hostmeta,./pkg/apfs,./pkg/hfsplus", "-coverprofile="+profile, "./pkg/hostmeta", "./pkg/apfs", "./pkg/hfsplus")
+	cmd := exec.Command("go", "test", "-count=1", "-json", "-run", "^(TestImageSecurity|FuzzImageSecurity)", "-covermode=atomic", "-coverpkg=./pkg/hostdata/...,./pkg/apfs,./pkg/hfsplus", "-coverprofile="+profile, "./pkg/hostdata", "./pkg/apfs", "./pkg/hfsplus")
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 	cmd.Stdout = io.MultiWriter(os.Stdout, log, &transcript)
 	cmd.Stderr = io.MultiWriter(os.Stderr, log)
@@ -64,7 +64,7 @@ func verify() error {
 		return e
 	}
 	covered, total := 0, 0
-	coverageFiles := map[string][2]int{"pkg/hostmeta/image_security.go": {}, "pkg/apfs/security.go": {}, "pkg/hfsplus/security.go": {}}
+	coverageFiles := map[string][2]int{"pkg/hostdata/image_security.go": {}, "pkg/apfs/security.go": {}, "pkg/hfsplus/security.go": {}}
 	blocks := map[string][2]int{}
 	for _, line := range strings.Split(string(b), "\n") {
 		fields := strings.Fields(line)
@@ -107,7 +107,7 @@ func verify() error {
 	if total == 0 || covered*100 <= total*95 {
 		return fmt.Errorf("Image security capture coverage must exceed 95%%: %d/%d", covered, total)
 	}
-	files := []string{"internal/unixmode/mode.go", "pkg/apfswrite/mode.go", "pkg/hfsplus/writer_mode.go", "pkg/apfs/fs.go", "pkg/hfsplus/fs.go", "pkg/hostmeta/image_security.go", "pkg/hostmeta/image_security_test.go", "pkg/apfs/security.go", "pkg/apfs/security_test.go", "pkg/hfsplus/security.go", "pkg/hfsplus/security_test.go", "pkg/hfsplus/attributes.go", "pkg/hfsplus/casefold_table.go", "scripts/casefold/main.go", "internal/testutil/imagesecurity/fixtures.go", "internal/testutil/securitycopy/oracle.go", "scripts/verify-image-security.go", "scripts/verify-image-security-coverage.go", "testdata/appledouble/native/image-security.c", "testdata/appledouble/native/image-security.json.gz", "testdata/appledouble/native/security-copy.c", "pkg/hostmeta/security_copy.go", "pkg/hostmeta/security_copy_volume.go", "pkg/hostmeta/acl_chmod_properties.go", "pkg/appledouble/filesec.go", "go.mod", "go.sum"}
+	files := []string{"internal/unixmode/mode.go", "pkg/apfswrite/mode.go", "pkg/hfsplus/writer_mode.go", "pkg/apfs/fs.go", "pkg/hfsplus/fs.go", "pkg/hostdata/image_security.go", "pkg/hostdata/image_security_test.go", "pkg/apfs/security.go", "pkg/apfs/security_test.go", "pkg/hfsplus/security.go", "pkg/hfsplus/security_test.go", "pkg/hfsplus/attributes.go", "pkg/hfsplus/casefold_table.go", "scripts/casefold/main.go", "internal/testutil/imagesecurity/fixtures.go", "internal/testutil/securitycopy/oracle.go", "scripts/verify-image-security.go", "scripts/verify-image-security-coverage.go", "testdata/appledouble/native/image-security.c", "testdata/appledouble/native/image-security.json.gz", "testdata/appledouble/native/security-copy.c", "pkg/hostdata/security_copy.go", "pkg/hostdata/security_copy_volume.go", "pkg/hostdata/acl/acl_chmod_properties.go", "pkg/appledouble/filesec.go", "go.mod", "go.sum"}
 	hashes := map[string]string{}
 	for _, path := range files {
 		b, e := os.ReadFile(path)

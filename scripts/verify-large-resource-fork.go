@@ -32,7 +32,7 @@ import (
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfswrite"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/hfsplus"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/metatransport"
 )
 
@@ -49,22 +49,22 @@ type fixture struct {
 func (fixture) Readlink(string) (string, error) { return "", fs.ErrInvalid }
 func (f fixture) XattrValues(name string) (map[string]appledouble.Value, error) {
 	if name == "file" {
-		return map[string]appledouble.Value{hostmeta.ResourceForkName: f.value}, nil
+		return map[string]appledouble.Value{hostdata.ResourceForkName: f.value}, nil
 	}
 	return nil, nil
 }
 
-func (f fixture) Metadata(name string) (hostmeta.ImageMetadata, error) {
+func (f fixture) Metadata(name string) (hostdata.ImageMetadata, error) {
 	info, err := f.Stat(name)
 	if err != nil {
-		return hostmeta.ImageMetadata{}, err
+		return hostdata.ImageMetadata{}, err
 	}
 	mode := uint32(0100644)
 	if info.IsDir() {
 		mode = 0040755
 	}
 	tm := time.Unix(1500000000, 123456789).UTC()
-	return hostmeta.ImageMetadata{UID: 501, GID: 20, Mode: mode, Times: &hostmeta.FileTimes{Birth: tm, Modify: tm, Access: tm, Change: tm}}, nil
+	return hostdata.ImageMetadata{UID: 501, GID: 20, Mode: mode, Times: &hostdata.FileTimes{Birth: tm, Modify: tm, Access: tm, Change: tm}}, nil
 }
 
 type imageResult struct {
@@ -204,14 +204,14 @@ func pack(kind, name, payload, metadata string) {
 		must(e)
 		attrs, e = v.XattrValues("file")
 		must(e)
-		checkValue(attrs[hostmeta.ResourceForkName])
+		checkValue(attrs[hostdata.ResourceForkName])
 		must(c.Close())
 	} else {
 		v, e := hfsplus.New(f)
 		must(e)
 		attrs, e = v.XattrValues("file")
 		must(e)
-		checkValue(attrs[hostmeta.ResourceForkName])
+		checkValue(attrs[hostdata.ResourceForkName])
 	}
 	must(f.Close())
 }
@@ -318,12 +318,12 @@ func nativeBinding(workspace string) {
 	file, e := os.OpenFile(name, os.O_RDWR, 0600)
 	must(e)
 	defer func() { must(file.Close()) }()
-	values, e := hostmeta.CaptureXattrValues(context.Background(), file, hostmeta.XattrCaptureLimits{NameBytes: hostmeta.MaxXattrListSize, ValueBytes: 16384, TotalBytes: 32768})
+	values, e := hostdata.CaptureXattrValues(context.Background(), file, hostdata.XattrCaptureLimits{NameBytes: hostdata.MaxXattrListSize, ValueBytes: 16384, TotalBytes: 32768})
 	must(e)
-	checkValue(values[hostmeta.ResourceForkName])
+	checkValue(values[hostdata.ResourceForkName])
 	must(os.Rename(name, name+".moved"))
 	must(os.WriteFile(name, []byte("replacement"), 0600))
-	n, e := hostmeta.ReplaceResourceFork(context.Background(), file, &largefork.Value{})
+	n, e := hostdata.ReplaceResourceFork(context.Background(), file, &largefork.Value{})
 	must(e)
 	if n != largefork.Size {
 		panic("native streamed write truncated")
@@ -354,7 +354,7 @@ func main() {
 			panic("large-fork qualification exceeded 512 MiB sampled Go heap budget")
 		}
 	}()
-	evidence.Sources, e = evidenceaudit.SourceHashes(os.DirFS("."), []string{"scripts/verify-large-resource-fork.go", "testdata/appledouble/native/large-resource-fork.c", "internal/testutil/largefork/*.go", "internal/testutil/diskimage/*.go", "internal/tools/extract*.go", "internal/hostwalk/*.go", "pkg/metatransport/*.go", "pkg/hostmeta/*.go", "pkg/appledouble/*.go", "pkg/apfswrite/*.go", "pkg/apfs/*.go", "pkg/hfsplus/*.go", "go.mod", "go.sum"})
+	evidence.Sources, e = evidenceaudit.SourceHashes(os.DirFS("."), []string{"scripts/verify-large-resource-fork.go", "testdata/appledouble/native/large-resource-fork.c", "internal/testutil/largefork/*.go", "internal/testutil/diskimage/*.go", "internal/tools/extract*.go", "internal/hostwalk/*.go", "pkg/metatransport/*.go", "pkg/hostdata/*.go", "pkg/hostdata/*/*.go", "internal/hosttime/*.go", "internal/testutil/heldfixture/*.go", "pkg/appledouble/*.go", "pkg/apfswrite/*.go", "pkg/apfs/*.go", "pkg/hfsplus/*.go", "go.mod", "go.sum"})
 	must(e)
 	evidence.ExpectedSHA256 = valueHash(&largefork.Value{})
 	if runtime.GOOS == "darwin" {
@@ -440,7 +440,7 @@ func main() {
 		}
 		attrs, e := store.BorrowRecordAttributes(context.Background(), r)
 		must(e)
-		checkValue(attrs[hostmeta.ResourceForkName])
+		checkValue(attrs[hostdata.ResourceForkName])
 		found = true
 	}
 	if !found {

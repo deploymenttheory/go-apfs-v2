@@ -1,6 +1,6 @@
 # AppleDouble object operations
 
-`hostmeta.PackAppleDoubleObject` and `UnpackAppleDoubleObject` connect the native
+`hostdata.PackAppleDoubleObject` and `UnpackAppleDoubleObject` connect the native
 packing and sequential unpacking policies to held metadata providers. They
 include source security acquisition, temporary destination permissions, source
 quarantine precedence, intent filtering, ACL handling, optional stat restoration

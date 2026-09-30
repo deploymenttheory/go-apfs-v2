@@ -74,7 +74,7 @@ func verify() error {
 	if _, err := run("xcrun", "clang", "-dynamiclib", "-O2", "-Wall", "-Wextra", "-Werror", source, "-o", library); err != nil {
 		return err
 	}
-	cmd := exec.Command("go", "test", "-count=1", "-json", "-tags=native_quarantine_oracle", "-run=^TestQuarantine(Capture|File)NativeOracle$", "./pkg/hostmeta")
+	cmd := exec.Command("go", "test", "-count=1", "-json", "-tags=native_quarantine_oracle", "-run=^TestQuarantine(Capture|File)NativeOracle$", "./pkg/hostdata")
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0", "APFS_QUARANTINE_ORACLE="+library)
 	out, err := cmd.CombinedOutput()
 	if writeErr := os.WriteFile(filepath.Join(dir, "tests.jsonl"), out, 0600); writeErr != nil {
@@ -87,11 +87,11 @@ func verify() error {
 		return fmt.Errorf("native comparison did not complete")
 	}
 	hashes := map[string]string{}
-	files, err := filepath.Glob("pkg/hostmeta/quarantine_capture*.go")
+	files, err := filepath.Glob("pkg/hostdata/quarantine_capture*.go")
 	if err != nil {
 		return err
 	}
-	fileSources, err := filepath.Glob("pkg/hostmeta/quarantine_file*.go")
+	fileSources, err := filepath.Glob("pkg/hostdata/quarantine_file*.go")
 	if err != nil {
 		return err
 	}

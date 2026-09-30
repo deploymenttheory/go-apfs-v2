@@ -1,6 +1,6 @@
 # AppleDouble unpack restoration
 
-`hostmeta.RestoreAppleDouble` executes a validated metadata snapshot through
+`hostdata.RestoreAppleDouble` executes a validated metadata snapshot through
 caller-supplied held destination operations. It supplies the missing ordering
 between the codec and the existing ordinary xattr, quarantine, ACL and stat
 components. Production code is pure Go and available on Linux, macOS and Windows.
@@ -88,7 +88,7 @@ Existing `File.QuarantineUpdates`, `Quarantine.PlanApplication`, `File.ACLUpdate
 for `RunCopyPipeline` can return the executor's code and error through
 `CopyStageResult`; it must also retain the detailed unpack failures for its caller.
 
-`hostmeta.ListXattrNames` now provides the strict held native enumeration
+`hostdata.ListXattrNames` now provides the strict held native enumeration
 primitive on Linux, macOS and Windows. Its complete bounded result is useful to
 providers, but does not itself implement `UnpackBackend`'s native two-stage
 list-error protocol, writes or foreign-carrier semantics. See

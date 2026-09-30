@@ -34,18 +34,18 @@ jobs:
           - { pkg: ./pkg/appledouble, target: FuzzCopyACL }
           - { pkg: ./pkg/appledouble, target: FuzzACLIdentitySnapshot }
           - { pkg: ./pkg/appledouble, target: FuzzFileSecurity }
-          - { pkg: ./pkg/hostmeta, target: FuzzXattrListNames }
-          - { pkg: ./pkg/hostmeta, target: FuzzXattrEARecord }
-          - { pkg: ./pkg/hostmeta, target: FuzzRestoreACL }
+          - { pkg: ./pkg/hostdata, target: FuzzXattrListNames }
+          - { pkg: ./pkg/hostdata, target: FuzzXattrEARecord }
+          - { pkg: ./pkg/hostdata/acl, target: FuzzRestoreACL }
           - { pkg: ./internal/imageacl, target: FuzzImageACLRestore }
           - { pkg: ./internal/imageacl, target: FuzzImageSecurityCopy }
-          - { pkg: ./pkg/hostmeta, target: FuzzACLAttributes }
-          - { pkg: ./pkg/hostmeta, target: FuzzDarwinChmodRequest }
-          - { pkg: ./pkg/hostmeta, target: FuzzDarwinChmodProperties }
-          - { pkg: ./pkg/hostmeta, target: FuzzSecurityCopy }
-          - { pkg: ./pkg/hostmeta, target: FuzzPathLifecycle }
+          - { pkg: ./pkg/hostdata/acl, target: FuzzACLAttributes }
+          - { pkg: ./pkg/hostdata/acl, target: FuzzDarwinChmodRequest }
+          - { pkg: ./pkg/hostdata/acl, target: FuzzDarwinChmodProperties }
+          - { pkg: ./pkg/hostdata, target: FuzzSecurityCopy }
+          - { pkg: ./pkg/hostdata, target: FuzzPathLifecycle }
           - { pkg: ./pkg/metatransport, target: FuzzCarrierManifest }
-          - { pkg: ./pkg/hostmeta, target: FuzzImageSecurity }
+          - { pkg: ./pkg/hostdata, target: FuzzImageSecurity }
           - { pkg: ./pkg/appledouble, target: FuzzQuarantine }
           - { pkg: ./pkg/appledouble, target: FuzzQuarantineXattr }
           - { pkg: ./pkg/appledouble, target: FuzzQuarantineApplication }

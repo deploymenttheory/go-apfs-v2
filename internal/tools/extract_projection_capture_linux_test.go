@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/metatransport"
 )
 
@@ -29,8 +29,8 @@ func TestProjectionLinuxSymlinkNativeBaseline(t *testing.T) {
 		defer root.Close()
 		e := &Extractor{}
 		records := []metatransport.Record{{Original: "link", Materialized: "link", Kind: "symlink", MaterializedKind: "symlink"}}
-		limits := hostmeta.XattrCaptureLimits{NameBytes: hostmeta.MaxXattrListSize, ValueBytes: 65536, TotalBytes: 1 << 20}
-		err = e.projectCarrier(context.Background(), root, store, records, limits, newNativeProjection, hostmeta.CaptureXattrs, captureProjectionValues)
+		limits := hostdata.XattrCaptureLimits{NameBytes: hostdata.MaxXattrListSize, ValueBytes: 65536, TotalBytes: 1 << 20}
+		err = e.projectCarrier(context.Background(), root, store, records, limits, newNativeProjection, hostdata.CaptureXattrs, captureProjectionValues)
 		if err != nil || e.projectionError() != nil || !records[0].NativeCaptured || records[0].NativeUnsupported {
 			t.Fatal(records, err, e.projectionError())
 		}

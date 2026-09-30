@@ -14,10 +14,10 @@ import (
 
 func TestSourceHashesPortableInventory(t *testing.T) {
 	root := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(root, "pkg", "hostmeta"), 0700); err != nil {
+	if err := os.MkdirAll(filepath.Join(root, "pkg", "hostdata", "accesstime"), 0700); err != nil {
 		t.Fatal(err)
 	}
-	contents := map[string][]byte{"pkg/hostmeta/access_time_windows.go": []byte("package hostmeta\r\n"), "pkg/hostmeta/access_time_darwin.go": []byte("package hostmeta\n"), "go.mod": []byte("module example\n")}
+	contents := map[string][]byte{"pkg/hostdata/accesstime/access_time_windows.go": []byte("package hostdata\r\n"), "pkg/hostdata/accesstime/access_time_darwin.go": []byte("package hostdata\n"), "go.mod": []byte("module example\n")}
 	want := map[string]string{}
 	for name, data := range contents {
 		if err := os.WriteFile(filepath.Join(root, filepath.FromSlash(name)), data, 0600); err != nil {
@@ -26,11 +26,11 @@ func TestSourceHashesPortableInventory(t *testing.T) {
 		sum := sha256.Sum256(data)
 		want[name] = hex.EncodeToString(sum[:])
 	}
-	got, err := SourceHashes(os.DirFS(root), []string{"go.mod", "pkg/hostmeta/*.go", "go.mod"})
+	got, err := SourceHashes(os.DirFS(root), []string{"go.mod", "pkg/hostdata/accesstime/*.go", "go.mod"})
 	if err != nil || !reflect.DeepEqual(got, want) {
 		t.Fatal(got, want, err)
 	}
-	if got["pkg/hostmeta/access_time_windows.go"] == got["pkg/hostmeta/access_time_darwin.go"] {
+	if got["pkg/hostdata/accesstime/access_time_windows.go"] == got["pkg/hostdata/accesstime/access_time_darwin.go"] {
 		t.Fatal("source bytes were normalized")
 	}
 	// The actual Windows OS filesystem is used above when this test runs on CI;
@@ -39,7 +39,7 @@ func TestSourceHashesPortableInventory(t *testing.T) {
 	for name, data := range contents {
 		reference[name] = &fstest.MapFile{Data: data}
 	}
-	other, err := SourceHashes(reference, []string{"go.mod", "pkg/hostmeta/*.go"})
+	other, err := SourceHashes(reference, []string{"go.mod", "pkg/hostdata/accesstime/*.go"})
 	if err != nil || !reflect.DeepEqual(other, got) {
 		t.Fatal(other, got, err)
 	}

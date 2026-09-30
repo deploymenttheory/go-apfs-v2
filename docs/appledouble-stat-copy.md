@@ -1,6 +1,6 @@
 # Ordered stat restoration
 
-`hostmeta.CopyStat` implements the final stat-restoration stage used by Apple's
+`hostdata.CopyStat` implements the final stat-restoration stage used by Apple's
 copyfile. It restores modification/access times, numeric ownership, permissions
 and BSD flags in the order that allows ordinary metadata writes before a file
 becomes immutable or append-only. The same pure-Go executor runs on Linux, macOS
@@ -17,7 +17,7 @@ adapter. Image timestamp storage is provided separately by
 ## Contract
 
 ```go
-result, err := hostmeta.CopyStat(source, hostmeta.StatCopyOptions{
+result, err := hostdata.CopyStat(source, hostdata.StatCopyOptions{
     VolumePolicy: capturedOrHeldVolumePolicy,
     PreserveDestinationTracked: true,
 }, heldDestinationBackend)

@@ -7,7 +7,7 @@ import (
 	"github.com/deploymenttheory/go-apfs-v2/internal/hostwalk"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/fidelity"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/metatransport"
 )
 
@@ -16,7 +16,7 @@ type WalkOptions struct {
 	// MetadataRoot explicitly selects a separate managed carrier for preservation.
 	MetadataRoot   string
 	MetadataLimits *metatransport.Limits
-	CaptureLimits  *hostmeta.XattrCaptureLimits
+	CaptureLimits  *hostdata.XattrCaptureLimits
 	Context        context.Context
 	// Xattrs reads each entry's extended attributes so they can be counted,
 	// and carried when this writer can represent them. It costs a syscall or
@@ -99,8 +99,8 @@ func newEntry(n hostwalk.Node, children []*Entry) *Entry {
 		GID:               n.GID,
 		Data:              n.Data,
 		DataValue:         n.DataValue,
-		ResourceFork:      n.Xattrs[hostmeta.ResourceForkName],
-		ResourceForkValue: n.XattrValues[hostmeta.ResourceForkName],
+		ResourceFork:      n.Xattrs[hostdata.ResourceForkName],
+		ResourceForkValue: n.XattrValues[hostdata.ResourceForkName],
 		XattrValues:       valuesWithoutResourceFork(n.XattrValues),
 		Xattrs:            attrsWithoutResourceFork(n.Xattrs),
 		LinkGroup:         n.LinkGroup,
@@ -113,12 +113,12 @@ func newEntry(n hostwalk.Node, children []*Entry) *Entry {
 // it into the attributes file as well would both duplicate the content and
 // disagree with what a reader reports.
 func attrsWithoutResourceFork(attrs map[string][]byte) map[string][]byte {
-	if _, ok := attrs[hostmeta.ResourceForkName]; !ok {
+	if _, ok := attrs[hostdata.ResourceForkName]; !ok {
 		return attrs
 	}
 	out := make(map[string][]byte, len(attrs)-1)
 	for name, value := range attrs {
-		if name != hostmeta.ResourceForkName {
+		if name != hostdata.ResourceForkName {
 			out[name] = value
 		}
 	}
@@ -169,12 +169,12 @@ func OpenEntryTreeFromDir(srcDir string, opts *WalkOptions) (*EntryTree, error) 
 }
 
 func valuesWithoutResourceFork(attrs map[string]appledouble.Value) map[string]appledouble.Value {
-	if _, ok := attrs[hostmeta.ResourceForkName]; !ok {
+	if _, ok := attrs[hostdata.ResourceForkName]; !ok {
 		return attrs
 	}
 	out := make(map[string]appledouble.Value, len(attrs)-1)
 	for name, value := range attrs {
-		if name != hostmeta.ResourceForkName {
+		if name != hostdata.ResourceForkName {
 			out[name] = value
 		}
 	}

@@ -15,7 +15,7 @@ import (
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/fidelity"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/metatransport"
 )
 
@@ -25,7 +25,7 @@ type carrierNode struct {
 }
 
 func makeCarrierNode(n Node, c []*carrierNode) *carrierNode { return &carrierNode{n, c} }
-func emptyCapture(context.Context, string, hostmeta.XattrCaptureLimits) (map[string][]byte, error) {
+func emptyCapture(context.Context, string, hostdata.XattrCaptureLimits) (map[string][]byte, error) {
 	return map[string][]byte{}, nil
 }
 func carrierFixture(t *testing.T) (string, string, *metatransport.Store) {
@@ -163,17 +163,17 @@ func TestCarrierWalkConflicts(t *testing.T) {
 				other.LinkGroup = "g"
 				records = append(records, other)
 			case "native-conflict":
-				capture = func(context.Context, string, hostmeta.XattrCaptureLimits) (map[string][]byte, error) {
+				capture = func(context.Context, string, hostdata.XattrCaptureLimits) (map[string][]byte, error) {
 					return map[string][]byte{"case": {9}}, nil
 				}
 			case "capture-error":
-				capture = func(context.Context, string, hostmeta.XattrCaptureLimits) (map[string][]byte, error) {
+				capture = func(context.Context, string, hostdata.XattrCaptureLimits) (map[string][]byte, error) {
 					return nil, fs.ErrPermission
 				}
 			case "keep-refused":
 				opts.Keep = func(string, []byte) bool { return false }
 			case "budget":
-				opts.CaptureLimits = &hostmeta.XattrCaptureLimits{}
+				opts.CaptureLimits = &hostdata.XattrCaptureLimits{}
 			case "cancel":
 				ctx, cancel := context.WithCancel(context.Background())
 				cancel()
@@ -197,7 +197,7 @@ func TestCarrierWalkConflicts(t *testing.T) {
 func TestCarrierWalkCompressionAndSidecar(t *testing.T) {
 	p, m, s := carrierFixture(t)
 	r := carrierFile(t, p, "file", "file")
-	values := map[string][]byte{hostmeta.DecmpfsName: compressionHeader(4), hostmeta.ResourceForkName: {3, 4}}
+	values := map[string][]byte{hostdata.DecmpfsName: compressionHeader(4), hostdata.ResourceForkName: {3, 4}}
 	r.Attributes = attrsCarrier(t, s, values)
 	data, e := appledouble.FromXattrs(values).Encode()
 	if e != nil {
@@ -208,7 +208,7 @@ func TestCarrierWalkCompressionAndSidecar(t *testing.T) {
 		t.Fatal(e)
 	}
 	r.AppleDouble = &ad
-	flags := hostmeta.UFCompressed
+	flags := hostdata.UFCompressed
 	r.Darwin.Flags = &flags
 	commitCarrier(t, s, []metatransport.Record{r})
 	opts := &Options{MetadataRoot: m, Compression: true, HardLinks: true, Keep: func(string, []byte) bool { return true }}
@@ -234,8 +234,8 @@ func TestCarrierWalkUnsupportedNamespace(t *testing.T) {
 	r := carrierFile(t, p, "file", "file")
 	r.Attributes = attrsCarrier(t, s, map[string][]byte{"empty": {}})
 	commitCarrier(t, s, []metatransport.Record{r})
-	capture := func(context.Context, string, hostmeta.XattrCaptureLimits) (map[string][]byte, error) {
-		return nil, hostmeta.ErrXattrUnsupported
+	capture := func(context.Context, string, hostdata.XattrCaptureLimits) (map[string][]byte, error) {
+		return nil, hostdata.ErrXattrUnsupported
 	}
 	got, _, e := walkCarrierUsing(p, &Options{MetadataRoot: m}, makeCarrierNode, capture)
 	if e != nil || got.Children[0].Xattrs["empty"] == nil {
@@ -323,8 +323,8 @@ func TestCarrierWalkControlledReads(t *testing.T) {
 			capture := emptyCapture
 			sentinel := errors.New("injected")
 			if which == "value-budget" {
-				opts.CaptureLimits = &hostmeta.XattrCaptureLimits{NameBytes: 10, ValueBytes: 0, TotalBytes: 10}
-				capture = func(context.Context, string, hostmeta.XattrCaptureLimits) (map[string][]byte, error) {
+				opts.CaptureLimits = &hostdata.XattrCaptureLimits{NameBytes: 10, ValueBytes: 0, TotalBytes: 10}
+				capture = func(context.Context, string, hostdata.XattrCaptureLimits) (map[string][]byte, error) {
 					return map[string][]byte{"value": {1}}, nil
 				}
 			}
@@ -336,7 +336,7 @@ func TestCarrierWalkControlledReads(t *testing.T) {
 			if which == "cancel-child" {
 				ctx, cancel := context.WithCancel(context.Background())
 				opts.Context = ctx
-				capture = func(context.Context, string, hostmeta.XattrCaptureLimits) (map[string][]byte, error) {
+				capture = func(context.Context, string, hostdata.XattrCaptureLimits) (map[string][]byte, error) {
 					cancel()
 					return nil, nil
 				}
@@ -421,7 +421,7 @@ func TestCarrierWalkNativeBaseline(t *testing.T) {
 				r.NativeAttributes = nil
 			}
 			commitCarrier(t, s, []metatransport.Record{r})
-			capture := func(_ context.Context, name string, _ hostmeta.XattrCaptureLimits) (map[string][]byte, error) {
+			capture := func(_ context.Context, name string, _ hostdata.XattrCaptureLimits) (map[string][]byte, error) {
 				if filepath.Base(name) != "file" {
 					return nil, nil
 				}
@@ -434,13 +434,13 @@ func TestCarrierWalkNativeBaseline(t *testing.T) {
 				case "deleted":
 					delete(native, "logical")
 				case "unsupported":
-					return nil, hostmeta.ErrXattrUnsupported
+					return nil, hostdata.ErrXattrUnsupported
 				}
 				return native, nil
 			}
 			opts := &Options{MetadataRoot: m}
 			if which == "budget" {
-				opts.CaptureLimits = &hostmeta.XattrCaptureLimits{NameBytes: 10, ValueBytes: 10, TotalBytes: 1}
+				opts.CaptureLimits = &hostdata.XattrCaptureLimits{NameBytes: 10, ValueBytes: 10, TotalBytes: 1}
 			}
 			got, _, e := walkCarrierUsing(p, opts, makeCarrierNode, capture)
 			if which == "changed" || which == "deleted" || which == "budget" {

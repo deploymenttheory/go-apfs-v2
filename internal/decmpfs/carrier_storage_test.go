@@ -4,10 +4,11 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
 	"io"
 	"io/fs"
 	"testing"
+
+	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
 )
 
 type carrierHeaderFault struct {

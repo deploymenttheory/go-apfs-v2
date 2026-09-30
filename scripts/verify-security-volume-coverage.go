@@ -36,7 +36,7 @@ func verify() error {
 	defer log.Close()
 	var transcript bytes.Buffer
 	profile := filepath.Join(dir, "coverage.out")
-	cmd := exec.Command("go", "test", "-count=1", "-json", "-run", "^(TestSecurityCopy|TestNativeSecurityCopy|TestImageSecurityCopy)", "-covermode=atomic", "-coverprofile="+profile, "-coverpkg=./pkg/hostmeta", "./pkg/hostmeta", "./pkg/apfswrite", "./pkg/hfsplus", "./internal/testutil/imagecopy")
+	cmd := exec.Command("go", "test", "-count=1", "-json", "-run", "^(TestSecurityCopy|TestNativeSecurityCopy|TestImageSecurityCopy)", "-covermode=atomic", "-coverprofile="+profile, "-coverpkg=./pkg/hostdata/...", "./pkg/hostdata", "./pkg/apfswrite", "./pkg/hfsplus", "./internal/testutil/imagecopy")
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 	cmd.Stdout = io.MultiWriter(os.Stdout, log, &transcript)
 	cmd.Stderr = io.MultiWriter(os.Stderr, log)
@@ -64,7 +64,7 @@ func verify() error {
 		return e
 	}
 	covered, total := 0, 0
-	coverageFiles := map[string][2]int{"pkg/hostmeta/security_copy.go": {}, "pkg/hostmeta/security_copy_volume.go": {}}
+	coverageFiles := map[string][2]int{"pkg/hostdata/security_copy.go": {}, "pkg/hostdata/security_copy_volume.go": {}}
 	blocks := map[string][2]int{}
 	for _, line := range strings.Split(string(b), "\n") {
 		fields := strings.Fields(line)
@@ -110,7 +110,7 @@ func verify() error {
 	if passed < 9527 {
 		return fmt.Errorf("incomplete image security-copy tests: %d", passed)
 	}
-	files := []string{"pkg/hostmeta/security_copy.go", "pkg/hostmeta/security_copy_volume.go", "pkg/hostmeta/security_copy_test.go", "pkg/hostmeta/security_copy_volume_test.go", "pkg/hostmeta/security_copy_volume_native_test.go", "pkg/hostmeta/acl_chmod_properties.go", "pkg/hostmeta/image_security.go", "pkg/appledouble/acl_update.go", "pkg/appledouble/filesec.go", "pkg/appledouble/acl.go", "pkg/appledouble/acl_external.go", "internal/testutil/securitycopy/oracle.go", "internal/testutil/imagecopy/volume_test.go", "internal/testutil/imagesecurity/fixtures.go", "internal/imageacl/copy.go", "internal/imageacl/tree.go", "pkg/apfswrite/security_copy.go", "pkg/apfswrite/acl_restore.go", "pkg/hfsplus/writer_security_copy.go", "pkg/hfsplus/writer_acl_restore.go", "scripts/verify-security-copy-volume.go", "scripts/verify-security-volume-coverage.go", "testdata/appledouble/native/security-copy-volume.c", "testdata/appledouble/native/security-copy.c", "testdata/appledouble/native/security-copy-volume.json.gz", "testdata/appledouble/native/security-copy.json.gz", "go.mod", "go.sum"}
+	files := []string{"pkg/hostdata/security_copy.go", "pkg/hostdata/security_copy_volume.go", "pkg/hostdata/security_copy_test.go", "pkg/hostdata/security_copy_volume_test.go", "pkg/hostdata/security_copy_volume_native_test.go", "pkg/hostdata/acl/acl_chmod_properties.go", "pkg/hostdata/image_security.go", "pkg/appledouble/acl_update.go", "pkg/appledouble/filesec.go", "pkg/appledouble/acl.go", "pkg/appledouble/acl_external.go", "internal/testutil/securitycopy/oracle.go", "internal/testutil/imagecopy/volume_test.go", "internal/testutil/imagesecurity/fixtures.go", "internal/imageacl/copy.go", "internal/imageacl/tree.go", "pkg/apfswrite/security_copy.go", "pkg/apfswrite/acl_restore.go", "pkg/hfsplus/writer_security_copy.go", "pkg/hfsplus/writer_acl_restore.go", "scripts/verify-security-copy-volume.go", "scripts/verify-security-volume-coverage.go", "testdata/appledouble/native/security-copy-volume.c", "testdata/appledouble/native/security-copy.c", "testdata/appledouble/native/security-copy-volume.json.gz", "testdata/appledouble/native/security-copy.json.gz", "go.mod", "go.sum"}
 	hashes := map[string]string{}
 	for _, path := range files {
 		b, e := os.ReadFile(path)

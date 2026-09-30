@@ -6,10 +6,11 @@ package apfswrite
 import (
 	"encoding/binary"
 	"fmt"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
 	"sort"
 	"strings"
+
+	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 )
 
 // setTree resolves the caller's directory tree (Root plus the RootFiles
@@ -55,7 +56,7 @@ func (b volCtx) setTree(spec VolumeSpec) error {
 			// or FIFO handed in directly would be written with the wrong mode
 			// and no sign anything was lost. EntryTreeFromDir skips these and
 			// reports them; a caller building a tree by hand gets told.
-			if hostmeta.IsSpecial(e.Mode) {
+			if hostdata.IsSpecial(e.Mode) {
 				return 0, fmt.Errorf("apfswrite: %q is a %s; this writer models only regular files, directories and symbolic links",
 					e.Name, e.Mode.Type())
 			}

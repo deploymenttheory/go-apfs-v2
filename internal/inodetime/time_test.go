@@ -2,11 +2,12 @@ package inodetime
 
 import (
 	"errors"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
 	"io/fs"
 	"math"
 	"testing"
 	"time"
+
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 )
 
 func TestInodeTimesEncoding(t *testing.T) {
@@ -23,7 +24,7 @@ func TestInodeTimesEncoding(t *testing.T) {
 		for _, value := range values {
 			for _, clamp := range []bool{false, true} {
 				for field := 0; field < 4; field++ {
-					times := hostmeta.FileTimes{Birth: time.Unix(1, 0), Modify: time.Unix(1, 0), Change: time.Unix(1, 0), Access: time.Unix(1, 0)}
+					times := hostdata.FileTimes{Birth: time.Unix(1, 0), Modify: time.Unix(1, 0), Change: time.Unix(1, 0), Access: time.Unix(1, 0)}
 					pointers := []*time.Time{&times.Birth, &times.Modify, &times.Change, &times.Access}
 					*pointers[field] = value
 					limit := time.Unix(100, 999999999)
@@ -49,7 +50,7 @@ func TestInodeTimesEncoding(t *testing.T) {
 		}
 		for _, value := range bad {
 			for field := 0; field < 4; field++ {
-				times := hostmeta.FileTimes{Birth: time.Unix(1, 0), Modify: time.Unix(1, 0), Change: time.Unix(1, 0), Access: time.Unix(1, 0)}
+				times := hostdata.FileTimes{Birth: time.Unix(1, 0), Modify: time.Unix(1, 0), Change: time.Unix(1, 0), Access: time.Unix(1, 0)}
 				p := []*time.Time{&times.Birth, &times.Modify, &times.Change, &times.Access}
 				*p[field] = value
 				got, e := Encode(times, time.Unix(100, 0), false, hfs)

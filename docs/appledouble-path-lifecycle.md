@@ -3,7 +3,7 @@
 The path operation creates or opens an AppleDouble destination, executes the
 metadata operation, and performs Apple's permission and descriptor cleanup.
 It is different from operating on descriptors the caller already owns. This
-document explains `hostmeta.CopyAppleDoublePath`, its measured behavior, and
+document explains `hostdata.CopyAppleDoublePath`, its measured behavior, and
 the evidence used to qualify it. Captured logical metadata makes the same
 policy usable on Linux and Windows; native Darwin bindings use Go and fixed
 libSystem wrappers, never the native copyfile algorithm.

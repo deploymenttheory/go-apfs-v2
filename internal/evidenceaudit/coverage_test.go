@@ -11,12 +11,12 @@ import (
 
 func fixture(t *testing.T, dir string) (fstest.MapFS, fstest.MapFS, report) {
 	t.Helper()
-	name := "pkg/hostmeta/example.go"
+	name := "pkg/hostdata/example.go"
 	if dir == "appledouble" {
 		name = "pkg/appledouble/example.go"
 	}
 	if dir == "strict-xattrs" {
-		name = "pkg/hostmeta/xattr_strict.go"
+		name = "pkg/hostdata/xattr_strict.go"
 	}
 	data := []byte("package example\n")
 	h := sha256.Sum256(data)
@@ -63,8 +63,8 @@ func TestCoverage(t *testing.T) {
 		{"revision", func(_ fstest.MapFS, _ fstest.MapFS, r *report) { r.Revision = "old" }},
 		{"os", func(_ fstest.MapFS, _ fstest.MapFS, r *report) { r.GOOS = "darwin" }},
 		{"no sources", func(_ fstest.MapFS, _ fstest.MapFS, r *report) { r.Sources = nil }},
-		{"missing source", func(s fstest.MapFS, _ fstest.MapFS, _ *report) { delete(s, "pkg/hostmeta/example.go") }},
-		{"source mismatch", func(s fstest.MapFS, _ fstest.MapFS, _ *report) { s["pkg/hostmeta/example.go"].Data = []byte("changed") }},
+		{"missing source", func(s fstest.MapFS, _ fstest.MapFS, _ *report) { delete(s, "pkg/hostdata/example.go") }},
+		{"source mismatch", func(s fstest.MapFS, _ fstest.MapFS, _ *report) { s["pkg/hostdata/example.go"].Data = []byte("changed") }},
 		{"transcript missing", func(_ fstest.MapFS, a fstest.MapFS, _ *report) { delete(a, "example/tests.jsonl") }},
 		{"transcript malformed", func(_ fstest.MapFS, a fstest.MapFS, _ *report) { a["example/tests.jsonl"].Data = []byte("{") }},
 		{"skipped", func(_ fstest.MapFS, a fstest.MapFS, _ *report) {
@@ -85,13 +85,13 @@ func TestCoverage(t *testing.T) {
 		{"profile malformed", func(_ fstest.MapFS, a fstest.MapFS, _ *report) { a["example/coverage.out"].Data = []byte("invalid") }},
 		{"empty file inventory", func(_ fstest.MapFS, _ fstest.MapFS, r *report) { r.CoverageFiles = nil }},
 		{"file count mismatch", func(_ fstest.MapFS, _ fstest.MapFS, r *report) {
-			r.CoverageFiles["pkg/hostmeta/example.go"] = [2]int64{19, 20}
+			r.CoverageFiles["pkg/hostdata/example.go"] = [2]int64{19, 20}
 		}},
 		{"total mismatch", func(_ fstest.MapFS, _ fstest.MapFS, r *report) { r.Covered = 19 }},
 		{"source absent from manifest", func(s fstest.MapFS, _ fstest.MapFS, r *report) {
-			r.Sources["other.go"] = r.Sources["pkg/hostmeta/example.go"]
-			s["other.go"] = s["pkg/hostmeta/example.go"]
-			delete(r.Sources, "pkg/hostmeta/example.go")
+			r.Sources["other.go"] = r.Sources["pkg/hostdata/example.go"]
+			s["other.go"] = s["pkg/hostdata/example.go"]
+			delete(r.Sources, "pkg/hostdata/example.go")
 		}},
 	}
 	for _, tc := range cases {

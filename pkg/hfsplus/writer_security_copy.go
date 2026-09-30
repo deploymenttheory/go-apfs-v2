@@ -1,10 +1,11 @@
 package hfsplus
 
 import (
+	"os"
+
 	"github.com/deploymenttheory/go-apfs-v2/internal/imageacl"
 	"github.com/deploymenttheory/go-apfs-v2/internal/unixmode"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
-	"os"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 )
 
 // CopySecurity stages ordinary security copying from an independently captured
@@ -19,7 +20,7 @@ import (
 // Volume policy can be precaptured or queried through options.VolumePolicy.
 // Providers must not mutate the tree. Exclude concurrent tree mutation.
 // A subsequent deferred RestoreACL replaces the merged ACL.
-func (root *Entry) CopySecurity(target *Entry, source hostmeta.SecurityCopySource, options hostmeta.SecurityCopyOptions) (hostmeta.SecurityCopyResult, error) {
+func (root *Entry) CopySecurity(target *Entry, source hostdata.SecurityCopySource, options hostdata.SecurityCopyOptions) (hostdata.SecurityCopyResult, error) {
 	return imageacl.Copy(root, target, source, options, (*Entry).imageSecurityNode, applySecurityCopy)
 }
 
