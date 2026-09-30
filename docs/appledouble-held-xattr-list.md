@@ -62,7 +62,12 @@ comes from the filesystem. Linux uses `flistxattr` and its native namespace rule
 An `O_PATH` handle is rejected by that native operation without a path fallback.
 Windows retains the names supplied by the kernel, including their raw byte
 representation. Existing named Windows reads accept the documented ASCII subset;
-listing does not silently discard names outside that subset.
+listing does not silently discard names outside that subset. Native Windows
+qualification accepts a 254-byte name and rejects a 255-byte name without
+changing existing metadata. Named operations enforce that same boundary,
+consistent with the [EA name specification](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-fscc/0eb94f48-6aac-41df-a878-79f4dcfd8989).
+The decoder's buffer still accommodates the full wire field range; it never
+truncates an enumerated name.
 
 This primitive does not equate Windows EAs or Linux attributes with Darwin
 metadata. In particular, NTFS cannot retain a present-empty EA, and native name

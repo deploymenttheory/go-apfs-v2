@@ -85,7 +85,7 @@ func TestStrictXattrListWindowsNative(t *testing.T) {
 			if names, e := ListXattrNames(f, 0); e != nil || names == nil || len(names) != 0 {
 				t.Fatal(names, e)
 			}
-			fixtures := []string{"user.z", "user.Alpha", "USER.NUMBER_1", "user.empty", strings.Repeat("n", 255)}
+			fixtures := []string{"user.z", "user.Alpha", "USER.NUMBER_1", "user.empty", strings.Repeat("n", 254)}
 			for _, n := range fixtures {
 				strictWindowsSet(t, path, n, []byte{1})
 			}
@@ -193,4 +193,27 @@ func TestStrictXattrListWindowsStatuses(t *testing.T) {
 			t.Fatal("lost status", e)
 		}
 	}
+}
+
+func TestStrictXattrListWindowsNameBoundary(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "boundary")
+	file := strictWindowsFile(t, path)
+	accepted, refused := strings.Repeat("a", 254), strings.Repeat("b", 255)
+	strictWindowsSet(t, path, accepted, []byte("keep"))
+	before := strictListWindowsOracle(t, path)
+	if err := strictWindowsSetResult(t, path, refused, []byte("reject")); !errors.Is(err, windows.STATUS_INVALID_EA_NAME) {
+		t.Fatalf("255-byte native name: %T %v", err, err)
+	}
+	if _, _, err := XattrSize(file, refused); !errors.Is(err, os.ErrInvalid) {
+		t.Fatal("255-byte named query", err)
+	}
+	after, err := ListXattrNames(file, MaxXattrListSize)
+	if err != nil || !reflect.DeepEqual(before, after) {
+		t.Fatal("failed set changed namespace", before, after, err)
+	}
+	value, present, err := ReadXattr(file, accepted, 4)
+	if err != nil || !present || string(value) != "keep" {
+		t.Fatal(value, present, err)
+	}
+	t.Log("254-byte native name accepted and readable; 255-byte native name refused without changing metadata")
 }

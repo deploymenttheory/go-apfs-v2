@@ -70,7 +70,7 @@ attributes through the supported `NtCreateFile`, `NtQueryEaFile` and `NtSetEaFil
 wrappers. Path opens use `FILE_FLAG_OPEN_REPARSE_POINT`; held-object opens use an
 empty relative name without looking up `File.Name`. Access is checked against the
 current DACL, without backup privilege. Files, directories and held symbolic links
-are supported. Named EA operations accept case-insensitive ASCII names up to 255 bytes, with
+are supported. Named EA operations accept case-insensitive ASCII names up to 254 bytes, with
 Windows name restrictions; values follow native EA storage limits. Assigning zero
 length deletes a native EA, so NTFS cannot store a present-empty EA. Removal
 queries presence before deletion on the same handle; concurrent mutation is not

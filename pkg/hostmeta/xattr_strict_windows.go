@@ -10,7 +10,7 @@ import (
 )
 
 func windowsXattrName(name string) error {
-	if len(name) == 0 || len(name) > 255 || strings.ContainsAny(name, `\/:*?"<>|,+=[];`) {
+	if len(name) == 0 || len(name) >= 255 || strings.ContainsAny(name, `\/:*?"<>|,+=[];`) {
 		return os.ErrInvalid
 	}
 	for _, c := range []byte(name) {

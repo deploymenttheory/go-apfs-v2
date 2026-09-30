@@ -18,6 +18,13 @@ import (
 // implementation's query/removal path. Failure is fatal on the Windows runner.
 func strictWindowsSet(t *testing.T, path, name string, value []byte) {
 	t.Helper()
+	if err := strictWindowsSetResult(t, path, name, value); err != nil {
+		t.Fatalf("native set %s: %v", name, err)
+	}
+}
+
+func strictWindowsSetResult(t *testing.T, path, name string, value []byte) error {
+	t.Helper()
 	p, err := windows.UTF16PtrFromString(path)
 	if err != nil {
 		t.Fatal(err)
@@ -32,9 +39,7 @@ func strictWindowsSet(t *testing.T, path, name string, value []byte) {
 	binary.LittleEndian.PutUint16(record[6:], uint16(len(value)))
 	copy(record[8:], name)
 	copy(record[9+len(name):], value)
-	if err := windows.NtSetEaFile(h, &windows.IO_STATUS_BLOCK{}, &record[0], uint32(len(record))); err != nil {
-		t.Fatalf("native set %s: %v", name, err)
-	}
+	return windows.NtSetEaFile(h, &windows.IO_STATUS_BLOCK{}, &record[0], uint32(len(record)))
 }
 
 func strictWindowsFile(t *testing.T, path string) *os.File {
@@ -254,7 +259,7 @@ func TestStrictXattrWindowsNoFollow(t *testing.T) {
 }
 
 func TestStrictXattrWindowsProtocol(t *testing.T) {
-	for _, name := range []string{"", "bad:name", "bad\x00name", "bad\x1fname", "世界", strings.Repeat("a", 256)} {
+	for _, name := range []string{"", "bad:name", "bad\x00name", "bad\x1fname", "世界", strings.Repeat("a", 255), strings.Repeat("a", 256)} {
 		if err := windowsXattrName(name); !errors.Is(err, os.ErrInvalid) {
 			t.Fatal(name, err)
 		}
