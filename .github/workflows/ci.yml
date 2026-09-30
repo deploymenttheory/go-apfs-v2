@@ -243,6 +243,17 @@ jobs:
           name: image-stat-coverage-${{ matrix.os }}
           path: artifacts/image-stat-coverage/
           if-no-files-found: error
+      - name: Portable copy pipeline ordering and coverage above 95%
+        env:
+          CGO_ENABLED: "0"
+        run: go run scripts/verify-copy-pipeline-coverage.go
+      - name: Upload copy pipeline coverage
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: copy-pipeline-coverage-${{ matrix.os }}
+          path: artifacts/copy-pipeline-coverage/
+          if-no-files-found: error
       - name: Portable ordered stat restoration and coverage above 95%
         env:
           CGO_ENABLED: "0"
@@ -350,6 +361,18 @@ jobs:
         with:
           name: security-source
           path: artifacts/security-source/
+          if-no-files-found: error
+      - name: Native copy pipeline ordering comparisons
+        if: runner.os == 'macOS'
+        env:
+          CGO_ENABLED: "0"
+        run: go run scripts/verify-copy-pipeline.go
+      - name: Upload native copy pipeline evidence
+        if: always() && runner.os == 'macOS'
+        uses: actions/upload-artifact@v7
+        with:
+          name: copy-pipeline
+          path: artifacts/copy-pipeline/
           if-no-files-found: error
       - name: Native ordered stat restoration comparisons
         if: runner.os == 'macOS'

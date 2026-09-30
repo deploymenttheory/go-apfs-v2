@@ -168,8 +168,8 @@ in both readers/writers and snapshot rebuilding on all three OSes. Native HFS
 catalog normalization and tracked document-ID allocation are qualified across
 four images. IDs identify the new volume; original document identity, general
 FinderInfo restoration and special object semantics remain separate work. The
-next step is binding these metadata fields to ordered restoration, not releasing
-APFS or changing package PR72's dependency.
+stat binding is implemented below; the complete provider lifecycle still gates
+release and package PR72's dependency update.
 
 [Ordered image stat staging](appledouble-image-stat.md) now binds the shared
 executor to both writer trees, with explicit destination times, alias agreement
@@ -177,3 +177,11 @@ and publication only after all staged operations succeed. Native model requests
 and 580 mounted-image observations qualify the stored output on all three OSes.
 Live authorization/timestamp effects, source/host bindings and the complete
 restoration lifecycle remain open; this does not ready package PR72.
+
+The [inner copy coordinator](appledouble-copy-pipeline.md) now owns route
+precedence, ordinary quarantine/xattrs/data/security/stat ordering, callback
+termination and pack/data failure cleanup. Pack/unpack remain explicit provider
+boundaries; unpack's deferred ACL runs before its final stat. Native controlled
+observations and real image-API composition replay on all three OSes. Held host
+providers, unpack internals and the outer creation/permission-restoration/close
+lifecycle remain outstanding. All five roadmap gates remain open.

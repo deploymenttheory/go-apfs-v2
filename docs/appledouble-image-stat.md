@@ -8,7 +8,8 @@ APIs to the existing stat policy without duplicating that policy in each writer.
 The implementation is pure Go on Linux, macOS and Windows.
 
 Use it when assembling a metadata-restoration pipeline after ordinary security
-copying. AppleDouble's deferred ACL replacement remains a separate later step.
+copying. The separate AppleDouble unpack route applies its deferred ACL
+replacement **before** this final stat stage. See [route ordering](appledouble-copy-pipeline.md).
 This component does not create the complete restoration lifecycle automatically.
 
 ## Use and publication
@@ -111,8 +112,9 @@ three OSes, checks the four image hashes, rejects skipped focused tests and
 requires above 95% coverage in each new production file. Current coverage is
 **68/68 statements (100%)**, with **618 passing test records**. Tests additionally
 cover failed staging with no publication, alias conflicts, sentinel ownership,
-unknown volume policy, explicit root mode zero and subsequent deferred ACL
-replacement. Existing flag/timestamp-image and legacy layout hashes remain gates.
+unknown volume policy, explicit root mode zero and independent ACL/stat
+metadata preservation. That preservation test is not a native unpack sequence.
+Existing flag/timestamp-image and legacy layout hashes remain gates.
 
 The pinned source provenance is shared with [stat execution](appledouble-stat-copy.md)
 and [image security capture](appledouble-image-security.md). Native helpers are
@@ -120,8 +122,9 @@ qualification-only; production has no C or macOS dependency.
 
 ## Remaining work
 
-Source/host/provider bindings, creation inheritance and the complete ordered
-security/stat/xattr/deferred-ACL/cleanup lifecycle still need integration. Live
+Source/host/provider bindings, creation inheritance and the outer copy lifecycle
+still need integration. Ordinary copy runs quarantine,
+xattrs, data, security and stat; unpack owns its deferred ACL-before-stat route. Live
 kernel timestamp side effects and authorization are not implemented by offline
 staging. Shared carriers, quarantine contexts, large values/allocation and final
 consumer qualification remain open. All five AppleDouble roadmap gates remain

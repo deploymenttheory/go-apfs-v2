@@ -193,7 +193,10 @@ func TestImageStatNativeReplay(t *testing.T) {
 		})
 	}
 }
-func TestImageStatAPIBindingAndLifecycle(t *testing.T) {
+
+// This checks that the independent APIs preserve unselected metadata. It does
+// not prescribe unpack ordering: native unpack applies its ACL before stat.
+func TestImageStatAPIBindingAndMetadataIndependence(t *testing.T) {
 	for _, hfs := range []bool{false, true} {
 		t.Run(fmt.Sprint(hfs), func(t *testing.T) {
 			times := imagestat.InitialTimes()

@@ -151,7 +151,7 @@ of this roadmap delivered. These phases are not estimates of remaining PR count.
 
 | Phase | Current state | Completion gate |
 | --- | --- | --- |
-| 1. ACL application | Source acquisition, image copying, volume policy, independent image timestamps/flags and ordered stat staging implemented; host bindings and lifecycle integration remain | Source acquisition, authorization, actual writes and restoration ordering qualified together |
+| 1. ACL application | Source acquisition, image copying, volume policy, independent image timestamps/flags, ordered stat staging and inner copy routing implemented; providers and outer lifecycle remain | Source acquisition, authorization, actual writes and restoration ordering qualified together |
 | 2. Quarantine | Conversion and much of application policy implemented; context/integration gaps open | Remaining process contexts and ordered restoration qualify against native behavior |
 | 3. Large values and allocation | Known native differences remain | Oversized values, aggregates, forks and allocation policy have explicit, tested behavior |
 | 4. Shared filesystem transport | Host primitives and exact image permissions available; complete metadata transport outstanding | APFS/HFS+ extract-and-repack preserves logical metadata on all three OSes |
@@ -217,17 +217,26 @@ of this roadmap delivered. These phases are not estimates of remaining PR count.
    and format validation prevent ambiguous or partially published metadata. Native
    policy requests and 580 image observations qualify the stored result; live
    kernel authorization and timestamp side effects remain separate work.
+   [Inner copy routing](../../docs/appledouble-copy-pipeline.md) now coordinates
+   pack/unpack precedence and ordinary quarantine, xattrs, data, security and
+   stat stages. Native return codes, callback termination and selective cleanup
+   qualify against the complete unchanged Apple function in 2,316 cases. Both
+   writer APIs compose through this coordinator with identical direct/staged
+   image hashes on all three OSes. The unpack delegate still owns its internal
+   deferred ACL-before-stat sequence; this is not a complete unpack provider.
    **Remaining:** native host write
    adapters, live host source acquisition,
-   privileged/sandbox authorization contexts and full restoration ordering.
+   privileged/sandbox authorization contexts, unpack internals and outer
+   creation/permission-restoration/close lifecycle.
    [Owner/non-owner image tests](../../docs/appledouble-acl-nonowner.md) qualify
    ordinary-user APFS/HFSX grants and denials and fix HFS security catalog flags.
    The request builder is not a completed native backend; foreign metadata carriers are integrated
    in phase 4.
 
    **Next implementation:** bind held native/foreign host metadata and destination
-   write adapters to ordered restoration, including creation inheritance, ordinary security copying,
-   the implemented stat stage, xattrs, deferred AppleDouble replacement and cleanup. Keep one
+   write adapters to these routes, including creation inheritance, xattr/data
+   transport and unpack's deferred ACL-before-stat sequence. Integrate outer
+   permission restoration and resource cleanup. Keep one
    pure-Go implementation on Linux, macOS and Windows.
 2. **Quarantine context and transport qualification.** Implemented: serialized
    and filesystem conversion, ordered updates, application planning, raw
