@@ -121,20 +121,15 @@ func removeVisibleXattrPath(path, name string) error {
 }
 
 func removeWindowsXattr(handle windows.Handle, name string) error {
-	// Kernel EAs silently ignore user-mode updates. Reject that namespace before
-	// attempting mutation so success can never claim deletion of a protected EA.
-	if strings.HasPrefix(strings.ToUpper(name), "$KERNEL.") {
-		return windows.ERROR_ACCESS_DENIED
+	if err := windowsXattrWriteName(name); err != nil {
+		return err
 	}
 	// Native deletion succeeds even for a missing name. Query this same handle
 	// first to preserve removed-versus-absent. Concurrent mutation is not atomic.
 	if _, err := queryWindowsXattr(handle, name, nil); err != nil {
 		return err
 	}
-	record := make([]byte, 9+len(name))
-	record[5] = byte(len(name))
-	copy(record[8:], name)
-	return windows.NtSetEaFile(handle, &windows.IO_STATUS_BLOCK{}, &record[0], uint32(len(record)))
+	return assignWindowsXattr(handle, name, nil)
 }
 
 func missingXattr(err error) bool {

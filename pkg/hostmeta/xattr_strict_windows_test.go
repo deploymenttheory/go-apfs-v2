@@ -368,6 +368,7 @@ func TestStrictXattrWindowsPermissionErrors(t *testing.T) {
 		}
 	}()
 	for name, op := range map[string]func() error{
+		"descriptor-set":    func() error { return SetXattr(file, "user.strict", []byte("reject")) },
 		"descriptor-list":   func() error { _, err := ListXattrNames(file, MaxXattrListSize); return err },
 		"descriptor-size":   func() error { _, _, err := XattrSize(file, "user.strict"); return err },
 		"descriptor-read":   func() error { _, _, err := ReadXattr(file, "user.strict", 4); return err },

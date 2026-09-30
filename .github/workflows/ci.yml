@@ -118,6 +118,16 @@ jobs:
           name: strict-xattrs-${{ matrix.os }}
           path: artifacts/strict-xattrs/
           if-no-files-found: error
+      - name: Native held xattr writes and Clang comparisons
+        if: runner.os == 'macOS'
+        run: go run scripts/verify-xattr-write-native.go
+      - name: Upload native held xattr write evidence
+        if: always() && runner.os == 'macOS'
+        uses: actions/upload-artifact@v7
+        with:
+          name: held-xattr-write
+          path: artifacts/held-xattr-write/
+          if-no-files-found: error
       - name: Native held xattr listing and Clang comparisons
         if: runner.os == 'macOS'
         run: go run scripts/verify-xattr-list-native.go
