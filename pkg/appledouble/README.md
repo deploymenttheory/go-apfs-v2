@@ -86,6 +86,11 @@ full AppleDouble transport integration is on the roadmap below.
   modification/access times, ownership, permissions and BSD flags. All aliases
   publish together after validation; failed staging leaves the tree unchanged.
   See [image stat staging](../../docs/appledouble-image-stat.md).
+- **Ordered unpack execution:** `hostmeta.RestoreAppleDouble` decodes a captured
+  sidecar before destination changes, then executes cleanup, ordered records,
+  dedicated FinderInfo/fork slots, deferred ACL and final stat through held
+  providers. Native return codes remain separate from retained failures. See
+  [unpack restoration](../../docs/appledouble-unpack-restoration.md).
 - **Source identity capture and replay:** `NewACLIdentityCapture` records the
   source callbacks used during parsing and formatting. Its serializable snapshot
   supplies immutable resolvers on any supported OS, preserving confirmed absence
@@ -151,7 +156,7 @@ of this roadmap delivered. These phases are not estimates of remaining PR count.
 
 | Phase | Current state | Completion gate |
 | --- | --- | --- |
-| 1. ACL application | Source acquisition, image copying, volume policy, independent image timestamps/flags, ordered stat staging, inner copy routing and ordinary xattr/image execution implemented; full unpack and host providers remain | Source acquisition, authorization, actual writes and restoration ordering qualified together |
+| 1. ACL application | Source/image policies, stat staging, copy routing and validated unpack ordering implemented; production held providers and outer lifecycle remain | Source acquisition, authorization, actual writes and restoration ordering qualified together |
 | 2. Quarantine | Conversion and much of application policy implemented; context/integration gaps open | Remaining process contexts and ordered restoration qualify against native behavior |
 | 3. Large values and allocation | Known native differences remain | Oversized values, aggregates, forks and allocation policy have explicit, tested behavior |
 | 4. Shared filesystem transport | Host primitives and exact image permissions available; complete metadata transport outstanding | APFS/HFS+ extract-and-repack preserves logical metadata on all three OSes |
@@ -230,21 +235,32 @@ of this roadmap delivered. These phases are not estimates of remaining PR count.
    applied write, and HFS resource forks use their existing catalog storage.
    4,088 controlled cases and 180 native applications qualify the executor;
    all three OSes replay those observations and reproduce four image hashes.
+   [Validated unpack execution](../../docs/appledouble-unpack-restoration.md)
+   now orders destination cleanup, wire records, dedicated FinderInfo/resource
+   slots, deferred ACL and final stat. It retains ignored/masked failures and
+   preserves the separate slot callback rules. Complete pinned Apple functions
+   qualify 1,907 controlled cases and 96 live scenarios, with 192 verified
+   removals and 89 read-back-verified writes. Existing image APIs compose through
+   the executor and produce identical direct/coordinated bytes on all three OSes.
+   Input decoding finishes before cleanup; native partial mutation from a late
+   malformed read, streaming allocation and production held providers are not
+   claimed by this snapshot executor.
    **Remaining:** native host write
    adapters, live host source acquisition,
-   privileged/sandbox authorization contexts, unpack internals and outer
+   privileged/sandbox authorization contexts, unpack provider bindings and outer
    creation/permission-restoration/close lifecycle.
    [Owner/non-owner image tests](../../docs/appledouble-acl-nonowner.md) qualify
    ordinary-user APFS/HFSX grants and denials and fix HFS security catalog flags.
    The request builder is not a completed native backend; foreign metadata carriers are integrated
    in phase 4.
 
-   **Next implementation:** integrate destination-xattr cleanup and ordered
-   record dispatch with the existing ordinary xattr, quarantine, security and stat
-   stages. The unpack provider must preserve separate FinderInfo/resource-fork
-   slot rules and deferred ACL-before-stat ordering. Held host/foreign carriers,
-   creation inheritance, outer permission restoration and resource cleanup remain
-   required, with one pure-Go implementation on Linux, macOS and Windows.
+   **Next implementation:** bind the validated unpack executor to production
+   held destinations and foreign-metadata carriers. Qualify visible xattr listing
+   (including hidden compression/security metadata), deletion, quarantine state
+   at each record, ACL application and timestamp restoration as one transport.
+   Keep the same logical capability on Linux, macOS and Windows. Creation
+   inheritance, outer permission restoration, resource cleanup and the streaming
+   allocation/error boundary remain required before end-to-end qualification.
 2. **Quarantine context and transport qualification.** Implemented: serialized
    and filesystem conversion, ordered updates, application planning, raw
    destination-state handling and file/directory/symlink destination policy.
