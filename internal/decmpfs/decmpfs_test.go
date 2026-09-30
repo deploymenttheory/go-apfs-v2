@@ -194,6 +194,8 @@ func TestZlibResourceForkManyBlocksIsAnError(t *testing.T) {
 // recognized but deliberately refused.
 func TestMethodFor(t *testing.T) {
 	supported := map[uint32]int{
+		1: MethodNone,
+		9: MethodRawMarked, 10: MethodRawMarked, 13: MethodLZBITMAP, 14: MethodLZBITMAP,
 		3:  MethodDeflate,
 		4:  MethodDeflate,
 		7:  MethodLZVN,
@@ -209,25 +211,6 @@ func TestMethodFor(t *testing.T) {
 		}
 		if got != want {
 			t.Errorf("type %d mapped to method %d, want %d", decmpfsType, got, want)
-		}
-	}
-
-	// Recognized but not decoded. Each names itself, so the error tells the
-	// caller which format it met rather than just "unsupported".
-	for decmpfsType, want := range map[uint32]string{
-		1:  "uncompressed inline",
-		9:  "uncompressed",
-		10: "uncompressed",
-		13: "LZBITMAP",
-		14: "LZBITMAP",
-	} {
-		_, err := MethodFor(decmpfsType)
-		if err == nil {
-			t.Errorf("type %d was accepted, want a refusal", decmpfsType)
-			continue
-		}
-		if !strings.Contains(err.Error(), want) {
-			t.Errorf("type %d: error %q does not mention %q", decmpfsType, err, want)
 		}
 	}
 
@@ -250,13 +233,13 @@ func TestMethodFor(t *testing.T) {
 // for a method with no decoder behind it -- including MethodUnknown5, which is
 // retained only as a deprecated alias.
 func TestNewHandleRejectsUndecodableMethods(t *testing.T) {
-	for _, method := range []int{MethodNone, MethodUnknown5, 42} {
+	for _, method := range []int{MethodUnknown5, 42} {
 		if _, err := NewHandle(&memSource{data: []byte("fpmc")}, 64, method); err == nil {
 			t.Errorf("method %d was accepted, want a refusal", method)
 		}
 	}
 
-	for _, method := range []int{MethodDeflate, MethodLZVN, MethodLZFSE} {
+	for _, method := range []int{MethodRawMarked, MethodLZBITMAP, MethodDeflate, MethodLZVN, MethodLZFSE} {
 		if _, err := NewHandle(&memSource{data: []byte("fpmc")}, 64, method); err != nil {
 			t.Errorf("method %d was refused: %v", method, err)
 		}

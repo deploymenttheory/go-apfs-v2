@@ -61,9 +61,14 @@ func NewHandle(
 	}
 
 	switch compressionMethod {
-	case MethodDeflate, MethodLZVN, MethodLZFSE:
+	case MethodNone, MethodRawMarked, MethodLZBITMAP, MethodDeflate, MethodLZVN, MethodLZFSE:
 	default:
 		return nil, fmt.Errorf("unsupported compression method: %d", compressionMethod)
+	}
+	if compressionMethod == MethodNone {
+		if err := validateRawSource(compressedDataStream, uncompressedDataSize); err != nil {
+			return nil, err
+		}
 	}
 
 	handle := &Handle{
@@ -161,7 +166,7 @@ func (cdh *Handle) loadCompressedBlockOffsets() error {
 		segmentDataOffset = 264
 		compressedDescriptorsOffset += 4
 		compressedBlockDescriptorSize = 8
-	} else if cdh.CompressionMethod == MethodLZVN ||
+	} else if cdh.CompressionMethod == MethodLZVN || cdh.CompressionMethod == MethodRawMarked || cdh.CompressionMethod == MethodLZBITMAP ||
 		cdh.CompressionMethod == MethodLZFSE {
 		// LZVN and LZFSE resource forks share one block-table layout, and it
 		// differs from zlib's: a flat array of little-endian uint32 at offset 0

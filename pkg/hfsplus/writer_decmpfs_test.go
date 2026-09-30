@@ -143,12 +143,6 @@ func TestWriteRejectsInconsistentDecmpfs(t *testing.T) {
 			"which is absent",
 		},
 		{
-			"an inline type that also has a resource fork",
-			Entry{Name: "confused.txt", Mode: 0o644, ResourceFork: []byte("a fork as well"),
-				Xattrs: map[string][]byte{decmpfsAttrName: hfsInlineDecmpfs(hfsDecmpfsPayload)}},
-			"stores its data inline",
-		},
-		{
 			"an attribute with no fpmc header",
 			Entry{Name: "headerless.txt", Mode: 0o644,
 				Xattrs: map[string][]byte{decmpfsAttrName: []byte("not a decmpfs attribute")}},

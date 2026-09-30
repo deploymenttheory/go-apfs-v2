@@ -4,7 +4,6 @@ package hostmeta
 
 import (
 	"sort"
-	"strings"
 
 	"golang.org/x/sys/unix"
 )
@@ -47,17 +46,6 @@ func ListXattrs(path string) (map[string][]byte, error) {
 		attrs[name] = value
 	}
 	return attrs, nil
-}
-
-// splitNames turns a NUL-separated listxattr buffer into names.
-func splitNames(buf []byte) []string {
-	var names []string
-	for name := range strings.SplitSeq(string(buf), "\x00") {
-		if name != "" {
-			names = append(names, name)
-		}
-	}
-	return names
 }
 
 // isUnsupported reports whether err means "this file system has no extended

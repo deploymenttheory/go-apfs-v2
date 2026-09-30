@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
 )
 
@@ -180,6 +181,10 @@ type Entry struct {
 	// Data is the file content for a regular file (any size, may be empty), or
 	// the target path for a symbolic link.
 	Data []byte
+	// DataValue streams a regular file's contents. It conflicts with non-nil
+	// Data, including empty Data. The caller keeps it immutable and open through
+	// CreateContainer; the writer never closes it.
+	DataValue appledouble.Value
 	// Xattrs are the entry's extended attributes. Small values are stored
 	// inside their attribute record; larger ones, and any resource fork, get a
 	// data stream of their own.
@@ -187,6 +192,10 @@ type Entry struct {
 	// The com.apple.fs.symlink name is reserved: it is how APFS stores a
 	// symbolic link's target, and the writer emits it itself.
 	Xattrs map[string][]byte
+	// XattrValues supplies borrowed immutable values without materializing large
+	// attributes or forks. Names must not also appear in Xattrs; nil values fail.
+	// Values remain open through CreateContainer and are never closed by it.
+	XattrValues map[string]appledouble.Value
 	// Children are the entries contained in a directory.
 	Children []*Entry
 
@@ -271,6 +280,8 @@ type builderEntry struct {
 
 	// Regular files with content (non-empty streams).
 	data        []byte
+	dataValue   appledouble.Value
+	valueSize   uint64
 	hasStream   bool   // true for every regular file (has a DSTREAM xfield + DSTREAM_ID record)
 	dataBlock   uint64 // physical block number of the first content block (0 if empty)
 	blocks      uint64 // number of allocation blocks in the file's extent (0 for a 0-byte file)
@@ -361,9 +372,17 @@ func CreateContainer(w io.WriterAt, sizeBytes int64, opts *CreateOptions) error 
 		// fixed metadata, block-aligned, with headroom for the pool and
 		// checkpoint areas.
 		var payload uint64
+		maxBlocks := uint64(^uint64(0)>>1) / uint64(b.blocksize)
 		for i := range uint64(len(b.vols)) {
 			v := b.vol(i)
-			payload += v.fsTreeNodes + v.extentrefNodes + v.omapNodes + v.fileDataBlocks + v.snapBlocks
+			blocks := v.fsTreeNodes + v.extentrefNodes + v.omapNodes + v.fileDataBlocks + v.snapBlocks
+			if blocks > maxBlocks-payload {
+				return fmt.Errorf("apfswrite: aggregate payload exceeds image offset range")
+			}
+			payload += blocks
+		}
+		if payload/8+2048 > maxBlocks-payload {
+			return fmt.Errorf("apfswrite: automatic image size exceeds offset range")
 		}
 		needBlocks := payload + payload/8 + 2048
 		sizeBytes = max(int64(needBlocks)*int64(b.blocksize), minBytes)

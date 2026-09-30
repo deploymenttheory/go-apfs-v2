@@ -3,6 +3,8 @@
 package cli
 
 import (
+	"context"
+	"errors"
 	"fmt"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfswrite"
@@ -10,7 +12,7 @@ import (
 )
 
 // packDirectoryAPFS builds an APFS container from srcDir and wraps it in a DMG.
-func packDirectoryAPFS(srcDir, dstPath, volname string, encOpts *disk.EncodeOptions) error {
+func packDirectoryAPFS(ctx context.Context, srcDir, dstPath, volname string, encOpts *disk.EncodeOptions) (result error) {
 	containerUUID, volumeUUID, err := packUUIDs.resolve()
 	if err != nil {
 		return err
@@ -29,14 +31,18 @@ func packDirectoryAPFS(srcDir, dstPath, volname string, encOpts *disk.EncodeOpti
 	}
 
 	// Walk before writing, so --strict can refuse without leaving a file behind.
-	root, report, err := apfswrite.EntryTreeFromDir(srcDir, &apfswrite.WalkOptions{
-		Xattrs:     true,
-		Decompress: packDecompress,
-		Warn:       fidelityWarner(),
+	tree, err := apfswrite.OpenEntryTreeFromDir(srcDir, &apfswrite.WalkOptions{
+		Context:      ctx,
+		MetadataRoot: packMetadataRoot,
+		Xattrs:       true,
+		Decompress:   packDecompress,
+		Warn:         fidelityWarner(),
 	})
 	if err != nil {
 		return fmt.Errorf("unable to read %s: %w", srcDir, err)
 	}
+	defer func() { result = errors.Join(result, tree.Close()) }()
+	root, report := tree.Root, tree.Report
 	if err := enforceStrict(report, packStrict, srcDir); err != nil {
 		return err
 	}

@@ -182,7 +182,7 @@ func (v *Volume) OpenRead(reader io.ReaderAt, fileOffset int64) error {
 		objectMapBTree,
 		fileSystemRootObjectID,
 		v.Superblock.XID, // Volume's transaction ID
-		true,             // Use case folding
+		v.Superblock.IncompatibleFeaturesFlags&VolumeIncompatCaseInsensitive != 0,
 	)
 	v.FileSystemBTree = fileSystemBTree
 

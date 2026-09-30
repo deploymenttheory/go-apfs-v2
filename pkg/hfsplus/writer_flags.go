@@ -1,6 +1,7 @@
 package hfsplus
 
 import (
+	"encoding/binary"
 	"fmt"
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/bsdflags"
@@ -15,6 +16,11 @@ func (b *builder) prepareBSDFlags() error {
 		flags, err := bsdflags.Select(n.entry.BSDFlags, compressedFlag(n) != 0, true)
 		if err != nil {
 			return fmt.Errorf("hfsplus: %s: %w", n.name, err)
+		}
+		if n.entry.BSDFlags == nil {
+			if finder := n.entry.Xattrs[finderInfoName]; len(finder) == 32 && binary.BigEndian.Uint16(finder[8:10])&0x4000 != 0 {
+				flags |= 0x8000
+			}
 		}
 		n.bsdFlags = flags
 	}

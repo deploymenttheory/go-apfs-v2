@@ -1,15 +1,23 @@
 package hfsplus
 
 import (
+	"context"
 	"strings"
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/hostwalk"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/fidelity"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/metatransport"
 )
 
 // WalkOptions tunes EntryTreeFromDir.
 type WalkOptions struct {
+	// MetadataRoot explicitly selects a separate managed carrier for preservation.
+	MetadataRoot   string
+	MetadataLimits *metatransport.Limits
+	CaptureLimits  *hostmeta.XattrCaptureLimits
+	Context        context.Context
 	// Xattrs reads each entry's extended attributes so they can be counted,
 	// and carried when this writer can represent them. It costs a syscall or
 	// two per entry, so it is opt-in; without it the report says nothing about
@@ -51,16 +59,7 @@ type WalkOptions struct {
 // reported as dropped. Several names for one file are written as hard links to
 // one copy of the content, rather than as copies.
 func EntryTreeFromDir(srcDir string, opts *WalkOptions) (*Entry, *fidelity.Report, error) {
-	var o hostwalk.Options
-	if opts != nil {
-		o = hostwalk.Options{
-			Xattrs:      opts.Xattrs,
-			Compression: !opts.Decompress,
-			Warn:        opts.Warn,
-			Keep:        CanWriteXattr,
-			HardLinks:   true,
-		}
-	}
+	o := walkOptions(opts)
 
 	root, report, err := hostwalk.Walk(srcDir, &o, newEntry)
 	if err != nil {
@@ -90,17 +89,22 @@ func CanWriteXattr(name string, value []byte) bool {
 // newEntry builds one HFS+ Entry from the walker's platform-neutral node.
 func newEntry(n hostwalk.Node, children []*Entry) *Entry {
 	return &Entry{
-		Name:         n.Name,
-		Mode:         n.Mode,
-		ModeExplicit: n.Name != "", // The anonymous root is synthetic, not captured metadata.
-		ModTime:      n.ModTime,
-		UID:          n.UID,
-		GID:          n.GID,
-		Data:         n.Data,
-		ResourceFork: n.Xattrs[hostmeta.ResourceForkName],
-		Xattrs:       attrsWithoutResourceFork(n.Xattrs),
-		LinkGroup:    n.LinkGroup,
-		Children:     children,
+		Name:              n.Name,
+		Mode:              n.Mode,
+		ModeExplicit:      n.Name != "" || n.ModeExplicit,
+		ModTime:           n.ModTime,
+		Times:             n.Times,
+		BSDFlags:          n.BSDFlags,
+		UID:               n.UID,
+		GID:               n.GID,
+		Data:              n.Data,
+		DataValue:         n.DataValue,
+		ResourceFork:      n.Xattrs[hostmeta.ResourceForkName],
+		ResourceForkValue: n.XattrValues[hostmeta.ResourceForkName],
+		XattrValues:       valuesWithoutResourceFork(n.XattrValues),
+		Xattrs:            attrsWithoutResourceFork(n.Xattrs),
+		LinkGroup:         n.LinkGroup,
+		Children:          children,
 	}
 }
 
@@ -113,6 +117,62 @@ func attrsWithoutResourceFork(attrs map[string][]byte) map[string][]byte {
 		return attrs
 	}
 	out := make(map[string][]byte, len(attrs)-1)
+	for name, value := range attrs {
+		if name != hostmeta.ResourceForkName {
+			out[name] = value
+		}
+	}
+	return out
+}
+
+func walkOptions(opts *WalkOptions) hostwalk.Options {
+	var o hostwalk.Options
+	if opts != nil {
+		o = hostwalk.Options{
+			MetadataRoot:   opts.MetadataRoot,
+			MetadataLimits: opts.MetadataLimits,
+			CaptureLimits:  opts.CaptureLimits,
+			Context:        opts.Context,
+			Xattrs:         opts.Xattrs,
+			Compression:    !opts.Decompress,
+			Warn:           opts.Warn,
+			Keep:           CanWriteXattr,
+			KeepName:       func(name string) bool { return CanWriteXattr(name, nil) },
+			HardLinks:      true,
+		}
+	}
+
+	return o
+}
+
+// EntryTree retains borrowed immutable sources until Close. Keep it open through
+// image creation; exclude concurrent source edits, including same-size edits.
+type EntryTree struct {
+	Root   *Entry
+	Report *fidelity.Report
+	source *hostwalk.Tree[*Entry]
+}
+
+// Close invalidates borrowed values and releases held roots. It is idempotent.
+func (t *EntryTree) Close() error { return t.source.Close() }
+
+// OpenEntryTreeFromDir walks with bounded-memory file and carrier readers. Native
+// attributes still use CaptureLimits. The caller closes the returned tree after
+// writing the image. EntryTreeFromDir remains the owned byte-slice alternative.
+func OpenEntryTreeFromDir(srcDir string, opts *WalkOptions) (*EntryTree, error) {
+	o := walkOptions(opts)
+	tree, err := hostwalk.OpenWalk(srcDir, &o, newEntry)
+	if err != nil {
+		return nil, err
+	}
+	return &EntryTree{Root: tree.Root, Report: tree.Report, source: tree}, nil
+}
+
+func valuesWithoutResourceFork(attrs map[string]appledouble.Value) map[string]appledouble.Value {
+	if _, ok := attrs[hostmeta.ResourceForkName]; !ok {
+		return attrs
+	}
+	out := make(map[string]appledouble.Value, len(attrs)-1)
 	for name, value := range attrs {
 		if name != hostmeta.ResourceForkName {
 			out[name] = value

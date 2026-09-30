@@ -77,8 +77,8 @@ func TestCopyAccessTimeInvalidFiles(t *testing.T) {
 }
 
 func TestCopyAccessTimeUnsupportedHost(t *testing.T) {
-	if runtime.GOOS == "darwin" {
-		t.Skip("Darwin supports access-time copying")
+	if runtime.GOOS == "darwin" || runtime.GOOS == "linux" || runtime.GOOS == "windows" {
+		t.Skip("host supports access-time copying; covered by native tests")
 	}
 	source, target := replacementSource(t, 0600), replacementSource(t, 0600)
 	beforeSource, err := source.Stat()

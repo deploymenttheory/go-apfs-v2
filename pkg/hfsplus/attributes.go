@@ -290,6 +290,10 @@ func (v *Volume) xattrs(e *entry) (map[string][]byte, error) {
 		attrs[name] = value
 	}
 
+	if err := addCatalogFinderInfo(attrs, e); err != nil {
+		return nil, err
+	}
+
 	// The resource fork is a fork of the catalog record on HFS+, but every tool
 	// on the platform reports it as an attribute, so present it as one. Note
 	// this is what makes `extract --xattrs` recover a resource fork, and what

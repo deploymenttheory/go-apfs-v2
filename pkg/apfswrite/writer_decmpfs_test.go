@@ -170,17 +170,6 @@ func TestCreateContainerRejectsInconsistentDecmpfs(t *testing.T) {
 			"which is absent",
 		},
 		{
-			"an inline type that also has a resource fork",
-			apfswrite.Entry{
-				Name: "confused.txt",
-				Xattrs: map[string][]byte{
-					"com.apple.decmpfs":      inlineDecmpfs(decmpfsPayload),
-					"com.apple.ResourceFork": []byte("a fork as well"),
-				},
-			},
-			"stores its data inline",
-		},
-		{
 			"an attribute with no fpmc header",
 			apfswrite.Entry{
 				Name:   "headerless.txt",

@@ -152,158 +152,39 @@ Use `File.Attrs` instead of the map when duplicate record order matters.
 
 ## Roadmap
 
-**Five completion gates remain open: four implementation areas and final
-qualification/release.** Work is currently in ACL application. The codec and
-many policy components are implemented; end-to-end filesystem preservation is
-not complete. Code coverage measures the implemented code, not the percentage
-of this roadmap delivered. These phases are not estimates of remaining PR count.
+The remaining work is one consolidated integration phase. The
+[completion plan](../../docs/appledouble-completion-plan.md) defines the technical
+work and the [completion matrix](../../docs/appledouble-completion-matrix.md)
+tracks its release gates. Component tests alone do not close an integration gate.
 
-| Phase | Current state | Completion gate |
+The architecture has separate operations, without a global compatibility mode:
+
+- The byte codec represents and validates metadata. `Value`, `StreamFile`,
+  `DecodeStream` and `EncodeTo` allow bounded-memory access to large values.
+- `hostmeta.RestoreAppleDouble` validates a complete snapshot before mutation.
+  `RestoreAppleDoubleSequential` instead reads records during restoration, so
+  late input failures can leave earlier native-style effects in place.
+- `metatransport` stores logical metadata in an explicitly selected directory.
+  Its manifest associates original names, payload names and verified blobs;
+  arbitrary `._` files are never automatically treated as metadata.
+- Host adapters perform actual native operations. Portable storage does not
+  imply that Linux or Windows enforces Darwin ACL or quarantine policy.
+
+| Area | Implemented in this integration | Still required before completion |
 | --- | --- | --- |
-| 1. ACL application | Source/image policies, stat staging, copy routing and validated unpack ordering implemented; held native listing and assignment implemented; complete providers and outer lifecycle remain | Source acquisition, authorization, actual writes and restoration ordering qualified together |
-| 2. Quarantine | Conversion and much of application policy implemented; context/integration gaps open | Remaining process contexts and ordered restoration qualify against native behavior |
-| 3. Large values and allocation | Known native differences remain | Oversized values, aggregates, forks and allocation policy have explicit, tested behavior |
-| 4. Shared filesystem transport | Host primitives and exact image permissions available; complete metadata transport outstanding | APFS/HFS+ extract-and-repack preserves logical metadata on all three OSes |
-| 5. Consumers and release | Component CI and downstream checks exist; final gate blocked by phases 1–4 | Qualified APFS release adopted by package tooling before codesign resumes |
+| Codec and allocation | Streaming encode/indexed decode; explicit wire/value budgets; borrowed values and bounded scratch | Fully streaming image endpoints, native pack limits and complete allocation/error qualification |
+| Restoration | Safe snapshot and separately named sequential executors; existing ACL/quarantine/stat policies | Complete held providers, source/process contexts, creation/inheritance, temporary permissions, cleanup and close ordering |
+| Host capture | Strict held and no-follow capture on all three OSes; Darwin hidden storage via libSystem without CGo | End-to-end source acquisition, native projection/readback and privileged/sandbox qualification |
+| Portable transport | Explicit carrier with hashes/generations/conflict detection; extract/repack bindings; roots, names, links and four-time metadata | Complete streaming integration, all host refusal/normalization paths and final native round-trip qualification |
+| Evidence | Existing native corpus, Clang ASTs, macOS image oracles, vendor DMGs and focused coverage; stale-evidence auditor | Full final-revision matrix with greater than 95% coverage and no unexplained mismatches |
+| Consumers | APFS owns the codec and transport; package PR72 remains draft | Qualified APFS release, downstream adoption in PR72, then codesign work |
 
-1. **ACL application and transport.** Implemented: deferred replacement,
-   creation inheritance, [ordinary copy selection](../../docs/appledouble-acl-copy.md),
-   captured identity replay, full security records,
-   [write/retry execution](../../docs/appledouble-acl-restoration.md),
-   [attribute records](../../docs/appledouble-acl-attributes.md) and
-   [extended chmod request preparation](../../docs/appledouble-acl-chmod.md),
-   including [optional properties and removal](../../docs/appledouble-acl-chmod-properties.md),
-   plus [ordinary security execution and fallbacks](../../docs/appledouble-security-copy.md)
-   and [APFS/HFS+ image source capture](../../docs/appledouble-image-security.md).
-   [APFS root metadata writing](../../docs/appledouble-root-metadata.md) retains
-   supplied ownership, permissions, timestamps and security/attribute storage,
-   including root-only volumes and snapshots.
-   [Image permission preservation](../../docs/appledouble-image-modes.md) retains
-   explicit zero modes and set-ID/sticky bits in both writers and readers,
-   including native-qualified roots, symlinks and hard links on all three OSes.
-   Captured child entries keep exact permissions during directory packing and
-   APFS snapshot rebuilding; synthetic roots still use default metadata.
-   Native extended chmod comparisons resolve the measured attribute/copyfile
-   refusal and empty-ACL flag differences for the qualified owner-operated cases.
-   [Deferred image ACL restoration](../../docs/appledouble-image-acl-restoration.md)
-   now stages replacements in both writers, retaining UUID ownership, exact modes
-   and unrelated metadata while updating hard-link aliases together. Written
-   images qualify against real native writes; all three OSes replay the corpus
-   and reproduce the image hashes.
-   [Ordinary image security copying](../../docs/appledouble-image-security-copy.md)
-   now merges explicit/inherited ACL entries, applies selected numeric properties,
-   handles UUID-only removal and retains native set-ID side effects. Raw NOACL
-   source properties produce the native pre-write refusal.
-   [Volume-policy acquisition](../../docs/appledouble-security-copy-volume.md)
-   queries source and destination policy lazily in native order, retains lookup
-   failures separately from write failures, and works through both image writers
-   on all three OSes. Image bytes alone do not establish mount policy.
-   [Source acquisition](../../docs/appledouble-security-source.md) now runs before
-   ordinary copying, retaining descriptor statx/fstat failures and the native
-   source-type gate. `CopySecurityFrom` connects both image readers to both
-   writers without a host-dependent capture path; all 16 filesystem combinations
-   reproduce manually captured output. This is the shared acquisition coordinator
-   and image binding; live native host read/write providers remain outstanding.
-   [Independent image timestamps](../../docs/appledouble-image-times.md) now preserve
-   birth, modification, change and access fields in both writers/readers, including
-   roots, resolved hard links and APFS snapshot rebuilding. Explicit epoch zero
-   remains a timestamp; HFS keeps its whole-second precision. Native comparisons
-   qualify eight images and 296 entries; existing layout controls remain stable.
-   [Ordered stat restoration](../../docs/appledouble-stat-copy.md) now executes
-   times, ownership, permissions and BSD flags through a shared portable backend.
-   It preserves protected destination flags, bounds compare-and-swap retries and
-   retains ignored native failures. Native APFS file/directory comparisons and
-   controlled race/failure cases replay on Linux, macOS and Windows. This is the
-   final stat stage, not a completed host backend or restoration lifecycle.
-   [Image BSD flags](../../docs/appledouble-image-flags.md) now retain ordinary
-   flags in both writers/readers, including root and hard-link state, HFS catalog
-   normalization, new-volume tracked document IDs and APFS snapshot rebuilding.
-   Native comparisons qualify 276 entries across four images. Host flag setters,
-   general FinderInfo restoration, special object flags and original document
-   identity preservation remain outside this increment.
-   [Ordered image stat staging](../../docs/appledouble-image-stat.md) connects
-   that executor to both writer trees. Explicit destination times, alias agreement
-   and format validation prevent ambiguous or partially published metadata. Native
-   policy requests and 580 image observations qualify the stored result; live
-   kernel authorization and timestamp side effects remain separate work.
-   [Inner copy routing](../../docs/appledouble-copy-pipeline.md) now coordinates
-   pack/unpack precedence and ordinary quarantine, xattrs, data, security and
-   stat stages. Native return codes, callback termination and selective cleanup
-   qualify against the complete unchanged Apple function in 2,316 cases. Both
-   writer APIs compose through this coordinator with identical direct/staged
-   image hashes on all three OSes. The unpack delegate still owns its internal
-   deferred ACL-before-stat sequence; this is not a complete unpack provider.
-   [Ordinary unpack xattr restoration](../../docs/appledouble-xattr-restoration.md)
-   now executes native callback/intent/error rules and binds them to both image
-   writers. Hard-link aliases update together, Finish cancellation retains an
-   applied write, and HFS resource forks use their existing catalog storage.
-   4,088 controlled cases and 180 native applications qualify the executor;
-   all three OSes replay those observations and reproduce four image hashes.
-   [Validated unpack execution](../../docs/appledouble-unpack-restoration.md)
-   now orders destination cleanup, wire records, dedicated FinderInfo/resource
-   slots, deferred ACL and final stat. It retains ignored/masked failures and
-   preserves the separate slot callback rules. Complete pinned Apple functions
-   qualify 1,907 controlled cases and 96 live scenarios per reviewed host profile, with 192 verified
-   removals and 89 read-back-verified writes. Existing image APIs compose through
-   the executor and produce identical direct/coordinated bytes on all three OSes.
-   Input decoding finishes before cleanup; native partial mutation from a late
-   malformed read, streaming allocation and production held providers are not
-   claimed by this snapshot executor.
-   [Held native listing](../../docs/appledouble-held-xattr-list.md) now supplies
-   bounded destination names on all three OSes, with native ordering, descriptor
-   identity and complete error results. It does not supply image namespace policy
-   or a foreign metadata carrier.
-   [Held native writes](../../docs/appledouble-held-xattr-write.md) now assign
-   attributes through pinned descriptors on all three OSes. Native Mac readback
-   qualifies FinderInfo normalization and resource-fork non-truncation; Windows
-   retains EA size/name rules and write access without requiring read access.
-   **Remaining:** complete native host provider bindings, live host source acquisition,
-   privileged/sandbox authorization contexts, unpack provider bindings and outer
-   creation/permission-restoration/close lifecycle.
-   [Owner/non-owner image tests](../../docs/appledouble-acl-nonowner.md) qualify
-   ordinary-user APFS/HFSX grants and denials and fix HFS security catalog flags.
-   The request builder is not a completed native backend; foreign metadata carriers are integrated
-   in phase 4.
+Use `apfs extract IMAGE -C PAYLOAD --xattrs --preserve-meta --metadata-root METADATA`
+to select portable storage, and `apfs pack PAYLOAD OUTPUT.dmg --metadata-root METADATA`
+to supply that association explicitly when repacking. The payload destination must
+be empty, and metadata must live outside it. Keep the metadata directory with the
+payload. The existing flags select which metadata categories to capture.
 
-   **Next implementation:** bind the validated unpack executor to production
-   held destinations and foreign-metadata carriers. Native descriptor listing and assignment are
-   available; qualify image namespace visibility/order and connect the write primitive
-   (including hidden compression/security metadata), deletion/readback, quarantine state
-   at each record, ACL application and timestamp restoration as one transport.
-   Keep the same logical capability on Linux, macOS and Windows. Creation
-   inheritance, outer permission restoration, resource cleanup and the streaming
-   allocation/error boundary remain required before end-to-end qualification.
-2. **Quarantine context and transport qualification.** Implemented: serialized
-   and filesystem conversion, ordered updates, application planning, raw
-   destination-state handling and file/directory/symlink destination policy.
-   **Remaining:** unresolved process contexts (including absence on macOS 27),
-   production raw-agent capture, destination protection, source-state capture,
-   cleanup and write-failure integration. See [runtime evidence](../../docs/appledouble-quarantine-runtime.md),
-   [application planning](../../docs/appledouble-quarantine-application.md) and
-   [destination state](../../docs/appledouble-quarantine-existing.md).
-3. **Large-value and allocation behavior.** Basic native size boundaries have
-   tests. **Remaining:** values above 16 MiB, aggregate and resource-fork limits,
-   the native packing versus lossless-codec difference, and native sequential
-   handling versus the decoder's cumulative alias-allocation guard. Each
-   difference needs a qualified policy, not an implicit metadata-loss success.
-4. **Shared filesystem transport.** Strict held listing, read, assignment and removal primitives are available
-   in `pkg/hostmeta`; both image readers and writers retain zero permissions and
-   all set-ID/sticky combinations. **Remaining:** integrated preservation for files,
-   directories, roots and links; native write refusal/normalization; empty values,
-   logical names and large forks; carrier conflicts and path safety. Prove
-   logical name/value preservation through APFS/HFS+ extraction and repacking on
-   Linux, macOS and Windows, with independent Mac validation of foreign-host output.
-5. **Consumers and release.** Component native comparisons, greater than 95%
-   codec unit coverage and downstream package tests are ongoing gates.
-   **Remaining:** qualify the completed integration, release APFS through the
-   repository release process, update draft package PR #72 to that published
-   version and rerun downstream validation. Keep PR #72 draft until then.
-   Resume codesign only after the qualified APFS release and downstream adoption.
-
-For implementation detail, see the [migration and implementation plan](../../docs/appledouble-migration.md).
-The native investigations document [sizes](../../docs/appledouble-native-sizes.md),
-[names](../../docs/appledouble-native-names.md),
-[records](../../docs/appledouble-native-records.md),
-[FinderInfo/resource forks](../../docs/appledouble-native-special.md),
-[ACLs](../../docs/appledouble-native-acl.md) and
-[quarantine](../../docs/appledouble-native-quarantine.md).
+The consolidated PR remains draft while qualification is incomplete. The
+maintainer merges it and the release PR; package adoption and codesign remain
+blocked until the completion gates pass.

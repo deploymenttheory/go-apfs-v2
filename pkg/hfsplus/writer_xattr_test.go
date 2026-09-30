@@ -12,6 +12,10 @@ import (
 func TestWriteXattrs(t *testing.T) {
 	small := []byte("value42")
 	finder := bytes.Repeat([]byte{0xAB}, 32)
+	// Native HFS hides document ID, date-added and generation words.
+	wantFinder := bytes.Clone(finder)
+	clear(wantFinder[16:24])
+	clear(wantFinder[28:32])
 	// Comfortably past the inline ceiling at any node size this writer uses.
 	large := bytes.Repeat([]byte("large attribute value. "), 500)
 
@@ -47,7 +51,7 @@ func TestWriteXattrs(t *testing.T) {
 		want       []byte
 	}{
 		{"small.txt", "com.example.test", small},
-		{"small.txt", "com.apple.FinderInfo", finder},
+		{"small.txt", "com.apple.FinderInfo", wantFinder},
 		{"large.txt", "com.example.big", large},
 		{"dir", "com.example.dir", []byte("directories carry them too")},
 		{".", "com.example.root", []byte("on the root folder")},

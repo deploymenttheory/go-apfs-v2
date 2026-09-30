@@ -3,6 +3,7 @@ package unpackrestore
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
@@ -265,6 +266,16 @@ func (r *replay) Stat(invisible bool) hostmeta.CopyStageResult {
 	return r.stage("stat", nil, n)
 }
 func Replay(c Case, images []string) error {
+	return replayCase(c, images, false)
+}
+
+// ReplaySequential checks the same independently captured native observations
+// with reads deferred until their native execution points.
+func ReplaySequential(c Case, images []string) error {
+	return replayCase(c, images, true)
+}
+
+func replayCase(c Case, images []string, sequential bool) error {
 	b, e := hex.DecodeString(images[c.Image])
 	if e != nil {
 		return e
@@ -287,7 +298,15 @@ func Replay(c Case, images []string) error {
 			return hostmeta.CopyPipelineAction(action)
 		}
 	}
-	got, err := hostmeta.RestoreAppleDouble(b, opts, r)
+	var got hostmeta.UnpackResult
+	var err error
+	if sequential {
+		got, err = hostmeta.RestoreAppleDoubleSequential(context.Background(), bytes.NewReader(b), hostmeta.UnpackSequentialOptions{
+			UnpackOptions: opts, Limits: appledouble.DefaultStreamLimits(), MaxActiveBytes: 1 << 20,
+		}, r)
+	} else {
+		got, err = hostmeta.RestoreAppleDouble(b, opts, r)
+	}
 	if r.err != nil {
 		return r.err
 	}

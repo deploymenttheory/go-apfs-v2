@@ -14,13 +14,14 @@ func TestSetCreationTimeInvalidFiles(t *testing.T) {
 	if err := SetCreationTime(nil, when); !errors.Is(err, os.ErrInvalid) {
 		t.Fatalf("nil file: %v", err)
 	}
-	dir, err := os.Open(t.TempDir())
+	r, pipe, err := os.Pipe()
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer dir.Close()
-	if err := SetCreationTime(dir, when); !errors.Is(err, os.ErrInvalid) {
-		t.Fatalf("directory: %v", err)
+	defer r.Close()
+	defer pipe.Close()
+	if err := SetCreationTime(pipe, when); !errors.Is(err, os.ErrInvalid) {
+		t.Fatalf("pipe: %v", err)
 	}
 	file, err := os.Create(filepath.Join(t.TempDir(), "closed"))
 	if err != nil {
@@ -35,8 +36,8 @@ func TestSetCreationTimeInvalidFiles(t *testing.T) {
 }
 
 func TestSetCreationTimeUnsupportedHost(t *testing.T) {
-	if runtime.GOOS == "darwin" {
-		t.Skip("Darwin supports creation-time updates")
+	if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
+		t.Skip("host supports creation-time updates; covered by native tests")
 	}
 	file := replacementSource(t, 0640)
 	before, err := file.Stat()

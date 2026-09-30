@@ -36,7 +36,7 @@ func verify() error {
 	defer log.Close()
 	var transcript bytes.Buffer
 	profile := filepath.Join(dir, "coverage.out")
-	cmd := exec.Command("go", "test", "-count=1", "-json", "-run", "^(TestImageStat)", "-covermode=atomic", "-coverprofile="+profile, "-coverpkg=./internal/imageacl,./pkg/apfswrite,./pkg/hfsplus", "./internal/imageacl", "./internal/testutil/imagestat")
+	cmd := exec.Command("go", "test", "-count=1", "-json", "-run", "^(TestImageStat|TestImageMetadata)", "-covermode=atomic", "-coverprofile="+profile, "-coverpkg=./internal/imageacl,./pkg/apfswrite,./pkg/apfs,./pkg/hfsplus", "./internal/imageacl", "./internal/testutil/imagestat", "./pkg/apfs", "./pkg/hfsplus", "./pkg/apfswrite")
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 	cmd.Stdout = io.MultiWriter(os.Stdout, log, &transcript)
 	cmd.Stderr = io.MultiWriter(os.Stderr, log)
@@ -64,7 +64,7 @@ func verify() error {
 		return e
 	}
 	covered, total := 0, 0
-	coverageFiles := map[string][2]int{"internal/imageacl/stat.go": {}, "pkg/apfswrite/stat_copy.go": {}, "pkg/hfsplus/writer_stat_copy.go": {}}
+	coverageFiles := map[string][2]int{"internal/imageacl/stat.go": {}, "pkg/apfswrite/stat_copy.go": {}, "pkg/hfsplus/writer_stat_copy.go": {}, "pkg/apfs/metadata.go": {}, "pkg/hfsplus/metadata.go": {}}
 	blocks := map[string][2]int{}
 	for _, line := range strings.Split(string(b), "\n") {
 		fields := strings.Fields(line)
@@ -107,10 +107,10 @@ func verify() error {
 	if total == 0 || covered*100 <= total*95 {
 		return fmt.Errorf("Image stat restoration coverage must exceed 95%%: %d/%d", covered, total)
 	}
-	if passed < 610 {
+	if passed < 618 {
 		return fmt.Errorf("incomplete image stat restoration tests: %d", passed)
 	}
-	files := []string{"internal/imageacl/stat.go", "pkg/apfswrite/stat_copy.go", "pkg/hfsplus/writer_stat_copy.go", "internal/imageacl/stat_test.go", "internal/imageacl/tree.go", "pkg/apfswrite/acl_restore.go", "pkg/hfsplus/writer_acl_restore.go", "pkg/hostmeta/image_stat.go", "pkg/hostmeta/stat_copy.go", "pkg/hostmeta/stat_flags.go", "internal/bsdflags/flags.go", "internal/inodetime/time.go", "pkg/apfswrite/file.go", "pkg/apfswrite/writer.go", "pkg/hfsplus/writer.go", "internal/testutil/imagestat/fixtures.go", "internal/testutil/imagestat/fixtures_test.go", "internal/testutil/imagesecurity/fixtures.go", "internal/testutil/statcopy/oracle.go", "scripts/verify-image-security.go", "scripts/verify-image-stat-coverage.go", "testdata/appledouble/native/image-stat.c", "testdata/appledouble/native/stat-copy.c", "testdata/appledouble/native/image-security.c", "testdata/appledouble/native/security-copy.c", "testdata/appledouble/native/image-stat.json.gz", "go.mod", "go.sum"}
+	files := []string{"pkg/apfs/volume.go", "pkg/apfswrite/lookup_case_test.go", "pkg/hostmeta/image_metadata.go", "pkg/apfs/metadata.go", "pkg/apfs/metadata_test.go", "pkg/hfsplus/metadata.go", "pkg/hfsplus/metadata_test.go", "internal/testutil/imagestat/metadata_test.go", "internal/imageacl/stat.go", "pkg/apfswrite/stat_copy.go", "pkg/hfsplus/writer_stat_copy.go", "internal/imageacl/stat_test.go", "internal/imageacl/tree.go", "pkg/apfswrite/acl_restore.go", "pkg/hfsplus/writer_acl_restore.go", "pkg/hostmeta/image_stat.go", "pkg/hostmeta/stat_copy.go", "pkg/hostmeta/stat_flags.go", "internal/bsdflags/flags.go", "internal/inodetime/time.go", "pkg/apfswrite/file.go", "pkg/apfswrite/writer.go", "pkg/hfsplus/writer.go", "internal/testutil/imagestat/fixtures.go", "internal/testutil/imagestat/fixtures_test.go", "internal/testutil/imagesecurity/fixtures.go", "internal/testutil/statcopy/oracle.go", "scripts/verify-image-security.go", "scripts/verify-image-stat-coverage.go", "testdata/appledouble/native/image-stat.c", "testdata/appledouble/native/stat-copy.c", "testdata/appledouble/native/image-security.c", "testdata/appledouble/native/security-copy.c", "testdata/appledouble/native/image-stat.json.gz", "go.mod", "go.sum"}
 	hashes := map[string]string{}
 	for _, path := range files {
 		b, e := os.ReadFile(path)

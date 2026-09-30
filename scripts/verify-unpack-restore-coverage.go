@@ -36,7 +36,7 @@ func verify() error {
 	defer log.Close()
 	var transcript bytes.Buffer
 	profile := filepath.Join(dir, "coverage.out")
-	cmd := exec.Command("go", "test", "-count=1", "-json", "-run", "^TestUnpackRestore", "-covermode=atomic", "-coverprofile="+profile, "-coverpkg=./pkg/hostmeta,./internal/imageacl,./pkg/apfswrite,./pkg/hfsplus", "./pkg/hostmeta")
+	cmd := exec.Command("go", "test", "-count=1", "-json", "-run", "^TestUnpack(Restore|Sequential)", "-covermode=atomic", "-coverprofile="+profile, "-coverpkg=./pkg/hostmeta,./internal/imageacl,./pkg/apfswrite,./pkg/hfsplus", "./pkg/hostmeta")
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 	cmd.Stdout = io.MultiWriter(os.Stdout, log, &transcript)
 	cmd.Stderr = io.MultiWriter(os.Stderr, log)

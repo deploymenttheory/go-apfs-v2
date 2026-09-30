@@ -65,8 +65,10 @@ transparent compression by default on both file systems, and `--decompress`
 writes those files out in full instead.
 
 ³ decmpfs types 3/4 (zlib), 5, 7/8 (LZVN) and 11/12 (LZFSE), stored inline in
-the attribute or in a resource fork. Types 9/10 (uncompressed) and 13/14
-(LZBITMAP) are recognized and reported as unsupported rather than decoded.
+the attribute or in a resource fork. Types 1, 9/10 (uncompressed storage) and 13/14
+(LZBITMAP) are also decoded and qualified against retained native fixtures.
+See [compression storage](docs/appledouble-compression-storage.md) for native
+attribute bounds, independent resource forks and external generation-store limits.
 Coverage is mostly by synthesized fixtures, because producing a real LZFSE file
 needs macOS plus `afsctool`. One real one is committed: `compressed.txt` in
 `testdata/cli/basic.dmg` is type 8 — LZVN in a resource fork — written by

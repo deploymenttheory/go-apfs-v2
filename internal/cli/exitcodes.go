@@ -2,6 +2,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/exitcode"
@@ -46,15 +47,9 @@ func exitCodeFor(err error) int {
 	if err == nil {
 		return ExitOK
 	}
-	for e := err; e != nil; {
-		if coded, ok := e.(*codedError); ok {
-			return coded.code
-		}
-		unwrapper, ok := e.(interface{ Unwrap() error })
-		if !ok {
-			break
-		}
-		e = unwrapper.Unwrap()
+	var coded *codedError
+	if errors.As(err, &coded) {
+		return coded.code
 	}
 	return ExitError
 }

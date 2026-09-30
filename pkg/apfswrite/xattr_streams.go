@@ -3,9 +3,11 @@
 
 package apfswrite
 
+import "github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
+
 // addXattrStreams assigns storage and object IDs for one inode's attributes.
 // Root and child inodes share the same allocation and accounting path.
-func (b volCtx) addXattrStreams(be *builderEntry, streamed map[string][]byte, nextOID uint64) uint64 {
+func (b volCtx) addXattrStreams(be *builderEntry, streamed map[string]appledouble.Value, nextOID uint64) uint64 {
 	// Each streamed attribute owns an object of its own: a data stream
 	// with its own oid, extent and refcount, referenced by the
 	// attribute record. It carries no inode and no directory entry —
@@ -15,9 +17,10 @@ func (b volCtx) addXattrStreams(be *builderEntry, streamed map[string][]byte, ne
 		stream := &builderEntry{
 			name:        be.name + ":" + name,
 			oid:         nextOID,
-			data:        value,
+			dataValue:   value,
+			valueSize:   uint64(value.Size()),
 			hasStream:   true,
-			blocks:      divRoundUp(uint64(len(value)), uint64(b.blocksize)),
+			blocks:      divRoundUp(uint64(value.Size()), uint64(b.blocksize)),
 			allocedSize: 0,
 		}
 		stream.allocedSize = stream.blocks * uint64(b.blocksize)

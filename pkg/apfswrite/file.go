@@ -6,14 +6,10 @@ package apfswrite
 import (
 	"encoding/binary"
 	"fmt"
-	"sort"
-	"strings"
-
-	"github.com/deploymenttheory/go-apfs-v2/internal/bsdflags"
-
-	"github.com/deploymenttheory/go-apfs-v2/internal/decmpfs"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"sort"
+	"strings"
 )
 
 // setTree resolves the caller's directory tree (Root plus the RootFiles
@@ -64,11 +60,20 @@ func (b volCtx) setTree(spec VolumeSpec) error {
 					e.Name, e.Mode.Type())
 			}
 
+			if _, err := entryDataSize(e); err != nil {
+				return 0, err
+			}
+
 			// A second or later name for a file already seen is written as a
 			// hard link: a directory entry pointing at the existing inode, with
 			// no inode, content or attributes of its own. Its attributes are
 			// that same inode's, so there is nothing separate to validate.
 			if primary := linkGroups[e.LinkGroup]; primary != nil && e.LinkGroup != 0 && e.Mode.IsRegular() && !e.isDirEntry() {
+				if len(e.XattrValues) > 0 {
+					if _, _, _, _, err := prepareXattrs(e); err != nil {
+						return 0, err
+					}
+				}
 				extra := &builderEntry{name: e.Name, parent: parent, primary: primary}
 				b.entries = append(b.entries, extra)
 				primary.siblings = append(primary.siblings, siblingName{parent: parent, name: e.Name})
@@ -79,11 +84,10 @@ func (b volCtx) setTree(spec VolumeSpec) error {
 			if err != nil {
 				return 0, fmt.Errorf("apfswrite: %s: %w", e.Name, err)
 			}
-			xattrs, xattrFlags, bsdFlags, err := validateXattrs(e)
+			embedded, streamed, xattrFlags, bsdFlags, err := prepareXattrs(e)
 			if err != nil {
 				return 0, err
 			}
-			embedded, streamed := splitXattrs(xattrs)
 
 			be := &builderEntry{
 				name:       e.Name,
@@ -131,8 +135,10 @@ func (b volCtx) setTree(spec VolumeSpec) error {
 				// a physical extent of ceil(size/blocksize) contiguous blocks; an
 				// empty file has size 0, alloced_size 0 and no extent at all.
 				be.data = e.Data
+				be.dataValue = e.DataValue
+				be.valueSize, _ = entryDataSize(e)
 				be.hasStream = true
-				be.blocks = divRoundUp(uint64(len(e.Data)), uint64(b.blocksize))
+				be.blocks = divRoundUp(be.streamSize(), uint64(b.blocksize))
 				be.allocedSize = be.blocks * uint64(b.blocksize)
 				b.streamFiles = append(b.streamFiles, be)
 				b.numFiles++
@@ -174,6 +180,9 @@ func (b volCtx) setTree(spec VolumeSpec) error {
 
 	b.fileDataBlocks = 0
 	for _, f := range b.streamFiles {
+		if f.blocks > uint64(^uint64(0)>>1)/uint64(b.blocksize)-b.fileDataBlocks {
+			return fmt.Errorf("apfswrite: aggregate stream size overflows image offsets")
+		}
 		b.fileDataBlocks += f.blocks
 	}
 
@@ -248,35 +257,6 @@ func (b volCtx) linkSiblingIDs() {
 	}
 }
 
-// splitXattrs divides an entry's attributes into those small enough to store
-// inside their record and those needing a data stream.
-func splitXattrs(xattrs map[string][]byte) (embedded, streamed map[string][]byte) {
-	for name, value := range xattrs {
-		if needsXattrStream(name, value) {
-			if streamed == nil {
-				streamed = map[string][]byte{}
-			}
-			streamed[name] = value
-			continue
-		}
-		if embedded == nil {
-			embedded = map[string][]byte{}
-		}
-		embedded[name] = value
-	}
-	return embedded, streamed
-}
-
-// needsXattrStream reports whether an attribute must be stored as a data
-// stream rather than inside its record.
-//
-// Size is the obvious reason. A resource fork is the other: fsck_apfs requires
-// one to be stream based however small it is — "com.apple.ResourceFork is
-// expected to be stream based" — and accepts nothing else.
-func needsXattrStream(name string, value []byte) bool {
-	return name == resourceForkName || len(value) > maxEmbeddedXattrSize
-}
-
 // sortedNames returns a map's keys in order, so records are emitted the same
 // way every time. Attributes arrive in a map, and reproducible output depends
 // on their order being fixed.
@@ -287,59 +267,6 @@ func sortedNames[V any](m map[string]V) []string {
 	}
 	sort.Strings(names)
 	return names
-}
-
-// validateXattrs checks an entry's extended attributes can be written, and
-// returns the inode flags their presence requires: the internal_flags several
-// attributes must agree with, and the bsd_flags a compressed file needs.
-//
-// Values too large to embed are split into separately allocated streams after
-// validation, using the same rules for the root and ordinary entries.
-func validateXattrs(e *Entry) (map[string][]byte, uint64, uint32, error) {
-	// An inode with no resource fork must say so. The flag is not optional:
-	// a checker treats its absence as a claim that a fork exists.
-	flags := uint64(inodeNoRsrcFork)
-	_, compressed := e.Xattrs[decmpfsName]
-	bsdFlags, err := bsdflags.Select(e.BSDFlags, compressed, false)
-	if err != nil {
-		return nil, 0, 0, err
-	}
-	if len(e.Xattrs) == 0 {
-		return nil, flags, bsdFlags, nil
-	}
-
-	for name := range e.Xattrs {
-		if name == "" {
-			return nil, 0, 0, fmt.Errorf("apfswrite: %q has an extended attribute with an empty name", e.Name)
-		}
-		if strings.ContainsRune(name, 0) {
-			return nil, 0, 0, fmt.Errorf("apfswrite: extended attribute name %q on %q contains a NUL", name, e.Name)
-		}
-		if name == symlinkName {
-			return nil, 0, 0, fmt.Errorf("apfswrite: %q sets %s, which the writer emits itself for symbolic links", e.Name, symlinkName)
-		}
-
-		switch name {
-		case resourceForkName:
-			// HAS and NO are mutually exclusive, and a checker compares each
-			// against whether the attribute is actually there.
-			flags = flags&^uint64(inodeNoRsrcFork) | inodeHasRsrcFork
-		case decmpfsName:
-			// The attribute holds the file's content, so it is carried through
-			// as it stands rather than recompressed. What the writer owes it is
-			// UF_COMPRESSED: apfsck reports "is not compressed but has decmpfs
-			// xattr" when the attribute is there without the flag.
-			if err := decmpfs.Validate(e.Xattrs[name], len(e.Data), e.Xattrs[resourceForkName]); err != nil {
-				return nil, 0, 0, fmt.Errorf("apfswrite: %q: %w", e.Name, err)
-			}
-			bsdFlags |= inoBSDCompressed
-		case securityName:
-			flags |= inodeHasSecurityEA
-		case finderInfoName:
-			flags |= inodeHasFinderInfo
-		}
-	}
-	return e.Xattrs, flags, bsdFlags, nil
 }
 
 func validateName(name string) error {
@@ -407,9 +334,9 @@ func (b volCtx) writeFileData() error {
 			// and the window is reused across files, so clear what the copy
 			// will not overwrite rather than trusting it to be zero.
 			offset := done * uint64(b.blocksize)
-			copied := 0
-			if offset < uint64(len(f.data)) {
-				copied = copy(chunk, f.data[offset:])
+			copied, err := f.copyStream(chunk, offset)
+			if err != nil {
+				return err
 			}
 			clear(chunk[copied:])
 
@@ -682,10 +609,10 @@ func (b *builder) inodeValue(e *builderEntry) []byte {
 		nameVal := xf1 + sizeofXField
 		copy(val[nameVal:], e.name)
 		dsVal := nameVal + paddedNameLen
-		binary.LittleEndian.PutUint64(val[dsVal+0:], uint64(len(e.data))) // size
-		binary.LittleEndian.PutUint64(val[dsVal+8:], e.allocedSize)       // alloced_size
+		binary.LittleEndian.PutUint64(val[dsVal+0:], e.streamSize()) // size
+		binary.LittleEndian.PutUint64(val[dsVal+8:], e.allocedSize)  // alloced_size
 		// default_crypto_id (16) = 0 on an unencrypted volume.
-		binary.LittleEndian.PutUint64(val[dsVal+24:], uint64(len(e.data))) // total_bytes_written
+		binary.LittleEndian.PutUint64(val[dsVal+24:], e.streamSize()) // total_bytes_written
 	} else {
 		nameVal := xf0 + sizeofXField
 		copy(val[nameVal:], e.name)
@@ -784,11 +711,11 @@ func (b *builder) symlinkXattrRecord(e *builderEntry) fsTreeRecord {
 // describing it.
 func (b *builder) streamedXattrRecord(oid uint64, name string, stream *builderEntry) fsTreeRecord {
 	xdata := make([]byte, sizeofXattrDstream)
-	binary.LittleEndian.PutUint64(xdata[0:], stream.oid)               // xattr_obj_id
-	binary.LittleEndian.PutUint64(xdata[8:], uint64(len(stream.data))) // size
-	binary.LittleEndian.PutUint64(xdata[16:], stream.allocedSize)      // alloced_size
+	binary.LittleEndian.PutUint64(xdata[0:], stream.oid)          // xattr_obj_id
+	binary.LittleEndian.PutUint64(xdata[8:], stream.streamSize()) // size
+	binary.LittleEndian.PutUint64(xdata[16:], stream.allocedSize) // alloced_size
 	// default_crypto_id (24) = 0 on an unencrypted volume.
-	binary.LittleEndian.PutUint64(xdata[32:], uint64(len(stream.data))) // total_bytes_written
+	binary.LittleEndian.PutUint64(xdata[32:], stream.streamSize()) // total_bytes_written
 	// total_bytes_read (40) = 0.
 
 	return b.xattrRecord(oid, name, xdata, xattrDataStream)
