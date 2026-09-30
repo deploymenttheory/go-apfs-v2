@@ -5,10 +5,15 @@ name: Fuzz
 # testdata/fuzz/<Target>/ so `go test` replays it as a regression test.
 on:
   push:
+    branches: [main]
   pull_request:
   schedule:
     - cron: "17 3 * * 1"
   workflow_dispatch:
+
+concurrency:
+  group: fuzz-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -21,6 +26,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - { pkg: ./pkg/appledouble, target: FuzzStreamDecode }
           - { pkg: ./pkg/appledouble, target: FuzzDecode }
           - { pkg: ./pkg/appledouble, target: FuzzACLText }
           - { pkg: ./pkg/appledouble, target: FuzzACLBinary }

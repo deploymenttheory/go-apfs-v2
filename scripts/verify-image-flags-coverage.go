@@ -36,7 +36,7 @@ func verify() error {
 	defer log.Close()
 	var transcript bytes.Buffer
 	profile := filepath.Join(dir, "coverage.out")
-	cmd := exec.Command("go", "test", "-count=1", "-json", "-run", "^(TestImageFlags)", "-covermode=atomic", "-coverprofile="+profile, "-coverpkg=./internal/bsdflags,./pkg/apfs,./pkg/apfswrite,./pkg/hfsplus", "./internal/bsdflags", "./internal/testutil/imagesecurity", "./internal/cli", "./pkg/hfsplus", "./pkg/apfswrite")
+	cmd := exec.Command("go", "test", "-count=1", "-json", "-run", "^(TestImageFlags|TestImageFinderInfo)", "-covermode=atomic", "-coverprofile="+profile, "-coverpkg=./internal/bsdflags,./pkg/apfs,./pkg/apfswrite,./pkg/hfsplus", "./internal/bsdflags", "./internal/testutil/imagesecurity", "./internal/cli", "./pkg/hfsplus", "./pkg/apfswrite")
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 	cmd.Stdout = io.MultiWriter(os.Stdout, log, &transcript)
 	cmd.Stderr = io.MultiWriter(os.Stderr, log)
@@ -64,7 +64,7 @@ func verify() error {
 		return e
 	}
 	covered, total := 0, 0
-	coverageFiles := map[string][2]int{"internal/bsdflags/flags.go": {}, "pkg/apfswrite/document_flags.go": {}, "pkg/apfs/bsd_flags.go": {}, "pkg/hfsplus/bsd_flags.go": {}, "pkg/hfsplus/writer_flags.go": {}}
+	coverageFiles := map[string][2]int{"internal/bsdflags/flags.go": {}, "pkg/apfswrite/document_flags.go": {}, "pkg/apfs/bsd_flags.go": {}, "pkg/hfsplus/bsd_flags.go": {}, "pkg/hfsplus/writer_flags.go": {}, "pkg/hfsplus/finder_info.go": {}}
 	blocks := map[string][2]int{}
 	for _, line := range strings.Split(string(b), "\n") {
 		fields := strings.Fields(line)
@@ -110,7 +110,7 @@ func verify() error {
 	if passed < 360 {
 		return fmt.Errorf("incomplete image BSD flags tests: %d", passed)
 	}
-	files := []string{"internal/bsdflags/flags.go", "pkg/apfswrite/document_flags.go", "pkg/apfs/bsd_flags.go", "pkg/hfsplus/bsd_flags.go", "pkg/hfsplus/writer_flags.go", "internal/bsdflags/flags_test.go", "pkg/apfswrite/document_flags_test.go", "pkg/hfsplus/bsd_flags_test.go", "pkg/apfswrite/file.go", "pkg/apfswrite/root.go", "pkg/apfswrite/writer.go", "pkg/apfswrite/super.go", "pkg/hfsplus/writer.go", "internal/cli/snapshot.go", "internal/cli/snapshot_flags_test.go", "internal/testutil/imagesecurity/flags.go", "internal/testutil/imagesecurity/flags_test.go", "internal/testutil/imagesecurity/fixtures.go", "scripts/verify-image-security.go", "scripts/verify-image-flags-coverage.go", "testdata/appledouble/native/image-flags.c", "testdata/appledouble/native/image-security.c", "testdata/appledouble/native/security-copy.c", "testdata/appledouble/native/image-flags.json.gz", "go.mod", "go.sum"}
+	files := []string{"pkg/hfsplus/finder_info.go", "pkg/hfsplus/finder_info_test.go", "pkg/hfsplus/validate.go", "pkg/hfsplus/attributes.go", "internal/bsdflags/flags.go", "pkg/apfswrite/document_flags.go", "pkg/apfs/bsd_flags.go", "pkg/hfsplus/bsd_flags.go", "pkg/hfsplus/writer_flags.go", "internal/bsdflags/flags_test.go", "pkg/apfswrite/document_flags_test.go", "pkg/hfsplus/bsd_flags_test.go", "pkg/apfswrite/file.go", "pkg/apfswrite/root.go", "pkg/apfswrite/writer.go", "pkg/apfswrite/super.go", "pkg/hfsplus/writer.go", "internal/cli/snapshot.go", "internal/cli/snapshot_flags_test.go", "internal/testutil/imagesecurity/flags.go", "internal/testutil/imagesecurity/flags_test.go", "internal/testutil/imagesecurity/fixtures.go", "scripts/verify-image-security.go", "scripts/verify-image-flags-coverage.go", "testdata/appledouble/native/image-flags.c", "testdata/appledouble/native/image-security.c", "testdata/appledouble/native/security-copy.c", "testdata/appledouble/native/image-flags.json.gz", "go.mod", "go.sum"}
 	hashes := map[string]string{}
 	for _, path := range files {
 		b, e := os.ReadFile(path)

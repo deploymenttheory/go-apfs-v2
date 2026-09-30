@@ -111,6 +111,38 @@ func RestoreAppleDouble(data []byte, options UnpackOptions, backend UnpackBacken
 		result.Code = -1
 		return result, err
 	}
+	i := 0
+	input := unpackInput{
+		next: func() (appledouble.Attr, bool, error) {
+			if i == len(f.Attrs) {
+				return appledouble.Attr{}, false, nil
+			}
+			a := f.Attrs[i]
+			i++
+			return a, true, nil
+		},
+		finder:       func() ([32]byte, error) { return f.FinderInfo, nil },
+		forkSize:     uint64(len(f.ResourceFork)),
+		allocateFork: func() ([]byte, error) { return f.ResourceFork, nil },
+		readFork:     func([]byte) error { return nil },
+	}
+	return restoreAppleDouble(input, options, backend)
+}
+
+// unpackInput separates source acquisition from the already qualified effect
+// order. Snapshot input is prevalidated; sequential input performs each read at
+// its native point, including fork allocation before stat and read after stat.
+type unpackInput struct {
+	next         func() (appledouble.Attr, bool, error)
+	finder       func() ([32]byte, error)
+	forkSize     uint64
+	allocateFork func() ([]byte, error)
+	readFork     func([]byte) error
+	rawNames     bool
+}
+
+func restoreAppleDouble(input unpackInput, options UnpackOptions, backend UnpackBackend) (result UnpackResult, err error) {
+	result.Copied = options.InitialCopied
 	failure := func(operation, name string, e error) {
 		if e != nil {
 			result.Failures = append(result.Failures, UnpackFailure{operation, name, e})
@@ -159,7 +191,16 @@ func RestoreAppleDouble(data []byte, options UnpackOptions, backend UnpackBacken
 		}
 	}
 	var acl []byte
-	for _, a := range f.Attrs {
+	for {
+		a, more, e := input.next()
+		if e != nil {
+			failure("source-attribute", "", e)
+			result.Code, lastError = -1, e
+			return finish()
+		}
+		if !more {
+			break
+		}
 		switch a.Name {
 		case appledouble.ACLTextName:
 			result.Code, lastError = 0, nil
@@ -179,7 +220,13 @@ func RestoreAppleDouble(data []byte, options UnpackOptions, backend UnpackBacken
 					return options.Callback(UnpackNotice{UnpackOrdinary, n})
 				}
 			}
-			r, e := RestoreXattr(a.Name, a.Value, opts, backend.WriteXattr)
+			apply := RestoreXattr
+			if input.rawNames {
+				// Native unpack validates wire name framing, then delegates name
+				// acceptance and special lengths to the actual write operation.
+				apply = restoreXattr
+			}
+			r, e := apply(a.Name, a.Value, opts, backend.WriteXattr)
 			result.Copied = r.Copied
 			failure("ordinary", a.Name, r.WriteError)
 			if e != nil {
@@ -193,7 +240,13 @@ func RestoreAppleDouble(data []byte, options UnpackOptions, backend UnpackBacken
 		return options.Callback(UnpackNotice{stage, XattrRestoreNotice{Event: event, Name: name, Copied: result.Copied, WriteError: writeError}})
 	}
 	cancel := func() (UnpackResult, error) { result.Code = -1; return result, ErrXattrRestoreCanceled }
-	if f.FinderInfo != [32]byte{} {
+	finder, e := input.finder()
+	if e != nil {
+		failure("source-finder", "", e)
+		result.Code, lastError = -1, e
+		return finish()
+	}
+	if finder != [32]byte{} {
 		action := CopyPipelineContinue
 		if options.Callback != nil {
 			action = notify(UnpackFinderInfo, XattrRestoreStart, appledouble.FinderInfoName, nil)
@@ -202,7 +255,7 @@ func RestoreAppleDouble(data []byte, options UnpackOptions, backend UnpackBacken
 			return cancel()
 		}
 		if action != CopyPipelineSkip {
-			e := backend.WriteXattr(appledouble.FinderInfoName, bytes.Clone(f.FinderInfo[:]))
+			e := backend.WriteXattr(appledouble.FinderInfoName, bytes.Clone(finder[:]))
 			failure("finder-info", appledouble.FinderInfoName, e)
 			if e != nil {
 				if options.Callback != nil && notify(UnpackFinderInfo, XattrRestoreError, appledouble.FinderInfoName, e) == CopyPipelineQuit {
@@ -215,12 +268,21 @@ func RestoreAppleDouble(data []byte, options UnpackOptions, backend UnpackBacken
 			if options.Callback != nil && notify(UnpackFinderInfo, XattrRestoreFinish, appledouble.FinderInfoName, nil) == CopyPipelineQuit {
 				return cancel()
 			}
-			result.MakeInvisible = binary.BigEndian.Uint16(f.FinderInfo[8:10])&0x4000 != 0
+			result.MakeInvisible = binary.BigEndian.Uint16(finder[8:10])&0x4000 != 0
 		}
 	}
-	if len(f.ResourceFork) > 0 {
-		state, e := backend.CaptureForkState()
-		failure("fork-stat", "", e)
+	if input.forkSize > 0 {
+		fork, e := input.allocateFork()
+		failure("fork-allocation", "", e)
+		var state UnpackForkState
+		if e == nil {
+			state, e = backend.CaptureForkState()
+			failure("fork-stat", "", e)
+		}
+		if e == nil {
+			e = input.readFork(fork)
+			failure("source-fork", "", e)
+		}
 		if e != nil {
 			result.Code, lastError = -1, e
 		} else {
@@ -232,11 +294,11 @@ func RestoreAppleDouble(data []byte, options UnpackOptions, backend UnpackBacken
 				return cancel()
 			}
 			if action != CopyPipelineSkip {
-				e = backend.WriteXattr(appledouble.ResourceForkName, bytes.Clone(f.ResourceFork))
+				e = backend.WriteXattr(appledouble.ResourceForkName, bytes.Clone(fork))
 				failure("resource-fork", appledouble.ResourceForkName, e)
 				result.Code, lastError = 0, nil
 				if e != nil {
-					if !(state.Directory && bytes.Equal(f.ResourceFork, emptyUnpackResourceFork())) && !(options.Callback != nil && notify(UnpackResourceFork, XattrRestoreError, appledouble.ResourceForkName, e) == CopyPipelineContinue) {
+					if !(state.Directory && bytes.Equal(fork, emptyUnpackResourceFork())) && !(options.Callback != nil && notify(UnpackResourceFork, XattrRestoreError, appledouble.ResourceForkName, e) == CopyPipelineContinue) {
 						result.Code, lastError = -1, e
 					}
 				} else {

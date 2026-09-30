@@ -141,7 +141,19 @@ func StoresDataInResourceFork(decmpfsType uint32) bool {
 // dataForkSize is the length of the file's data fork and resourceFork the
 // com.apple.ResourceFork attribute value, nil when the file has none.
 func Validate(attrValue []byte, dataForkSize int, resourceFork []byte) error {
-	header, err := ParseHeader(attrValue)
+	return ValidateLayout(attrValue, uint64(len(attrValue)), uint64(dataForkSize), uint64(len(resourceFork)))
+}
+
+// ValidateLayout checks storage shape without allocating an entire attribute or
+// resource fork. prefix must contain the attribute's complete header (or all its
+// bytes when shorter); attrSize is its full length. It validates the same
+// compression methods and structural rules as Validate, not compressed payload
+// integrity. Sources must remain immutable between validation and writing.
+func ValidateLayout(prefix []byte, attrSize, dataForkSize, resourceForkSize uint64) error {
+	if uint64(len(prefix)) > attrSize || uint64(len(prefix)) < min(attrSize, uint64(HeaderSize)) {
+		return fmt.Errorf("decmpfs prefix length %d does not cover attribute header for %d bytes", len(prefix), attrSize)
+	}
+	header, err := ParseHeader(prefix)
 	if err != nil {
 		return err
 	}
@@ -162,21 +174,24 @@ func Validate(attrValue []byte, dataForkSize int, resourceFork []byte) error {
 	}
 
 	if StoresDataInResourceFork(header.CompressionMethod) {
-		if len(resourceFork) == 0 {
+		if resourceForkSize == 0 {
 			return fmt.Errorf("decmpfs type %d keeps its data in %s, which is absent",
 				header.CompressionMethod, ResourceForkName)
 		}
 		// The attribute is the header alone: the payload is in the fork.
-		if len(attrValue) != HeaderSize {
+		if attrSize != HeaderSize {
 			return fmt.Errorf("decmpfs type %d keeps its data in %s, but the attribute carries %d bytes beyond its %d-byte header",
-				header.CompressionMethod, ResourceForkName, len(attrValue)-HeaderSize, HeaderSize)
+				header.CompressionMethod, ResourceForkName, attrSize-HeaderSize, HeaderSize)
 		}
 		return nil
 	}
 
-	if len(resourceFork) != 0 {
+	if resourceForkSize != 0 {
 		return fmt.Errorf("decmpfs type %d stores its data inline, but the file also has a %s",
 			header.CompressionMethod, ResourceForkName)
 	}
-	return CheckInline(attrValue)
+	if attrSize <= HeaderSize {
+		return fmt.Errorf("inline decmpfs attribute is %d bytes: too short to hold a %d-byte header and any data", attrSize, HeaderSize)
+	}
+	return nil
 }

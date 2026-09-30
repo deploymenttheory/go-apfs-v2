@@ -23,13 +23,15 @@ func (b volCtx) setRoot(source *Entry, nextOID uint64) (uint64, error) {
 	}
 	// The root's name and payload have never represented a user file. Work on
 	// a copy so neither normalization nor validation mutates the caller's tree.
+	if root.DataValue != nil {
+		return nextOID, fmt.Errorf("apfswrite: root cannot have DataValue")
+	}
 	root.Name, root.Data = "root", nil
 	root.Mode |= os.ModeDir
-	xattrs, flags, bsdFlags, err := validateXattrs(&root)
+	embedded, streamed, flags, bsdFlags, err := prepareXattrs(&root)
 	if err != nil {
 		return nextOID, err
 	}
-	embedded, streamed := splitXattrs(xattrs)
 	mode := uint16(sIFDIR) | unixmode.Permissions(source.Mode, 0755, source.ModeExplicit || source.Mode != 0)
 	times, err := b.inodeTimes(&root)
 	if err != nil {

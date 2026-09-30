@@ -9,18 +9,29 @@
 package hostwalk
 
 import (
+	"context"
 	"fmt"
+	"io/fs"
 	"os"
 	"path"
 	"path/filepath"
 	"time"
 
+	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/fidelity"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/metatransport"
 )
 
 // Options tunes a walk.
 type Options struct {
+	owner *treeOwner
+	// KeepName selects names without reading a borrowed value.
+	KeepName       func(string) bool
+	MetadataRoot   string
+	MetadataLimits *metatransport.Limits
+	CaptureLimits  *hostmeta.XattrCaptureLimits
+	Context        context.Context
 	// Xattrs reads each entry's extended attributes so they can be counted,
 	// and carried when Keep accepts them. It costs a syscall or two per entry,
 	// so it is opt-in; without it the report says nothing about attributes
@@ -55,11 +66,16 @@ type Options struct {
 // build its own entry type. Data holds a regular file's contents or a symbolic
 // link's target; it is nil for a directory.
 type Node struct {
-	Name     string
-	Mode     os.FileMode
-	ModTime  time.Time
-	UID, GID uint32
-	Data     []byte
+	ModeExplicit bool
+	Times        *hostmeta.FileTimes
+	BSDFlags     *uint32
+	Name         string
+	Mode         os.FileMode
+	ModTime      time.Time
+	UID, GID     uint32
+	Data         []byte
+	DataValue    appledouble.Value
+	XattrValues  map[string]appledouble.Value
 	// Xattrs are the attributes Options.Keep accepted. The rest are counted in
 	// the report instead.
 	Xattrs map[string][]byte
@@ -78,6 +94,9 @@ type Node struct {
 func Walk[E any](dir string, opts *Options, mk func(Node, []E) E) (E, *fidelity.Report, error) {
 	if opts == nil {
 		opts = &Options{}
+	}
+	if opts.MetadataRoot != "" {
+		return walkCarrier(dir, opts, mk)
 	}
 	w := &walker[E]{
 		opts:       opts,
@@ -122,7 +141,13 @@ func (w *walker[E]) warn(rel string, kind fidelity.Kind, detail string) {
 // on every platform because it names a location inside the image, not on the
 // host.
 func (w *walker[E]) readDir(dir, rel string) ([]E, error) {
-	names, err := os.ReadDir(dir)
+	var names []os.DirEntry
+	var err error
+	if w.opts.owner != nil {
+		names, err = fs.ReadDir(w.opts.owner.root.FS(), rel)
+	} else {
+		names, err = os.ReadDir(dir)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -135,7 +160,15 @@ func (w *walker[E]) readDir(dir, rel string) ([]E, error) {
 			childRel = path.Join(rel, name.Name())
 		}
 
-		info, err := os.Lstat(full)
+		var info os.FileInfo
+		if w.opts.owner != nil {
+			if err = w.opts.owner.ctx.Err(); err != nil {
+				return nil, err
+			}
+			info, err = w.opts.owner.root.Lstat(filepath.FromSlash(childRel))
+		} else {
+			info, err = os.Lstat(full)
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -167,7 +200,12 @@ func (w *walker[E]) readDir(dir, rel string) ([]E, error) {
 		var children []E
 		switch {
 		case info.Mode()&os.ModeSymlink != 0:
-			target, err := os.Readlink(full)
+			var target string
+			if w.opts.owner != nil {
+				target, err = w.opts.owner.root.Readlink(filepath.FromSlash(childRel))
+			} else {
+				target, err = os.Readlink(full)
+			}
 			if err != nil {
 				return nil, err
 			}
@@ -182,7 +220,12 @@ func (w *walker[E]) readDir(dir, rel string) ([]E, error) {
 			// is precisely what a compressed file must not have — the writers
 			// refuse an entry whose data fork is not empty.
 		default:
-			if node.Data, err = os.ReadFile(full); err != nil {
+			if w.opts.owner != nil {
+				node.DataValue, err = w.opts.owner.borrow(childRel, info)
+			} else {
+				node.Data, err = os.ReadFile(full)
+			}
+			if err != nil {
 				return nil, err
 			}
 		}

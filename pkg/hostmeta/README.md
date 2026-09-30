@@ -122,14 +122,15 @@ modernize the legacy compression-aware best-effort reader.
 
 ## Access and creation times
 
-`CopyAccessTime(source, target)` copies a regular file's current Darwin access time
-into a distinct open regular file with nanosecond precision. It uses held
-descriptors through x/sys's `Setattrlist` wrapper and fdescfs, so moved names or
-old-path decoys cannot redirect the update. Source metadata, contents and file
+`CopyAccessTime(source, target)` copies a regular file's current access time
+into a distinct open regular file on Darwin, Linux and Windows. It uses held
+descriptors, so moved names or old-path decoys cannot redirect the update.
+Darwin/Linux retain nanoseconds; Windows retains its native 100ns precision.
+Source metadata, contents and file
 positions are unchanged. Only target access time is explicitly set; its metadata
 change time may advance. Other timestamps, ownership, mode, ACLs and xattrs remain
 unchanged. Target hard links share the update. Nil, closed, non-regular and
-same-inode pairs fail; other hosts return `ErrAccessTimeUnsupported` without
+same-inode pairs fail; unsupported hosts return `ErrAccessTimeUnsupported` without
 mutation. The caller needs metadata-write permission on the target and must keep
 both descriptors open without concurrent metadata changes. Use this after a
 source read to update a privately staged clone without repeating allocation.
@@ -146,8 +147,8 @@ write-only and event-only descriptors are rejected. Other hosts return
 explicit operation and does not change replacement API defaults.
 
 `SetCreationTime(file, when)` updates the creation time of an open regular file
-on Darwin with nanosecond precision. It uses the held descriptor through x/sys's
-`Setattrlist` wrapper and fdescfs; replacing the original pathname does not change
+on Darwin with nanosecond precision and Windows with 100ns precision. Windows
+rejects values outside its representable range or precision. Replacing the original pathname does not change
 the target. Contents, access/modification times and other supported metadata remain
 unchanged. Hard-link names share the update. Nil, closed and non-regular files
 fail; other hosts return `ErrCreationTimeUnsupported` without emulating the time.
@@ -155,15 +156,36 @@ This is an explicit caller operation; replacement APIs retain their source
 creation-time preservation contract. Call it on a private staged file before
 restoring restrictive flags, then sync and commit through the caller's writer.
 
+`SetFileTimes(file, modify, access)` sets both timestamps on held regular files or
+directories on Darwin, Linux and Windows. Native filesystem resolution can differ:
+read back results when exact projection matters. Store the original logical values
+in the portable carrier to retain nanoseconds or creation times unavailable on the
+host. These setters never fabricate a native metadata-change timestamp.
+
 This package is the former `internal/hostmeta`, exposed for consumers such as
 `go-macos-codesign`. APFS/HFS+ writers, extraction, capacity checks and signing
 share the same implementation and platform definitions.
 
 `ListXattrs`, `SetXattrs`, `Flags`, `Link`, `AvailableSpace` and the attribute
 constants retain their existing behavior. Attribute extraction is best effort;
-callers must inspect reported failures. The existing Darwin compression-aware
-`ListXattrs` reader still uses direct syscalls with a wrapper fallback. That
-legacy path has not been modernized by this change.
+callers must inspect reported failures. Darwin compression-aware reads use
+option-aware libSystem bindings through the pinned purego dependency, with CGo
+disabled. They no longer use deprecated raw syscalls or silently fall back to
+ordinary visibility when hidden storage cannot be read.
+
+`CaptureXattrs` captures a complete namespace on a held file with explicit
+name, per-value and aggregate budgets. `CaptureXattrsNoFollow` targets the final
+path component itself; its Unix pathname calls require the caller to exclude
+concurrent path replacement. Both distinguish missing metadata from an unknown
+or failed capture and return no partial snapshot. Ordinary attribute values
+still require one complete native read; the explicit budget is not a claim that
+ordinary xattrs support positioned reads.
+
+`ImageMetadataFS` exposes numeric ownership, Unix mode, BSD flags, independent
+timestamps and resolved link identity from APFS/HFS+ readers on every supported
+host. `pkg/metatransport` preserves this logical state outside the payload tree
+when the destination host cannot represent it. Storage and host enforcement are
+separate capabilities; there is no global preservation/native mode.
 
 `PrepareReplacement(source, parent)` provides a separate strict contract:
 

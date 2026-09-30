@@ -1,5 +1,11 @@
 # AppleDouble ownership, native parity and release gates
 
+The current implementation work follows the
+[consolidated completion plan](appledouble-completion-plan.md) and its
+[completion matrix](appledouble-completion-matrix.md). The numbered increments
+below retain migration rationale and evidence references; they are not a new
+sequence of small PRs or separate compatibility modes.
+
 The filesystem SDK owns `pkg/appledouble` (bytes) and `pkg/hostmeta` (filesystem
 operations). `go-macos-pkg` consumes the codec; codesign eventually consumes the
 shared metadata APIs. There must be no APFS-to-package-tooling dependency cycle.

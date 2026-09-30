@@ -2,7 +2,14 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
+  workflow_dispatch:
+
+# A feature revision runs once through its PR; merged main keeps the full matrix.
+concurrency:
+  group: ci-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -318,6 +325,74 @@ jobs:
         with:
           name: stat-copy-coverage-${{ matrix.os }}
           path: artifacts/stat-copy-coverage/
+          if-no-files-found: error
+      - name: Streaming AppleDouble and sequential restoration above 95% coverage
+        env:
+          CGO_ENABLED: "0"
+        run: go run scripts/verify-appledouble-stream.go
+      - name: Upload streaming and sequential coverage
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: appledouble-stream-${{ matrix.os }}
+          path: artifacts/appledouble-stream/
+          if-no-files-found: error
+      - name: Native sequential unpack partial-mutation comparisons
+        if: runner.os == 'macOS'
+        env:
+          CGO_ENABLED: "0"
+        run: go run scripts/verify-unpack-sequential.go
+      - name: Upload native sequential unpack evidence
+        if: always() && runner.os == 'macOS'
+        uses: actions/upload-artifact@v7
+        with:
+          name: unpack-sequential
+          path: artifacts/unpack-sequential/
+          if-no-files-found: error
+      - name: Production metadata carrier and host integration above 95% coverage
+        env:
+          CGO_ENABLED: "0"
+        run: go run scripts/verify-metadata-transport-coverage.go
+      - name: Upload production metadata transport coverage
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: metadata-transport-coverage-${{ matrix.os }}
+          path: artifacts/metadata-transport-coverage/
+          if-no-files-found: error
+      - name: Native-compatible AppleDouble packing above 95% coverage
+        env:
+          CGO_ENABLED: "0"
+        run: go run scripts/verify-appledouble-pack-coverage.go
+      - name: Upload native-compatible packing coverage
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: appledouble-pack-coverage-${{ matrix.os }}
+          path: artifacts/appledouble-pack-coverage/
+          if-no-files-found: error
+      - name: Native AppleDouble packing and oversized-value comparisons
+        if: runner.os == 'macOS'
+        env:
+          CGO_ENABLED: "0"
+        run: go run scripts/verify-appledouble-pack.go
+      - name: Upload native AppleDouble packing evidence
+        if: always() && runner.os == 'macOS'
+        uses: actions/upload-artifact@v7
+        with:
+          name: appledouble-pack
+          path: artifacts/appledouble-pack/
+          if-no-files-found: error
+      - name: Audit portable AppleDouble qualification evidence
+        env:
+          CGO_ENABLED: "0"
+        run: go run scripts/audit-appledouble-evidence.go
+      - name: Upload evidence auditor tests and coverage
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: evidence-audit-${{ matrix.os }}
+          path: artifacts/evidence-audit/
           if-no-files-found: error
       - name: AppleDouble 32-bit address-space regressions
         if: runner.os == 'Linux'

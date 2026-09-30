@@ -9,6 +9,8 @@ import (
 	"golang.org/x/sys/windows"
 )
 
+const missingXattrError = windows.STATUS_NONEXISTENT_EA_ENTRY
+
 func windowsXattrName(name string) error {
 	if len(name) == 0 || len(name) >= 255 || strings.ContainsAny(name, `\/:*?"<>|,+=[];`) {
 		return os.ErrInvalid

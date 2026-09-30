@@ -11,8 +11,8 @@ import (
 var ErrAccessTimeUnsupported = errors.New("access-time copying is unsupported on this host")
 
 // CopyAccessTime copies the current access time between distinct open regular
-// files on Darwin, preserving nanosecond precision. Other hosts return
-// ErrAccessTimeUnsupported. It does not record a read or change source metadata.
+// files on Darwin, Linux or Windows, preserving the source's native precision.
+// Other hosts return ErrAccessTimeUnsupported. It does not record a read or change source metadata.
 // Target contents, position, creation/modification times, ownership, mode, ACLs
 // and xattrs are unchanged; its metadata-change time may advance. Hard links to
 // the target observe the update. Metadata-write permission is required.

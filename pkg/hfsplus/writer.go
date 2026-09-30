@@ -26,6 +26,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
 )
 
@@ -33,8 +34,13 @@ import (
 // Children; a regular file or symlink carries its bytes in Data (for a
 // symlink, Data is the target path).
 type Entry struct {
-	Name string
-	Mode os.FileMode // type, permissions and Go set-ID/sticky bits
+	// DataValue, ResourceForkValue and XattrValues borrow immutable sized sources.
+	// Keep their owner open until CreateImage completes.
+	DataValue         appledouble.Value
+	ResourceForkValue appledouble.Value
+	XattrValues       map[string]appledouble.Value
+	Name              string
+	Mode              os.FileMode // type, permissions and Go set-ID/sticky bits
 	// ModeExplicit disables default permissions, including on the root.
 	// Use true to preserve 0000; false retains the legacy 0644/0755 defaults.
 	// Hard-link groups use the first entry's inode metadata.
@@ -172,6 +178,8 @@ type fileNode struct {
 type attrWrite struct {
 	name   string
 	value  []byte
+	source appledouble.Value
+	size   int
 	inline bool
 	blocks uint32
 	start  uint32
@@ -212,6 +220,11 @@ func CreateImage(w io.WriterAt, sizeBytes int64, volumeName string, root *Entry,
 	}
 	if root == nil {
 		root = &Entry{}
+	}
+	var prepareErr error
+	root, prepareErr = prepareValueTree(root, blockSize)
+	if prepareErr != nil {
+		return prepareErr
 	}
 	if err := validateTree(root); err != nil {
 		return err
@@ -436,7 +449,7 @@ func (b *builder) addChildren(parent *fileNode, children []*Entry) {
 		// A directory has no forks, and a symlink's target is its data fork;
 		// neither carries a resource fork.
 		if !n.isDir && !n.isSymlink {
-			n.rsrcLen = len(ce.ResourceFork)
+			n.rsrcLen = resourceSize(ce)
 			if n.rsrcLen > 0 {
 				n.rsrcBlocks = uint32((n.rsrcLen + b.blockSize - 1) / b.blockSize)
 			}
@@ -454,11 +467,17 @@ func (b *builder) addChildren(parent *fileNode, children []*Entry) {
 // by name so the image is byte-identical for identical input, and decides which
 // values fit inside their record.
 func (b *builder) collectAttrs(n *fileNode) {
-	if len(n.entry.Xattrs) == 0 {
+	if len(n.entry.Xattrs) == 0 && len(n.entry.XattrValues) == 0 {
 		return
 	}
 	names := make([]string, 0, len(n.entry.Xattrs))
 	for name := range n.entry.Xattrs {
+		if name == finderInfoName {
+			continue
+		}
+		names = append(names, name)
+	}
+	for name := range n.entry.XattrValues {
 		names = append(names, name)
 	}
 	sort.Strings(names)
@@ -466,9 +485,14 @@ func (b *builder) collectAttrs(n *fileNode) {
 	limit := maxInlineAttrSize(b.blockSize)
 	for _, name := range names {
 		value := n.entry.Xattrs[name]
-		a := &attrWrite{name: name, value: value, inline: len(value) <= limit}
+		size := len(value)
+		source := n.entry.XattrValues[name]
+		if source != nil {
+			size = int(source.Size())
+		}
+		a := &attrWrite{name: name, value: value, source: source, size: size, inline: size <= limit}
 		if !a.inline {
-			a.blocks = uint32((len(value) + b.blockSize - 1) / b.blockSize)
+			a.blocks = uint32((size + b.blockSize - 1) / b.blockSize)
 		}
 		n.attrs = append(n.attrs, a)
 		b.attrCount++
@@ -490,7 +514,7 @@ func (b *builder) attrRecords() []btRecord {
 			}
 			recs = append(recs, btRecord{
 				key:     key,
-				payload: attrForkRecord(forkDescriptor(len(a.value), a.blocks, a.start)),
+				payload: attrForkRecord(forkDescriptor(a.size, a.blocks, a.start)),
 			})
 		}
 	}
@@ -502,21 +526,25 @@ func (b *builder) attrRecords() []btRecord {
 // determines the total block count.
 func (b *builder) computeLayout(sizeBytes int64, catalogBlks, attrBlks uint32) (layout, error) {
 	bs := b.blockSize
-	var totalData uint32
+	var totalData uint64
 	for _, f := range b.fileNodes {
-		totalData += f.dataBlocks + f.rsrcBlocks
+		totalData += uint64(f.dataBlocks) + uint64(f.rsrcBlocks)
 	}
 	for _, n := range b.allNodes {
 		for _, a := range n.attrs {
-			totalData += a.blocks
+			totalData += uint64(a.blocks)
 		}
+	}
+	// Bound allocation arithmetic before narrowing on-disk block numbers.
+	if err := validateLayoutBlocks(totalData, catalogBlks, attrBlks, bs, sizeBytes); err != nil {
+		return layout{}, err
 	}
 
 	// Metadata before data: block 0, bitmap, extents (1 node), catalog.
 	// Data follows; the last block holds the alternate volume header.
 	place := func(total uint32) layout {
-		bitmapBytes := (total + 7) / 8
-		bitmapBlks := (bitmapBytes + uint32(bs) - 1) / uint32(bs)
+		bitmapBytes := (uint64(total) + 7) / 8
+		bitmapBlks := uint32((bitmapBytes + uint64(bs) - 1) / uint64(bs))
 		lay := layout{blockSize: bs, totalBlocks: total}
 		next := uint32(1) // block 0 reserved
 		lay.bitmapStart, lay.bitmapBlocks = next, bitmapBlks
@@ -528,7 +556,7 @@ func (b *builder) computeLayout(sizeBytes int64, catalogBlks, attrBlks uint32) (
 		lay.attrStart, lay.attrBlks = next, attrBlks
 		next += attrBlks
 		lay.dataStart = next
-		next += totalData
+		next += uint32(totalData)
 		lay.firstFree = next
 		return lay
 	}
@@ -605,7 +633,13 @@ func (b *builder) writeFileData(w io.WriterAt) error {
 		}
 		if f.rsrcLen > 0 {
 			off := int64(f.rsrcStart) * int64(b.blockSize)
-			if _, err := w.WriteAt(f.entry.ResourceFork, off); err != nil {
+			var err error
+			if f.entry.ResourceForkValue != nil {
+				err = writeValue(w, off, f.entry.ResourceForkValue, f.rsrcLen)
+			} else {
+				_, err = w.WriteAt(f.entry.ResourceFork, off)
+			}
+			if err != nil {
 				return fmt.Errorf("hfsplus: writing resource fork of %s: %w", f.name, err)
 			}
 		}
@@ -616,7 +650,13 @@ func (b *builder) writeFileData(w io.WriterAt) error {
 				continue
 			}
 			off := int64(a.start) * int64(b.blockSize)
-			if _, err := w.WriteAt(a.value, off); err != nil {
+			var err error
+			if a.source != nil {
+				err = writeValue(w, off, a.source, a.size)
+			} else {
+				_, err = w.WriteAt(a.value, off)
+			}
+			if err != nil {
 				return fmt.Errorf("hfsplus: writing attribute %s of %s: %w", a.name, n.name, err)
 			}
 		}
@@ -768,6 +808,7 @@ func (b *builder) normalRecord(n *fileNode) btRecord {
 			BSDInfo:          bsd,
 			FolderCount:      subFolders,
 		}
+		setFolderFinderInfo(&folder, n)
 		if n.bsdFlags&0x40 != 0 {
 			setDocumentID(&folder.FinderInfo, uint32(n.cnid))
 		}
@@ -789,6 +830,7 @@ func (b *builder) normalRecord(n *fileNode) btRecord {
 		DataFork:         b.forkFor(n),
 		ResourceFork:     b.rsrcForkFor(n),
 	}
+	setFileFinderInfo(&file, n)
 	if n.bsdFlags&0x40 != 0 {
 		setDocumentID(&file.FinderInfo, uint32(n.cnid))
 	}

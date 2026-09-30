@@ -35,8 +35,8 @@ func TestSetCreationTimeInvalidFiles(t *testing.T) {
 }
 
 func TestSetCreationTimeUnsupportedHost(t *testing.T) {
-	if runtime.GOOS == "darwin" {
-		t.Skip("Darwin supports creation-time updates")
+	if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
+		t.Skip("host supports creation-time updates; covered by native tests")
 	}
 	file := replacementSource(t, 0640)
 	before, err := file.Stat()

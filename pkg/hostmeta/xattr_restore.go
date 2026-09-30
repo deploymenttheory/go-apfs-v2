@@ -80,6 +80,14 @@ func RestoreXattr(name string, value []byte, options XattrRestoreOptions, write 
 	if validXattrName(name) != nil || name == appledouble.ACLTextName || name == appledouble.QuarantineName || uint64(len(value)) > uint64(^uint32(0)) {
 		return result, fmt.Errorf("ordinary xattr restoration input: %w", os.ErrInvalid)
 	}
+	return restoreXattr(name, value, options, write)
+}
+
+// restoreXattr executes already framed records. Sequential native unpack also
+// routes empty/invalid-UTF8 names here: the held provider supplies the actual
+// write refusal after Start, instead of changing native callback/error order.
+func restoreXattr(name string, value []byte, options XattrRestoreOptions, write func(string, []byte) error) (result XattrRestoreResult, err error) {
+	result.Copied = options.InitialCopied
 	if !unpackXattrSelected(name, options) {
 		result.Completed = true
 		return result, nil

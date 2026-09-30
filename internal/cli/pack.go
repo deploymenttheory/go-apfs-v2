@@ -3,6 +3,8 @@
 package cli
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -16,14 +18,15 @@ import (
 )
 
 var (
-	packCompression string
-	packChunkKiB    uint
-	packVolumeName  string
-	packFS          string
-	packSnapshot    string
-	packStrict      bool
-	packDecompress  bool
-	packUUIDs       writeIdentityFlags
+	packCompression  string
+	packChunkKiB     uint
+	packVolumeName   string
+	packFS           string
+	packSnapshot     string
+	packStrict       bool
+	packDecompress   bool
+	packMetadataRoot string
+	packUUIDs        writeIdentityFlags
 )
 
 var packCmd = &cobra.Command{
@@ -48,14 +51,18 @@ Chunks are compressed with --compression: lzfse (default, Apple's modern codec),
 lzma (smallest output, slowest), zlib, or none. Every codec falls back to raw
 storage for any chunk it cannot shrink.
 
-Fidelity: packing a directory is lossy. The new volume carries regular files,
-directories and symbolic links with their mode, owner, group and modification
-time. It does not carry extended attributes (including resource forks and
-ACLs), hard links (each name becomes a separate copy), device nodes, FIFOs or
-sockets (skipped), BSD flags, or a distinct creation time. Each loss is counted
-and reported, and --output json exposes the counts. --strict refuses to write
-anything at all when the source contains something the volume cannot carry.
-Repacking an existing DMG loses nothing. See docs/write-fidelity.md.
+Fidelity depends on the source metadata and the destination file system. The
+writers carry regular files, directories, symbolic links, attributes and resource
+forks. An explicitly selected metadata carrier also restores the captured Darwin
+ownership, times, flags, security and hard-link relationships. File-system limits
+and unsupported objects are reported; --output json exposes fidelity counts.
+--strict refuses to write when the source contains something the volume cannot
+carry. Repacking an existing DMG preserves its raw image. See docs/write-fidelity.md.
+
+--metadata-root explicitly associates a directory source with its portable
+metadata carrier from extract. Original names, links and captured metadata are
+restored from verified blobs; conflicting native edits are reported as errors.
+Keep the carrier outside the payload tree. It is never discovered implicitly.
 
 Exit codes: 6 means entries were skipped entirely and the image is incomplete;
 5 means --strict refused to write. Metadata that could not be carried is
@@ -78,6 +85,7 @@ func init() {
 	packCmd.Flags().StringVar(&packSnapshot, "snapshot", "", "APFS only: also create a snapshot with this name capturing the packed volume")
 	packCmd.Flags().BoolVar(&packStrict, "strict", false, "refuse to write anything if the source contains something the volume cannot carry")
 	packCmd.Flags().BoolVar(&packDecompress, "decompress", false, "write transparently compressed files out in full instead of carrying their compression")
+	packCmd.Flags().StringVar(&packMetadataRoot, "metadata-root", "", "explicit portable metadata directory associated with SOURCE")
 	packUUIDs.register(packCmd)
 }
 
@@ -96,7 +104,10 @@ func runPack(cmd *cobra.Command, args []string) error {
 	}
 
 	if info.IsDir() {
-		return packDirectory(srcPath, dstPath, encOpts)
+		return packDirectory(cmd.Context(), srcPath, dstPath, encOpts)
+	}
+	if packMetadataRoot != "" {
+		return usageErrorf("--metadata-root requires a directory source")
 	}
 	return packRepack(srcPath, dstPath, encOpts)
 }
@@ -124,7 +135,7 @@ func packEncodeOptions() (*disk.EncodeOptions, error) {
 
 // packDirectory writes srcDir into a new volume (HFS+ or APFS) and wraps it in
 // a DMG.
-func packDirectory(srcDir, dstPath string, encOpts *disk.EncodeOptions) error {
+func packDirectory(ctx context.Context, srcDir, dstPath string, encOpts *disk.EncodeOptions) error {
 	volname := packVolumeName
 	if volname == "" {
 		volname = filepath.Base(filepath.Clean(srcDir))
@@ -143,16 +154,16 @@ func packDirectory(srcDir, dstPath string, encOpts *disk.EncodeOptions) error {
 
 	switch strings.ToLower(packFS) {
 	case "hfs+", "hfsx":
-		return packDirectoryHFS(srcDir, dstPath, volname, encOpts)
+		return packDirectoryHFS(ctx, srcDir, dstPath, volname, encOpts)
 	case "apfs":
-		return packDirectoryAPFS(srcDir, dstPath, volname, encOpts)
+		return packDirectoryAPFS(ctx, srcDir, dstPath, volname, encOpts)
 	default:
 		return usageErrorf("invalid --fs %q: must be HFS+ or APFS", packFS)
 	}
 }
 
 // packDirectoryHFS writes srcDir into a new HFS+ volume and wraps it in a DMG.
-func packDirectoryHFS(srcDir, dstPath, volname string, encOpts *disk.EncodeOptions) error {
+func packDirectoryHFS(ctx context.Context, srcDir, dstPath, volname string, encOpts *disk.EncodeOptions) (result error) {
 	volumeUUID, err := packUUIDs.resolveVolumeOnly("HFS+")
 	if err != nil {
 		return err
@@ -160,14 +171,18 @@ func packDirectoryHFS(srcDir, dstPath, volname string, encOpts *disk.EncodeOptio
 	fixed, clamp := writerTimes()
 
 	// Walk before writing, so --strict can refuse without leaving a file behind.
-	root, report, err := hfsplus.EntryTreeFromDir(srcDir, &hfsplus.WalkOptions{
-		Xattrs:     true,
-		Decompress: packDecompress,
-		Warn:       fidelityWarner(),
+	tree, err := hfsplus.OpenEntryTreeFromDir(srcDir, &hfsplus.WalkOptions{
+		Context:      ctx,
+		MetadataRoot: packMetadataRoot,
+		Xattrs:       true,
+		Decompress:   packDecompress,
+		Warn:         fidelityWarner(),
 	})
 	if err != nil {
 		return fmt.Errorf("unable to read %s: %w", srcDir, err)
 	}
+	defer func() { result = errors.Join(result, tree.Close()) }()
+	root, report := tree.Root, tree.Report
 	if err := enforceStrict(report, packStrict, srcDir); err != nil {
 		return err
 	}

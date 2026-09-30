@@ -4,8 +4,10 @@
 package tools
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -19,6 +21,7 @@ import (
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/metatransport"
 	"github.com/schollz/progressbar/v3"
 )
 
@@ -39,6 +42,10 @@ type XattrVolume interface {
 	Xattrs(name string) (map[string][]byte, error)
 }
 
+// XattrsCarried counts attributes safely published in the explicit carrier.
+// This is separate from attributes actually applied by the host kernel.
+func (e *Extractor) XattrsCarried() int { return e.xattrsCarried }
+
 // SymlinkMode controls how symbolic links are materialized on disk.
 type SymlinkMode int
 
@@ -56,12 +63,22 @@ const (
 
 // Extractor handles file extraction from APFS volumes
 type Extractor struct {
-	Volume         VolumeFS
-	Destination    string
-	Pattern        *regexp.Regexp
-	PreserveMeta   bool
-	Verbose        bool
-	VerifyChecksum bool
+	// MetadataRoot explicitly selects a separate portable carrier directory.
+	// Selected categories survive independently of host metadata support.
+	// ProjectNative explicitly also attempts native enforcement/materialization.
+	// It requires MetadataRoot and may restrict subsequent payload access.
+	ProjectNative       bool
+	projectionResults   []ProjectionResult
+	MetadataRoot        string
+	MetadataLimits      *metatransport.Limits
+	NativeCaptureLimits *hostmeta.XattrCaptureLimits
+	Context             context.Context
+	Volume              VolumeFS
+	Destination         string
+	Pattern             *regexp.Regexp
+	PreserveMeta        bool
+	Verbose             bool
+	VerifyChecksum      bool
 	// Xattrs restores extended attributes onto the extracted files. Without
 	// it, extracting and repacking a tree silently discards every attribute,
 	// so the round trip is not faithful however capable the writer is.
@@ -70,6 +87,7 @@ type Extractor struct {
 	filesExtracted   int
 	xattrsRestored   int
 	xattrsUnwritable int
+	xattrsCarried    int
 	entriesSkipped   int
 	symlinksDegraded int
 	namesRemapped    int
@@ -106,11 +124,20 @@ func (e *Extractor) destPath(rel string) string {
 
 // ExtractAll extracts the entire volume into the destination directory.
 func (e *Extractor) ExtractAll() error {
+	if e.ProjectNative && e.MetadataRoot == "" {
+		return errors.New("native projection requires a metadata root")
+	}
+	if e.MetadataRoot != "" {
+		return e.extractCarrier(".", "")
+	}
 	return e.extractTree(".", "")
 }
 
 // ExtractByPath extracts a specific file or directory by absolute volume path.
 func (e *Extractor) ExtractByPath(volumePath string, recursive bool) error {
+	if e.ProjectNative && e.MetadataRoot == "" {
+		return errors.New("native projection requires a metadata root")
+	}
 	name := FSNameFromVolumePath(volumePath)
 
 	info, err := e.Volume.Stat(name)
@@ -119,6 +146,12 @@ func (e *Extractor) ExtractByPath(volumePath string, recursive bool) error {
 	}
 
 	base := path.Base(name)
+	if e.MetadataRoot != "" {
+		if info.IsDir() && !recursive {
+			return fmt.Errorf("%s is a directory; use --recursive to extract its contents", volumePath)
+		}
+		return e.extractCarrier(name, base)
+	}
 
 	if info.IsDir() {
 		if !recursive {

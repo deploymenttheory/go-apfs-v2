@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/decmpfs"
 )
@@ -42,7 +43,13 @@ func walkEntries(e *Entry, path string, visit func(*Entry, string) error) error 
 }
 
 func validateEntry(e *Entry, path string) error {
+	if err := validateFinderInfo(e); err != nil {
+		return err
+	}
 	for name := range e.Xattrs {
+		if !utf8.ValidString(name) {
+			return fmt.Errorf("hfsplus: invalid UTF-8 attribute name on %q", path)
+		}
 		if name == "" {
 			return fmt.Errorf("hfsplus: %q has an extended attribute with an empty name", path)
 		}
@@ -59,7 +66,7 @@ func validateEntry(e *Entry, path string) error {
 		return err
 	}
 
-	attr, compressed := e.Xattrs[decmpfs.AttributeName]
+	_, compressed := compressedValue(e)
 	if !compressed {
 		return nil
 	}
@@ -67,7 +74,7 @@ func validateEntry(e *Entry, path string) error {
 	// types the resource fork alongside it. HFS+ keeps that fork on the
 	// catalog record rather than in the attributes file, so it is passed from
 	// there.
-	if err := decmpfs.Validate(attr, e.dataLen(), e.ResourceFork); err != nil {
+	if err := validateCompressedValue(e); err != nil {
 		return fmt.Errorf("hfsplus: %q: %w", path, err)
 	}
 	if e.Mode.IsDir() || e.Mode&os.ModeSymlink != 0 {

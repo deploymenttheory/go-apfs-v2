@@ -13,7 +13,8 @@ import (
 var ErrCreationTimeUnsupported = errors.New("creation time is unsupported on this host")
 
 // SetCreationTime sets the creation time of an already-open regular file on
-// Darwin, using nanosecond precision. Other hosts return ErrCreationTimeUnsupported.
+// Darwin (nanoseconds) or Windows (100-nanosecond precision). Windows refuses
+// unrepresentable times instead of rounding. Other hosts return ErrCreationTimeUnsupported.
 // It leaves contents, access/modification times, ownership, mode, ACLs and xattrs
 // unchanged. The inode is updated, so all hard-link names observe the new time.
 //

@@ -1,0 +1,83 @@
+name: Metadata transport
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: metadata-transport-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  transport:
+    name: Metadata transport journeys (${{ matrix.goos }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, goos: linux }
+          - { os: macos-latest, goos: darwin }
+          - { os: windows-latest, goos: windows }
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Sixteen image extraction and repacking journeys
+        env:
+          CGO_ENABLED: "0"
+        run: go run scripts/verify-metadata-transport.go
+      - name: Upload complete images and qualification evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: metadata-transport-${{ matrix.goos }}
+          path: artifacts/metadata-transport/
+          if-no-files-found: error
+
+  native-foreign:
+    name: Native Mac verification of Linux and Windows images
+    needs: transport
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - uses: actions/download-artifact@v8.0.1
+        with:
+          pattern: metadata-transport-*
+          path: artifacts/foreign
+      - name: Independently mount and read Linux output
+        env:
+          CGO_ENABLED: "0"
+        run: >-
+          go run scripts/verify-metadata-transport.go
+          -foreign artifacts/foreign/metadata-transport-linux
+          -foreign-goos linux
+          -reference artifacts/foreign/metadata-transport-darwin
+          -out artifacts/metadata-transport-linux-native
+      - name: Independently mount and read Windows output
+        env:
+          CGO_ENABLED: "0"
+        run: >-
+          go run scripts/verify-metadata-transport.go
+          -foreign artifacts/foreign/metadata-transport-windows
+          -foreign-goos windows
+          -reference artifacts/foreign/metadata-transport-darwin
+          -out artifacts/metadata-transport-windows-native
+      - name: Upload independent foreign-host readback evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: metadata-transport-foreign-native
+          path: |
+            artifacts/metadata-transport-linux-native/
+            artifacts/metadata-transport-windows-native/
+          if-no-files-found: error

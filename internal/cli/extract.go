@@ -7,18 +7,22 @@ import (
 	"time"
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/tools"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/metatransport"
 	"github.com/schollz/progressbar/v3"
 	"github.com/spf13/cobra"
 )
 
 var (
-	extractDestination  string
-	extractPattern      string
-	extractRecursive    bool
-	extractPreserveMeta bool
-	extractXattrs       bool
-	extractVerify       bool
-	extractSymlinks     string
+	extractDestination    string
+	extractPattern        string
+	extractRecursive      bool
+	extractPreserveMeta   bool
+	extractXattrs         bool
+	extractVerify         bool
+	extractSymlinks       string
+	extractMetadataRoot   string
+	extractMetadataBudget int64
+	extractProjectNative  bool
 )
 
 var extractCmd = &cobra.Command{
@@ -35,6 +39,16 @@ are silently discarded, so extracting and repacking a tree is not a faithful
 round trip however capable the writer is. Attributes the kernel reserves, or
 that the destination file system will not take, are counted and reported rather
 than failing the extraction.
+
+--metadata-root selects a separate directory for portable metadata transport.
+With it, selected --xattrs/--preserve-meta categories are retained with original
+names and link relationships for repacking on Linux, macOS and Windows. The
+payload destination must be empty. Supply the same metadata directory explicitly
+to pack; arbitrary ._ files are always ordinary payload files.
+
+--project-native also applies selected metadata to the working copy, and requires
+--metadata-root. This can enforce restrictive permissions or ACLs. Native outcomes
+are reported separately; the carrier retains metadata the host cannot represent.
 
 Symlink handling (--symlinks): "auto" (default) creates a real symlink where
 the OS allows it and otherwise writes the link target into a regular file
@@ -59,10 +73,16 @@ func init() {
 	extractCmd.Flags().BoolVar(&extractXattrs, "xattrs", false, "restore extended attributes onto the extracted files")
 	extractCmd.Flags().BoolVar(&extractVerify, "verify", false, "verify extracted files against source checksums")
 	extractCmd.Flags().StringVar(&extractSymlinks, "symlinks", "auto", "symlink handling: auto, real or file")
+	extractCmd.Flags().StringVar(&extractMetadataRoot, "metadata-root", "", "separate directory for portable metadata; required again when repacking")
+	extractCmd.Flags().Int64Var(&extractMetadataBudget, "metadata-blob-limit", 1<<40, "maximum bytes per portable metadata blob")
+	extractCmd.Flags().BoolVar(&extractProjectNative, "project-native", false, "also apply selected metadata to the host payload; requires --metadata-root")
 	extractCmd.MarkFlagRequired("destination")
 }
 
 func runExtract(cmd *cobra.Command, args []string) error {
+	if extractProjectNative && extractMetadataRoot == "" {
+		return usageErrorf("--project-native requires --metadata-root")
+	}
 	imagePath := args[0]
 	volumePath := "/"
 	if len(args) == 2 {
@@ -102,6 +122,12 @@ func runExtract(cmd *cobra.Command, args []string) error {
 	extractor.Verbose = opts.Verbose
 	extractor.VerifyChecksum = extractVerify
 	extractor.SymlinkMode = symlinkMode
+	extractor.MetadataRoot = extractMetadataRoot
+	extractor.ProjectNative = extractProjectNative
+	extractor.Context = cmd.Context()
+	limits := metatransport.DefaultLimits()
+	limits.BlobBytes = extractMetadataBudget
+	extractor.MetadataLimits = &limits
 
 	if !opts.Verbose && !opts.Quiet && stderrIsTTY() {
 		extractor.SetProgressBar(progressbar.NewOptions(-1,
@@ -141,6 +167,10 @@ func runExtract(cmd *cobra.Command, args []string) error {
 			restored, unwritable := extractor.XattrStats()
 			summary["xattrsRestored"] = restored
 			summary["xattrsUnwritable"] = unwritable
+			summary["xattrsCarried"] = extractor.XattrsCarried()
+		}
+		if extractProjectNative {
+			summary["nativeProjection"] = projectionJSON(extractor.NativeProjectionResults())
 		}
 		if err := jsonOut(summary); err != nil {
 			return err
@@ -157,8 +187,18 @@ func runExtract(cmd *cobra.Command, args []string) error {
 		if extractXattrs {
 			restored, unwritable := extractor.XattrStats()
 			fmt.Printf("Restored %d extended attribute(s)\n", restored)
+			if carried := extractor.XattrsCarried(); carried > 0 {
+				fmt.Printf("Preserved %d extended attribute(s) in %s\n", carried, extractMetadataRoot)
+			}
 			if unwritable > 0 {
 				fmt.Printf("Note: %d extended attribute(s) could not be written to this file system\n", unwritable)
+			}
+		}
+	}
+	if extractProjectNative && opts.Output != "json" {
+		for _, r := range extractor.NativeProjectionResults() {
+			if r.Status != tools.ProjectionApplied || !r.Verified {
+				fmt.Fprintf(cmd.ErrOrStderr(), "Native metadata %s %s: %s (verified=%t): %v\n", r.Path, r.Field, r.Status, r.Verified, r.Err)
 			}
 		}
 	}
@@ -177,4 +217,16 @@ func runExtract(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+func projectionJSON(results []tools.ProjectionResult) []map[string]any {
+	rows := make([]map[string]any, 0, len(results))
+	for _, result := range results {
+		row := map[string]any{"path": result.Path, "field": result.Field, "status": result.Status, "verified": result.Verified}
+		if result.Err != nil {
+			row["error"] = result.Err.Error()
+		}
+		rows = append(rows, row)
+	}
+	return rows
 }
