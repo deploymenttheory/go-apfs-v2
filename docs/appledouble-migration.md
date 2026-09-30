@@ -197,7 +197,7 @@ Validated unpack execution now composes destination-xattr cleanup, ordered ATTR
 records, dedicated FinderInfo/resource-fork slots, deferred ACL and final stat.
 The portable executor retains ignored and overwritten failures and works through
 existing image APIs on all three OSes. Complete pinned Apple functions qualify
-1,907 controlled cases and 96 live scenarios, including 192 verified removals and
+1,907 controlled cases and 96 live scenarios per reviewed host profile, including 192 verified removals and
 89 read-back-verified writes. Production held/carrier providers and the outer
 lifecycle remain open; input decoding deliberately completes before destination
 mutation. See [unpack restoration](appledouble-unpack-restoration.md). This

@@ -110,16 +110,24 @@ Pinned source hashes:
 - `xattr_flags.c`: `991a340ad26bf9086f9fcbca8eafb0dee4c2ab38e41d152c60fa218e5d4226dc`
 - `xattr_flags.h`: `0fd2d35d0ae3efba30d30b8c470dae4bc42972455c6d8d5246fec44732f43d49`
 
-The reviewed corpus covers **1,907 controlled cases and 96 live file/directory
+Each reviewed host profile covers **1,907 controlled cases and 96 live file/directory
 scenarios**. Live scenarios use real list/remove/set/get/stat/time operations:
 **192 stale-attribute removals** are checked for absence and **89 successful
 writes** are independently read back. Callback cancellation, refusal and skipping
 mean not every scenario performs a write. Source data is always a valid captured
 snapshot; this corpus does not qualify corrupt-source partial mutations.
 
-Every OS replays the same corpus, exercises provider-contract/input failures,
+Two complete profiles retain the native traces from macOS 27 and CI macOS 26.6.2.
+The former includes host-added `com.apple.provenance` in the initial destination
+namespace; the latter does not. Both preserve the exact list and removal events.
+Native verification must match one complete profile, including every event and
+return value; it does not filter or reorder observations. Any unreviewed host
+variation fails qualification.
+
+Every OS replays both complete profiles (the same 1,907 controlled inputs plus
+192 captured live observations across the two hosts), exercises provider-contract/input failures,
 checks source ownership and requires more than 95% coverage of the new production
-file. Current focused coverage is **125/125 statements (100%)**, with **2,013
+file. Current focused coverage is **125/125 statements (100%)**, with **4,018
 passing test records** and no focused skips. Four APFS/APFS-sensitive/HFSX/HFS+ images prove explicit and coordinated
 stage execution produce identical bytes, with hard-link aliases and APFS
 snapshots. Actual readers verify the retained metadata. These new images are not

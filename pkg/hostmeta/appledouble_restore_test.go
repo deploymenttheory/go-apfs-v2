@@ -19,57 +19,63 @@ import (
 )
 
 func TestUnpackRestoreNative(t *testing.T) {
-	z, e := os.Open("../../testdata/appledouble/native/unpack-restore.json.gz")
-	if e != nil {
-		t.Fatal(e)
-	}
-	defer z.Close()
-	g, e := gzip.NewReader(z)
-	if e != nil {
-		t.Fatal(e)
-	}
-	defer g.Close()
-	var f unpackrestore.Fixture
-	if e = json.NewDecoder(g).Decode(&f); e != nil {
-		t.Fatal(e)
-	}
-	b, e := os.ReadFile("../../testdata/appledouble/native/unpack-restore.c")
-	if e != nil {
-		t.Fatal(e)
-	}
-	if fmt.Sprintf("%x", sha256.Sum256(b)) != f.HelperSHA256 || f.CopyfileSHA256 != "19f3ad0910f05bb2a6ae982ebdabcc4dc9c911b65ec2d99e75b7c4c52272805c" || f.PolicySHA256 != "991a340ad26bf9086f9fcbca8eafb0dee4c2ab38e41d152c60fa218e5d4226dc" || f.HeaderSHA256 != "0fd2d35d0ae3efba30d30b8c470dae4bc42972455c6d8d5246fec44732f43d49" {
-		t.Fatal("source provenance")
-	}
-	if !reflect.DeepEqual(f.Images, unpackrestore.Images()) {
-		t.Fatal("image inputs changed")
-	}
-	for name, set := range map[string]struct{ actual, want []unpackrestore.Case }{"model": {f.Cases, unpackrestore.Cases()}, "live": {f.Live, unpackrestore.LiveCases()}} {
-		if len(set.actual) != len(set.want) {
-			t.Fatal("missing cases")
-		}
-		for i, c := range set.actual {
-			if name == "live" {
-				writes := 0
-				for _, event := range c.Native.Events {
-					if (event.Kind == "ordinary" || event.Kind == "finder-info" || event.Kind == "resource-fork") && event.Code == 0 {
-						writes++
+	for _, name := range []string{"unpack-restore.json.gz", "unpack-restore-ci.json.gz"} {
+		t.Run(name, func(t *testing.T) {
+			z, e := os.Open("../../testdata/appledouble/native/" + name)
+			if e != nil {
+				t.Fatal(e)
+			}
+			defer z.Close()
+			g, e := gzip.NewReader(z)
+			if e != nil {
+				t.Fatal(e)
+			}
+			defer g.Close()
+			var f unpackrestore.Fixture
+			if e = json.NewDecoder(g).Decode(&f); e != nil {
+				t.Fatal(e)
+			}
+			b, e := os.ReadFile("../../testdata/appledouble/native/unpack-restore.c")
+			if e != nil {
+				t.Fatal(e)
+			}
+			// Git may check the qualification helper out with CRLF on Windows.
+			b = bytes.ReplaceAll(b, []byte("\r\n"), []byte("\n"))
+			if fmt.Sprintf("%x", sha256.Sum256(b)) != f.HelperSHA256 || f.CopyfileSHA256 != "19f3ad0910f05bb2a6ae982ebdabcc4dc9c911b65ec2d99e75b7c4c52272805c" || f.PolicySHA256 != "991a340ad26bf9086f9fcbca8eafb0dee4c2ab38e41d152c60fa218e5d4226dc" || f.HeaderSHA256 != "0fd2d35d0ae3efba30d30b8c470dae4bc42972455c6d8d5246fec44732f43d49" {
+				t.Fatal("source provenance")
+			}
+			if !reflect.DeepEqual(f.Images, unpackrestore.Images()) {
+				t.Fatal("image inputs changed")
+			}
+			for name, set := range map[string]struct{ actual, want []unpackrestore.Case }{"model": {f.Cases, unpackrestore.Cases()}, "live": {f.Live, unpackrestore.LiveCases()}} {
+				if len(set.actual) != len(set.want) {
+					t.Fatal("missing cases")
+				}
+				for i, c := range set.actual {
+					if name == "live" {
+						writes := 0
+						for _, event := range c.Native.Events {
+							if (event.Kind == "ordinary" || event.Kind == "finder-info" || event.Kind == "resource-fork") && event.Code == 0 {
+								writes++
+							}
+						}
+						if !c.Native.RemovedSeeds || c.Native.VerifiedWrites != writes {
+							t.Fatal("missing native readback/removal evidence")
+						}
 					}
-				}
-				if !c.Native.RemovedSeeds || c.Native.VerifiedWrites != writes {
-					t.Fatal("missing native readback/removal evidence")
+					spec := c
+					spec.Native = unpackrestore.Observation{}
+					if !reflect.DeepEqual(spec, set.want[i]) {
+						t.Fatalf("changed %s input %d", name, i)
+					}
+					t.Run(fmt.Sprintf("%s-%04d", name, i), func(t *testing.T) {
+						if e := unpackrestore.Replay(c, f.Images); e != nil {
+							t.Fatal(e)
+						}
+					})
 				}
 			}
-			spec := c
-			spec.Native = unpackrestore.Observation{}
-			if !reflect.DeepEqual(spec, set.want[i]) {
-				t.Fatalf("changed %s input %d", name, i)
-			}
-			t.Run(fmt.Sprintf("%s-%04d", name, i), func(t *testing.T) {
-				if e := unpackrestore.Replay(c, f.Images); e != nil {
-					t.Fatal(e)
-				}
-			})
-		}
+		})
 	}
 }
 

@@ -107,10 +107,10 @@ func verify() error {
 	if total == 0 || covered*100 <= total*95 {
 		return fmt.Errorf("Unpack restoration coverage must exceed 95%%: %d/%d", covered, total)
 	}
-	if passed < 2013 {
+	if passed < 4018 {
 		return fmt.Errorf("incomplete unpack restoration tests: %d", passed)
 	}
-	files := []string{"pkg/hostmeta/appledouble_restore.go", "pkg/hostmeta/appledouble_restore_test.go", "pkg/hostmeta/appledouble_restore_image_test.go", "internal/testutil/unpackrestore/oracle.go", "scripts/verify-unpack-restore.go", "scripts/verify-unpack-restore-coverage.go", "testdata/appledouble/native/unpack-restore.c", "testdata/appledouble/native/unpack-restore.json.gz", "pkg/hostmeta/xattr_restore.go", "pkg/appledouble/appledouble.go", "pkg/appledouble/acl_update.go", "pkg/appledouble/quarantine_update.go", "pkg/appledouble/quarantine_application.go", "pkg/hostmeta/copy_pipeline.go", "go.mod", "go.sum"}
+	files := []string{"pkg/hostmeta/appledouble_restore.go", "pkg/hostmeta/appledouble_restore_test.go", "pkg/hostmeta/appledouble_restore_image_test.go", "internal/testutil/unpackrestore/oracle.go", "scripts/verify-unpack-restore.go", "scripts/verify-unpack-restore-coverage.go", "testdata/appledouble/native/unpack-restore.c", "testdata/appledouble/native/unpack-restore.json.gz", "testdata/appledouble/native/unpack-restore-ci.json.gz", "pkg/hostmeta/xattr_restore.go", "pkg/appledouble/appledouble.go", "pkg/appledouble/acl_update.go", "pkg/appledouble/quarantine_update.go", "pkg/appledouble/quarantine_application.go", "pkg/hostmeta/copy_pipeline.go", "go.mod", "go.sum"}
 	hashes := map[string]string{}
 	for _, path := range files {
 		b, e := os.ReadFile(path)

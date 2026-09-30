@@ -239,7 +239,7 @@ of this roadmap delivered. These phases are not estimates of remaining PR count.
    now orders destination cleanup, wire records, dedicated FinderInfo/resource
    slots, deferred ACL and final stat. It retains ignored/masked failures and
    preserves the separate slot callback rules. Complete pinned Apple functions
-   qualify 1,907 controlled cases and 96 live scenarios, with 192 verified
+   qualify 1,907 controlled cases and 96 live scenarios per reviewed host profile, with 192 verified
    removals and 89 read-back-verified writes. Existing image APIs compose through
    the executor and produce identical direct/coordinated bytes on all three OSes.
    Input decoding finishes before cleanup; native partial mutation from a late

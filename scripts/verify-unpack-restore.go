@@ -187,15 +187,22 @@ func main() {
 		fmt.Printf("Captured %d models and %d native application observations; NOT approved\n", len(f.Cases), len(f.Live))
 		return
 	}
-	z, e := gzip.NewReader(bytes.NewReader(read("testdata/appledouble/native/unpack-restore.json.gz")))
-	must(e)
-	var archived unpackrestore.Fixture
-	must(json.NewDecoder(z).Decode(&archived))
-	must(z.Close())
-	archived.Revision, archived.Host = f.Revision, f.Host
-	if !reflect.DeepEqual(archived, f) {
-		panic("archived unpack restoration observations differ")
+	matched := ""
+	for _, name := range []string{"unpack-restore.json.gz", "unpack-restore-ci.json.gz"} {
+		z, e := gzip.NewReader(bytes.NewReader(read("testdata/appledouble/native/" + name)))
+		must(e)
+		var archived unpackrestore.Fixture
+		must(json.NewDecoder(z).Decode(&archived))
+		must(z.Close())
+		archived.Revision, archived.Host = f.Revision, f.Host
+		if reflect.DeepEqual(archived, f) {
+			matched = name
+		}
 	}
+	if matched == "" {
+		panic("archived unpack restoration observations differ from every reviewed host profile")
+	}
+	fmt.Printf("Exact reviewed host profile: %s\n", matched)
 	passed = true
 	fmt.Printf("Qualified %d models and %d native application observations\n", len(f.Cases), len(f.Live))
 }
