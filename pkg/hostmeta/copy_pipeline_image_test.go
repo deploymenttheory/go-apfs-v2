@@ -27,6 +27,7 @@ func TestCopyPipelineImageComposition(t *testing.T) {
 			for variant := range 2 {
 				times := hostmeta.FileTimes{Birth: time.Unix(1700000000, 0), Modify: time.Unix(1700000001, 0), Change: time.Unix(1700000002, 0), Access: time.Unix(1700000003, 0)}
 				source := hostmeta.SecurityCopySource{UID: 501, GID: 20, Mode: 0106711, Properties: hostmeta.DarwinChmodProperties{RawSecurity: &appledouble.FileSecurity{ACL: &appledouble.ACL{Entries: []appledouble.ACLEntry{{Principal: [16]byte{1}, Flags: 1, Rights: 1}}}}}}
+				source.Properties.Mode = &source.Mode
 				stat := hostmeta.StatCopySource{UID: 501, GID: 20, Mode: 0100640, Flags: 1, Times: hostmeta.FileTimes{Modify: time.Unix(1700000010, 0), Access: time.Unix(1700000020, 0)}}
 				securityOptions := hostmeta.SecurityCopyOptions{ACL: true, Stat: true}
 				root := &apfswrite.Entry{Name: "", Mode: os.ModeDir | 0755, Times: &times}
@@ -63,6 +64,11 @@ func TestCopyPipelineImageComposition(t *testing.T) {
 						if err == nil && (!r.Completed || len(r.Failures) > 0) {
 							err = fmt.Errorf("security: %+v", r)
 						}
+						wantMode := os.FileMode(0711) | os.ModeSetuid | os.ModeSetgid
+						if err == nil && ((hfs && hchild.Mode != wantMode) || (!hfs && child.Mode != wantMode)) {
+							err = fmt.Errorf("security mode was not staged")
+						}
+
 					case hostmeta.CopyStageStat:
 						var r hostmeta.ImageStatCopyResult
 						if hfs {
