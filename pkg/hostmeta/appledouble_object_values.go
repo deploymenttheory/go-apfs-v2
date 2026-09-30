@@ -13,10 +13,12 @@ import (
 )
 
 type logicalObjectAttributes struct {
-	meta   *LogicalMetadata
-	order  []string
-	values map[string]appledouble.Value
-	mount  *bool
+	meta     *LogicalMetadata
+	order    []string
+	values   map[string]appledouble.Value
+	mount    *bool
+	removals map[string]CapturedXattrRemoval
+	writes   map[string]CapturedXattrWrite
 }
 
 func newLogicalObjectAttributes(meta *LogicalMetadata, attrs []appledouble.StreamAttr, noSetID *bool) (*logicalObjectAttributes, error) {
@@ -90,6 +92,15 @@ func (a *logicalObjectAttributes) read(name string, dst []byte) (int, error) {
 	return n, err
 }
 func (a *logicalObjectAttributes) remove(name string) error {
+	if observation, ok := a.removals[name]; ok {
+		return a.applyObserved(observation)
+	}
+	return a.removeStored(name)
+}
+
+// removeStored updates logical storage for operations other than removexattr,
+// such as an all-zero FinderInfo write or a named-fork open with truncation.
+func (a *logicalObjectAttributes) removeStored(name string) error {
 	if _, ok := a.values[name]; !ok {
 		return os.ErrNotExist
 	}
@@ -97,7 +108,20 @@ func (a *logicalObjectAttributes) remove(name string) error {
 	a.order = slices.DeleteFunc(a.order, func(n string) bool { return n == name })
 	return nil
 }
+func (a *logicalObjectAttributes) truncateFork(_ uint32) error {
+	err := a.removeStored(appledouble.ResourceForkName)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	return err
+}
 func (a *logicalObjectAttributes) write(name string, value []byte) error {
+	if observation, ok := a.writes[name]; ok {
+		if !bytes.Equal(value, observation.Input) {
+			return ErrXattrMutationUncaptured
+		}
+		return a.applyObserved(observation.Effect)
+	}
 	if name == "" || len(name) > 127 || strings.ContainsRune(name, 0) {
 		return os.ErrInvalid
 	}
@@ -107,7 +131,7 @@ func (a *logicalObjectAttributes) write(name string, value []byte) error {
 		}
 		if [32]byte(value) == [32]byte{} {
 			if _, ok := a.values[name]; ok {
-				return a.remove(name)
+				return a.removeStored(name)
 			}
 			return nil
 		}
@@ -119,10 +143,21 @@ func (a *logicalObjectAttributes) write(name string, value []byte) error {
 	if !present {
 		a.order = append(a.order, name)
 	}
-	owned := bytes.Clone(value)
-	var next appledouble.Value = bytes.NewReader(owned)
-	if name == appledouble.ResourceForkName && present && old.Size() > int64(len(owned)) {
-		next = &prefixObjectValue{head: owned, tail: old}
+	var next appledouble.Value
+	if name == appledouble.ResourceForkName && present && old.Size() > int64(len(value)) {
+		if previous, ok := old.(*prefixObjectValue); ok {
+			// Coalesce owned prefixes without reading the borrowed suffix.
+			// Keeping previous as the tail would retain every superseded
+			// buffer after repeated shorter writes. Clone for old snapshots.
+			head := make([]byte, max(len(previous.head), len(value)))
+			copy(head, previous.head)
+			copy(head, value)
+			next = &prefixObjectValue{head: head, tail: previous.tail}
+		} else {
+			next = &prefixObjectValue{head: bytes.Clone(value), tail: old}
+		}
+	} else {
+		next = bytes.NewReader(bytes.Clone(value))
 	}
 	a.values[name] = next
 	return nil

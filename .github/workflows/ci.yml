@@ -360,6 +360,125 @@ jobs:
           name: metadata-transport-coverage-${{ matrix.os }}
           path: artifacts/metadata-transport-coverage/
           if-no-files-found: error
+      - name: Complete path lifecycle above 95% per-file coverage
+        env:
+          CGO_ENABLED: "0"
+        run: go run scripts/verify-path-lifecycle-coverage.go
+      - name: Upload complete path lifecycle coverage
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: path-lifecycle-coverage-${{ matrix.os }}
+          path: artifacts/path-lifecycle-coverage/
+          if-no-files-found: error
+      - name: Pinned Apple path lifecycle and both SDK ASTs
+        if: "!cancelled() && runner.os == 'macOS'"
+        env:
+          CGO_ENABLED: "0"
+        run: go run scripts/verify-path-lifecycle-source.go
+      - name: Upload path-lifecycle-source evidence
+        if: always() && runner.os == 'macOS'
+        uses: actions/upload-artifact@v7
+        with:
+          name: path-lifecycle-source
+          path: artifacts/path-lifecycle-source/
+          if-no-files-found: error
+      - name: Native path creation, callback, cleanup and state release
+        if: "!cancelled() && runner.os == 'macOS'"
+        env:
+          CGO_ENABLED: "0"
+        run: go run scripts/verify-path-copyfile-native.go
+      - name: Upload path-copyfile-native evidence
+        if: always() && runner.os == 'macOS'
+        uses: actions/upload-artifact@v7
+        with:
+          name: path-copyfile-native
+          path: artifacts/path-copyfile-native/
+          if-no-files-found: error
+      - name: Native path ACL preparation and restoration
+        if: "!cancelled() && runner.os == 'macOS'"
+        env:
+          CGO_ENABLED: "0"
+        run: go run scripts/verify-path-security-native.go
+      - name: Upload path-security-native evidence
+        if: always() && runner.os == 'macOS'
+        uses: actions/upload-artifact@v7
+        with:
+          name: path-security-native
+          path: artifacts/path-security-native/
+          if-no-files-found: error
+      - name: Native attribute mutation provider contexts and portable replay
+        if: "!cancelled() && runner.os == 'macOS'"
+        env:
+          CGO_ENABLED: "0"
+        run: go run scripts/verify-xattr-remove-effects-native.go
+      - name: Upload xattr-remove-effects-native evidence
+        if: always() && runner.os == 'macOS'
+        uses: actions/upload-artifact@v7
+        with:
+          name: xattr-remove-effects-native
+          path: artifacts/xattr-remove-effects-native/
+          if-no-files-found: error
+      - name: Native held AppleDouble object byte and metadata parity
+        if: "!cancelled() && runner.os == 'macOS'"
+        env:
+          CGO_ENABLED: "0"
+        run: go run scripts/verify-appledouble-object-native.go
+      - name: Upload appledouble-object-native evidence
+        if: always() && runner.os == 'macOS'
+        uses: actions/upload-artifact@v7
+        with:
+          name: appledouble-object-native
+          path: artifacts/appledouble-object-native/
+          if-no-files-found: error
+      - name: Privileged and nonowner held-object authorization
+        if: "!cancelled() && runner.os == 'macOS'"
+        env:
+          CGO_ENABLED: "0"
+        run: go run scripts/verify-appledouble-object-authorization.go
+      - name: Upload appledouble-object-authorization evidence
+        if: always() && runner.os == 'macOS'
+        uses: actions/upload-artifact@v7
+        with:
+          name: appledouble-object-authorization
+          path: artifacts/appledouble-object-authorization/
+          if-no-files-found: error
+      - name: Native and signed sandbox attribute-intent policy
+        if: "!cancelled() && runner.os == 'macOS'"
+        env:
+          CGO_ENABLED: "0"
+        run: go run scripts/verify-xattr-intent.go -ephemeral-runner
+      - name: Upload xattr-intent evidence
+        if: always() && runner.os == 'macOS'
+        uses: actions/upload-artifact@v7
+        with:
+          name: xattr-intent
+          path: artifacts/xattr-intent/
+          if-no-files-found: error
+      - name: Native path resource fork threshold and cleanup parity
+        if: "!cancelled() && runner.os == 'macOS'"
+        env:
+          CGO_ENABLED: "0"
+        run: go run scripts/verify-path-fork-native.go
+      - name: Upload path-fork-native evidence
+        if: always() && runner.os == 'macOS'
+        uses: actions/upload-artifact@v7
+        with:
+          name: path-fork-native
+          path: artifacts/path-fork-native/
+          if-no-files-found: error
+      - name: Signed sandbox full-object operations and real authorization denials
+        if: "!cancelled() && runner.os == 'macOS'"
+        env:
+          CGO_ENABLED: "0"
+        run: go run scripts/verify-appledouble-object-sandbox.go -ephemeral-runner
+      - name: Upload appledouble-object-sandbox evidence
+        if: always() && runner.os == 'macOS'
+        uses: actions/upload-artifact@v7
+        with:
+          name: appledouble-object-sandbox
+          path: artifacts/appledouble-object-sandbox/
+          if-no-files-found: error
       - name: Native-compatible AppleDouble packing above 95% coverage
         env:
           CGO_ENABLED: "0"

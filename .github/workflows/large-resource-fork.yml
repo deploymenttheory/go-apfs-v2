@@ -1,0 +1,127 @@
+name: Large resource fork
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: large-resource-fork-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  CGO_ENABLED: "0"
+  GOTOOLCHAIN: local
+
+jobs:
+  large-fork:
+    name: Full 4 GiB fork (${{ matrix.goos }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, goos: linux }
+          - { os: macos-latest, goos: darwin }
+          - { os: windows-latest, goos: windows }
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Require 9 GiB temporary workspace (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/large-resource-fork "$RUNNER_TEMP/large-resource-fork"
+          df -Pk "$RUNNER_TEMP" | tee artifacts/large-resource-fork/disk-prerequisite.txt
+          available=$(df -Pk "$RUNNER_TEMP" | awk 'END {print $4}')
+          if [ "$available" -lt 9437184 ]; then
+            echo "Large-fork acceptance requires 9 GiB free; refusing to skip the boundary test." >&2
+            exit 1
+          fi
+          echo "TMPDIR=$RUNNER_TEMP/large-resource-fork" >> "$GITHUB_ENV"
+      - name: Require 9 GiB temporary workspace (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force artifacts/large-resource-fork | Out-Null
+          $temporary = Join-Path $env:RUNNER_TEMP 'large-resource-fork'
+          New-Item -ItemType Directory -Force $temporary | Out-Null
+          $drive = Get-PSDrive -Name ([IO.Path]::GetPathRoot($temporary).TrimEnd(':\'))
+          $drive | Format-List Name, Root, Used, Free | Out-File artifacts/large-resource-fork/disk-prerequisite.txt
+          if ($drive.Free -lt 9GB) { throw 'Large-fork acceptance requires 9 GiB free; refusing to skip the boundary test.' }
+          "TEMP=$temporary" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "TMP=$temporary" | Out-File -FilePath $env:GITHUB_ENV -Append
+      - name: Full carrier, APFS, HFS+ and native fork qualification
+        shell: bash
+        run: |
+          set -euo pipefail
+          go run scripts/verify-large-resource-fork.go 2>&1 | tee artifacts/large-resource-fork/run.log
+      - name: Upload full-byte evidence and compressed images
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: large-resource-fork-${{ matrix.goos }}
+          path: artifacts/large-resource-fork/
+          if-no-files-found: error
+          compression-level: 0
+
+  native-foreign:
+    name: Native readback of ${{ matrix.goos }} 4 GiB forks
+    needs: large-fork
+    runs-on: macos-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        goos: [linux, windows]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - uses: actions/download-artifact@v8.0.1
+        with:
+          name: large-resource-fork-${{ matrix.goos }}
+          path: artifacts/foreign/input
+      - uses: actions/download-artifact@v8.0.1
+        with:
+          name: large-resource-fork-darwin
+          path: artifacts/foreign/reference
+      - name: Require 9 GiB temporary workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/large-resource-fork-native "$RUNNER_TEMP/large-resource-fork"
+          df -Pk "$RUNNER_TEMP" | tee artifacts/large-resource-fork-native/disk-prerequisite.txt
+          available=$(df -Pk "$RUNNER_TEMP" | awk 'END {print $4}')
+          if [ "$available" -lt 9437184 ]; then
+            echo "Native large-fork acceptance requires 9 GiB free; refusing to skip the boundary test." >&2
+            exit 1
+          fi
+          echo "TMPDIR=$RUNNER_TEMP/large-resource-fork" >> "$GITHUB_ENV"
+      - name: Match native reference and independently read every fork byte
+        shell: bash
+        run: |
+          set -euo pipefail
+          go run scripts/verify-large-resource-fork.go \
+            -foreign artifacts/foreign/input \
+            -foreign-goos '${{ matrix.goos }}' \
+            -reference artifacts/foreign/reference \
+            -out artifacts/large-resource-fork-native \
+            2>&1 | tee artifacts/large-resource-fork-native/run.log
+      - name: Upload independent native evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: large-resource-fork-${{ matrix.goos }}-native
+          path: artifacts/large-resource-fork-native/
+          if-no-files-found: error

@@ -336,3 +336,33 @@ func TestProjectionStreamFallbackAndReadback(t *testing.T) {
 		t.Fatal(results)
 	}
 }
+
+func TestProjectionXattrStats(t *testing.T) {
+	ctx := context.Background()
+	_, _, store := projectionFixture(t)
+	attrs := map[string][]byte{"applied": {1}, "normalized": {2}, "retained": {3}, "failed": {4}}
+	r := projectionRecord()
+	var err error
+	r.Attributes, err = store.StoreAttributes(ctx, attrs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	values := map[string]appledouble.Value{}
+	for name, value := range attrs {
+		values[name] = bytes.NewReader(value)
+	}
+	e := &Extractor{xattrsRestored: 2, xattrsUnwritable: 3}
+	backend := &projectionRecorder{failures: map[string]error{"xattr:retained": errors.ErrUnsupported, "xattr:failed": io.ErrClosedPipe, "ownership": os.ErrPermission}}
+	if err := e.applyProjection(ctx, r, values, 1024, backend); err != nil {
+		t.Fatal(err)
+	}
+	e.verifyProjection(r, map[string][]byte{"applied": {1}, "normalized": {9}})
+	if !errors.Is(e.projectionError(), io.ErrClosedPipe) {
+		t.Fatal("statistics masked the failed native write")
+	}
+	for range 2 {
+		if written, unwritable := e.XattrStats(); written != 4 || unwritable != 5 {
+			t.Fatalf("native outcomes or legacy writes miscounted: %d, %d", written, unwritable)
+		}
+	}
+}

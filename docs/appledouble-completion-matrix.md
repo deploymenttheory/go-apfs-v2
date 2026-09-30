@@ -4,17 +4,22 @@ This matrix is the completion checklist for the [integrated plan](appledouble-co
 It distinguishes existing components from completed end-to-end functionality.
 No row is complete solely because its component coverage exceeds 95%.
 
+The production integration is implemented. Open rows below require the complete
+qualification set against the final committed revision; local results and CI on
+an earlier commit do not qualify subsequent edits. A discovered discrepancy must
+be resolved before the corresponding row closes.
+
 | Requirement | Existing foundation | Required closing evidence | Status |
 | --- | --- | --- | --- |
 | Binary codec | Borrowed streaming values, sequential partial mutation, native packing and retained source/AST fixtures | Final revision CI/fuzz/race and integrated lifecycle qualification | Open |
 | Held native attributes | Strict list/read/assignment/removal, held metadata providers and native readback | Final three-OS provider and outer lifecycle qualification | Open |
-| Resource forks | Bounded APFS/HFS fork writers/readers, native non-truncation, large/empty carrier values | Final three-OS native image artifact qualification and lifecycle limits | Open |
+| Resource forks | Bounded APFS/HFS fork writers/readers, native non-truncation, large/empty carrier values; real 4 GiB + 17 byte image/carrier/native harness | Final three-OS large-value jobs and independent Mac readback of both foreign image artifacts; documented whole-buffer sequential limit | Open |
 | Compressed storage | Types 1, 3/4,7/8,9/10,11/12,13/14; native compression bounds and independent inline forks | Final codec/transport CI; external generation-store/provider references require their separate content source | Open |
-| ACL and security | Conversion, captured identities, creation inheritance, copy/update policy, image bindings | Live authorization/source capture and outer lifecycle, nonowner/privileged/sandbox qualification | Open |
-| Quarantine | macOS 26/27 conversion/application profiles and destination corpus | Remaining process contexts, raw source/agent capture, protection and ordered write/failure integration | Open |
+| ACL and security | Conversion, captured identities, inheritance, image bindings; 579-case temporary-permission oracle and explicitly scoped portable replay | Final live root/nonowner supervisor and signed native/Go App Sandbox jobs; retain C-only allocator boundaries | Open |
+| Quarantine | macOS 26/27 conversion/application profiles, raw process/source capture, destination corpus and integrated object/path providers | Final process-context, protection, destination normalization and ordered write/failure native gates | Open |
 | Stat restoration | Image time/mode/flags storage and ordered policy executor | Live host binding, side effects, temporary permission restoration and close failures | Open |
-| Shared metadata transport | Production carrier, host baseline reconciliation, collision/path safety, roots/links/hardlinks and explicit native projection/readback | Final cross-platform CI and remaining complete lifecycle composition | Open |
-| Complete lifecycle | Copy routing and prevalidated unpack executor | Create/open/transfer/restore/close with cancellation and partial-error trace | Open |
+| Shared metadata transport | Production carrier, required preservation preflight, host baseline reconciliation, collision/path safety, roots/links/hardlinks and contained native projection/readback | Final cross-platform lifecycle, CLI preservation and independent image acceptance | Open |
+| Complete lifecycle | Production held-object and path APIs; 8 live held-owner combinations; 552 native path scenarios; temporary permission and close-failure traces | Final 23-report audit and complete native CI; actual authorization, protection and version-specific host observations | Open |
 | End-to-end filesystem qualification | 16 streaming extract/repack pairs with native mounted metadata/content comparison, 14 native compression cases and 80 FinderInfo cases | Final Linux/Windows image artifacts independently mounted on Mac; edited-payload/refusal lifecycle qualification | Open |
 | Evidence integrity | Source-hashed coverage and retained native artifacts | Integrated journey manifests and comprehensive required-case inventory | Open |
 | Documentation | Detailed investigations and package roadmap | Current architecture, usage, carrier/streaming contracts and final capability matrix | Open |
@@ -22,7 +27,7 @@ No row is complete solely because its component coverage exceeds 95%.
 
 ## Evidence inventory
 
-The required 22 portable qualification reports remain required on each supported
+The required 23 portable qualification reports remain required on each supported
 OS. `go run scripts/audit-appledouble-evidence.go` validates their revision, source
 hashes, test transcripts and raw coverage counts against the checkout. It rejects
 skips, failures, missing package completion, stale hashes, incomplete file counts
@@ -34,6 +39,52 @@ scenario and output checks. New integration work must add its coverage and evide
 to the inventory before its row can close. Downloaded cross-host evidence must be
 checked against the exact source bytes used by that host; newline conversion is
 not a reason to silently accept a different source hash.
+
+`path-lifecycle-coverage` is the new report; the preceding 22 remain required.
+Object facade, intent and sandbox files are selected individually by the existing
+metadata transport coverage gate. Temporary permission replay accounts for all
+579 source traces: 22 direct preparation and 492 direct reset comparisons,
+28 C-only construction faults, 36 C-only temporary-template faults, and one
+outer reset with no destination. C allocation/property APIs do not exist inside
+the Go slice transformation. Those 64 fault cases retain native assertions and
+compare Go with the matching native transformation without that C-only fault;
+they are not presented as equivalent injected Go failures. The native gate still
+executes every case. Empty ACL omission in native file readback is explicit;
+present-empty ACLs remain distinct during logical preparation.
+
+The live owner matrix now compares packed metadata as well as bytes, including
+unconditional inner PACK stat and the outer mode reset. The 16-case real
+root/nonowner supervisor requires `sudo -n` and validates actual process
+credentials without creating accounts. Nonowner PACK and writable (0666) UNPACK
+retain independently generated data/fork write times when explicit timestamp
+restoration is unauthorized; read-only (0400) UNPACK retains its exact original
+timestamp. For the two measured write contexts, each
+observed mtime must lie within its own recorded invocation interval. Raw times
+and bounds are retained, and all other metadata and output bytes remain exact.
+Signed sandbox qualification requires an
+explicit disposable GitHub-hosted Mac runner: two generated container namespaces
+expire when the VM is destroyed, while temporary app-bundle cleanup is checked
+before success is reported. Local prerequisite failure is not a passing result.
+These CI jobs and the final revision audit remain outstanding until successful.
+
+## Large-value boundary
+
+The direct sequential native-style unpack API allocates the incoming resource
+fork before its native stat/read/write effects. Its explicit active-memory budget
+includes simultaneous input and owned write buffers. The default 64 MiB budget
+therefore cannot accept every fork that fits the wire's 32-bit size. Budget refusal
+is an ordered, documented library diagnostic, not an invented Darwin errno or
+a claim that macOS cannot store the fork. The logical destination owns newly
+written bytes; untouched old suffixes remain borrowed. This facade does not claim
+bounded-memory full-fork restoration.
+
+Lossless large-value transport uses borrowed streaming codec/carrier/image APIs.
+AppleDouble cannot encode a resource-fork length above 4,294,967,295 bytes; the
+carrier and APFS/HFS image APIs preserve the larger value and explicitly omit the
+unrepresentable optional AppleDouble view. The dedicated real-byte harness uses
+4 GiB + 17 bytes, full hashes, a memory ceiling and independent native reads.
+Its successful final three-OS and foreign-image jobs are still required. No Linux
+or Windows feature is removed because native local xattrs have smaller limits.
 
 ## Exit rules
 

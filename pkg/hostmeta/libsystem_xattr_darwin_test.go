@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"syscall"
 	"testing"
+	"unsafe"
 
 	"github.com/ebitengine/purego"
 	"golang.org/x/sys/unix"
@@ -101,7 +102,7 @@ func TestLibSystemBindingFailures(t *testing.T) {
 	}
 	errno := int32(syscall.EACCES)
 	a := &darwinXattrABI{errno: func() *int32 { return &errno }}
-	if _, err := a.call(func() int64 { return -1 }); !errors.Is(err, syscall.EACCES) {
+	if _, err := callDarwinSize(0, func() int64 { return -1 }, a.errno); !errors.Is(err, syscall.EACCES) {
 		t.Fatal(err)
 	}
 	old := loadDarwinXattr
@@ -118,5 +119,83 @@ func TestLibSystemBindingFailures(t *testing.T) {
 	}
 	if _, err := getCaptureXattrFD(1, "name", nil); !errors.Is(err, fault) {
 		t.Fatal(err)
+	}
+}
+
+// The controlled ABI path must carry the same positions, sizes, visibility
+// options and errno as the native symbol path. It supports deterministic native
+// boundary failures without delegating policy to C.
+func TestLibSystemXattrFallbackABI(t *testing.T) {
+	const name = "user.fallback"
+	errno := int32(syscall.EACCES)
+	fail := false
+	copyResult := func(buf *byte, size uintptr, data []byte) int64 {
+		if fail {
+			return -1
+		}
+		if size != 0 {
+			if size < uintptr(len(data)) {
+				t.Fatal("ABI buffer smaller than requested data")
+			}
+			copy(unsafe.Slice(buf, int(size)), data)
+		}
+		return int64(len(data))
+	}
+	checkString := func(ptr *byte, want string) {
+		if !bytes.Equal(unsafe.Slice(ptr, len(want)+1), append([]byte(want), 0)) {
+			t.Fatal("ABI string did not preserve its terminating NUL")
+		}
+	}
+	a := &darwinXattrABI{
+		errno: func() *int32 { return &errno },
+		listPath: func(path, buf *byte, size uintptr, flags int32) int64 {
+			checkString(path, "fixture")
+			if flags != 17 {
+				t.Fatal("path options lost", flags)
+			}
+			return copyResult(buf, size, []byte(name+"\x00"))
+		},
+		getPath: func(path, attr, buf *byte, size uintptr, position uint32, flags int32) int64 {
+			checkString(path, "fixture")
+			checkString(attr, name)
+			if position != 0 || flags != 17 {
+				t.Fatal("path read position/options lost", position, flags)
+			}
+			return copyResult(buf, size, []byte("ok"))
+		},
+		listFD: func(fd int32, buf *byte, size uintptr, flags int32) int64 {
+			if fd != 19 || flags != xattrShowCompression {
+				t.Fatal("held descriptor/hidden visibility lost", fd, flags)
+			}
+			return copyResult(buf, size, []byte(name+"\x00"))
+		},
+		getFD: func(fd int32, attr, buf *byte, size uintptr, position uint32, flags int32) int64 {
+			checkString(attr, name)
+			if fd != 19 || position != 0 || flags != xattrShowCompression {
+				t.Fatal("held read descriptor/position/options lost", fd, position, flags)
+			}
+			return copyResult(buf, size, []byte("ok"))
+		},
+	}
+	old := loadDarwinXattr
+	loadDarwinXattr = func() (*darwinXattrABI, error) { return a, nil }
+	defer func() { loadDarwinXattr = old }()
+	for _, failed := range []bool{false, true} {
+		fail = failed
+		buf := make([]byte, len(name)+1)
+		n, pathList := darwinListXattrPath("fixture", buf, 17)
+		value := make([]byte, 2)
+		m, pathRead := darwinGetXattrPath("fixture", name, value, 17)
+		names, heldList := listCaptureXattrFD(19, 1024)
+		heldValue := make([]byte, 2)
+		k, heldRead := getCaptureXattrFD(19, name, heldValue)
+		for _, err := range []error{pathList, pathRead, heldList, heldRead} {
+			if failed && !errors.Is(err, syscall.EACCES) || !failed && err != nil {
+				t.Fatal("ABI errno mismatch", failed, err)
+			}
+		}
+		if !failed && (n != len(buf) || m != 2 || k != 2 || string(value) != "ok" || string(heldValue) != "ok" || len(names) != 1 || names[0] != name) {
+			t.Fatal("ABI values changed", n, m, k, names)
+		}
 	}
 }

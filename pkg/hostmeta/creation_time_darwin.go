@@ -17,6 +17,7 @@ func setCreationTime(file *os.File, when time.Time) error {
 	return m.control(func(fd int32) error {
 		stamp := unix.Timespec{Sec: when.Unix(), Nsec: int64(when.Nanosecond())}
 		list := unix.Attrlist{Bitmapcount: 5, Commonattr: unix.ATTR_CMN_CRTIME}
-		return a.call(func() int32 { return a.setattr(fd, &list, unsafe.Pointer(&stamp), unsafe.Sizeof(stamp), 0) })
+		_, err := callDarwinInt(a.native["fsetattrlist"], func() int32 { return a.setattr(fd, &list, unsafe.Pointer(&stamp), unsafe.Sizeof(stamp), 0) }, a.errno, uintptr(fd), uintptr(unsafe.Pointer(&list)), uintptr(unsafe.Pointer(&stamp)), unsafe.Sizeof(stamp), 0)
+		return err
 	})
 }

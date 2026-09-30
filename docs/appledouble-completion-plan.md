@@ -133,8 +133,9 @@ Keep every existing CI gate. Add complete scenario manifests and test:
 
 Portable codec, every changed provider and each new subsystem must exceed 95%
 statement coverage on each supported OS. Retain file-level gates so new code is
-not concealed by mature code's coverage. Retain all current 33 fuzz targets and add
-streaming/carrier/lifecycle targets, overflow tests and corpus replay. Retain race,
+not concealed by mature code's coverage. The CI fuzz inventory now retains all
+35 preceding targets and adds carrier-manifest and path-lifecycle fuzzing, for
+37 targets including streaming decode. Retain overflow tests, corpus replay, race,
 Linux 386, CGO=0 six-target builds, three-GOOS lint, vet and vulnerability checks.
 
 Retain all native C/AST qualification, hdiutil and fsck comparisons and all four
@@ -144,7 +145,7 @@ execute the complete logical operation, replay the corpus and submit output for
 independent Mac inspection. Normalize only legitimately nondeterministic fields
 under a documented rule, never unexplained mismatches.
 
-The Go evidence auditor checks the required 22 portable report directories against
+The Go evidence auditor checks the required 23 portable report directories against
 the exact checkout revision and source hashes, raw coverage and JSONL transcript.
 Native semantic comparison remains the responsibility of each native harness.
 Extend the auditor inventory for every new gate and add end-to-end artifact
@@ -157,6 +158,55 @@ fixtures. Cache pinned downloads and build inputs, not test conclusions. Duplica
 feature-branch push/PR runs may be consolidated only while retaining the complete
 PR matrix, main postmerge checks and scheduled fuzzing. Do not remove gates or
 shorten native coverage to make the loop faster.
+
+### Current integration evidence and remaining prerequisites
+
+`path-lifecycle-coverage` adds a strict portable report to the previous 22. The
+metadata transport report now covers each object-facade, intent and sandbox
+implementation file. Run the full inventory again at the final committed revision;
+locally passing subsets are development evidence, not release qualification.
+
+The integrated object facade has eight native owner-context comparisons with
+exact packed bytes and independent C mode, mtime, BSD flag, xattr and ACL readback.
+Packed metadata is checked before unpacking so unconditional inner PACK stat is
+not confused with the optional outer permission reset. A separate sixteen-case
+supervisor compares actual root and existing-nobody credentials, held descriptors,
+mode restrictions, PACK/UNPACK and stat selection. It requires passwordless
+`sudo -n`; missing privilege fails before fixture creation. It clears supplementary
+groups, verifies both real and effective UID, and does not mutate account records.
+Actual privileged CI execution is still required where developer hosts cannot run it.
+
+The native temporary-security gate retains all 579 source/provider cases.
+Portable production replay directly compares 514 transformations and classifies
+64 C-only construction/template failures plus the outer absent-destination case.
+Go has no fallible filesec allocation/property object inside its owned-slice
+transformation. Do not manufacture such failures or call them equivalent: retain
+the native failure, compare the corresponding fault-free transformation, and
+document the provider boundary. Capture, ACL publication and chmod failures map
+to actual Go provider boundaries and retain ordering and ignored errors.
+
+Intent qualification retains full pinned Apple sources, dual-architecture ASTs,
+4,384 controlled cases, 2,192 unsandboxed native calls and 2,192 signed native/Go
+sandbox comparisons. A real signed application bundle must observe the runtime
+sandbox predicate as true. Its synthetic container namespace belongs to a
+disposable runner's lifetime because macOS protects container-manager metadata
+from ordinary deletion. The harness requires both `-ephemeral-runner` and a
+GitHub-hosted disposable runner before creating any fixture; temporary app bundles
+must be removed before success. This prerequisite does not permit skipping the
+sandbox matrix on native CI or leaving containers silently on developer machines.
+
+Direct native-style sequential restoration deliberately follows the whole-fork
+allocation order and explicit caller budgets. It is not the bounded-memory path
+for arbitrarily large forks. The streaming codec/carrier/image path owns that
+requirement, including a real 4 GiB + 17 byte qualification across all three OSes
+and independent Mac inspection of foreign images. AppleDouble's 32-bit fork length
+is a wire-format restriction; the shared carrier and 64-bit image storage preserve
+larger forks. Complete every dedicated large-value job before closing that row.
+
+Installed macOS behavior and published source are different evidence classes.
+Keep the retained installed-function captures, 552 live path observations,
+controlled failure traces and current production replay together. Source ASTs
+alone do not prove newer private permission/identity-check helper behavior.
 
 ## 5. Documentation, review and release
 

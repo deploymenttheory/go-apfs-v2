@@ -57,11 +57,11 @@ func (m *nativeHeldMetadata) CaptureSecurityState() (result SecurityCopySource, 
 	err = m.control(func(fd int32) error {
 		sec := m.abi.init()
 		if sec == 0 {
-			return syscall.ENOMEM
+			return errors.Join(ErrFilesecAllocation, syscall.ENOMEM)
 		}
 		defer m.abi.free(sec)
 		var stat unix.Stat_t
-		err := m.abi.call(func() int32 { return m.abi.stat(fd, &stat, sec) })
+		_, err := callDarwinInt(m.abi.native["fstatx_np"], func() int32 { return m.abi.stat(fd, &stat, sec) }, m.abi.errno, uintptr(fd), uintptr(unsafe.Pointer(&stat)), sec)
 		result.UID, result.GID, result.Mode = stat.Uid, stat.Gid, uint32(stat.Mode)
 		statResult = heldStatMetadata(stat)
 		if err != nil {
@@ -121,7 +121,7 @@ func (m *nativeHeldMetadata) WriteSecurity(a DarwinChmodArguments) error {
 		if a.SecurityArgument == DarwinSecurityRemove {
 			security = 1
 		}
-		err := m.abi.call(func() int32 { return m.abi.chmod(fd, a.UID, a.GID, a.Mode, security) })
+		_, err := callDarwinInt(m.abi.native["__fchmod_extended"], func() int32 { return m.abi.chmod(fd, a.UID, a.GID, a.Mode, security) }, m.abi.errno, uintptr(fd), uintptr(a.UID), uintptr(a.GID), uintptr(a.Mode), security)
 		runtime.KeepAlive(a.Security)
 		return err
 	})
@@ -163,7 +163,7 @@ func setHeldFileTimes(m *nativeHeldMetadata, modify, access time.Time) error {
 	return m.control(func(fd int32) error {
 		list := unix.Attrlist{Bitmapcount: 5, Commonattr: unix.ATTR_CMN_MODTIME | unix.ATTR_CMN_ACCTIME}
 		times := [2]unix.Timespec{{Sec: modify.Unix(), Nsec: int64(modify.Nanosecond())}, {Sec: access.Unix(), Nsec: int64(access.Nanosecond())}}
-		err := m.abi.call(func() int32 { return m.abi.setattr(fd, &list, unsafe.Pointer(&times), unsafe.Sizeof(times), 0) })
+		_, err := callDarwinInt(m.abi.native["fsetattrlist"], func() int32 { return m.abi.setattr(fd, &list, unsafe.Pointer(&times), unsafe.Sizeof(times), 0) }, m.abi.errno, uintptr(fd), uintptr(unsafe.Pointer(&list)), uintptr(unsafe.Pointer(&times)), unsafe.Sizeof(times), 0)
 		runtime.KeepAlive(times)
 		return err
 	})
@@ -175,7 +175,8 @@ func (m *nativeHeldMetadata) ReadFlags() (uint32, error) {
 func (m *nativeHeldMetadata) CompareAndSwapFlags(expected, replacement uint32) (actual uint32, err error) {
 	args := [3]uint32{expected, replacement, 0}
 	err = m.control(func(fd int32) error {
-		return m.abi.call(func() int32 { return m.abi.fsctl(fd, 0xc00c4114, unsafe.Pointer(&args), 0) })
+		_, err := callDarwinInt(m.abi.native["ffsctl"], func() int32 { return m.abi.fsctl(fd, 0xc00c4114, unsafe.Pointer(&args), 0) }, m.abi.errno, uintptr(fd), 0xc00c4114, uintptr(unsafe.Pointer(&args)), 0)
+		return err
 	})
 	if errors.Is(err, syscall.EAGAIN) {
 		err = errors.Join(ErrStatFlagsAgain, err)

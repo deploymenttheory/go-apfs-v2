@@ -79,9 +79,9 @@ type Extractor struct {
 	PreserveMeta        bool
 	Verbose             bool
 	VerifyChecksum      bool
-	// Xattrs restores extended attributes onto the extracted files. Without
-	// it, extracting and repacking a tree silently discards every attribute,
-	// so the round trip is not faithful however capable the writer is.
+	// Xattrs retains complete extended attributes in MetadataRoot. Native
+	// materialization additionally requires ProjectNative; a native store's
+	// constraints cannot discard values selected for preservation.
 	Xattrs           bool
 	SymlinkMode      SymlinkMode
 	filesExtracted   int
@@ -124,6 +124,9 @@ func (e *Extractor) destPath(rel string) string {
 
 // ExtractAll extracts the entire volume into the destination directory.
 func (e *Extractor) ExtractAll() error {
+	if (e.Xattrs || e.PreserveMeta) && e.MetadataRoot == "" {
+		return errors.New("metadata preservation requires a metadata root")
+	}
 	if e.ProjectNative && e.MetadataRoot == "" {
 		return errors.New("native projection requires a metadata root")
 	}
@@ -135,6 +138,9 @@ func (e *Extractor) ExtractAll() error {
 
 // ExtractByPath extracts a specific file or directory by absolute volume path.
 func (e *Extractor) ExtractByPath(volumePath string, recursive bool) error {
+	if (e.Xattrs || e.PreserveMeta) && e.MetadataRoot == "" {
+		return errors.New("metadata preservation requires a metadata root")
+	}
 	if e.ProjectNative && e.MetadataRoot == "" {
 		return errors.New("native projection requires a metadata root")
 	}
@@ -493,10 +499,24 @@ func (e *Extractor) NamesRemapped() int {
 	return e.namesRemapped
 }
 
-// XattrStats returns how many extended attributes were restored onto the
-// extracted files, and how many could not be written.
+// XattrStats returns successful native attribute writes and attributes that
+// could not be projected. Successful writes include native normalization;
+// NativeProjectionResults records whether readback matched the logical value.
+// Carrier-only preservation is counted separately by XattrsCarried.
 func (e *Extractor) XattrStats() (restored, unwritable int) {
-	return e.xattrsRestored, e.xattrsUnwritable
+	restored, unwritable = e.xattrsRestored, e.xattrsUnwritable
+	for _, result := range e.projectionResults {
+		if !strings.HasPrefix(result.Field, "xattr:") {
+			continue
+		}
+		switch result.Status {
+		case ProjectionApplied, ProjectionNormalized:
+			restored++
+		case ProjectionRetained, ProjectionFailed:
+			unwritable++
+		}
+	}
+	return restored, unwritable
 }
 
 // Stats returns extraction statistics

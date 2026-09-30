@@ -1,5 +1,84 @@
 # Shared host metadata
 
+`hostmeta` connects portable Darwin metadata policy with actual held files,
+explicit captured observations and image/carrier consumers. Use it when a tool
+must preserve more than the data fork, inspect native metadata failures, or
+execute AppleDouble packing/restoration on Linux, macOS and Windows. Production
+does not invoke Apple tools, C compilers or copyfile subprocesses.
+
+## Choose the operation
+
+| Need | API and contract |
+| --- | --- |
+| Inspect or assign one native host attribute | Strict held xattr APIs below; inspect actual errors and readback normalization. |
+| Preserve complete logical metadata between hosts/images | `pkg/metatransport` plus APFS/HFS streaming readers/writers; unsupported local native storage does not discard a logical value. |
+| Restore a validated complete AppleDouble snapshot | `RestoreAppleDouble`; validate first, then perform ordered destination effects. |
+| Reproduce sequential native reads and partial effects | `RestoreAppleDoubleSequential`; late malformed input may follow earlier successful writes. |
+| Execute native-style packing/unpacking on held objects | `PackAppleDoubleObject` / `UnpackAppleDoubleObject`; caller owns descriptor and borrowed-value lifetimes. |
+| Include path creation/opening and cleanup | `CopyAppleDoublePath`; library owns opened handles and retains creation, permission, route and close diagnostics. |
+
+## Complete AppleDouble operations
+
+`NewHostAppleDoubleObject` binds a held Darwin file to source identity, process,
+sandbox and native metadata providers. `NewCapturedAppleDoubleObject` supplies
+the same logical policies on all three supported OSes using captured metadata,
+attributes, identities, quarantine process state and mount observations. Native
+capture being unavailable on a foreign OS does not disable the captured operation.
+Read `LogicalSnapshot` and persist its state/values through the image or carrier;
+logical ACL and quarantine updates do not create equivalent Linux/Windows kernel
+authorization. No receiving-host account database replaces the source mappings.
+
+`CopyAppleDoublePath(ctx, source, destination, options)` chooses
+`PathPackAppleDouble` or `PathUnpackAppleDouble`. Supply
+`DefaultObjectPackOptions()` or `DefaultObjectUnpackOptions()` for the selected
+route and a positive `MaxOpenAttempts`; zero retry budget is invalid. Native
+Darwin use leaves `Captured` nil. Foreign-host use supplies `CapturedPathContext`,
+including source and existing destination objects, creator/parent-ACL/umask
+context when creating a destination, explicit real/effective UUID pointers, and
+observed source/destination protection capabilities. Nil UUID/protection fields
+mean unknown and are rejected when required; an explicit negative observation
+differs from absent information. Captured source type must agree with its actual
+payload object. Required source context should be collected before starting.
+
+These are ordinary explicit OS paths, not a contained-root extraction API.
+`NoFollowSource` and `NoFollowDestination` select final-link behavior;
+intermediate components resolve normally. Exclude concurrent namespace,
+content and metadata changes. The implementation validates observed object
+identity and uses held descriptors for temporary permission restoration; it
+does not claim protection against substitution followed by restoration between
+observations. On foreign hosts, temporary access to the actual backing payload
+has its own saved/restored permissions, separate from captured Darwin modes.
+Logical link permissions never justify chmod of the receiving-host referent.
+
+The result retains outer lifecycle steps and inner pack/unpack/stat/ACL results.
+Inspect both the Go error and recorded steps: native success can ignore an
+individual metadata failure. Close/restoration failures remain visible. There
+is no rollback or implicit fsync; failures can leave metadata changes, truncated
+content or an unlinked pack destination. `MoveSource` and `UnlinkDestination`
+request those actual path effects and must be selected deliberately.
+
+Native-style pack preserves observed copyfile omission/normalization policy.
+Sequential unpack allocates the complete incoming resource fork in native order.
+Default object options allow 64 MiB active workspace, and allocation requires
+`size <= (MaxActiveBytes - headerBytes - deferredACLBytes) / 2` as well as explicit
+value/aggregate limits. Consequently, less than 32 MiB fits as a single fork under
+that default. Budgets are configurable; they do not limit the filesystem or the
+streaming preservation APIs. Borrowed input Values stay immutable/readable until
+consumption; new logical writes own their bytes, while preserved old fork suffixes
+can remain borrowed. Destination-owned snapshots are not a total-memory budget.
+
+See [object operations](../../docs/appledouble-object.md),
+[path lifecycle and native evidence](../../docs/appledouble-path-lifecycle.md),
+[large resource forks](../../docs/appledouble-large-values.md) and
+[carrier storage](../metatransport/README.md) for complete contracts and examples.
+The [completion matrix](../../docs/appledouble-completion-matrix.md) remains open:
+final 23-report three-OS coverage, native root/nonowner and genuine signed-sandbox
+qualification, full large-value/foreign-image checks and existing fuzz/race/lint
+gates must pass at the final revision. C-only allocator faults and unavailable
+native observations are explicitly distinguished from implemented Go policy.
+Package relocation/refactoring is deferred; downstream package PR72 and codesign
+remain held until the qualified APFS release is adopted.
+
 ## Strict extended attributes
 
 `ListXattrNames`, `XattrSize`, `ReadXattr` and `RemoveXattr` operate on an already-open `*os.File`.

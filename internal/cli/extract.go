@@ -34,9 +34,9 @@ the whole volume is extracted.
 Exit code 6 indicates a partial extraction: some entries were skipped and a
 warning was printed to stderr for each.
 
---xattrs selects extended attributes for retention. With --metadata-root they
-are stored in the portable carrier. Without a carrier the tool attempts native
-attribute restoration and reports values the host filesystem cannot store.
+--xattrs selects extended attributes for retention and requires --metadata-root.
+--preserve-meta selects inode permissions, ownership, flags and timestamps and
+also requires --metadata-root. Missing carrier selection fails before extraction.
 Omitting --xattrs excludes attributes from the extraction.
 
 --metadata-root selects a separate directory for portable metadata transport.
@@ -59,7 +59,7 @@ Examples:
   apfs extract image.dmg -C ./out
   apfs extract image.dmg /Applications/Some.app -C ./out --recursive
   apfs extract image.dmg -C ./out --pattern '\.plist$'
-  apfs extract image.dmg -C ./out --preserve-meta --verify`,
+  apfs extract image.dmg -C ./out --xattrs --preserve-meta --metadata-root ./metadata --verify`,
 	Args: rangeArgs(1, 2, "IMAGE [PATH]"),
 	RunE: runExtract,
 }
@@ -68,8 +68,8 @@ func init() {
 	extractCmd.Flags().StringVarP(&extractDestination, "destination", "C", "", "destination directory (required)")
 	extractCmd.Flags().StringVar(&extractPattern, "pattern", "", "only extract files whose path matches this regex")
 	extractCmd.Flags().BoolVarP(&extractRecursive, "recursive", "r", false, "recurse into a directory PATH")
-	extractCmd.Flags().BoolVar(&extractPreserveMeta, "preserve-meta", false, "retain permissions and timestamps in the carrier, or restore native metadata without one")
-	extractCmd.Flags().BoolVar(&extractXattrs, "xattrs", false, "retain extended attributes in the carrier, or attempt native restoration without one")
+	extractCmd.Flags().BoolVar(&extractPreserveMeta, "preserve-meta", false, "retain inode metadata; requires --metadata-root")
+	extractCmd.Flags().BoolVar(&extractXattrs, "xattrs", false, "retain extended attributes; requires --metadata-root")
 	extractCmd.Flags().BoolVar(&extractVerify, "verify", false, "verify extracted files against source checksums")
 	extractCmd.Flags().StringVar(&extractSymlinks, "symlinks", "auto", "symlink handling: auto, real or file")
 	extractCmd.Flags().StringVar(&extractMetadataRoot, "metadata-root", "", "separate directory for portable metadata; required again when repacking")
@@ -79,6 +79,9 @@ func init() {
 }
 
 func runExtract(cmd *cobra.Command, args []string) error {
+	if (extractXattrs || extractPreserveMeta) && extractMetadataRoot == "" {
+		return usageErrorf("--xattrs and --preserve-meta require --metadata-root to preserve metadata on every filesystem; add --project-native to also apply it to the working copy")
+	}
 	if extractProjectNative && extractMetadataRoot == "" {
 		return usageErrorf("--project-native requires --metadata-root")
 	}
@@ -185,7 +188,9 @@ func runExtract(cmd *cobra.Command, args []string) error {
 		}
 		if extractXattrs {
 			restored, unwritable := extractor.XattrStats()
-			fmt.Printf("Restored %d extended attribute(s)\n", restored)
+			if extractProjectNative {
+				fmt.Printf("%d native extended attribute write(s) succeeded\n", restored)
+			}
 			if carried := extractor.XattrsCarried(); carried > 0 {
 				fmt.Printf("Preserved %d extended attribute(s) in %s\n", carried, extractMetadataRoot)
 			}

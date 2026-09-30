@@ -192,14 +192,20 @@ apfs cat image.dmg /App.app/Contents/Info.plist | plutil -p -
 ```
 apfs extract IMAGE [PATH] -C DIR [-r|--recursive] [--pattern REGEX]
                    [--preserve-meta] [--xattrs] [--verify]
+                   [--metadata-root DIR] [--project-native]
                    [--symlinks auto|real|file]
 ```
 
 Extracts the whole volume (or a subtree given `PATH`) to `DIR`, preserving
 symlinks, decompressing transparently-compressed files, and
-optionally restoring permissions/timestamps (`--preserve-meta`), restoring
-extended attributes (`--xattrs`) and verifying content against source checksums
-(`--verify`).
+optionally retaining inode metadata (`--preserve-meta`), retaining extended
+attributes (`--xattrs`) and verifying content against source checksums (`--verify`).
+Both metadata flags require an explicit, separate `--metadata-root` directory;
+missing selection fails before extraction. The carrier preserves metadata,
+original names and link relationships on Linux, macOS and Windows. Supply it
+again when packing the directory. Add `--project-native` to also apply selected
+metadata to the working copy; host limitations are reported and complete values
+remain in the carrier. Native projection can impose restrictive permissions.
 
 **Symlink handling** (`--symlinks`): `auto` (default) creates a real symlink
 where the OS allows it and otherwise writes the link target into a regular file
@@ -212,7 +218,8 @@ and reported. Exit code **6** signals a partial extraction.
 apfs extract image.dmg -C ./out
 apfs extract image.dmg /Applications/Some.app -C ./out --recursive
 apfs extract image.dmg -C ./out --pattern '\.plist$'
-apfs extract image.dmg -C ./out --preserve-meta --verify
+apfs extract image.dmg -C ./out --xattrs --preserve-meta --metadata-root ./metadata --verify
+apfs pack ./out repacked.dmg --metadata-root ./metadata
 ```
 
 ### `inspect` — low-level structural inspection

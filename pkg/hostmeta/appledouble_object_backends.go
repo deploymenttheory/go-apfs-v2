@@ -57,9 +57,8 @@ func (b *objectPackBackend) WriteAt(data []byte, offset int64) (int, error) {
 	return b.output.WriteAt(data, offset)
 }
 func (b *objectPackBackend) Stat() CopyStageResult {
-	if !b.options.Stat {
-		return CopyStageResult{}
-	}
+	// copyfile_pack always performs its final stat stage. The outer STAT
+	// flag independently controls fcopyfile's subsequent permission reset.
 	var err error
 	b.result.Stat, err = copyObjectStat(b.source, b.destination, b.options.StatOptions, false)
 	return objectCode(err)

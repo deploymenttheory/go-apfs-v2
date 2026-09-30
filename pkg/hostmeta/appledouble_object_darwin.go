@@ -61,6 +61,13 @@ func (a *hostObjectAttributes) write(name string, value []byte) error {
 func (a *hostObjectAttributes) remove(name string) error {
 	return a.control(func(fd int) error { return unix.Fremovexattr(fd, name) })
 }
+func (a *hostObjectAttributes) truncateFork(mode uint32) error {
+	fork, err := openPathResourceForkNative(a.file, true, mode)
+	if err != nil {
+		return err
+	}
+	return fork.Close()
+}
 func (a *hostObjectAttributes) quarantine(ctx context.Context, profile appledouble.QuarantineProfile) (*appledouble.Quarantine, error) {
 	return CaptureQuarantineFile(ctx, a.file, profile)
 }

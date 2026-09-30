@@ -199,21 +199,27 @@ Note that on macOS `--strict` will refuse most real trees, because of
 Extraction discards extended attributes unless asked to keep them:
 
 ```console
-apfs extract image.dmg -C ./out --xattrs
+apfs extract image.dmg -C ./out --xattrs --preserve-meta --metadata-root ./metadata
+apfs pack ./out repacked.dmg --metadata-root ./metadata
 ```
 
 Without `--xattrs`, extract-then-pack loses every attribute regardless of what
-the writer can do. With it, attributes are restored onto the extracted files;
-any the kernel reserves or the destination file system rejects are counted and
-reported rather than failing the extraction.
+the writer can do. Selected metadata requires a separate explicit carrier root;
+the CLI rejects missing selection before extraction. Both APFS and HFS+ writers
+read complete logical values from this carrier on every supported OS. Native
+filesystem limits cannot silently remove selected values. Add `--project-native`
+to attempt host enforcement as well; its per-field outcomes remain separate from
+carrier preservation, and it can apply restrictive permissions or ACLs.
 
 Transparent-compression metadata (`com.apple.decmpfs` and the resource fork
-holding the compressed copy) is deliberately **not** restored. Extraction
+holding the compressed copy) is retained in the carrier and deliberately **not**
+projected onto the decompressed working copy. Extraction
 decompresses as it reads, so the extracted file holds its content in the data
 fork; restoring that metadata would leave the file describing content it no
 longer has, and would render it unreadable if anything later set
-`UF_COMPRESSED`. A resource fork without `decmpfs` is a genuine one and is
-restored.
+`UF_COMPRESSED`. Repacking validates the payload baseline before restoring the
+original compressed storage; conflicting edits require explicit decompression.
+An unrelated inline resource fork remains independent of compression metadata.
 
 ## Using this from Go
 
@@ -237,6 +243,8 @@ public so that a consumer of the writer libraries can name what it is handed.
 
 ## Roadmap
 
-Extended attributes and hard links are planned for the APFS writer; see
-[`TOOLS_ROADMAP.md`](../TOOLS_ROADMAP.md). Until then, the counts above are the
-honest account of what a packed image is missing.
+The writers now carry extended attributes and hard links. Current remaining
+AppleDouble qualification and release prerequisites are tracked in the
+[completion matrix](appledouble-completion-matrix.md). Fidelity reports describe
+actual source/destination limits; a passing component test does not close an
+unfinished native or cross-platform qualification gate.

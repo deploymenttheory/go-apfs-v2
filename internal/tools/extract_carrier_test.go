@@ -367,8 +367,8 @@ func TestCarrierControlledExtractionFailures(t *testing.T) {
 			v := carrierVolume{MapFS: fstest.MapFS{".": {Mode: fs.ModeDir | 0755}, "file": {Data: []byte("payload")}}}
 			e := newCarrierExtractor(t, v)
 			e.SymlinkMode = SymlinkFile
-			ops := carrierExtractionOps{os.ReadDir, os.OpenRoot, func(context.Context, string, hostmeta.XattrCaptureLimits) (map[string][]byte, error) {
-				return map[string][]byte{}, nil
+			ops := carrierExtractionOps{os.ReadDir, os.OpenRoot, func(context.Context, *os.Root, string, hostmeta.XattrCaptureLimits) (map[string]appledouble.Value, error) {
+				return map[string]appledouble.Value{}, nil
 			}}
 			switch which {
 			case "source-directory":
@@ -398,19 +398,19 @@ func TestCarrierControlledExtractionFailures(t *testing.T) {
 				e.Context = ctx
 				ops.openRoot = func(p string) (*os.Root, error) { r, err := os.OpenRoot(p); cancel(); return r, err }
 			case "native-unsupported":
-				ops.capture = func(context.Context, string, hostmeta.XattrCaptureLimits) (map[string][]byte, error) {
+				ops.capture = func(context.Context, *os.Root, string, hostmeta.XattrCaptureLimits) (map[string]appledouble.Value, error) {
 					return nil, hostmeta.ErrXattrUnsupported
 				}
 			case "native-failure":
-				ops.capture = func(context.Context, string, hostmeta.XattrCaptureLimits) (map[string][]byte, error) {
+				ops.capture = func(context.Context, *os.Root, string, hostmeta.XattrCaptureLimits) (map[string]appledouble.Value, error) {
 					return nil, sentinel
 				}
 			case "native-budget":
 				limits := metatransport.DefaultLimits()
 				limits.BlobBytes = 0
 				e.MetadataLimits = &limits
-				ops.capture = func(context.Context, string, hostmeta.XattrCaptureLimits) (map[string][]byte, error) {
-					return map[string][]byte{"x": {1}}, nil
+				ops.capture = func(context.Context, *os.Root, string, hostmeta.XattrCaptureLimits) (map[string]appledouble.Value, error) {
+					return map[string]appledouble.Value{"x": bytes.NewReader([]byte{1})}, nil
 				}
 			case "manifest-budget":
 				limits := metatransport.DefaultLimits()
@@ -477,7 +477,7 @@ func TestCarrierPatternAndLateParentFailure(t *testing.T) {
 			r.Close()
 		}
 		return r, err
-	}, hostmeta.CaptureXattrsNoFollow}
+	}, hostmeta.CaptureXattrValuesAt}
 	if err = e.extractCarrierUsing("file", "file", ops); !errors.Is(err, os.ErrClosed) {
 		t.Fatal(err)
 	}
@@ -587,5 +587,76 @@ func TestCarrierStreamingFinderReadFailures(t *testing.T) {
 	value := &transportTestValue{size: 32, failAfter: 2, fault: fault}
 	if _, _, err := storeCarrierValues(context.Background(), store, map[string]appledouble.Value{appledouble.FinderInfoName: value}); !errors.Is(err, io.ErrUnexpectedEOF) || !errors.Is(err, fault) {
 		t.Fatal(err)
+	}
+}
+
+func TestCarrierInitialBaselineStreamsValues(t *testing.T) {
+	value := &transportTestValue{size: 17 << 20}
+	e := newCarrierExtractor(t, carrierVolume{MapFS: fstest.MapFS{"file": {Data: []byte("payload")}}})
+	e.NativeCaptureLimits = &hostmeta.XattrCaptureLimits{NameBytes: hostmeta.MaxXattrListSize, ValueBytes: 16, TotalBytes: 16}
+	captured := 0
+	ops := carrierExtractionOps{os.ReadDir, os.OpenRoot, func(ctx context.Context, root *os.Root, name string, limits hostmeta.XattrCaptureLimits) (map[string]appledouble.Value, error) {
+		if root == nil || limits.ValueBytes != 16 {
+			t.Fatal("capture lost held root or explicit limits")
+		}
+		if name != "file" {
+			return nil, nil
+		}
+		f, err := root.Open(name)
+		if err != nil {
+			return nil, err
+		}
+		data, err := io.ReadAll(f)
+		err = errors.Join(err, f.Close())
+		if err != nil {
+			return nil, err
+		}
+		if string(data) != "payload" {
+			t.Fatal("capture did not refer to extracted entry")
+		}
+		captured++
+		return map[string]appledouble.Value{hostmeta.ResourceForkName: value}, ctx.Err()
+	}}
+	if err := e.extractCarrierUsing(".", "", ops); err != nil {
+		t.Fatal(err)
+	}
+	if captured != 1 || value.reads < 200 || value.maxRead > 64<<10 {
+		t.Fatal(captured, value)
+	}
+	store, err := metatransport.Open(e.Destination, e.MetadataRoot, metatransport.DefaultLimits())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	manifest, err := store.Load(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, record := range manifest.Records {
+		if record.Original != "file" {
+			continue
+		}
+		if !record.NativeCaptured || len(record.NativeAttributes) != 1 || record.NativeAttributes[0].Value.Size != value.Size() {
+			t.Fatal(record)
+		}
+		values, err := store.BorrowAttributes(context.Background(), record.NativeAttributes)
+		if err != nil {
+			t.Fatal(err)
+		}
+		data := make([]byte, 17)
+		offset := value.Size() - int64(len(data))
+		if _, err := values[hostmeta.ResourceForkName].ReadAt(data, offset); err != nil {
+			t.Fatal(err)
+		}
+		for i, b := range data {
+			if b != byte((offset+int64(i))%251) {
+				t.Fatal("baseline data changed")
+			}
+		}
+		found = true
+	}
+	if !found {
+		t.Fatal("native baseline missing")
 	}
 }

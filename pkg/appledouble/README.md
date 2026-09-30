@@ -35,12 +35,24 @@ to process the bytes.
 The package operates on bytes. Filesystem reads/writes, choosing where to store a
 sidecar, resolving filename conflicts and applying permissions belong to the
 surrounding metadata layer. Shared filesystem operations live in `pkg/hostmeta`;
-full AppleDouble transport integration is on the roadmap below.
+`pkg/metatransport` supplies the explicit portable carrier, and APFS/HFS+ readers,
+writers and the CLI bind that carrier to extraction and repacking.
 
 ## What it provides
 
 - **Sidecar encoding and decoding:** `File`, `Attr`, `FromXattrs`, `Encode` and
   `Decode` carry FinderInfo, resource forks and extended-attribute records.
+- **Streamed metadata:** `Value`, `StreamFile`, `DecodeStream` and `EncodeTo`
+  retain sized borrowed readers and use bounded scratch space. Keep their image,
+  file or carrier owners open and exclude mutation until consumption finishes.
+- **Complete metadata operations:** `hostmeta.PackAppleDoubleObject` and
+  `UnpackAppleDoubleObject` operate on held objects; `CopyAppleDoublePath` adds
+  creation/opening, temporary permission handling, retries and owned-descriptor
+  cleanup. Captured source context supplies the same logical policy on Linux
+  and Windows. These native-style operations preserve native omissions and
+  partial failures; lossless transport uses the carrier and image APIs. See
+  [object operations](../../docs/appledouble-object.md) and
+  [path lifecycle](../../docs/appledouble-path-lifecycle.md).
 - **Logical metadata:** `Xattrs` resolves ordinary duplicate attributes and the
   implemented FinderInfo/resource-fork write semantics. `File.Attrs` retains
   ordered records for consumers that need to inspect them directly.
@@ -172,11 +184,11 @@ The architecture has separate operations, without a global compatibility mode:
 
 | Area | Implemented in this integration | Still required before completion |
 | --- | --- | --- |
-| Codec and allocation | Streaming encode/indexed decode; explicit wire/value budgets; borrowed values and bounded scratch | Fully streaming image endpoints, native pack limits and complete allocation/error qualification |
-| Restoration | Safe snapshot and separately named sequential executors; existing ACL/quarantine/stat policies | Complete held providers, source/process contexts, creation/inheritance, temporary permissions, cleanup and close ordering |
-| Host capture | Strict held and no-follow capture on all three OSes; Darwin hidden storage via libSystem without CGo | End-to-end source acquisition, native projection/readback and privileged/sandbox qualification |
-| Portable transport | Explicit carrier with hashes/generations/conflict detection; extract/repack bindings; roots, names, links and four-time metadata | Complete streaming integration, all host refusal/normalization paths and final native round-trip qualification |
-| Evidence | Existing native corpus, Clang ASTs, macOS image oracles, vendor DMGs and focused coverage; stale-evidence auditor | Full final-revision matrix with greater than 95% coverage and no unexplained mismatches |
+| Codec and allocation | Streamed codec and APFS/HFS endpoints; native pack limits; explicit value/work budgets; borrowed values | Final full-byte large-fork jobs on all three OSes and native foreign-image readback; retain native-style whole-fork allocation constraints |
+| Restoration | Prevalidated and sequential executors; complete object/path composition; ACL/quarantine/stat, inheritance, temporary permissions and cleanup | Final production replay, partial-error and close diagnostics, version-specific native CI |
+| Host capture | Strict held/no-follow capture on all three OSes; native Darwin source/process/identity/protection observations | Live privileged/nonowner and signed-sandbox CI with explicit prerequisites; unknown observations remain errors |
+| Portable transport | Streamed carrier with hashes/generations/conflict detection; extraction/repacking and native projection/readback; roots, names, links, hardlinks and four times | Final three-OS transport and large-value matrices; independent Mac validation of Linux/Windows images |
+| Evidence | Retained C/native corpus, Clang ASTs, image oracles, four vendor DMGs, strict 23-report coverage inventory | Final committed revision's complete CI, greater than 95% for each selected file, fuzz/race/lint/build checks and no unexplained mismatches |
 | Consumers | APFS owns the codec and transport; package PR72 remains draft | Qualified APFS release, downstream adoption in PR72, then codesign work |
 
 Use `apfs extract IMAGE -C PAYLOAD --xattrs --preserve-meta --metadata-root METADATA`
@@ -184,6 +196,15 @@ to select portable storage, and `apfs pack PAYLOAD OUTPUT.dmg --metadata-root ME
 to supply that association explicitly when repacking. The payload destination must
 be empty, and metadata must live outside it. Keep the metadata directory with the
 payload. The existing flags select which metadata categories to capture.
+
+Native-style sequential unpack owns an incoming resource fork as one buffer and
+uses an explicit workspace budget. The object defaults are 64 MiB active space;
+simultaneous input/write copies plus header/ACL storage mean less than a 32 MiB
+fork fits that default. Callers can raise the budget. This is not a filesystem
+size limit. The streaming carrier and image APIs preserve larger values without
+whole-fork allocation; AppleDouble's own unsigned 32-bit fork length remains a
+format limit. See [large resource forks](../../docs/appledouble-large-values.md)
+for the real 4 GiB + 17 byte qualification and foreign-image checks.
 
 The consolidated PR remains draft while qualification is incomplete. The
 maintainer merges it and the release PR; package adoption and codesign remain
