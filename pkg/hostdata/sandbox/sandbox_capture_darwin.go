@@ -1,28 +1,10 @@
 package sandbox
 
-import (
-	"sync"
+import "github.com/deploymenttheory/go-apfs-v2/internal/darwinabi"
 
-	"github.com/ebitengine/purego"
-)
-
-var loadAppSandbox = sync.OnceValues(func() (func() bool, error) {
-	return bindAppSandbox(purego.Dlopen, purego.Dlsym)
-})
-
-func bindAppSandbox(open func(string, int) (uintptr, error), symbol func(uintptr, string) (uintptr, error)) (func() bool, error) {
-	h, err := open("/usr/lib/system/libxpc.dylib", purego.RTLD_NOW|purego.RTLD_LOCAL)
-	if err != nil {
-		return nil, err
-	}
-	p, err := symbol(h, "_xpc_runtime_is_app_sandboxed")
-	if err != nil {
-		return nil, err
-	}
-	var query func() bool
-	purego.RegisterFunc(&query, p)
-	return query, nil
-}
+// The required symbol is linked by the typed wrapper, rather than discovered
+// at runtime. Keep the provider seam for deterministic capture failure tests.
+var loadAppSandbox = func() (func() bool, error) { return darwinabi.AppSandboxed, nil }
 
 func captureAppSandbox() (bool, error) {
 	query, err := loadAppSandbox()

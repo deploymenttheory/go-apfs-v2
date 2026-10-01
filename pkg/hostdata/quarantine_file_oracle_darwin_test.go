@@ -15,8 +15,8 @@ import (
 	"unsafe"
 
 	heldfixture "github.com/deploymenttheory/go-apfs-v2/internal/testutil/heldfixture"
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/quarantineoracle"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
-	"github.com/ebitengine/purego"
 	"golang.org/x/sys/unix"
 )
 
@@ -25,13 +25,7 @@ func TestQuarantineFileNativeOracle(t *testing.T) {
 	if path == "" {
 		t.Fatal("native oracle path required")
 	}
-	h, err := purego.Dlopen(path, purego.RTLD_NOW|purego.RTLD_LOCAL)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer purego.Dlclose(h)
-	var apply func(int32, *byte, uint64) int32
-	purego.RegisterLibFunc(&apply, h, "appledouble_quarantine_apply")
+
 	process, err := CaptureQuarantineProcess(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -54,7 +48,7 @@ func TestQuarantineFileNativeOracle(t *testing.T) {
 					t.Fatal(err)
 				}
 				start := uint32(time.Now().Unix())
-				code := apply(int32(reference.Fd()), unsafe.SliceData(envelope), uint64(len(envelope)))
+				code := quarantineoracle.Apply(int32(reference.Fd()), unsafe.SliceData(envelope), uint64(len(envelope)))
 				got := ApplyQuarantineFile(context.Background(), ours, q, *process)
 				end := uint32(time.Now().Unix())
 				if code == 0 && got != nil || code > 0 && !errors.Is(got, syscall.Errno(code)) || code < 0 && got == nil {
@@ -80,7 +74,7 @@ func TestQuarantineFileNativeOracle(t *testing.T) {
 		}
 	}
 	ours, reference := heldfixture.Source(t, 0600), heldfixture.Source(t, 0600)
-	code := apply(int32(reference.Fd()), nil, 0)
+	code := quarantineoracle.Apply(int32(reference.Fd()), nil, 0)
 	err = ApplyQuarantineFile(context.Background(), ours, nil, *process)
 	if code == 0 && err != nil || code > 0 && !errors.Is(err, syscall.Errno(code)) || code < 0 && err == nil {
 		t.Fatalf("clear native=%d Go=%v", code, err)

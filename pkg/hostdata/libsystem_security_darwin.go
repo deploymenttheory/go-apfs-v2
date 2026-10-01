@@ -2,65 +2,33 @@ package hostdata
 
 import (
 	"errors"
-	"runtime"
-	"strings"
-	"sync"
 	"syscall"
 	"unsafe"
 
+	"github.com/deploymenttheory/go-apfs-v2/internal/darwinabi"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
 	aclmeta "github.com/deploymenttheory/go-apfs-v2/pkg/hostdata/acl"
-	"github.com/ebitengine/purego"
 	"golang.org/x/sys/unix"
 )
 
 // Only libSystem IO and filesec property access cross this boundary. The ACL,
 // AppleDouble, policy and ordering algorithms remain Go implementations.
 type darwinSecurityABI struct {
-	native  map[string]uintptr
 	init    func() uintptr
 	free    func(uintptr)
-	get     func(uintptr, int32, unsafe.Pointer) int32
-	stat    func(int32, *unix.Stat_t, uintptr) int32
-	chmod   func(int32, uint32, uint32, int32, uintptr) int32
-	setattr func(int32, *unix.Attrlist, unsafe.Pointer, uintptr, uint32) int32
-	fsctl   func(int32, uintptr, unsafe.Pointer, uint32) int32
-	errno   func() *int32
+	get     func(uintptr, int32, unsafe.Pointer) (int32, error)
+	stat    func(int32, *unix.Stat_t, uintptr) (int32, error)
+	chmod   func(int32, uint32, uint32, int32, uintptr) (int32, error)
+	setattr func(int32, *unix.Attrlist, unsafe.Pointer, uintptr, uint32) (int32, error)
+	fsctl   func(int32, uintptr, unsafe.Pointer, uint32) (int32, error)
 }
 
-var loadDarwinSecurity = sync.OnceValues(func() (*darwinSecurityABI, error) {
-	h, err := purego.Dlopen("/usr/lib/libSystem.B.dylib", purego.RTLD_NOW|purego.RTLD_LOCAL)
-	if err != nil {
-		return nil, err
-	}
-	return bindDarwinSecurity(func(name string) (uintptr, error) { return purego.Dlsym(h, name) }, runtime.GOARCH)
-})
-
-func bindDarwinSecurity(symbol func(string) (uintptr, error), arch string) (*darwinSecurityABI, error) {
-	a := &darwinSecurityABI{native: make(map[string]uintptr)}
-	stat := "fstatx_np"
-	if arch == "amd64" {
-		stat += "$INODE64"
-	}
-	for _, item := range []struct {
-		name   string
-		target any
-	}{
-		{"filesec_init", &a.init}, {"filesec_free", &a.free}, {"filesec_get_property", &a.get}, {stat, &a.stat},
-		{"__fchmod_extended", &a.chmod}, {"fsetattrlist", &a.setattr}, {"ffsctl", &a.fsctl}, {"__error", &a.errno},
-	} {
-		p, err := symbol(item.name)
-		if err != nil {
-			return nil, err
-		}
-		a.native[strings.TrimSuffix(item.name, "$INODE64")] = p
-		purego.RegisterFunc(item.target, p)
-	}
-	return a, nil
+var loadDarwinSecurity = func() (*darwinSecurityABI, error) {
+	return &darwinSecurityABI{init: darwinabi.FilesecInit, free: darwinabi.FilesecFree, get: darwinabi.FilesecGetProperty, stat: darwinabi.Fstatx, chmod: darwinabi.FchmodExtended, setattr: darwinabi.Fsetattrlist, fsctl: darwinabi.Ffsctl}, nil
 }
 
 func (a *darwinSecurityABI) property(sec uintptr, name int32, out unsafe.Pointer) (bool, error) {
-	_, err := callDarwinInt(a.native["filesec_get_property"], func() int32 { return a.get(sec, name, out) }, a.errno, sec, uintptr(name), uintptr(out))
+	_, err := a.get(sec, name, out)
 	if errors.Is(err, syscall.ENOENT) {
 		return false, nil
 	}

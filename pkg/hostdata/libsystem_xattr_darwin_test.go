@@ -10,7 +10,6 @@ import (
 	"testing"
 	"unsafe"
 
-	"github.com/ebitengine/purego"
 	"golang.org/x/sys/unix"
 )
 
@@ -88,23 +87,6 @@ func TestLibSystemXattrNative(t *testing.T) {
 
 func TestLibSystemBindingFailures(t *testing.T) {
 	fault := errors.New("symbol not found")
-	if _, err := bindDarwinXattr(func(string) (uintptr, error) { return 0, fault }); !errors.Is(err, fault) {
-		t.Fatal(err)
-	}
-	// Real symbol resolution independently confirms all registered ABI functions.
-	h, err := purego.Dlopen("/usr/lib/libSystem.B.dylib", purego.RTLD_NOW|purego.RTLD_LOCAL)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer purego.Dlclose(h)
-	if _, err := bindDarwinXattr(func(n string) (uintptr, error) { return purego.Dlsym(h, n) }); err != nil {
-		t.Fatal(err)
-	}
-	errno := int32(syscall.EACCES)
-	a := &darwinXattrABI{errno: func() *int32 { return &errno }}
-	if _, err := callDarwinSize(0, func() int64 { return -1 }, a.errno); !errors.Is(err, syscall.EACCES) {
-		t.Fatal(err)
-	}
 	old := loadDarwinXattr
 	loadDarwinXattr = func() (*darwinXattrABI, error) { return nil, fault }
 	defer func() { loadDarwinXattr = old }()
@@ -129,9 +111,9 @@ func TestLibSystemXattrFallbackABI(t *testing.T) {
 	const name = "user.fallback"
 	errno := int32(syscall.EACCES)
 	fail := false
-	copyResult := func(buf *byte, size uintptr, data []byte) int64 {
+	copyResult := func(buf *byte, size uintptr, data []byte) (int64, error) {
 		if fail {
-			return -1
+			return -1, syscall.Errno(errno)
 		}
 		if size != 0 {
 			if size < uintptr(len(data)) {
@@ -139,7 +121,7 @@ func TestLibSystemXattrFallbackABI(t *testing.T) {
 			}
 			copy(unsafe.Slice(buf, int(size)), data)
 		}
-		return int64(len(data))
+		return int64(len(data)), nil
 	}
 	checkString := func(ptr *byte, want string) {
 		if !bytes.Equal(unsafe.Slice(ptr, len(want)+1), append([]byte(want), 0)) {
@@ -147,15 +129,14 @@ func TestLibSystemXattrFallbackABI(t *testing.T) {
 		}
 	}
 	a := &darwinXattrABI{
-		errno: func() *int32 { return &errno },
-		listPath: func(path, buf *byte, size uintptr, flags int32) int64 {
+		listPath: func(path, buf *byte, size uintptr, flags int32) (int64, error) {
 			checkString(path, "fixture")
 			if flags != 17 {
 				t.Fatal("path options lost", flags)
 			}
 			return copyResult(buf, size, []byte(name+"\x00"))
 		},
-		getPath: func(path, attr, buf *byte, size uintptr, position uint32, flags int32) int64 {
+		getPath: func(path, attr, buf *byte, size uintptr, position uint32, flags int32) (int64, error) {
 			checkString(path, "fixture")
 			checkString(attr, name)
 			if position != 0 || flags != 17 {
@@ -163,13 +144,13 @@ func TestLibSystemXattrFallbackABI(t *testing.T) {
 			}
 			return copyResult(buf, size, []byte("ok"))
 		},
-		listFD: func(fd int32, buf *byte, size uintptr, flags int32) int64 {
+		listFD: func(fd int32, buf *byte, size uintptr, flags int32) (int64, error) {
 			if fd != 19 || flags != xattrShowCompression {
 				t.Fatal("held descriptor/hidden visibility lost", fd, flags)
 			}
 			return copyResult(buf, size, []byte(name+"\x00"))
 		},
-		getFD: func(fd int32, attr, buf *byte, size uintptr, position uint32, flags int32) int64 {
+		getFD: func(fd int32, attr, buf *byte, size uintptr, position uint32, flags int32) (int64, error) {
 			checkString(attr, name)
 			if fd != 19 || position != 0 || flags != xattrShowCompression {
 				t.Fatal("held read descriptor/position/options lost", fd, position, flags)

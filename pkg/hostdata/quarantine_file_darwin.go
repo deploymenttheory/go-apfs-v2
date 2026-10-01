@@ -7,7 +7,6 @@ import (
 	"os"
 	"runtime"
 	"syscall"
-	"unsafe"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
 	"golang.org/x/sys/unix"
@@ -64,8 +63,7 @@ func (a *quarantineCaptureABI) readFile(ctx context.Context, fd int, profile app
 	n := uint64(len(buffer))
 	request := quarantineFileGet{fd: int64(fd), length: &n, data: &buffer[0]}
 	policy := []byte("Quarantine\x00")
-	_, err := callDarwinInt(a.native["__mac_syscall"], func() int32 { return a.getFile(&policy[0], 82, &request) }, a.errno,
-		uintptr(unsafe.Pointer(&policy[0])), 82, uintptr(unsafe.Pointer(&request)))
+	_, err := a.getFile(&policy[0], 82, &request)
 	runtime.KeepAlive(policy)
 	runtime.KeepAlive(buffer)
 	if errors.Is(err, syscall.ENOATTR) {
@@ -121,8 +119,7 @@ func (a *quarantineCaptureABI) writeFile(ctx context.Context, fd int, source *ap
 	}
 	request := quarantineFileSet{fd: int64(fd), length: uint64(len(data)), data: &data[0]}
 	policy := []byte("Quarantine\x00")
-	_, err := callDarwinInt(a.native["__mac_syscall"], func() int32 { return a.setFile(&policy[0], 83, &request) }, a.errno,
-		uintptr(unsafe.Pointer(&policy[0])), 83, uintptr(unsafe.Pointer(&request)))
+	_, err := a.setFile(&policy[0], 83, &request)
 	runtime.KeepAlive(policy)
 	runtime.KeepAlive(data)
 	return err

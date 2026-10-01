@@ -74,7 +74,41 @@ func verify() error {
 	if _, err := run("xcrun", "clang", "-dynamiclib", "-O2", "-Wall", "-Wextra", "-Werror", source, "-o", library); err != nil {
 		return err
 	}
-	cmd := exec.Command("go", "test", "-count=1", "-json", "-tags=native_quarantine_oracle", "-run=^TestQuarantine(Capture|File)NativeOracle$", "./pkg/hostdata")
+
+	// Link the unchanged C observer into the same CGO-disabled test process.
+	// Only the library path varies: retain both the template and concrete overlay.
+	const oracleSource = "internal/testutil/quarantineoracle/oracle_darwin.go"
+	template, err := os.ReadFile(oracleSource)
+	if err != nil {
+		return err
+	}
+	if strings.Count(string(template), "APFS_QUARANTINE_ORACLE_LIBRARY") != 2 {
+		return fmt.Errorf("oracle library markers differ")
+	}
+	concrete := strings.ReplaceAll(string(template), "APFS_QUARANTINE_ORACLE_LIBRARY", library)
+	generated, err := filepath.Abs(filepath.Join(dir, "oracle_darwin.go"))
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(generated, []byte(concrete), 0600); err != nil {
+		return err
+	}
+	original, err := filepath.Abs(oracleSource)
+	if err != nil {
+		return err
+	}
+	overlay, err := json.Marshal(map[string]any{"Replace": map[string]string{original: generated}})
+	if err != nil {
+		return err
+	}
+	overlayPath, err := filepath.Abs(filepath.Join(dir, "overlay.json"))
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(overlayPath, overlay, 0600); err != nil {
+		return err
+	}
+	cmd := exec.Command("go", "test", "-overlay="+overlayPath, "-count=1", "-json", "-tags=native_quarantine_oracle", "-run=^TestQuarantine(Capture|File)NativeOracle$", "./pkg/hostdata")
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0", "APFS_QUARANTINE_ORACLE="+library)
 	out, err := cmd.CombinedOutput()
 	if writeErr := os.WriteFile(filepath.Join(dir, "tests.jsonl"), out, 0600); writeErr != nil {
@@ -96,6 +130,12 @@ func verify() error {
 		return err
 	}
 	files = append(files, fileSources...)
+	files = append(files, oracleSource, "internal/testutil/quarantineoracle/oracle_darwin.s")
+	wrappers, err := filepath.Glob("internal/darwinabi/*")
+	if err != nil {
+		return err
+	}
+	files = append(files, wrappers...)
 	files = append(files, source, "scripts/verify-quarantine-capture-native.go", "testdata/appledouble/native/quarantine-process-capture.h", "go.mod", "go.sum")
 	for _, file := range files {
 		b, err := os.ReadFile(file)

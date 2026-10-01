@@ -289,8 +289,9 @@ through the qualified release described in the migration guide.
 `ListXattrs`, `SetXattrs`, `bsdflags.Flags`, `Link`, `diskspace.AvailableSpace` and the attribute
 constants retain their existing behavior. Attribute extraction is best effort;
 callers must inspect reported failures. Darwin compression-aware reads use
-option-aware libSystem bindings through the pinned purego dependency, with CGo
-disabled. They no longer use deprecated raw syscalls or silently fall back to
+option-aware, typed Darwin wrappers in `internal/darwinabi`, following the
+`golang.org/x/sys/unix` static import pattern with CGo disabled. See the
+[wrapper boundary and qualification](../../docs/darwin-wrappers.md). They no longer use deprecated raw syscalls or silently fall back to
 ordinary visibility when hidden storage cannot be read.
 
 `CaptureXattrs` captures a complete namespace on a held file with explicit

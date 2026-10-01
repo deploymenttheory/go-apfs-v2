@@ -134,6 +134,7 @@ func verify() error {
 		return fmt.Errorf("incomplete path lifecycle tests: %d", passed)
 	}
 	files := []string{"scripts/verify-path-lifecycle-coverage.go", "go.mod", "go.sum", "pkg/hostdata/*.go", "pkg/hostdata/*/*.go", "internal/hosttime/*.go", "internal/testutil/heldfixture/*.go", "internal/evidenceaudit/*.go", "internal/testutil/pathnative/*.go", "internal/testutil/pathsecurity/*.go", "testdata/appledouble/native/path-*.c", "testdata/appledouble/native/path-*.json.gz", "testdata/appledouble/native/xattr-provider-context.h", "testdata/appledouble/native/xattr-remove-effects*"}
+	files = append(files, "internal/darwinabi/*", "scripts/generate-darwin-wrappers.go")
 	hashes, e := evidenceaudit.SourceHashes(os.DirFS("."), files)
 	if e != nil {
 		return e

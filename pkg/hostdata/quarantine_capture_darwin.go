@@ -5,12 +5,11 @@ import (
 	"errors"
 	"runtime"
 	"strings"
-	"sync"
 	"syscall"
 	"unsafe"
 
+	"github.com/deploymenttheory/go-apfs-v2/internal/darwinabi"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
-	"github.com/ebitengine/purego"
 	"golang.org/x/sys/unix"
 )
 
@@ -30,51 +29,27 @@ type quarantineProcessInfo struct {
 }
 
 type quarantineCaptureABI struct {
-	native  map[string]uintptr
-	query   func(*byte, int32, *quarantineProcessInfo) int32
-	getFile func(*byte, int32, *quarantineFileGet) int32
-	setFile func(*byte, int32, *quarantineFileSet) int32
-	errno   func() *int32
+	query   func(*byte, int32, *quarantineProcessInfo) (int32, error)
+	getFile func(*byte, int32, *quarantineFileGet) (int32, error)
+	setFile func(*byte, int32, *quarantineFileSet) (int32, error)
 	alloc   func() uintptr
 	free    func(uintptr)
-	capture func(uintptr) int32
+	capture func(uintptr) (int32, error)
 }
 
-var loadQuarantineCapture = sync.OnceValues(func() (*quarantineCaptureABI, error) {
-	system, err := purego.Dlopen("/usr/lib/libSystem.B.dylib", purego.RTLD_NOW|purego.RTLD_LOCAL)
-	if err != nil {
-		return nil, err
-	}
-	q, err := purego.Dlopen("/usr/lib/system/libquarantine.dylib", purego.RTLD_NOW|purego.RTLD_LOCAL)
-	if err != nil {
-		return nil, err
-	}
-	return bindQuarantineCapture(func(name string) (uintptr, error) {
-		h := system
-		if strings.HasPrefix(name, "_qtn_") {
-			h = q
-		}
-		return purego.Dlsym(h, name)
-	})
-})
-
-func bindQuarantineCapture(symbol func(string) (uintptr, error)) (*quarantineCaptureABI, error) {
-	a := &quarantineCaptureABI{native: map[string]uintptr{}}
-	for _, item := range []struct {
-		name   string
-		target any
-	}{
-		{"__mac_syscall", &a.query}, {"__error", &a.errno}, {"_qtn_proc_alloc", &a.alloc}, {"_qtn_proc_free", &a.free}, {"_qtn_proc_init_with_self", &a.capture},
-		{"__mac_syscall", &a.getFile}, {"__mac_syscall", &a.setFile},
-	} {
-		p, err := symbol(item.name)
-		if err != nil {
-			return nil, err
-		}
-		purego.RegisterFunc(item.target, p)
-		a.native[item.name] = p
-	}
-	return a, nil
+var loadQuarantineCapture = func() (*quarantineCaptureABI, error) {
+	return &quarantineCaptureABI{
+		query: func(policy *byte, operation int32, data *quarantineProcessInfo) (int32, error) {
+			return darwinabi.MacSyscall(policy, operation, unsafe.Pointer(data))
+		},
+		getFile: func(policy *byte, operation int32, data *quarantineFileGet) (int32, error) {
+			return darwinabi.MacSyscall(policy, operation, unsafe.Pointer(data))
+		},
+		setFile: func(policy *byte, operation int32, data *quarantineFileSet) (int32, error) {
+			return darwinabi.MacSyscall(policy, operation, unsafe.Pointer(data))
+		},
+		alloc: darwinabi.QuarantineProcessAlloc, free: darwinabi.QuarantineProcessFree, capture: darwinabi.QuarantineProcessInit,
+	}, nil
 }
 
 func nativeQuarantineProfile(release string) (appledouble.QuarantineProfile, error) {
@@ -114,8 +89,7 @@ func (a *quarantineCaptureABI) read(profile appledouble.QuarantineProfile) (*Qua
 	var tracking [64]byte
 	i := quarantineProcessInfo{agent: &agent[0], metadata: &metadata[0], tracking: &tracking[0]}
 	policy := []byte("Quarantine\x00")
-	_, err := callDarwinInt(a.native["__mac_syscall"], func() int32 { return a.query(&policy[0], 84, &i) }, a.errno,
-		uintptr(unsafe.Pointer(&policy[0])), 84, uintptr(unsafe.Pointer(&i)))
+	_, err := a.query(&policy[0], 84, &i)
 	runtime.KeepAlive(policy)
 	runtime.KeepAlive(agent)
 	runtime.KeepAlive(metadata)
@@ -138,7 +112,7 @@ func (a *quarantineCaptureABI) confirmAbsent() error {
 		return syscall.ENOMEM
 	}
 	defer a.free(p)
-	_, err := callDarwinInt(a.native["_qtn_proc_init_with_self"], func() int32 { return a.capture(p) }, a.errno, p)
+	_, err := a.capture(p)
 	if errors.Is(err, syscall.ENOATTR) {
 		return nil
 	}

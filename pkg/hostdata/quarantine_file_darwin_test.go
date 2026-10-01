@@ -85,29 +85,29 @@ func TestQuarantineFileBoundsAndErrors(t *testing.T) {
 	}
 	ctx := context.Background()
 	var errno int32
-	a := &quarantineCaptureABI{errno: func() *int32 { return &errno }}
+	a := &quarantineCaptureABI{}
 	q := &appledouble.Quarantine{Flags: 1, Timestamp: 1, Agent: "source", Identifier: "id"}
 	input, err := q.MarshalBinary()
 	if err != nil {
 		t.Fatal(err)
 	}
-	a.getFile = func(_ *byte, op int32, r *quarantineFileGet) int32 {
+	a.getFile = func(_ *byte, op int32, r *quarantineFileGet) (int32, error) {
 		if op != 82 || r.fd != 123 || *r.length != 384 {
 			t.Fatal("get request")
 		}
 		copy(unsafe.Slice(r.data, 384), input)
 		*r.length = uint64(len(input) - 1)
-		return 0
+		return 0, nil
 	}
 	got, err := a.readFile(ctx, 123, 0)
 	if err != nil || !reflect.DeepEqual(got, q) {
 		t.Fatalf("get model: %#v %v", got, err)
 	}
-	a.setFile = func(_ *byte, op int32, r *quarantineFileSet) int32 {
+	a.setFile = func(_ *byte, op int32, r *quarantineFileSet) (int32, error) {
 		if op != 83 || r.fd != 123 || string(unsafe.Slice(r.data, int(r.length))) != string(input) {
 			t.Fatal("set request")
 		}
-		return 0
+		return 0, nil
 	}
 	if err := a.writeFile(ctx, 123, q, 0); err != nil {
 		t.Fatal(err)
@@ -126,7 +126,7 @@ func TestQuarantineFileBoundsAndErrors(t *testing.T) {
 	if err := a.writeFile(ctx, 123, &appledouble.Quarantine{Flags: 1, Agent: strings.Repeat("\xff", 255)}, 0); !errors.Is(err, appledouble.ErrQuarantineApplicationSize) {
 		t.Fatal(err)
 	}
-	a.getFile = func(*byte, int32, *quarantineFileGet) int32 { return -1 }
+	a.getFile = func(*byte, int32, *quarantineFileGet) (int32, error) { return -1, syscall.Errno(errno) }
 	errno = int32(syscall.EPERM)
 	if _, err := a.readFile(ctx, 123, 0); !errors.Is(err, syscall.EPERM) {
 		t.Fatal(err)
@@ -135,33 +135,33 @@ func TestQuarantineFileBoundsAndErrors(t *testing.T) {
 	if model, err := a.readFile(ctx, 123, 0); err != nil || model != nil {
 		t.Fatal(err)
 	}
-	a.setFile = func(*byte, int32, *quarantineFileSet) int32 { return -1 }
+	a.setFile = func(*byte, int32, *quarantineFileSet) (int32, error) { return -1, syscall.Errno(errno) }
 	if err := a.writeFile(ctx, 123, nil, 0); !errors.Is(err, syscall.ENOATTR) {
 		t.Fatal(err)
 	}
-	a.getFile = func(_ *byte, _ int32, r *quarantineFileGet) int32 { *r.length = 385; return 0 }
+	a.getFile = func(_ *byte, _ int32, r *quarantineFileGet) (int32, error) { *r.length = 385; return 0, nil }
 	if _, err := a.readFile(ctx, 123, 0); !errors.Is(err, appledouble.ErrQuarantine) {
 		t.Fatal(err)
 	}
-	a.getFile = func(_ *byte, _ int32, r *quarantineFileGet) int32 {
+	a.getFile = func(_ *byte, _ int32, r *quarantineFileGet) (int32, error) {
 		for i := range 384 {
 			unsafe.Slice(r.data, 384)[i] = 'x'
 		}
-		return 0
+		return 0, nil
 	}
 	if _, err := a.readFile(ctx, 123, 0); !errors.Is(err, appledouble.ErrQuarantine) {
 		t.Fatal(err)
 	}
-	a.getFile = func(_ *byte, _ int32, r *quarantineFileGet) int32 {
+	a.getFile = func(_ *byte, _ int32, r *quarantineFileGet) (int32, error) {
 		copy(unsafe.Slice(r.data, 384), "invalid")
 		*r.length = 7
-		return 0
+		return 0, nil
 	}
 	if _, err := a.readFile(ctx, 123, 0); !errors.Is(err, appledouble.ErrQuarantine) {
 		t.Fatal(err)
 	}
 	interrupted, stop := context.WithCancel(ctx)
-	a.getFile = func(*byte, int32, *quarantineFileGet) int32 { stop(); return 0 }
+	a.getFile = func(*byte, int32, *quarantineFileGet) (int32, error) { stop(); return 0, nil }
 	if _, err := a.readFile(interrupted, 123, 0); !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
 	}

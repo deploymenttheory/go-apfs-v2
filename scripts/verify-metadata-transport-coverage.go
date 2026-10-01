@@ -175,6 +175,7 @@ func verify() error {
 		files = append(files, pattern)
 	}
 	files = append(files, "internal/evidenceaudit/*.go", "internal/testutil/largefork/*.go", "pkg/hostdata/*.go", "pkg/hostdata/*/*.go", "internal/hosttime/*.go", "internal/testutil/heldfixture/*.go")
+	files = append(files, "internal/darwinabi/*", "scripts/generate-darwin-wrappers.go")
 	hashes, e := evidenceaudit.SourceHashes(os.DirFS("."), files)
 	if e != nil {
 		return e

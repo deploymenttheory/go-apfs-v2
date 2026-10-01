@@ -12,7 +12,7 @@ import (
 )
 
 func TestACLIdentityCaptureDarwinLayout(t *testing.T) {
-	if unsafe.Sizeof(darwinPasswd{}) != 72 || unsafe.Offsetof(darwinPasswd{}.uid) != 16 || unsafe.Offsetof(darwinPasswd{}.expire) != 64 || unsafe.Sizeof(darwinGroup{}) != 32 || unsafe.Offsetof(darwinGroup{}.members) != 24 {
+	if unsafe.Sizeof(darwinPasswd{}) != 72 || unsafe.Offsetof(darwinPasswd{}.UID) != 16 || unsafe.Offsetof(darwinPasswd{}.Expire) != 64 || unsafe.Sizeof(darwinGroup{}) != 32 || unsafe.Offsetof(darwinGroup{}.Members) != 24 {
 		t.Fatal("native structure layout")
 	}
 	a, err := loadDarwinIdentity()
@@ -64,9 +64,6 @@ func TestACLIdentityCaptureDarwinLayout(t *testing.T) {
 }
 func TestACLIdentityCaptureDarwinLoaderErrors(t *testing.T) {
 	want := errors.New("lookup")
-	if _, err := bindDarwinIdentity(func(string) (uintptr, error) { return 0, want }); !errors.Is(err, want) {
-		t.Fatal(err)
-	}
 	old := loadDarwinIdentity
 	defer func() { loadDarwinIdentity = old }()
 	loadDarwinIdentity = func() (*darwinIdentityABI, error) { return nil, want }
@@ -82,8 +79,8 @@ func identityTestABI() *darwinIdentityABI {
 			return int32(syscall.ERANGE)
 		}
 		copy(buf, "user\x00")
-		r.name = b
-		r.uid = id
+		r.Name = b
+		r.UID = id
 		*out = r
 		return 0
 	}
@@ -93,8 +90,8 @@ func identityTestABI() *darwinIdentityABI {
 			return int32(syscall.ERANGE)
 		}
 		copy(buf, "group\x00")
-		r.name = b
-		r.gid = id
+		r.Name = b
+		r.GID = id
 		*out = r
 		return 0
 	}
@@ -150,9 +147,9 @@ func TestACLIdentityCaptureDarwinAccountErrors(t *testing.T) {
 					code := user(id, r, b, n, out)
 					switch mode {
 					case "nil-name":
-						r.name = nil
+						r.Name = nil
 					case "outside-name":
-						r.name = new(byte)
+						r.Name = new(byte)
 					case "unterminated":
 						for i := range unsafe.Slice(b, n) {
 							unsafe.Slice(b, n)[i] = 65
@@ -180,9 +177,9 @@ func TestACLIdentityCaptureDarwinAccountErrors(t *testing.T) {
 					code := groupfn(id, r, b, n, out)
 					switch mode {
 					case "nil-name":
-						r.name = nil
+						r.Name = nil
 					case "outside-name":
-						r.name = new(byte)
+						r.Name = new(byte)
 					case "unterminated":
 						for i := range unsafe.Slice(b, n) {
 							unsafe.Slice(b, n)[i] = 65

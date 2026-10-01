@@ -123,25 +123,20 @@ func TestPathNativeMetadata(t *testing.T) {
 
 func TestPathNativeProviderErrors(t *testing.T) {
 	var eno int32 = 5
-	a := &darwinPathABI{security: &darwinSecurityABI{errno: func() *int32 { return &eno }, init: func() uintptr { return 0 }}}
+	a := &darwinPathABI{security: &darwinSecurityABI{init: func() uintptr { return 0 }}}
 	if _, err := a.capture("file", false); !errors.Is(err, ErrFilesecAllocation) || !errors.Is(err, unix.ENOMEM) {
 		t.Fatal(err)
 	}
 	a.security.init = func() uintptr { return 1 }
 	a.security.free = func(uintptr) {}
-	a.stat = func(*byte, *unix.Stat_t, uintptr) int32 { return -1 }
+	a.stat = func(*byte, *unix.Stat_t, uintptr) (int32, error) { return -1, syscall.Errno(eno) }
 	if _, err := a.capture("file", false); !errors.Is(err, unix.EIO) {
 		t.Fatal(err)
 	}
-	a.stat = func(*byte, *unix.Stat_t, uintptr) int32 { return 0 }
-	a.security.get = func(uintptr, int32, unsafe.Pointer) int32 { return -1 }
+	a.stat = func(*byte, *unix.Stat_t, uintptr) (int32, error) { return 0, nil }
+	a.security.get = func(uintptr, int32, unsafe.Pointer) (int32, error) { return -1, syscall.Errno(eno) }
 	if _, err := a.capture("file", false); !errors.Is(err, unix.EIO) {
 		t.Fatal(err)
-	}
-	for _, arch := range []string{"arm64", "amd64"} {
-		if _, err := bindDarwinPath(a.security, func(string) (uintptr, error) { return 0, os.ErrNotExist }, arch); !errors.Is(err, os.ErrNotExist) {
-			t.Fatal(err)
-		}
 	}
 	old := loadDarwinPath
 	loadDarwinPath = func() (*darwinPathABI, error) { return nil, unix.EIO }
@@ -182,7 +177,7 @@ func TestPathNativeProtectionProviders(t *testing.T) {
 	}
 	defer f.Close()
 	var eno int32 = 5
-	a := &darwinPathABI{security: &darwinSecurityABI{errno: func() *int32 { return &eno }}}
+	a := &darwinPathABI{security: &darwinSecurityABI{}}
 	probe := func(string) (bool, error) { return true, nil }
 	load := func() (*darwinPathABI, error) { return a, nil }
 	if _, err = openProtectedPath("file", 0, 0, 0600, probe, unix.Open, func() (*darwinPathABI, error) { return nil, unix.EIO }); !errors.Is(err, unix.EIO) {
@@ -191,12 +186,12 @@ func TestPathNativeProtectionProviders(t *testing.T) {
 	if _, err = openProtectedPath("bad\x00", 0, 0, 0600, probe, unix.Open, load); !errors.Is(err, unix.EINVAL) {
 		t.Fatal(err)
 	}
-	a.protectedOpen = func(*byte, int32, int32, int32, uint32) int32 { return -1 }
+	a.protectedOpen = func(*byte, int32, int32, int32, uint32) (int32, error) { return -1, syscall.Errno(eno) }
 	if _, err = openProtectedPath("file", 0, 0, 0600, probe, unix.Open, load); !errors.Is(err, unix.EIO) {
 		t.Fatal(err)
 	}
 	for _, flags := range []int{0, unix.O_CREAT} {
-		a.protectedOpen = func(_ *byte, gotFlags, class, dpflags int32, mode uint32) int32 {
+		a.protectedOpen = func(_ *byte, gotFlags, class, dpflags int32, mode uint32) (int32, error) {
 			want := uint32(0)
 			if flags&unix.O_CREAT != 0 {
 				want = 0640
@@ -208,7 +203,7 @@ func TestPathNativeProtectionProviders(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			return int32(fd)
+			return int32(fd), nil
 		}
 		file, err := openProtectedPath("file", flags, 3, 0640, probe, unix.Open, load)
 		if err != nil {
