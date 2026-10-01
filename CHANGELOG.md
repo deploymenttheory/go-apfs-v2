@@ -39,6 +39,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   preserving supported metadata using opened roots and handles. Tests cover both
   preparation APIs, containment, renamed roots, Windows streams and cleanup.
 
+## [0.15.0](https://github.com/deploymenttheory/go-apfs-v2/compare/v0.14.0...v0.15.0) (2026-10-01)
+
+
+### Features
+
+* replace purego with typed Darwin wrappers ([#184](https://github.com/deploymenttheory/go-apfs-v2/issues/184)) ([cc34ab6](https://github.com/deploymenttheory/go-apfs-v2/commit/cc34ab6d9b7e40cfac71a7193b681b350a201abc))
+
 ## [0.14.0](https://github.com/deploymenttheory/go-apfs-v2/compare/v0.13.0...v0.14.0) (2026-10-01)
 
 
