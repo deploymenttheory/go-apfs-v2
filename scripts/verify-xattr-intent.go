@@ -22,7 +22,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	sandbox "github.com/deploymenttheory/go-apfs-v2/pkg/hostdata/sandbox"
+	xattrintent "github.com/deploymenttheory/go-apfs-v2/pkg/hostdata/xattrintent"
 )
 
 const dir = "artifacts/xattr-intent"
@@ -140,7 +141,7 @@ func main() {
 			panic("controlled sandbox mismatch")
 		}
 		if mode == "live" {
-			actual, e := hostmeta.CaptureAppSandbox()
+			actual, e := sandbox.CaptureAppSandbox()
 			must(e)
 			if actual != sandboxed {
 				panic("C and Go live sandbox capture differ")
@@ -155,7 +156,7 @@ func main() {
 			}
 			q.Sandboxed = sandboxed
 			q.Preserve = n == 1
-			if got := hostmeta.PreserveXattrForIntent(string(q.Name), q.Intent, q.Sandboxed); got != q.Preserve {
+			if got := xattrintent.PreserveXattrForIntent(string(q.Name), q.Intent, q.Sandboxed); got != q.Preserve {
 				panic(fmt.Sprintf("intent mismatch mode%s query%d", mode, i))
 			}
 			if mode == "live" {
@@ -181,7 +182,7 @@ func main() {
 		panic("signed native/Go live sandbox policy mismatch")
 	}
 	for i, query := range queries {
-		want := hostmeta.PreserveXattrForIntent(string(query.Name), query.Intent, true)
+		want := xattrintent.PreserveXattrForIntent(string(query.Name), query.Intent, true)
 		if (nativeOutput[i+2] == "1") != want {
 			panic("signed sandbox disagrees with portable policy")
 		}
@@ -194,7 +195,7 @@ func main() {
 	// Protected system-managed containers have the explicit VM lifetime above.
 	must(os.RemoveAll(work))
 	report.ContainerLifecycle = "Two uniquely named synthetic App Sandbox containers remain under macOS container-manager ownership until this disposable GitHub-hosted VM is destroyed. Temporary application bundles are removed before successful exit."
-	for _, pattern := range []string{"pkg/hostmeta/*.go", "pkg/hostmeta/sandbox_capture*.go", source, "scripts/verify-xattr-intent.go", "go.mod", "go.sum"} {
+	for _, pattern := range []string{"pkg/hostdata/*.go", "pkg/hostdata/*/*.go", "internal/hosttime/*.go", "internal/testutil/heldfixture/*.go", "pkg/hostdata/sandbox/sandbox_capture*.go", source, "scripts/verify-xattr-intent.go", "go.mod", "go.sum"} {
 		paths, e := filepath.Glob(pattern)
 		must(e)
 		for _, p := range paths {
@@ -220,7 +221,7 @@ func main() {
 }
 
 func sandboxChild() {
-	sandboxed, err := hostmeta.CaptureAppSandbox()
+	sandboxed, err := sandbox.CaptureAppSandbox()
 	must(err)
 	if !sandboxed {
 		panic("Go helper did not enter App Sandbox")
@@ -241,7 +242,7 @@ func sandboxChild() {
 		decoded, err := hex.DecodeString(name)
 		must(err)
 		result := 0
-		if hostmeta.PreserveXattrForIntent(string(decoded), intent, sandboxed) {
+		if xattrintent.PreserveXattrForIntent(string(decoded), intent, sandboxed) {
 			result = 1
 		}
 		fmt.Println(result)

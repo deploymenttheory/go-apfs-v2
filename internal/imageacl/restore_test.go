@@ -8,7 +8,8 @@ import (
 	"testing"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
+	aclmeta "github.com/deploymenttheory/go-apfs-v2/pkg/hostdata/acl"
 )
 
 type entry struct {
@@ -16,7 +17,7 @@ type entry struct {
 	fail error
 }
 
-func apply(root, target *entry, update appledouble.ACLUpdate) (hostmeta.ACLRestoreResult, error) {
+func apply(root, target *entry, update appledouble.ACLUpdate) (aclmeta.ACLRestoreResult, error) {
 	return Restore(root, target, update, func(e *entry, _ bool) (Node[*entry], error) { return e.node, e.fail }, func(e *entry, attrs map[string][]byte) { e.node.Xattrs = attrs })
 }
 func replacement() appledouble.ACLUpdate {
@@ -67,9 +68,9 @@ func TestImageACLRestoreAliases(t *testing.T) {
 			if e != nil {
 				t.Fatal(e)
 			}
-			a := &entry{node: Node[*entry]{Mode: 0107000, UID: 42, GID: 43, LinkGroup: 7, Xattrs: map[string][]byte{hostmeta.SecurityName: raw, "user.keep": {3}}}}
+			a := &entry{node: Node[*entry]{Mode: 0107000, UID: 42, GID: 43, LinkGroup: 7, Xattrs: map[string][]byte{hostdata.SecurityName: raw, "user.keep": {3}}}}
 			b := &entry{node: a.node}
-			b.node.Xattrs = map[string][]byte{hostmeta.SecurityName: bytes.Clone(raw), "user.other": {4}}
+			b.node.Xattrs = map[string][]byte{hostdata.SecurityName: bytes.Clone(raw), "user.other": {4}}
 			switch conflict {
 			case "owner":
 				b.node.UID++
@@ -78,13 +79,13 @@ func TestImageACLRestoreAliases(t *testing.T) {
 			case "mode":
 				b.node.Mode++
 			case "presence":
-				delete(b.node.Xattrs, hostmeta.SecurityName)
+				delete(b.node.Xattrs, hostdata.SecurityName)
 			case "bytes":
-				b.node.Xattrs[hostmeta.SecurityName][4]++
+				b.node.Xattrs[hostdata.SecurityName][4]++
 			}
 			root := &entry{node: Node[*entry]{Mode: 040755, Children: []*entry{a, b}}}
 			oldA, oldB := a.node.Xattrs, b.node.Xattrs
-			beforeA, beforeB := bytes.Clone(oldA[hostmeta.SecurityName]), bytes.Clone(oldB[hostmeta.SecurityName])
+			beforeA, beforeB := bytes.Clone(oldA[hostdata.SecurityName]), bytes.Clone(oldB[hostdata.SecurityName])
 			r, err := apply(root, b, replacement())
 			if conflict != "none" {
 				if !errors.Is(err, fs.ErrInvalid) || r.Applied {
@@ -95,17 +96,17 @@ func TestImageACLRestoreAliases(t *testing.T) {
 					t.Fatal(r, err)
 				}
 				for _, v := range []*entry{a, b} {
-					s, err := appledouble.ParseFileSecurity(v.node.Xattrs[hostmeta.SecurityName])
+					s, err := appledouble.ParseFileSecurity(v.node.Xattrs[hostdata.SecurityName])
 					if err != nil || s.OwnerUUID[0] != 1 || s.GroupUUID[0] != 2 || len(s.ACL.Entries) != 1 || s.ACL.Flags != 1<<17 {
 						t.Fatal(s, err)
 					}
 				}
-				a.node.Xattrs[hostmeta.SecurityName][4] = 99
-				if b.node.Xattrs[hostmeta.SecurityName][4] != 1 {
+				a.node.Xattrs[hostdata.SecurityName][4] = 99
+				if b.node.Xattrs[hostdata.SecurityName][4] != 1 {
 					t.Fatal("aliases share new security storage")
 				}
 			}
-			if !bytes.Equal(oldA[hostmeta.SecurityName], beforeA) || !bytes.Equal(oldB[hostmeta.SecurityName], beforeB) {
+			if !bytes.Equal(oldA[hostdata.SecurityName], beforeA) || !bytes.Equal(oldB[hostdata.SecurityName], beforeB) {
 				t.Fatal("old maps changed")
 			}
 			if a.node.UID != 42 || a.node.GID != 43 || a.node.Mode != 0107000 || a.node.Xattrs["user.keep"][0] != 3 || b.node.Xattrs["user.other"][0] != 4 {
@@ -130,7 +131,7 @@ func TestImageACLRestoreRecords(t *testing.T) {
 		t.Fatal(e)
 	}
 	for _, raw := range [][]byte{nil, {}, {1}, make([]byte, 44), append(bytes.Clone(valid), make([]byte, 24)...), valid} {
-		root := &entry{node: Node[*entry]{Mode: 040000, UID: 0, GID: 0, Xattrs: map[string][]byte{hostmeta.SecurityName: raw}}}
+		root := &entry{node: Node[*entry]{Mode: 040000, UID: 0, GID: 0, Xattrs: map[string][]byte{hostdata.SecurityName: raw}}}
 		before := bytes.Clone(raw)
 		u := replacement()
 		snapshot := *u.ACL
@@ -142,7 +143,7 @@ func TestImageACLRestoreRecords(t *testing.T) {
 		if !bytes.Equal(raw, before) || !reflect.DeepEqual(*u.ACL, snapshot) {
 			t.Fatal("input mutated")
 		}
-		if len(root.node.Xattrs[hostmeta.SecurityName]) != 68 {
+		if len(root.node.Xattrs[hostdata.SecurityName]) != 68 {
 			t.Fatal("noncanonical output")
 		}
 	}
@@ -150,7 +151,7 @@ func TestImageACLRestoreRecords(t *testing.T) {
 	if e := backend.ClearSourceSecurity(); e != nil {
 		t.Fatal(e)
 	}
-	if e := backend.WriteACL(hostmeta.ACLMetadata{Security: &appledouble.FileSecurity{ACL: &appledouble.ACL{Entries: make([]appledouble.ACLEntry, 129)}}}); !errors.Is(e, appledouble.ErrFileSecurity) {
+	if e := backend.WriteACL(aclmeta.ACLMetadata{Security: &appledouble.FileSecurity{ACL: &appledouble.ACL{Entries: make([]appledouble.ACLEntry, 129)}}}); !errors.Is(e, appledouble.ErrFileSecurity) {
 		t.Fatal(e)
 	}
 }
@@ -164,7 +165,7 @@ func FuzzImageACLRestore(f *testing.F) {
 			return
 		}
 		original := bytes.Clone(raw)
-		target := &entry{node: Node[*entry]{Mode: 0107000, LinkGroup: 1, Xattrs: map[string][]byte{hostmeta.SecurityName: raw}}}
+		target := &entry{node: Node[*entry]{Mode: 0107000, LinkGroup: 1, Xattrs: map[string][]byte{hostdata.SecurityName: raw}}}
 		root := &entry{node: Node[*entry]{Mode: 040755, Children: []*entry{target}}}
 		switch shape % 4 {
 		case 1:
@@ -187,7 +188,7 @@ func FuzzImageACLRestore(f *testing.F) {
 		if err != nil || !r.Applied || r.Attempts != 1 {
 			t.Fatal(r, err)
 		}
-		if s, e := appledouble.ParseFileSecurity(target.node.Xattrs[hostmeta.SecurityName]); e != nil || len(s.ACL.Entries) != 1 {
+		if s, e := appledouble.ParseFileSecurity(target.node.Xattrs[hostdata.SecurityName]); e != nil || len(s.ACL.Entries) != 1 {
 			t.Fatal(s, e)
 		}
 	})

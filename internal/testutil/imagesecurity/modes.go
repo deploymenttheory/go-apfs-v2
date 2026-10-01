@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfswrite"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 )
 
 type ModeTree struct {
@@ -64,7 +64,7 @@ func Modes(uid, gid uint32) []ModeTree {
 					}
 				}
 				tree.Children = append(tree.Children, e)
-				cases = append(cases, Case{Name: name, Profile: profile.name, Kind: kind, UID: uid, GID: gid, Mode: raw, Disposition: hostmeta.SecurityRecordAbsent})
+				cases = append(cases, Case{Name: name, Profile: profile.name, Kind: kind, UID: uid, GID: gid, Mode: raw, Disposition: hostdata.SecurityRecordAbsent})
 			}
 		}
 	}

@@ -41,7 +41,7 @@ contracts remain unchanged.
 
 ## Native capture and carrier lifetime
 
-`hostmeta.CaptureXattrValuesAt` captures a relative object through a held payload
+`hostdata.CaptureXattrValuesAt` captures a relative object through a held payload
 root without following its final symlink. Ordinary native attributes still need
 whole-value reads: their syscalls do not support arbitrary chunked reads. Name,
 individual-value and aggregate capture budgets remain explicit, and exceeding a
@@ -72,7 +72,7 @@ native descriptor qualification, memory and disk budgets, and cross-host CI.
 
 ## Explicit sequential execution
 
-`hostmeta.RestoreAppleDouble` remains the safe snapshot operation: it decodes the
+`hostdata.RestoreAppleDouble` remains the safe snapshot operation: it decodes the
 complete source before changing a destination. `RestoreAppleDoubleSequential`
 explicitly selects native source-read/effect order through the same held backend:
 

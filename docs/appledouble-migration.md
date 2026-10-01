@@ -6,7 +6,7 @@ The current implementation work follows the
 below retain migration rationale and evidence references; they are not a new
 sequence of small PRs or separate compatibility modes.
 
-The filesystem SDK owns `pkg/appledouble` (bytes) and `pkg/hostmeta` (filesystem
+The filesystem SDK owns `pkg/appledouble` (bytes) and `pkg/hostdata` (filesystem
 operations). `go-macos-pkg` consumes the codec; codesign eventually consumes the
 shared metadata APIs. There must be no APFS-to-package-tooling dependency cycle.
 
@@ -103,7 +103,7 @@ normalization is a bug.
 
 ## 3. Resolve shared host metadata transport
 
-After codec behavior is established, implement preservation in `pkg/hostmeta`
+After codec behavior is established, implement preservation in `pkg/hostdata`
 and consume it from APFS/HFS+ extraction and directory packing. The earlier
 uncommitted transport experiment is not part of the relocation or a delivered API.
 
@@ -135,7 +135,7 @@ than duplicating the codec or host transport.
 
 Relocation coverage alone is not permission to release or resume codesign.
 
-The ordinary security-copy executor is now available as `hostmeta.CopySecurity`.
+The ordinary security-copy executor is now available as `hostdata.CopySecurity`.
 It separates native sequence completion from write-failure diagnostics and keeps
 source-cache changes explicit. Native host adapters and lifecycle integration
 remain required; see [security-copy execution](appledouble-security-copy.md).
@@ -209,7 +209,7 @@ lifecycle remain open; input decoding deliberately completes before destination
 mutation. See [unpack restoration](appledouble-unpack-restoration.md). This
 component does not open the package release gate or resume codesign.
 
-Held destination enumeration now uses `hostmeta.ListXattrNames` on Linux, macOS
+Held destination enumeration now uses `hostdata.ListXattrNames` on Linux, macOS
 and Windows. It preserves native name order and descriptor identity, bounds
 allocation and rejects partial results. This closes the native listing
 prerequisite, not the full unpack binding or foreign-carrier preservation gate.
@@ -217,7 +217,7 @@ See [held-file listing](appledouble-held-xattr-list.md). Package PR72 remains
 draft on released v0.13.0; codesign remains paused.
 
 Held native assignment is available on all three OSes through
-[`hostmeta.SetXattr`](appledouble-held-xattr-write.md), with native error and
+[`hostdata.SetXattr`](appledouble-held-xattr-write.md), with native error and
 normalization behavior, bounded Windows records and independent Mac readback.
 This completes the assignment primitive, not provider/carrier integration. All
 five roadmap gates remain open; package PR72 remains draft until qualification

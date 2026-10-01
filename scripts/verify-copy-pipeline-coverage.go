@@ -36,7 +36,7 @@ func verify() error {
 	defer log.Close()
 	var transcript bytes.Buffer
 	profile := filepath.Join(dir, "coverage.out")
-	cmd := exec.Command("go", "test", "-count=1", "-json", "-run", "^TestCopyPipeline", "-covermode=atomic", "-coverprofile="+profile, "-coverpkg=./pkg/hostmeta", "./pkg/hostmeta")
+	cmd := exec.Command("go", "test", "-count=1", "-json", "-run", "^TestCopyPipeline", "-covermode=atomic", "-coverprofile="+profile, "-coverpkg=./pkg/hostdata/...", "./pkg/hostdata")
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 	cmd.Stdout = io.MultiWriter(os.Stdout, log, &transcript)
 	cmd.Stderr = io.MultiWriter(os.Stderr, log)
@@ -64,7 +64,7 @@ func verify() error {
 		return e
 	}
 	covered, total := 0, 0
-	coverageFiles := map[string][2]int{"pkg/hostmeta/copy_pipeline.go": {}}
+	coverageFiles := map[string][2]int{"pkg/hostdata/copy_pipeline.go": {}}
 	blocks := map[string][2]int{}
 	for _, line := range strings.Split(string(b), "\n") {
 		fields := strings.Fields(line)
@@ -110,7 +110,7 @@ func verify() error {
 	if passed < 2326 {
 		return fmt.Errorf("incomplete copy pipeline tests: %d", passed)
 	}
-	files := []string{"pkg/hostmeta/copy_pipeline.go", "pkg/hostmeta/copy_pipeline_test.go", "pkg/hostmeta/copy_pipeline_image_test.go", "internal/testutil/copypipeline/oracle.go", "scripts/verify-copy-pipeline.go", "scripts/verify-copy-pipeline-coverage.go", "testdata/appledouble/native/copy-pipeline.c", "testdata/appledouble/native/copy-pipeline.json.gz", "pkg/apfswrite/security_copy.go", "pkg/apfswrite/stat_copy.go", "pkg/hfsplus/writer_security_copy.go", "pkg/hfsplus/writer_stat_copy.go", "internal/imageacl/copy.go", "internal/imageacl/stat.go", "go.mod", "go.sum"}
+	files := []string{"pkg/hostdata/copy_pipeline.go", "pkg/hostdata/copy_pipeline_test.go", "pkg/hostdata/copy_pipeline_image_test.go", "internal/testutil/copypipeline/oracle.go", "scripts/verify-copy-pipeline.go", "scripts/verify-copy-pipeline-coverage.go", "testdata/appledouble/native/copy-pipeline.c", "testdata/appledouble/native/copy-pipeline.json.gz", "pkg/apfswrite/security_copy.go", "pkg/apfswrite/stat_copy.go", "pkg/hfsplus/writer_security_copy.go", "pkg/hfsplus/writer_stat_copy.go", "internal/imageacl/copy.go", "internal/imageacl/stat.go", "go.mod", "go.sum"}
 	hashes := map[string]string{}
 	for _, path := range files {
 		b, e := os.ReadFile(path)

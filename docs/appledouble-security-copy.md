@@ -1,13 +1,13 @@
 # Executing ordinary security copies
 
-`hostmeta.CopySecurity` coordinates the ordinary `copyfile_security` stage from
+`hostdata.CopySecurity` coordinates the ordinary `copyfile_security` stage from
 captured source properties and stat metadata. Use it when copying an existing
 object's ACL, mode or combined security to a held destination. It runs the same
 Go implementation on Linux, macOS and Windows; an explicit backend supplies
 capture and write operations for the host or a foreign-metadata carrier.
 
 This is separate from `appledouble.CopyACL`, which only selects entries, and
-`hostmeta.RestoreACL`, which applies a deferred AppleDouble replacement. An
+`acl.RestoreACL`, which applies a deferred AppleDouble replacement. An
 AppleDouble replacement later in the lifecycle must still replace the merged
 ordinary-copy ACL.
 

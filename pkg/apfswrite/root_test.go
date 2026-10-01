@@ -18,7 +18,7 @@ import (
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/securitycopy"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfswrite"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 )
 
 func TestRootMetadataImages(t *testing.T) {
@@ -264,7 +264,7 @@ func TestRootMetadataInvalidTimes(t *testing.T) {
 		t.Fatal(e)
 	}
 	defer file.Close()
-	root := &apfswrite.Entry{Times: &hostmeta.FileTimes{}}
+	root := &apfswrite.Entry{Times: &hostdata.FileTimes{}}
 	if e = apfswrite.CreateContainer(file, 64<<20, &apfswrite.CreateOptions{Root: root}); !errors.Is(e, fs.ErrInvalid) {
 		t.Fatal(e)
 	}

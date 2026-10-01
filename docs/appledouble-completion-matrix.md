@@ -4,26 +4,25 @@ This matrix is the completion checklist for the [integrated plan](appledouble-co
 It distinguishes existing components from completed end-to-end functionality.
 No row is complete solely because its component coverage exceeds 95%.
 
-The production integration is implemented. Open rows below require the complete
-qualification set against the final committed revision; local results and CI on
-an earlier commit do not qualify subsequent edits. A discovered discrepancy must
-be resolved before the corresponding row closes.
+The defined implementation and qualification scope completed in [PR182](https://github.com/deploymenttheory/go-apfs-v2/pull/182), merged on 30 September 2026. Its final revision passed all 62 checks, including the 23-report per-OS coverage audit, all 37 fuzz targets, native authorization/sandbox cases and independent large-fork readback. [CI evidence](https://github.com/deploymenttheory/go-apfs-v2/actions/runs/36769165547) remains the baseline for that claim.
 
-| Requirement | Existing foundation | Required closing evidence | Status |
+The current phase is the requested [hostdata package refactor](hostdata-packages.md). Every gate must pass again for that refactor before release. The qualified native-version/context boundaries and explicit format/resource constraints below remain in force; this table does not claim unseen future macOS behavior.
+
+| Requirement | Existing foundation | Qualification evidence and retained constraints | Status |
 | --- | --- | --- | --- |
-| Binary codec | Borrowed streaming values, sequential partial mutation, native packing and retained source/AST fixtures | Final revision CI/fuzz/race and integrated lifecycle qualification | Open |
-| Held native attributes | Strict list/read/assignment/removal, held metadata providers and native readback | Final three-OS provider and outer lifecycle qualification | Open |
-| Resource forks | Bounded APFS/HFS fork writers/readers, native non-truncation, large/empty carrier values; real 4 GiB + 17 byte image/carrier/native harness | Final three-OS large-value jobs and independent Mac readback of both foreign image artifacts; documented whole-buffer sequential limit | Open |
-| Compressed storage | Types 1, 3/4,7/8,9/10,11/12,13/14; native compression bounds and independent inline forks | Final codec/transport CI; external generation-store/provider references require their separate content source | Open |
-| ACL and security | Conversion, captured identities, inheritance, image bindings; 579-case temporary-permission oracle and explicitly scoped portable replay | Final live root/nonowner supervisor and signed native/Go App Sandbox jobs; retain C-only allocator boundaries | Open |
-| Quarantine | macOS 26/27 conversion/application profiles, raw process/source capture, destination corpus and integrated object/path providers | Final process-context, protection, destination normalization and ordered write/failure native gates | Open |
-| Stat restoration | Image time/mode/flags storage and ordered policy executor | Live host binding, side effects, temporary permission restoration and close failures | Open |
-| Shared metadata transport | Production carrier, required preservation preflight, host baseline reconciliation, collision/path safety, roots/links/hardlinks and contained native projection/readback | Final cross-platform lifecycle, CLI preservation and independent image acceptance | Open |
-| Complete lifecycle | Production held-object and path APIs; 8 live held-owner combinations; 552 native path scenarios; temporary permission and close-failure traces | Final 23-report audit and complete native CI; actual authorization, protection and version-specific host observations | Open |
-| End-to-end filesystem qualification | 16 streaming extract/repack pairs with native mounted metadata/content comparison, 14 native compression cases and 80 FinderInfo cases | Final Linux/Windows image artifacts independently mounted on Mac; edited-payload/refusal lifecycle qualification | Open |
-| Evidence integrity | Source-hashed coverage and retained native artifacts | Integrated journey manifests and comprehensive required-case inventory | Open |
-| Documentation | Detailed investigations and package roadmap | Current architecture, usage, carrier/streaming contracts and final capability matrix | Open |
-| Release and consumers | Release-please/GoReleaser and package draft PR72 on v0.13.0 | All gates closed, maintainer merge, published release, downstream adoption/qualification | Blocked by preceding rows |
+| Binary codec | Borrowed streaming values, sequential partial mutation, native packing and retained source/AST fixtures | Final revision CI/fuzz/race and integrated lifecycle qualification | Qualified in PR182 |
+| Held native attributes | Strict list/read/assignment/removal, held metadata providers and native readback | Final three-OS provider and outer lifecycle qualification | Qualified in PR182 |
+| Resource forks | Bounded APFS/HFS fork writers/readers, native non-truncation, large/empty carrier values; real 4 GiB + 17 byte image/carrier/native harness | Final three-OS large-value jobs and independent Mac readback of both foreign image artifacts; documented whole-buffer sequential limit | Qualified in PR182 |
+| Compressed storage | Types 1, 3/4,7/8,9/10,11/12,13/14; native compression bounds and independent inline forks | Final codec/transport CI; external generation-store/provider references require their separate content source | Qualified in PR182 |
+| ACL and security | Conversion, captured identities, inheritance, image bindings; 579-case temporary-permission oracle and explicitly scoped portable replay | Final live root/nonowner supervisor and signed native/Go App Sandbox jobs; retain C-only allocator boundaries | Qualified in PR182 |
+| Quarantine | macOS 26/27 conversion/application profiles, raw process/source capture, destination corpus and integrated object/path providers | Final process-context, protection, destination normalization and ordered write/failure native gates | Qualified in PR182 |
+| Stat restoration | Image time/mode/flags storage and ordered policy executor | Live host binding, side effects, temporary permission restoration and close failures | Qualified in PR182 |
+| Shared metadata transport | Production carrier, required preservation preflight, host baseline reconciliation, collision/path safety, roots/links/hardlinks and contained native projection/readback | Final cross-platform lifecycle, CLI preservation and independent image acceptance | Qualified in PR182 |
+| Complete lifecycle | Production held-object and path APIs; 8 live held-owner combinations; 552 native path scenarios; temporary permission and close-failure traces | Final 23-report audit and complete native CI; actual authorization, protection and version-specific host observations | Qualified in PR182 |
+| End-to-end filesystem qualification | 16 streaming extract/repack pairs with native mounted metadata/content comparison, 14 native compression cases and 80 FinderInfo cases | Final Linux/Windows image artifacts independently mounted on Mac; edited-payload/refusal lifecycle qualification | Qualified in PR182 |
+| Evidence integrity | Source-hashed coverage and retained native artifacts | Integrated journey manifests and comprehensive required-case inventory | Qualified in PR182 |
+| Documentation | Detailed investigations and package roadmap | Current architecture, usage, carrier/streaming contracts and final capability matrix | Qualified in PR182 |
+| Release and consumers | Release-please/GoReleaser and package draft PR72 on v0.13.0 | All gates closed, maintainer merge, published release, downstream adoption/qualification | Awaiting refactor qualification, release and downstream adoption |
 
 ## Evidence inventory
 
@@ -65,7 +64,7 @@ Signed sandbox qualification requires an
 explicit disposable GitHub-hosted Mac runner: two generated container namespaces
 expire when the VM is destroyed, while temporary app-bundle cleanup is checked
 before success is reported. Local prerequisite failure is not a passing result.
-These CI jobs and the final revision audit remain outstanding until successful.
+These jobs and the final audit passed in PR182 and remain mandatory for the package refactor.
 
 ## Large-value boundary
 
@@ -83,7 +82,7 @@ AppleDouble cannot encode a resource-fork length above 4,294,967,295 bytes; the
 carrier and APFS/HFS image APIs preserve the larger value and explicitly omit the
 unrepresentable optional AppleDouble view. The dedicated real-byte harness uses
 4 GiB + 17 bytes, full hashes, a memory ceiling and independent native reads.
-Its successful final three-OS and foreign-image jobs are still required. No Linux
+Its three-OS and foreign-image jobs passed in PR182 and remain required for every change. No Linux
 or Windows feature is removed because native local xattrs have smaller limits.
 
 ## Exit rules

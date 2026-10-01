@@ -17,7 +17,7 @@ This component does not create the complete restoration lifecycle automatically.
 ```go
 // Resolve all four destination timestamps from captured metadata first.
 destination.Times = &destinationTimes
-result, err := root.CopyStat(destination, capturedSource, hostmeta.StatCopyOptions{
+result, err := root.CopyStat(destination, capturedSource, hostdata.StatCopyOptions{
     PreserveDestinationTracked: true,
 })
 if err != nil {
@@ -31,7 +31,7 @@ if !result.Applied {
 // CreateContainer/CreateImage must still succeed to serialize the staged result.
 ```
 
-The source is `hostmeta.StatCopySource`, with Darwin mode bits rather than
+The source is `hostdata.StatCopySource`, with Darwin mode bits rather than
 `os.FileMode`. Source birth/change times are not selected. Destination birth and
 change times remain intact. The tree does not synthesize wall-clock metadata or
 live kernel timestamp side effects. For example, this API does not emulate a

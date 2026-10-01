@@ -3,7 +3,7 @@
 `apfswrite.Entry.RestoreACL` and `hfsplus.Entry.RestoreACL` apply a deferred
 AppleDouble ACL replacement to an in-memory image tree. Use them after selecting
 the update with `appledouble.File.ACLUpdate`, once other metadata has been
-restored. They share the existing `hostmeta.RestoreACL` execution policy and one
+restored. They share the existing `acl.RestoreACL` execution policy and one
 portable image backend. No native library or operating-system ACL conversion is
 required in production.
 

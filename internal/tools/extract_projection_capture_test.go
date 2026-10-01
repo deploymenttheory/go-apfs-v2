@@ -11,7 +11,7 @@ import (
 	"testing"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/metatransport"
 )
 
@@ -28,7 +28,7 @@ func TestProjectionBoundCaptureIdentity(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer root.Close()
-			file, err := hostmeta.OpenMetadataFile(root, "file")
+			file, err := hostdata.OpenMetadataFile(root, "file")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -42,7 +42,7 @@ func TestProjectionBoundCaptureIdentity(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			capture := func(context.Context, *os.Root, string, hostmeta.XattrCaptureLimits) (map[string]appledouble.Value, error) {
+			capture := func(context.Context, *os.Root, string, hostdata.XattrCaptureLimits) (map[string]appledouble.Value, error) {
 				if fault == "capture" {
 					return nil, io.ErrClosedPipe
 				}
@@ -66,7 +66,7 @@ func TestProjectionBoundCaptureIdentity(t *testing.T) {
 			case "replacement-before":
 				replace()
 			}
-			values, err := captureProjectionValuesUsing(context.Background(), root, "file", file, hostmeta.XattrCaptureLimits{}, capture)
+			values, err := captureProjectionValuesUsing(context.Background(), root, "file", file, hostdata.XattrCaptureLimits{}, capture)
 			if fault == "none" {
 				if err != nil || values["user.value"].Size() != 6 {
 					t.Fatal(values, err)
@@ -76,7 +76,7 @@ func TestProjectionBoundCaptureIdentity(t *testing.T) {
 			if err == nil || values != nil {
 				t.Fatal("partial or substituted baseline", values, err)
 			}
-			if (fault == "replacement-before" || fault == "replacement-after") && !errors.Is(err, hostmeta.ErrMetadataIdentity) {
+			if (fault == "replacement-before" || fault == "replacement-after") && !errors.Is(err, hostdata.ErrMetadataIdentity) {
 				t.Fatal(err)
 			}
 			if fault == "capture" && !errors.Is(err, io.ErrClosedPipe) {
@@ -87,7 +87,7 @@ func TestProjectionBoundCaptureIdentity(t *testing.T) {
 }
 
 func TestProjectionReadbackFailureKeepsPriorBaseline(t *testing.T) {
-	for _, cause := range []error{io.ErrClosedPipe, hostmeta.ErrXattrUnsupported} {
+	for _, cause := range []error{io.ErrClosedPipe, hostdata.ErrXattrUnsupported} {
 		p, _, store := projectionFixture(t)
 		if err := os.WriteFile(filepath.Join(p, "file"), nil, 0600); err != nil {
 			t.Fatal(err)
@@ -103,7 +103,7 @@ func TestProjectionReadbackFailureKeepsPriorBaseline(t *testing.T) {
 		}
 		records := []metatransport.Record{{Original: "file", Materialized: "file", Kind: "file", MaterializedKind: "file", NativeCaptured: true, NativeAttributes: prior}}
 		e := &Extractor{}
-		err = e.projectCarrier(context.Background(), root, store, records, hostmeta.XattrCaptureLimits{}, func(*os.File) projectionBackend { return &projectionRecorder{} }, func(context.Context, *os.File, hostmeta.XattrCaptureLimits) (map[string][]byte, error) {
+		err = e.projectCarrier(context.Background(), root, store, records, hostdata.XattrCaptureLimits{}, func(*os.File) projectionBackend { return &projectionRecorder{} }, func(context.Context, *os.File, hostdata.XattrCaptureLimits) (map[string][]byte, error) {
 			return nil, cause
 		})
 		if err != nil || !records[0].NativeCaptured || records[0].NativeUnsupported || !reflect.DeepEqual(prior, records[0].NativeAttributes) {

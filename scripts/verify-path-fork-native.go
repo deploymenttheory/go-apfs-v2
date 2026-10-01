@@ -10,9 +10,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/deploymenttheory/go-apfs-v2/internal/evidenceaudit"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -21,6 +18,10 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/evidenceaudit"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 )
 
 const out = "artifacts/path-fork-native"
@@ -91,7 +92,7 @@ func main() {
 				f, e := os.Open(src)
 				must(e)
 				if size != 0 {
-					must(hostmeta.SetXattr(f, appledouble.ResourceForkName, bytes.Repeat([]byte{37}, size)))
+					must(hostdata.SetXattr(f, appledouble.ResourceForkName, bytes.Repeat([]byte{37}, size)))
 				}
 				must(f.Close())
 				must(os.Chtimes(src, time.Unix(1700000000, 0), time.Unix(1700000001, 0)))
@@ -100,19 +101,19 @@ func main() {
 						must(os.WriteFile(p, []byte("old destination payload"), 0640))
 						f, e := os.Open(p)
 						must(e)
-						must(hostmeta.SetXattr(f, appledouble.ResourceForkName, []byte("old destination resource fork suffix")))
+						must(hostdata.SetXattr(f, appledouble.ResourceForkName, []byte("old destination resource fork suffix")))
 						must(f.Close())
 						must(os.Chtimes(p, time.Unix(1600000000, 0), time.Unix(1600000001, 0)))
 					}
 				}
-				opts := hostmeta.AppleDoublePathOptions{Operation: hostmeta.PathPackAppleDouble, Pack: hostmeta.DefaultObjectPackOptions(), Unpack: hostmeta.DefaultObjectUnpackOptions(), MaxOpenAttempts: 8}
+				opts := hostdata.AppleDoublePathOptions{Operation: hostdata.PathPackAppleDouble, Pack: hostdata.DefaultObjectPackOptions(), Unpack: hostdata.DefaultObjectUnpackOptions(), MaxOpenAttempts: 8}
 				// Copy explicit source times in both operations, so newly created
 				// destinations have deterministic metadata for exact readback.
 				opts.Pack.Stat, opts.Unpack.Stat = true, true
 				if operation == "unpack" {
-					opts.Operation = hostmeta.PathUnpackAppleDouble
+					opts.Operation = hostdata.PathUnpackAppleDouble
 				}
-				got, e := hostmeta.CopyAppleDoublePath(context.Background(), src, goDest, opts)
+				got, e := hostdata.CopyAppleDoublePath(context.Background(), src, goDest, opts)
 				must(e)
 				var native struct{ Code, Errno int }
 				must(json.Unmarshal(run(oracle, "path-"+operation, src, nativeDest, "0", "1"), &native))
@@ -146,7 +147,7 @@ func main() {
 		}
 	}
 	must(os.RemoveAll(work))
-	hashes, e := evidenceaudit.SourceHashes(os.DirFS("."), []string{source, "scripts/verify-path-fork-native.go", "pkg/hostmeta/*.go", "go.mod", "go.sum"})
+	hashes, e := evidenceaudit.SourceHashes(os.DirFS("."), []string{source, "scripts/verify-path-fork-native.go", "pkg/hostdata/*.go", "pkg/hostdata/*/*.go", "internal/hosttime/*.go", "internal/testutil/heldfixture/*.go", "go.mod", "go.sum"})
 	must(e)
 	report := map[string]any{"passed": true, "revision": strings.TrimSpace(string(run("git", "rev-parse", "HEAD"))), "goos": runtime.GOOS, "goarch": runtime.GOARCH, "source_sha256": hashes, "ast_sha256": ast, "cases": cases, "sdk": strings.TrimSpace(string(run("xcrun", "--show-sdk-version"))), "host": string(run("sw_vers")), "compiler": string(run("xcrun", "clang", "--version"))}
 	b, e := json.MarshalIndent(report, "", "  ")

@@ -12,7 +12,7 @@ import (
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 )
 
 // CreateOptions configures CreateContainer. The zero value is valid: it formats
@@ -171,7 +171,7 @@ type Entry struct {
 	// Times overrides ModTime with four independently supplied inode timestamps.
 	// Nil retains the legacy ModTime/default behavior. ClampModTimes changes
 	// only Times.Modify. Explicit times retain nanoseconds and Unix epoch zero.
-	Times *hostmeta.FileTimes
+	Times *hostdata.FileTimes
 	// BSDFlags explicitly selects the inode's chflags word. Nil retains legacy
 	// compression inference. UF_COMPRESSED must agree with decmpfs storage.
 	// The first hard-link entry supplies the shared inode flags.

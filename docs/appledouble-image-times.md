@@ -9,7 +9,7 @@ and Windows; native tools are used only for qualification.
 
 ## Use
 
-Both writer `Entry` types accept `Times *hostmeta.FileTimes`:
+Both writer `Entry` types accept `Times *hostdata.FileTimes`:
 
 ```go
 times, err := sourceVolume.FileTimes("Payload/file")

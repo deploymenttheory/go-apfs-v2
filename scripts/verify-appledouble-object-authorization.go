@@ -27,7 +27,7 @@ import (
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/evidenceaudit"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 )
 
 const artifactDir = "artifacts/appledouble-object-authorization"
@@ -102,7 +102,7 @@ func main() {
 	if len(cases) != 16 {
 		panic("incomplete authorization matrix")
 	}
-	hashes, e := evidenceaudit.SourceHashes(os.DirFS("."), []string{cSource, "scripts/verify-appledouble-object-authorization.go", "pkg/hostmeta/*.go", "pkg/hostmeta/held_lifecycle*.go", "pkg/hostmeta/held_metadata*.go", "pkg/hostmeta/appledouble_pack*.go", "pkg/hostmeta/appledouble_sequential*.go", "pkg/hostmeta/quarantine_file*.go", "go.mod", "go.sum"})
+	hashes, e := evidenceaudit.SourceHashes(os.DirFS("."), []string{cSource, "scripts/verify-appledouble-object-authorization.go", "pkg/hostdata/*.go", "pkg/hostdata/*/*.go", "internal/hosttime/*.go", "internal/testutil/heldfixture/*.go", "pkg/hostdata/held_lifecycle*.go", "pkg/hostdata/held_metadata*.go", "pkg/hostdata/appledouble_pack*.go", "pkg/hostdata/appledouble_sequential*.go", "pkg/hostdata/quarantine_file*.go", "go.mod", "go.sum"})
 	must(e)
 	report := map[string]any{"revision": strings.TrimSpace(string(run("git", "rev-parse", "HEAD"))), "goos": runtime.GOOS, "goarch": runtime.GOARCH, "source_sha256": hashes, "ast_sha256": ast, "cases": cases, "passed": true, "sdk": strings.TrimSpace(string(run("xcrun", "--show-sdk-version"))), "host": string(run("sw_vers")), "compiler": string(run("xcrun", "clang", "--version")), "authorization": "actual root and existing nobody UID; held descriptors acquired before credential drop; supplementary groups cleared; no account mutation"}
 	b, e := json.MarshalIndent(report, "", "  ")
@@ -117,24 +117,24 @@ func child(operation string, stat bool) {
 	}
 	defer source.Close()
 	defer target.Close()
-	a, e := hostmeta.NewHostAppleDoubleObject(context.Background(), source)
+	a, e := hostdata.NewHostAppleDoubleObject(context.Background(), source)
 	must(e)
-	b, e := hostmeta.NewHostAppleDoubleObject(context.Background(), target)
+	b, e := hostdata.NewHostAppleDoubleObject(context.Background(), target)
 	must(e)
-	var lifecycle hostmeta.HeldLifecycleResult
+	var lifecycle hostdata.HeldLifecycleResult
 	var operationErr error
 	if operation == "pack" {
-		opts := hostmeta.DefaultObjectPackOptions()
+		opts := hostdata.DefaultObjectPackOptions()
 		opts.Stat = stat
-		r, err := hostmeta.PackAppleDoubleObject(context.Background(), a, b, target, opts)
+		r, err := hostdata.PackAppleDoubleObject(context.Background(), a, b, target, opts)
 		operationErr = err
 		lifecycle = r.Lifecycle
 	} else if operation == "unpack" {
 		s, err := source.Stat()
 		must(err)
-		opts := hostmeta.DefaultObjectUnpackOptions()
+		opts := hostdata.DefaultObjectUnpackOptions()
 		opts.Stat = stat
-		r, err := hostmeta.UnpackAppleDoubleObject(context.Background(), io.NewSectionReader(source, 0, s.Size()), a, b, opts)
+		r, err := hostdata.UnpackAppleDoubleObject(context.Background(), io.NewSectionReader(source, 0, s.Size()), a, b, opts)
 		operationErr = err
 		lifecycle = r.Lifecycle
 	} else {
@@ -220,8 +220,8 @@ func supervise(oracle string) {
 						files[key] = f
 					}
 					source := files["source"]
-					must(hostmeta.SetXattr(source, "user.authorization", []byte("fixed owner fixture")))
-					must(hostmeta.SetXattr(source, appledouble.ResourceForkName, []byte("fixed fork")))
+					must(hostdata.SetXattr(source, "user.authorization", []byte("fixed owner fixture")))
+					must(hostdata.SetXattr(source, appledouble.ResourceForkName, []byte("fixed fork")))
 					must(source.Chmod(0644))
 					must(os.Chtimes(source.Name(), time.Unix(1700000000, 0), time.Unix(1700000001, 0)))
 					statArg := "0"
@@ -237,8 +237,8 @@ func supervise(oracle string) {
 					}
 					for _, key := range []string{"go-target", "native-target"} {
 						f := files[key]
-						must(hostmeta.SetXattr(f, "user.stale", []byte("stale fixture")))
-						must(hostmeta.SetXattr(f, appledouble.ResourceForkName, []byte("old fork with suffix")))
+						must(hostdata.SetXattr(f, "user.stale", []byte("stale fixture")))
+						must(hostdata.SetXattr(f, appledouble.ResourceForkName, []byte("old fork with suffix")))
 						must(f.Chmod(mode))
 						must(os.Chtimes(f.Name(), time.Unix(1600000000, 0), time.Unix(1600000001, 0)))
 					}

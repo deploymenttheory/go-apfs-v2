@@ -10,7 +10,7 @@ import (
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/statcopy"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfswrite"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/hfsplus"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 )
 
 func Models() []statcopy.Case {
@@ -26,8 +26,8 @@ func Models() []statcopy.Case {
 	}
 	return result
 }
-func InitialTimes() hostmeta.FileTimes {
-	return hostmeta.FileTimes{Birth: time.Unix(1400000000, 123456789), Modify: time.Unix(1550000000, 111111111), Change: time.Unix(1700000000, 222222222), Access: time.Unix(1450000000, 333333333)}
+func InitialTimes() hostdata.FileTimes {
+	return hostdata.FileTimes{Birth: time.Unix(1400000000, 123456789), Modify: time.Unix(1550000000, 111111111), Change: time.Unix(1700000000, 222222222), Access: time.Unix(1450000000, 333333333)}
 }
 
 // Build uses native model requests as the independent expected values. It stages
@@ -72,7 +72,7 @@ func Build(models []statcopy.Case, hfs bool) (*apfswrite.Entry, *hfsplus.Entry, 
 	var cases []imagesecurity.Case
 	for _, t := range targets {
 		if t.kind != "hard-b" {
-			var result hostmeta.ImageStatCopyResult
+			var result hostdata.ImageStatCopyResult
 			var err error
 			if hfs {
 				dst := hroot
@@ -117,7 +117,7 @@ func Build(models []statcopy.Case, hfs bool) (*apfswrite.Entry, *hfsplus.Entry, 
 		default:
 			mode |= 0100000
 		}
-		cases = append(cases, imagesecurity.Case{Name: t.name, Profile: "stat", Kind: t.kind, UID: uid, GID: gid, Mode: mode, Flags: &flags, Times: &wantTimes, Disposition: hostmeta.SecurityRecordAbsent})
+		cases = append(cases, imagesecurity.Case{Name: t.name, Profile: "stat", Kind: t.kind, UID: uid, GID: gid, Mode: mode, Flags: &flags, Times: &wantTimes, Disposition: hostdata.SecurityRecordAbsent})
 	}
 	return root, hroot, cases, nil
 }

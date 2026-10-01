@@ -6,14 +6,14 @@ import (
 	"io/fs"
 	"time"
 
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 )
 
 // Encode returns birth, modification, change and access fields in on-disk order.
 // APFS uses signed Unix nanoseconds carried in uint64 slots. HFS uses unsigned
 // seconds since 1904; subsecond precision is truncated by that format. The clamp
 // applies only to modification time, not independently supplied metadata times.
-func Encode(t hostmeta.FileTimes, limit time.Time, clamp, hfs bool) ([4]uint64, error) {
+func Encode(t hostdata.FileTimes, limit time.Time, clamp, hfs bool) ([4]uint64, error) {
 	values := [4]time.Time{t.Birth, t.Modify, t.Change, t.Access}
 	if clamp && values[1].After(limit) {
 		values[1] = limit

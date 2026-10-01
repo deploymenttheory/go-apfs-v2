@@ -3,7 +3,7 @@ package hfsplus
 import (
 	"io/fs"
 
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 )
 
 // Security captures native-statx-compatible security properties from an HFS+ or
@@ -12,10 +12,10 @@ import (
 // It reads only the bounded security value, not unrelated attribute forks or
 // resource forks. Disposition distinguishes ignored storage from absence.
 // This is metadata acquisition, not host authorization or a permissions check.
-func (v *Volume) Security(name string) (out hostmeta.ImageSecurity, err error) {
+func (v *Volume) Security(name string) (out hostdata.ImageSecurity, err error) {
 	defer func() {
 		if err != nil {
-			out = hostmeta.ImageSecurity{}
+			out = hostdata.ImageSecurity{}
 			err = &fs.PathError{Op: "security", Path: name, Err: err}
 		}
 	}()
@@ -45,7 +45,7 @@ func (v *Volume) Security(name string) (out hostmeta.ImageSecurity, err error) {
 		return out, err
 	}
 	var value []byte
-	if record := v.attributes[attrKey{fileID: id, name: hostmeta.SecurityName}]; record != nil {
+	if record := v.attributes[attrKey{fileID: id, name: hostdata.SecurityName}]; record != nil {
 		size := uint64(len(record.inline))
 		if record.inline == nil && !record.hasFork {
 			return out, fs.ErrInvalid
@@ -54,12 +54,12 @@ func (v *Volume) Security(name string) (out hostmeta.ImageSecurity, err error) {
 			size = record.fork.LogicalSize
 		}
 		value = []byte{}
-		if hostmeta.SecurityRecordSizeValid(size) {
-			value, err = v.attributeValue(id, hostmeta.SecurityName)
+		if hostdata.SecurityRecordSizeValid(size) {
+			value, err = v.attributeValue(id, hostdata.SecurityName)
 			if err != nil {
 				return out, err
 			}
 		}
 	}
-	return hostmeta.DecodeImageSecurity(bsd.OwnerID, bsd.GroupID, bsd.FileMode, value), nil
+	return hostdata.DecodeImageSecurity(bsd.OwnerID, bsd.GroupID, bsd.FileMode, value), nil
 }

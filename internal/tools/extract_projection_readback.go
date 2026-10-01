@@ -8,7 +8,7 @@ import (
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/unixmode"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/metatransport"
 )
 
@@ -21,7 +21,7 @@ func (p nativeProjection) Readback(r metatransport.Record) (map[string]bool, err
 	if err != nil {
 		return nil, err
 	}
-	var stat *hostmeta.StatCopySource
+	var stat *hostdata.StatCopySource
 	var security *appledouble.FileSecurity
 	if p.heldErr == nil {
 		captured, e := p.held.CaptureStat()
@@ -30,7 +30,7 @@ func (p nativeProjection) Readback(r metatransport.Record) (map[string]bool, err
 		}
 		stat = &captured
 		for _, a := range r.Attributes {
-			if a.Name == hostmeta.SecurityName {
+			if a.Name == hostdata.SecurityName {
 				acl, e := p.held.CaptureACL()
 				if e != nil {
 					return nil, e
@@ -45,7 +45,7 @@ func (p nativeProjection) Readback(r metatransport.Record) (map[string]bool, err
 	return projectionChecks(r, info, stat, security)
 }
 
-func projectionChecks(r metatransport.Record, info os.FileInfo, stat *hostmeta.StatCopySource, security *appledouble.FileSecurity) (map[string]bool, error) {
+func projectionChecks(r metatransport.Record, info os.FileInfo, stat *hostdata.StatCopySource, security *appledouble.FileSecurity) (map[string]bool, error) {
 	checks := map[string]bool{}
 	d := r.Darwin
 	if d.Mode != nil {
@@ -65,7 +65,7 @@ func projectionChecks(r metatransport.Record, info os.FileInfo, stat *hostmeta.S
 			checks["birth"] = stat.Times.Birth.Equal(*d.Birth)
 		}
 		if d.Flags != nil {
-			checks["flags"] = stat.Flags == (*d.Flags &^ hostmeta.UFCompressed)
+			checks["flags"] = stat.Flags == (*d.Flags &^ hostdata.UFCompressed)
 		}
 	}
 	if security != nil {
@@ -75,7 +75,7 @@ func projectionChecks(r metatransport.Record, info os.FileInfo, stat *hostmeta.S
 		}
 		sum := sha256.Sum256(raw)
 		for _, a := range r.Attributes {
-			if a.Name == hostmeta.SecurityName {
+			if a.Name == hostdata.SecurityName {
 				checks["xattr:"+a.Name] = hex.EncodeToString(sum[:]) == a.Value.SHA256 && int64(len(raw)) == a.Value.Size
 			}
 		}

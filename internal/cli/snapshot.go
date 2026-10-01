@@ -16,7 +16,7 @@ import (
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfswrite"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/disk"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/fidelity"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 )
 
 // Volume-superblock field offsets (bytes) used by in-place revert.
@@ -306,9 +306,9 @@ func (w *volumeWalker) noteAttributes(path string) {
 		switch {
 		case name == symlinkXattrName:
 			continue
-		case name == hostmeta.ResourceForkName:
+		case name == hostdata.ResourceForkName:
 			w.add(path, fidelity.ResourceFork, name)
-		case hostmeta.IsACLName(name):
+		case hostdata.IsACLName(name):
 			w.add(path, fidelity.ACL, name)
 		default:
 			w.add(path, fidelity.Xattr, name)

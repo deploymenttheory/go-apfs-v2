@@ -2,11 +2,12 @@ package apfswrite
 
 import (
 	"errors"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
 	"io/fs"
 	"os"
 	"testing"
+
+	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 )
 
 func TestImageACLRestoreTreeValidation(t *testing.T) {
@@ -29,7 +30,7 @@ func TestImageACLRestoreTreeValidation(t *testing.T) {
 		t.Fatal(r, e)
 	}
 	for _, entry := range []*Entry{first, &second} {
-		if len(entry.Xattrs[hostmeta.SecurityName]) != 44 || entry.Mode != 0 || !entry.ModeExplicit || entry.UID != 42 || entry.GID != 43 {
+		if len(entry.Xattrs[hostdata.SecurityName]) != 44 || entry.Mode != 0 || !entry.ModeExplicit || entry.UID != 42 || entry.GID != 43 {
 			t.Fatal("alias metadata changed", entry)
 		}
 	}

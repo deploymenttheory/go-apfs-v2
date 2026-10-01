@@ -36,7 +36,7 @@ func verify() error {
 	}
 	defer log.Close()
 	profile := filepath.Join(dir, "coverage.out")
-	cmd := exec.Command("go", "test", "-count=1", "-json", "-covermode=atomic", "-coverprofile="+profile, "-run", "^TestStrictXattr", "./pkg/hostmeta")
+	cmd := exec.Command("go", "test", "-count=1", "-json", "-covermode=atomic", "-coverprofile="+profile, "-run", "^TestStrictXattr", "./pkg/hostdata")
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 	var transcript bytes.Buffer
 	cmd.Stdout = io.MultiWriter(os.Stdout, log, &transcript)
@@ -116,7 +116,7 @@ func verify() error {
 		}
 	}
 	sources := map[string]string{}
-	names, err := filepath.Glob("pkg/hostmeta/xattr_strict*.go")
+	names, err := filepath.Glob("pkg/hostdata/xattr_strict*.go")
 	if err != nil {
 		return err
 	}

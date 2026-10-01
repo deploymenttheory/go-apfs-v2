@@ -16,7 +16,7 @@ import (
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfswrite"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/hfsplus"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 )
 
 func sourceImage(t *testing.T, kind string, root *apfswrite.Entry, hroot *hfsplus.Entry) (imagesecurity.Volume, *os.File, string) {
@@ -74,7 +74,7 @@ func TestImageSecuritySourceIntegration(t *testing.T) {
 			for _, to := range kinds {
 				t.Run(to, func(t *testing.T) {
 					var hashes [2]string
-					var results []hostmeta.SecurityCopyResult
+					var results []hostdata.SecurityCopyResult
 					for pass := 0; pass < 2; pass++ {
 						root, targetCases := imagesecurity.Tree(88, 89)
 						hroot := imagesecurity.HFSTree(root)
@@ -89,17 +89,17 @@ func TestImageSecuritySourceIntegration(t *testing.T) {
 								htarget = hroot.Children[i-1]
 							}
 							flags := 1 + i%3
-							options := hostmeta.SecurityCopyOptions{ACL: flags&1 != 0, Stat: flags&2 != 0}
+							options := hostdata.SecurityCopyOptions{ACL: flags&1 != 0, Stat: flags&2 != 0}
 							// A hard-link alias must receive the same selected stage as its peer.
 							if target.LinkGroup != 0 {
 								flags = 1 + int(target.LinkGroup%3)
 								options.ACL, options.Stat = flags&1 != 0, flags&2 != 0
 							}
-							var copied hostmeta.SecurityCopyResult
+							var copied hostdata.SecurityCopyResult
 							var err error
 							if pass == 0 {
-								capture := hostmeta.ImageSecurityCapture(volume, c.Name)
-								var r hostmeta.SecuritySourceCopyResult
+								capture := hostdata.ImageSecurityCapture(volume, c.Name)
+								var r hostdata.SecuritySourceCopyResult
 								if strings.HasPrefix(to, "apfs") {
 									r, err = root.CopySecurityFrom(target, capture, options)
 								} else {
@@ -176,8 +176,8 @@ func TestImageSecuritySourceFailures(t *testing.T) {
 			root := &apfswrite.Entry{Children: []*apfswrite.Entry{target}}
 			hroot := imagesecurity.HFSTree(root)
 			calls := 0
-			capture := hostmeta.SecuritySourceCapture{ReadSecurity: func() (hostmeta.SecurityCopySource, error) { calls++; return hostmeta.SecurityCopySource{}, failure }}
-			copyFrom := func(valid bool, options hostmeta.SecurityCopyOptions) (hostmeta.SecuritySourceCopyResult, error) {
+			capture := hostdata.SecuritySourceCapture{ReadSecurity: func() (hostdata.SecurityCopySource, error) { calls++; return hostdata.SecurityCopySource{}, failure }}
+			copyFrom := func(valid bool, options hostdata.SecurityCopyOptions) (hostdata.SecuritySourceCopyResult, error) {
 				if hfs {
 					var r *hfsplus.Entry
 					if valid {
@@ -191,15 +191,15 @@ func TestImageSecuritySourceFailures(t *testing.T) {
 				}
 				return r.CopySecurityFrom(target, capture, options)
 			}
-			r, e := copyFrom(false, hostmeta.SecurityCopyOptions{})
+			r, e := copyFrom(false, hostdata.SecurityCopyOptions{})
 			if e != nil || !r.Copy.Completed || calls != 0 {
 				t.Fatal(r, e, calls)
 			}
-			r, e = copyFrom(false, hostmeta.SecurityCopyOptions{ACL: true})
+			r, e = copyFrom(false, hostdata.SecurityCopyOptions{ACL: true})
 			if !errors.Is(e, fs.ErrInvalid) || calls != 0 {
 				t.Fatal(r, e, calls)
 			}
-			r, e = copyFrom(true, hostmeta.SecurityCopyOptions{ACL: true})
+			r, e = copyFrom(true, hostdata.SecurityCopyOptions{ACL: true})
 			if !errors.Is(e, failure) || calls != 1 || r.Copy.Writes != 0 || target.UID != 42 || target.Mode != 0644 || hroot.Children[0].UID != 42 || hroot.Children[0].Mode != 0644 {
 				t.Fatal(r, e, calls)
 			}

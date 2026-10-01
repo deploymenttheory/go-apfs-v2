@@ -4,14 +4,15 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/apfswrite"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/metatransport"
 	"os"
 	"path/filepath"
 	"testing"
 	"testing/fstest"
+
+	"github.com/deploymenttheory/go-apfs-v2/pkg/apfswrite"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/metatransport"
 )
 
 type projectedForkVolume struct{ carrierVolume }
@@ -24,11 +25,11 @@ func (v projectedForkVolume) Xattrs(n string) (map[string][]byte, error) {
 }
 func TestProjectionStreamedForkBaseline(t *testing.T) {
 	content := bytes.Repeat([]byte{7}, (1<<20)+1)
-	volume := projectedForkVolume{carrierVolume{MapFS: fstest.MapFS{"file": {Data: []byte("body")}}, attrs: map[string][]byte{hostmeta.ResourceForkName: content}}}
+	volume := projectedForkVolume{carrierVolume{MapFS: fstest.MapFS{"file": {Data: []byte("body")}}, attrs: map[string][]byte{hostdata.ResourceForkName: content}}}
 	e := newCarrierExtractor(t, volume)
 	e.ProjectNative = true
 	e.Xattrs = true
-	e.NativeCaptureLimits = &hostmeta.XattrCaptureLimits{NameBytes: hostmeta.MaxXattrListSize, ValueBytes: 16384, TotalBytes: 32768}
+	e.NativeCaptureLimits = &hostdata.XattrCaptureLimits{NameBytes: hostdata.MaxXattrListSize, ValueBytes: 16384, TotalBytes: 32768}
 	if err := e.ExtractAll(); err != nil {
 		t.Fatal(err)
 	}
@@ -44,7 +45,7 @@ func TestProjectionStreamedForkBaseline(t *testing.T) {
 	found := false
 	for _, r := range m.Records {
 		for _, a := range r.NativeAttributes {
-			if a.Name == hostmeta.ResourceForkName {
+			if a.Name == hostdata.ResourceForkName {
 				found = a.Value.Size == int64(len(content))
 			}
 		}
@@ -57,7 +58,7 @@ func TestProjectionStreamedForkBaseline(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fork := tree.Root.Children[0].XattrValues[hostmeta.ResourceForkName]
+	fork := tree.Root.Children[0].XattrValues[hostdata.ResourceForkName]
 	if fork == nil || fork.Size() != int64(len(content)) {
 		t.Fatal("borrowed fork missing")
 	}
@@ -71,7 +72,7 @@ func TestProjectionStreamedForkBaseline(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer file.Close()
-	native, err := hostmeta.OpenResourceFork(file, true)
+	native, err := hostdata.OpenResourceFork(file, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,20 +91,20 @@ func TestProjectionStreamedForkBaseline(t *testing.T) {
 func TestCarrierNativeInitialForkBaseline(t *testing.T) {
 	content := bytes.Repeat([]byte{5}, (1<<20)+1)
 	e := newCarrierExtractor(t, carrierVolume{MapFS: fstest.MapFS{"file": {Data: []byte("body")}}})
-	e.NativeCaptureLimits = &hostmeta.XattrCaptureLimits{NameBytes: hostmeta.MaxXattrListSize, ValueBytes: 16384, TotalBytes: 32768}
-	ops := carrierExtractionOps{os.ReadDir, os.OpenRoot, func(ctx context.Context, root *os.Root, name string, limits hostmeta.XattrCaptureLimits) (map[string]appledouble.Value, error) {
+	e.NativeCaptureLimits = &hostdata.XattrCaptureLimits{NameBytes: hostdata.MaxXattrListSize, ValueBytes: 16384, TotalBytes: 32768}
+	ops := carrierExtractionOps{os.ReadDir, os.OpenRoot, func(ctx context.Context, root *os.Root, name string, limits hostdata.XattrCaptureLimits) (map[string]appledouble.Value, error) {
 		if name == "file" {
 			f, err := root.OpenFile(name, os.O_RDWR, 0)
 			if err != nil {
 				return nil, err
 			}
-			_, err = hostmeta.ReplaceResourceFork(ctx, f, bytes.NewReader(content))
+			_, err = hostdata.ReplaceResourceFork(ctx, f, bytes.NewReader(content))
 			err = errors.Join(err, f.Close())
 			if err != nil {
 				return nil, err
 			}
 		}
-		return hostmeta.CaptureXattrValuesAt(ctx, root, name, limits)
+		return hostdata.CaptureXattrValuesAt(ctx, root, name, limits)
 	}}
 	if err := e.extractCarrierUsing(".", "", ops); err != nil {
 		t.Fatal(err)
@@ -125,7 +126,7 @@ func TestCarrierNativeInitialForkBaseline(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		fork := values[hostmeta.ResourceForkName]
+		fork := values[hostdata.ResourceForkName]
 		if !r.NativeCaptured || fork == nil || fork.Size() != int64(len(content)) {
 			t.Fatal(r)
 		}

@@ -1,12 +1,13 @@
 package cli
 
 import (
-	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/imagesecurity"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/apfswrite"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/imagesecurity"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/apfswrite"
 )
 
 func TestImageTimesSnapshotRebuild(t *testing.T) {

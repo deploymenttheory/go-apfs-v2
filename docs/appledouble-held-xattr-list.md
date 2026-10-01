@@ -1,6 +1,6 @@
 # Held-file attribute listing
 
-`hostmeta.ListXattrNames(file, maxBytes)` lists the visible extended-attribute
+`hostdata.ListXattrNames(file, maxBytes)` lists the visible extended-attribute
 names on an already-open file, directory or supported link descriptor. Use it
 when restoration needs the destination namespace before cleanup, or when
 capturing metadata from an object whose pathname may have changed.
@@ -14,7 +14,7 @@ object, keeping reparse-point identity and checking current access rights.
 ## Result and limits
 
 ```go
-names, err := hostmeta.ListXattrNames(file, 64<<10)
+names, err := hostdata.ListXattrNames(file, 64<<10)
 if err != nil {
     return err // names is nil; do not treat failure as an empty namespace
 }

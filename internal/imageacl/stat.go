@@ -7,13 +7,13 @@ import (
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/bsdflags"
 	"github.com/deploymenttheory/go-apfs-v2/internal/inodetime"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 )
 
 // StatMetadata is explicit destination state. Times must be resolved by the
 // caller: a tree alone cannot determine serialization defaults or clamp policy.
 type StatMetadata struct {
-	Times *hostmeta.FileTimes
+	Times *hostdata.FileTimes
 	Flags *uint32
 }
 
@@ -21,13 +21,13 @@ type StatMetadata struct {
 type StatChange struct {
 	UID, GID, Flags uint32
 	Mode            uint16
-	Times           hostmeta.FileTimes
+	Times           hostdata.FileTimes
 }
 
 // CopyStat binds the existing validated tree/alias graph, executes the shared
 // stat stage against private metadata and publishes only a complete valid result.
 // Callbacks and the caller must exclude concurrent tree mutation.
-func CopyStat[T comparable](root, target T, source hostmeta.StatCopySource, options hostmeta.StatCopyOptions, hfs bool, read func(T, bool) (Node[T], error), metadata func(T) StatMetadata, write func(T, StatChange)) (result hostmeta.ImageStatCopyResult, err error) {
+func CopyStat[T comparable](root, target T, source hostdata.StatCopySource, options hostdata.StatCopyOptions, hfs bool, read func(T, bool) (Node[T], error), metadata func(T) StatMetadata, write func(T, StatChange)) (result hostdata.ImageStatCopyResult, err error) {
 	aliases, nodes, destination, err := bind(root, target, read)
 	if err != nil {
 		return result, err
@@ -54,7 +54,7 @@ func CopyStat[T comparable](root, target T, source hostmeta.StatCopySource, opti
 	}
 	_, compressed := destination.Xattrs["com.apple.decmpfs"]
 	backend := &statCopier{StatChange: staged, hfs: hfs, compressed: compressed}
-	result.Execution, err = hostmeta.CopyStat(source, options, backend)
+	result.Execution, err = hostdata.CopyStat(source, options, backend)
 	if err != nil || len(result.Execution.Failures) != 0 {
 		return result, err
 	}
@@ -65,7 +65,7 @@ func CopyStat[T comparable](root, target T, source hostmeta.StatCopySource, opti
 	return result, nil
 }
 
-func equalTimes(a, b hostmeta.FileTimes) bool {
+func equalTimes(a, b hostdata.FileTimes) bool {
 	return a.Birth.Equal(b.Birth) && a.Modify.Equal(b.Modify) && a.Change.Equal(b.Change) && a.Access.Equal(b.Access)
 }
 

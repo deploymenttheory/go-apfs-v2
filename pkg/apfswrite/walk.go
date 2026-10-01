@@ -9,7 +9,7 @@ import (
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/hostwalk"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/fidelity"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/metatransport"
 )
 
@@ -18,7 +18,7 @@ type WalkOptions struct {
 	// MetadataRoot explicitly selects a separate managed carrier for preservation.
 	MetadataRoot   string
 	MetadataLimits *metatransport.Limits
-	CaptureLimits  *hostmeta.XattrCaptureLimits
+	CaptureLimits  *hostdata.XattrCaptureLimits
 	Context        context.Context
 	// Xattrs reads each entry's extended attributes so they can be counted.
 	// It costs a syscall or two per entry, so it is opt-in; without it the

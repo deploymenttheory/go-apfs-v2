@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 )
 
 type imageSecurityFault struct{ err error }
@@ -21,13 +21,13 @@ func TestImageSecurityErrorsAndForks(t *testing.T) {
 		for _, name := range []string{".", "", "../x"} {
 			got, e := v.Security(name)
 			var pe *fs.PathError
-			if e == nil || !errors.As(e, &pe) || pe.Op != "security" || !reflect.DeepEqual(got, hostmeta.ImageSecurity{}) {
+			if e == nil || !errors.As(e, &pe) || pe.Op != "security" || !reflect.DeepEqual(got, hostdata.ImageSecurity{}) {
 				t.Fatalf("invalid volume/path: %+v %v", got, e)
 			}
 		}
 	}
 	v := &Volume{root: &entry{isDir: true, folder: &HFSPlusCatalogFolder{FolderID: 2, BSDInfo: BSDInfo{OwnerID: 42, GroupID: 43, FileMode: 040755}}}, attributes: map[attrKey]*attrRecord{}}
-	key := attrKey{fileID: 2, name: hostmeta.SecurityName}
+	key := attrKey{fileID: 2, name: hostdata.SecurityName}
 	v.attributes[key] = &attrRecord{}
 	if _, e := v.Security("."); !errors.Is(e, fs.ErrInvalid) {
 		t.Fatalf("unreadable record: %v", e)
@@ -45,7 +45,7 @@ func TestImageSecurityErrorsAndForks(t *testing.T) {
 	}
 	v.attributes[key].fork.LogicalSize = 1 << 40
 	got, e := v.Security(".")
-	if e != nil || got.Disposition != hostmeta.SecurityRecordInvalid {
+	if e != nil || got.Disposition != hostdata.SecurityRecordInvalid {
 		t.Fatalf("extent bound: %+v %v", got, e)
 	}
 	v.attributes[key].fork.LogicalSize = uint64(len(record))
@@ -53,7 +53,7 @@ func TestImageSecurityErrorsAndForks(t *testing.T) {
 	copy(disk[512:], record)
 	v.dev = bytes.NewReader(disk)
 	got, e = v.Security(".")
-	if e != nil || got.Disposition != hostmeta.SecurityRecordACL {
+	if e != nil || got.Disposition != hostdata.SecurityRecordACL {
 		t.Fatalf("valid fork: %+v %v", got, e)
 	}
 	v.dev = bytes.NewReader(nil)
@@ -64,7 +64,7 @@ func TestImageSecurityErrorsAndForks(t *testing.T) {
 
 func TestImageSecurityFailedAttributeLoadRetries(t *testing.T) {
 	const id = CatalogNodeID(2)
-	recs := []btRecord{{key: encodeAttrKey(id, "a", 0), payload: attrInlineRecord([]byte("ok"))}, {key: encodeAttrKey(id, hostmeta.SecurityName, 0), payload: []byte{0, 0, 0, 0x10}}}
+	recs := []btRecord{{key: encodeAttrKey(id, "a", 0), payload: attrInlineRecord([]byte("ok"))}, {key: encodeAttrKey(id, hostdata.SecurityName, 0), payload: []byte{0, 0, 0, 0x10}}}
 	v := attrVolume(t, 512, recs, nil)
 	v.root = &entry{isDir: true, folder: &HFSPlusCatalogFolder{FolderID: id}}
 	for i := 0; i < 2; i++ {
@@ -72,10 +72,10 @@ func TestImageSecurityFailedAttributeLoadRetries(t *testing.T) {
 			t.Fatalf("partial failed cache retained, attempt %d: %v", i, e)
 		}
 	}
-	good := attrVolume(t, 512, []btRecord{{key: encodeAttrKey(id, hostmeta.SecurityName, 0), payload: attrInlineRecord([]byte{})}}, nil)
+	good := attrVolume(t, 512, []btRecord{{key: encodeAttrKey(id, hostdata.SecurityName, 0), payload: attrInlineRecord([]byte{})}}, nil)
 	v.dev, v.hdr = good.dev, good.hdr
 	got, e := v.Security(".")
-	if e != nil || got.Disposition != hostmeta.SecurityRecordInvalid {
+	if e != nil || got.Disposition != hostdata.SecurityRecordInvalid {
 		t.Fatalf("retry after recovery: %+v %v", got, e)
 	}
 	v.attributes, v.attrNames = nil, nil

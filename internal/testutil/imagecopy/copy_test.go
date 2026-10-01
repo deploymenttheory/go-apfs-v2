@@ -22,7 +22,7 @@ import (
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfswrite"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/hfsplus"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 )
 
 func metadata(t *testing.T, v imagesecurity.Volume, name string) imagerestore.Metadata {
@@ -148,7 +148,7 @@ func TestImageSecurityCopyNativeReplay(t *testing.T) {
 					if got := metadata(t, before, c.Target); got != n.Native.Before {
 						t.Fatalf("initial metadata %s: %+v != %+v", c.Name, got, n.Native.Before)
 					}
-					var result hostmeta.SecurityCopyResult
+					var result hostdata.SecurityCopyResult
 					var err error
 					if strings.HasPrefix(kind, "apfs") {
 						result, err = imagecopy.ApplyAPFS(scene.Root, c)

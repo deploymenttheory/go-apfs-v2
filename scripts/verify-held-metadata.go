@@ -36,7 +36,7 @@ func verify() error {
 	defer log.Close()
 	var transcript bytes.Buffer
 	profile := filepath.Join(dir, "coverage.out")
-	cmd := exec.Command("go", "test", "-count=1", "-json", "-run", "^Test(HeldMetadata|HeldLifecycle|LogicalMetadata|MetadataArgument|DarwinSecurity|OpenMetadata|MetadataOpen|DarwinMetadata)", "-covermode=atomic", "-coverprofile="+profile, "-coverpkg=./pkg/hostmeta", "./pkg/hostmeta")
+	cmd := exec.Command("go", "test", "-count=1", "-json", "-run", "^Test(HeldMetadata|HeldLifecycle|LogicalMetadata|MetadataArgument|DarwinSecurity|OpenMetadata|MetadataOpen|DarwinMetadata)", "-covermode=atomic", "-coverprofile="+profile, "-coverpkg=./pkg/hostdata/...", "./pkg/hostdata")
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 	cmd.Stdout = io.MultiWriter(os.Stdout, log, &transcript)
 	cmd.Stderr = io.MultiWriter(os.Stderr, log)
@@ -64,16 +64,16 @@ func verify() error {
 		return e
 	}
 	covered, total := 0, 0
-	coverageFiles := map[string][2]int{"pkg/hostmeta/held_metadata.go": {}, "pkg/hostmeta/metadata_open.go": {}}
-	coverageFiles["pkg/hostmeta/held_lifecycle.go"] = [2]int{}
+	coverageFiles := map[string][2]int{"pkg/hostdata/held_metadata.go": {}, "pkg/hostdata/metadata_open.go": {}}
+	coverageFiles["pkg/hostdata/held_lifecycle.go"] = [2]int{}
 	switch runtime.GOOS {
 	case "darwin":
-		coverageFiles["pkg/hostmeta/held_metadata_darwin.go"] = [2]int{}
-		coverageFiles["pkg/hostmeta/libsystem_security_darwin.go"] = [2]int{}
-		coverageFiles["pkg/hostmeta/metadata_open_darwin.go"] = [2]int{}
+		coverageFiles["pkg/hostdata/held_metadata_darwin.go"] = [2]int{}
+		coverageFiles["pkg/hostdata/libsystem_security_darwin.go"] = [2]int{}
+		coverageFiles["pkg/hostdata/metadata_open_darwin.go"] = [2]int{}
 	case "linux", "windows":
-		coverageFiles["pkg/hostmeta/held_metadata_other.go"] = [2]int{}
-		coverageFiles["pkg/hostmeta/metadata_open_"+runtime.GOOS+".go"] = [2]int{}
+		coverageFiles["pkg/hostdata/held_metadata_other.go"] = [2]int{}
+		coverageFiles["pkg/hostdata/metadata_open_"+runtime.GOOS+".go"] = [2]int{}
 	default:
 		return fmt.Errorf("unsupported qualification host: %s", runtime.GOOS)
 	}
@@ -122,10 +122,10 @@ func verify() error {
 	if passed < 1150 {
 		return fmt.Errorf("incomplete metadata provider tests: %d", passed)
 	}
-	files := []string{"pkg/hostmeta/held_metadata.go", "pkg/hostmeta/held_metadata_test.go", "pkg/hostmeta/held_metadata_darwin.go", "pkg/hostmeta/held_metadata_darwin_test.go", "pkg/hostmeta/held_metadata_other.go", "pkg/hostmeta/held_metadata_other_test.go", "pkg/hostmeta/libsystem_security_darwin.go", "pkg/hostmeta/metadata_open.go", "pkg/hostmeta/metadata_open_test.go", "pkg/hostmeta/metadata_open_darwin.go", "pkg/hostmeta/metadata_open_darwin_test.go", "pkg/hostmeta/metadata_open_linux.go", "pkg/hostmeta/metadata_open_windows.go", "scripts/verify-held-metadata.go", "scripts/verify-held-metadata-native.go", "testdata/appledouble/native/held-metadata.c", "go.mod", "go.sum"}
+	files := []string{"pkg/hostdata/held_metadata.go", "pkg/hostdata/held_metadata_test.go", "pkg/hostdata/held_metadata_darwin.go", "pkg/hostdata/held_metadata_darwin_test.go", "pkg/hostdata/held_metadata_other.go", "pkg/hostdata/held_metadata_other_test.go", "pkg/hostdata/libsystem_security_darwin.go", "pkg/hostdata/metadata_open.go", "pkg/hostdata/metadata_open_test.go", "pkg/hostdata/metadata_open_darwin.go", "pkg/hostdata/metadata_open_darwin_test.go", "pkg/hostdata/metadata_open_linux.go", "pkg/hostdata/metadata_open_windows.go", "scripts/verify-held-metadata.go", "scripts/verify-held-metadata-native.go", "testdata/appledouble/native/held-metadata.c", "go.mod", "go.sum"}
 	hashes := map[string]string{}
-	files = append(files, "pkg/hostmeta/held_metadata_fixture_test.go", "pkg/hostmeta/metadata_open_windows_test.go", "testdata/appledouble/native/held-metadata.json.gz")
-	files = append(files, "pkg/hostmeta/held_lifecycle.go", "pkg/hostmeta/held_lifecycle_test.go", "pkg/hostmeta/held_lifecycle_native_test.go", "internal/testutil/heldlifecycle/oracle.go", "testdata/appledouble/native/held-lifecycle.c", "testdata/appledouble/native/held-lifecycle.json.gz", "scripts/verify-held-lifecycle.go")
+	files = append(files, "pkg/hostdata/held_metadata_fixture_test.go", "pkg/hostdata/metadata_open_windows_test.go", "testdata/appledouble/native/held-metadata.json.gz")
+	files = append(files, "pkg/hostdata/held_lifecycle.go", "pkg/hostdata/held_lifecycle_test.go", "pkg/hostdata/held_lifecycle_native_test.go", "internal/testutil/heldlifecycle/oracle.go", "testdata/appledouble/native/held-lifecycle.c", "testdata/appledouble/native/held-lifecycle.json.gz", "scripts/verify-held-lifecycle.go")
 	for _, path := range files {
 		b, e := os.ReadFile(path)
 		if e != nil {

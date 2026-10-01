@@ -20,7 +20,7 @@ import (
 	"strings"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	aclmeta "github.com/deploymenttheory/go-apfs-v2/pkg/hostdata/acl"
 )
 
 const out = "artifacts/acl-identity-capture-native"
@@ -97,7 +97,7 @@ func main() {
 		p := filepath.Join(sdk, "usr/include", name)
 		evidence.SourceSHA256[p] = sha(read(p))
 	}
-	for _, pattern := range []string{"pkg/hostmeta/acl_identity_capture*.go", "pkg/appledouble/acl_identity*.go", "scripts/verify-acl-identity-capture-native.go", "testdata/appledouble/native/acl-identity.c", "testdata/appledouble/native/acl-identity-capture.c", "go.mod", "go.sum"} {
+	for _, pattern := range []string{"pkg/hostdata/acl/acl_identity_capture*.go", "pkg/appledouble/acl_identity*.go", "scripts/verify-acl-identity-capture-native.go", "testdata/appledouble/native/acl-identity.c", "testdata/appledouble/native/acl-identity-capture.c", "go.mod", "go.sum"} {
 		paths, e := filepath.Glob(pattern)
 		must(e)
 		for _, p := range paths {
@@ -117,7 +117,7 @@ func main() {
 			}
 		}
 	}
-	c, e := hostmeta.NewNativeACLIdentityCapture(context.Background())
+	c, e := aclmeta.NewNativeACLIdentityCapture(context.Background())
 	must(e)
 	query := func(args ...string) native {
 		var n native

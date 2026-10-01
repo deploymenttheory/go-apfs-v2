@@ -21,7 +21,7 @@ import (
 	"time"
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/tools"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/metatransport"
 )
 
@@ -39,10 +39,10 @@ func (v fixture) Readlink(name string) (string, error) {
 func (v fixture) Xattrs(string) (map[string][]byte, error) {
 	return map[string][]byte{"user.projection": []byte("value"), "org.example.empty": {}, "com.apple.ResourceFork": bytes.Repeat([]byte{3}, 10000)}, nil
 }
-func (v fixture) Metadata(name string) (hostmeta.ImageMetadata, error) {
+func (v fixture) Metadata(name string) (hostdata.ImageMetadata, error) {
 	info, e := v.Stat(name)
 	if e != nil {
-		return hostmeta.ImageMetadata{}, e
+		return hostdata.ImageMetadata{}, e
 	}
 	mode := uint32(0100640)
 	if info.IsDir() {
@@ -51,8 +51,8 @@ func (v fixture) Metadata(name string) (hostmeta.ImageMetadata, error) {
 	if info.Mode()&os.ModeSymlink != 0 {
 		mode = 0120777
 	}
-	times := &hostmeta.FileTimes{Birth: time.Unix(1500000000, 100), Modify: time.Unix(1600000000, 200), Access: time.Unix(1700000000, 300), Change: time.Unix(1650000000, 400)}
-	return hostmeta.ImageMetadata{UID: uint32(os.Getuid()), GID: uint32(os.Getgid()), Mode: mode, Times: times}, nil
+	times := &hostdata.FileTimes{Birth: time.Unix(1500000000, 100), Modify: time.Unix(1600000000, 200), Access: time.Unix(1700000000, 300), Change: time.Unix(1650000000, 400)}
+	return hostdata.ImageMetadata{UID: uint32(os.Getuid()), GID: uint32(os.Getgid()), Mode: mode, Times: times}, nil
 }
 
 type stat struct {
@@ -99,7 +99,7 @@ func main() {
 		must(e)
 		must(os.WriteFile(filepath.Join(out, "report.json"), append(b, '\n'), 0600))
 	}()
-	for _, pattern := range []string{"scripts/verify-native-projection.go", "testdata/appledouble/native/native-projection.c", "internal/tools/extract_projection*.go", "pkg/hostmeta/metadata_open*.go", "pkg/hostmeta/held_metadata*.go", "go.mod", "go.sum"} {
+	for _, pattern := range []string{"scripts/verify-native-projection.go", "testdata/appledouble/native/native-projection.c", "internal/tools/extract_projection*.go", "pkg/hostdata/metadata_open*.go", "pkg/hostdata/held_metadata*.go", "go.mod", "go.sum"} {
 		paths, e := filepath.Glob(pattern)
 		must(e)
 		for _, p := range paths {

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	diskspace "github.com/deploymenttheory/go-apfs-v2/pkg/hostdata/diskspace"
 )
 
 // TestRequiredScratchBytes covers the arithmetic without needing a full disk.
@@ -54,7 +54,7 @@ func TestEnsureScratchSpaceRefusesTheImpossible(t *testing.T) {
 	dir := t.TempDir()
 	out := filepath.Join(dir, "image.dmg")
 
-	available, ok, err := hostmeta.AvailableSpace(dir)
+	available, ok, err := diskspace.AvailableSpace(dir)
 	if err != nil || !ok {
 		t.Skip("this platform cannot report free space, so the guard is inactive")
 	}

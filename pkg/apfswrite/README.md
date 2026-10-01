@@ -80,7 +80,7 @@ for its completion contract, native qualification and remaining host integration
 
 ### Independent timestamps
 
-Set `Entry.Times` to a `hostmeta.FileTimes` value to retain separate birth,
+Set `Entry.Times` to a `hostdata.FileTimes` value to retain separate birth,
 modification, change and access times. Nil keeps existing `ModTime` defaults.
 Both image readers expose `Volume.FileTimes(name)` without following symlinks. See
 [image timestamps](../../docs/appledouble-image-times.md) for clamping, precision,

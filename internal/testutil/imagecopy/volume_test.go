@@ -16,12 +16,12 @@ import (
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfswrite"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/hfsplus"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 )
 
-type imageVolumePolicy func(hostmeta.SecurityCopyVolume) (bool, error)
+type imageVolumePolicy func(hostdata.SecurityCopyVolume) (bool, error)
 
-func (f imageVolumePolicy) NoSetID(v hostmeta.SecurityCopyVolume) (bool, error) { return f(v) }
+func (f imageVolumePolicy) NoSetID(v hostdata.SecurityCopyVolume) (bool, error) { return f(v) }
 
 func TestImageSecurityCopyVolumePolicy(t *testing.T) {
 	failure := errors.New("uncaptured mount state")
@@ -31,7 +31,7 @@ func TestImageSecurityCopyVolumePolicy(t *testing.T) {
 			for pass := 0; pass < 2; pass++ {
 				var entries []*apfswrite.Entry
 				var expected []uint32
-				var options []hostmeta.SecurityCopyOptions
+				var options []hostdata.SecurityCopyOptions
 				for flags := 1; flags <= 3; flags++ {
 					for override := 0; override < 3; override++ {
 						for s := 0; s < 3; s++ {
@@ -44,11 +44,11 @@ func TestImageSecurityCopyVolumePolicy(t *testing.T) {
 									mode &^= 06000
 								}
 								expected = append(expected, 0100000|mode)
-								option := hostmeta.SecurityCopyOptions{ACL: flags&1 != 0, Stat: flags&2 != 0, ForbidCopySetID: override == 1, AlwaysCopySetID: override == 2}
+								option := hostdata.SecurityCopyOptions{ACL: flags&1 != 0, Stat: flags&2 != 0, ForbidCopySetID: override == 1, AlwaysCopySetID: override == 2}
 								if pass == 0 {
-									option.VolumePolicy = imageVolumePolicy(func(v hostmeta.SecurityCopyVolume) (bool, error) {
+									option.VolumePolicy = imageVolumePolicy(func(v hostdata.SecurityCopyVolume) (bool, error) {
 										state := s
-										if v == hostmeta.SecurityCopyDestinationVolume {
+										if v == hostdata.SecurityCopyDestinationVolume {
 											state = d
 										}
 										if state == 2 {
@@ -69,10 +69,10 @@ func TestImageSecurityCopyVolumePolicy(t *testing.T) {
 				}
 				root := &apfswrite.Entry{Children: entries}
 				hroot := imagesecurity.HFSTree(root)
-				source := hostmeta.DecodeImageSecurity(42, 43, 0106755, nil).Source
+				source := hostdata.DecodeImageSecurity(42, 43, 0106755, nil).Source
 				source.Properties.RawSecurity = &appledouble.FileSecurity{ACL: &appledouble.ACL{Entries: []appledouble.ACLEntry{{Principal: [16]byte{1}, Flags: 1, Rights: 1}}}}
 				for i, option := range options {
-					var result hostmeta.SecurityCopyResult
+					var result hostdata.SecurityCopyResult
 					var err error
 					if strings.HasPrefix(kind, "apfs") {
 						result, err = root.CopySecurity(entries[2*i], source, option)
@@ -118,7 +118,7 @@ func TestImageSecurityCopyVolumePolicy(t *testing.T) {
 					}
 				}
 				for i, want := range expected {
-					var snapshots [2]hostmeta.ImageSecurity
+					var snapshots [2]hostdata.ImageSecurity
 					for j, suffix := range []string{"a", "b"} {
 						name := fmt.Sprintf("case-%03d-%s", i, suffix)
 						captured, e := volume.Security(name)

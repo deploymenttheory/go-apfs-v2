@@ -22,7 +22,7 @@ import (
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/evidenceaudit"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 )
 
 const objectDir = "artifacts/appledouble-object-native"
@@ -82,35 +82,35 @@ func main() {
 				dir := filepath.Join(work, name)
 				must(os.Mkdir(dir, 0700))
 				files := map[string]*os.File{}
-				objects := map[string]*hostmeta.AppleDoubleObject{}
+				objects := map[string]*hostdata.AppleDoubleObject{}
 				for _, key := range []string{"source", "go-packed", "native-packed", "go-target", "native-target"} {
 					f, e := os.OpenFile(filepath.Join(dir, key), os.O_CREATE|os.O_RDWR, 0600)
 					must(e)
 					files[key] = f
-					o, e := hostmeta.NewHostAppleDoubleObject(context.Background(), f)
+					o, e := hostdata.NewHostAppleDoubleObject(context.Background(), f)
 					must(e)
 					objects[key] = o
 				}
 				sourceFile := files["source"]
-				must(hostmeta.SetXattr(sourceFile, "user.object", []byte("ordinary fixed fixture")))
-				must(hostmeta.SetXattr(sourceFile, "user.empty", nil))
+				must(hostdata.SetXattr(sourceFile, "user.object", []byte("ordinary fixed fixture")))
+				must(hostdata.SetXattr(sourceFile, "user.empty", nil))
 				finder := make([]byte, 32)
 				copy(finder, "TEXTttxt")
-				must(hostmeta.SetXattr(sourceFile, appledouble.FinderInfoName, finder))
+				must(hostdata.SetXattr(sourceFile, appledouble.FinderInfoName, finder))
 				if fork {
-					must(hostmeta.SetXattr(sourceFile, appledouble.ResourceForkName, []byte("source fork")))
+					must(hostdata.SetXattr(sourceFile, appledouble.ResourceForkName, []byte("source fork")))
 				}
-				held, e := hostmeta.NewHeldMetadata(sourceFile)
+				held, e := hostdata.NewHeldMetadata(sourceFile)
 				must(e)
 				if acl {
 					must(held.SetACL(&appledouble.ACL{Entries: []appledouble.ACLEntry{{Principal: [16]byte{1}, Flags: 1, Rights: 2}}}))
 				}
 				must(held.Chmod(0640))
 				must(held.SetTimes(time.Unix(1700000000, 0), time.Unix(1700000001, 0)))
-				options := hostmeta.DefaultObjectPackOptions()
+				options := hostdata.DefaultObjectPackOptions()
 				options.CopyACL = acl
 				options.Stat = stat
-				packed, e := hostmeta.PackAppleDoubleObject(context.Background(), objects["source"], objects["go-packed"], files["go-packed"], options)
+				packed, e := hostdata.PackAppleDoubleObject(context.Background(), objects["source"], objects["go-packed"], files["go-packed"], options)
 				must(e)
 				aclArg, statArg := "0", "0"
 				if acl {
@@ -136,16 +136,16 @@ func main() {
 				}
 				for _, key := range []string{"go-target", "native-target"} {
 					f := files[key]
-					must(hostmeta.SetXattr(f, "user.stale", []byte("remove")))
+					must(hostdata.SetXattr(f, "user.stale", []byte("remove")))
 					if fork {
-						must(hostmeta.SetXattr(f, appledouble.ResourceForkName, []byte("old fork suffix remains")))
+						must(hostdata.SetXattr(f, appledouble.ResourceForkName, []byte("old fork suffix remains")))
 					}
 					must(f.Chmod(0400))
 					must(os.Chtimes(f.Name(), time.Unix(1600000000, 0), time.Unix(1600000001, 0)))
 				}
-				optionsU := hostmeta.DefaultObjectUnpackOptions()
+				optionsU := hostdata.DefaultObjectUnpackOptions()
 				optionsU.Stat = stat
-				unpacked, e := hostmeta.UnpackAppleDoubleObject(context.Background(), io.NewSectionReader(files["go-packed"], 0, int64(len(got))), objects["go-packed"], objects["go-target"], optionsU)
+				unpacked, e := hostdata.UnpackAppleDoubleObject(context.Background(), io.NewSectionReader(files["go-packed"], 0, int64(len(got))), objects["go-packed"], objects["go-target"], optionsU)
 				must(e)
 				must(json.Unmarshal(run(oracle, "unpack", files["native-packed"].Name(), files["native-target"].Name(), aclArg, statArg), &result))
 				if result.Code != unpacked.Lifecycle.Code {
@@ -163,7 +163,7 @@ func main() {
 			}
 		}
 	}
-	hashes, e := evidenceaudit.SourceHashes(os.DirFS("."), []string{source, "scripts/verify-appledouble-object-native.go", "pkg/hostmeta/*.go", "pkg/hostmeta/appledouble_pack*.go", "pkg/hostmeta/appledouble_sequential*.go", "pkg/hostmeta/held_lifecycle*.go", "pkg/hostmeta/held_metadata*.go", "pkg/hostmeta/quarantine_file*.go", "pkg/hostmeta/xattr_intent*.go", "go.mod", "go.sum"})
+	hashes, e := evidenceaudit.SourceHashes(os.DirFS("."), []string{source, "scripts/verify-appledouble-object-native.go", "pkg/hostdata/*.go", "pkg/hostdata/*/*.go", "internal/hosttime/*.go", "internal/testutil/heldfixture/*.go", "pkg/hostdata/appledouble_pack*.go", "pkg/hostdata/appledouble_sequential*.go", "pkg/hostdata/held_lifecycle*.go", "pkg/hostdata/held_metadata*.go", "pkg/hostdata/quarantine_file*.go", "pkg/hostdata/xattrintent/xattr_intent*.go", "go.mod", "go.sum"})
 	must(e)
 	report := map[string]any{"revision": strings.TrimSpace(string(run("git", "rev-parse", "HEAD"))), "goos": runtime.GOOS, "goarch": runtime.GOARCH, "source_sha256": hashes, "ast_sha256": astHashes, "sdk": strings.TrimSpace(string(run("xcrun", "--show-sdk-version"))), "compiler": string(run("xcrun", "clang", "--version")), "host": string(run("sw_vers")), "cases": cases, "privacy": "controlled fixture hashes only; process identity and labels are not retained"}
 	must(os.RemoveAll(work))

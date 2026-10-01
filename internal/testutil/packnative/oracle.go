@@ -9,7 +9,7 @@ import (
 	"reflect"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 )
 
 type Event struct {
@@ -258,23 +258,23 @@ func (b *backend) WriteAt(data []byte, offset int64) (int, error) {
 	copy(b.output[int(offset):end], data[:n])
 	return n, nil
 }
-func (b *backend) Stat() hostmeta.CopyStageResult {
+func (b *backend) Stat() hostdata.CopyStageResult {
 	b.event("stat", "", 0, 0, b.c.StatCode, 0)
-	return hostmeta.CopyStageResult{Code: b.c.StatCode, Err: diagnostic(b.c.StatCode)}
+	return hostdata.CopyStageResult{Code: b.c.StatCode, Err: diagnostic(b.c.StatCode)}
 }
 
 func Replay(c Case) error {
 	b := &backend{c: c}
-	opts := hostmeta.PackOptions{CopyACL: c.ACLPresent != 0, HasQuarantine: c.Quarantine != 0, CopyIntent: uint32(c.Intent), InitialCopied: 77, Limits: appledouble.DefaultStreamLimits(), MaxActiveBytes: 64 << 20}
+	opts := hostdata.PackOptions{CopyACL: c.ACLPresent != 0, HasQuarantine: c.Quarantine != 0, CopyIntent: uint32(c.Intent), InitialCopied: 77, Limits: appledouble.DefaultStreamLimits(), MaxActiveBytes: 64 << 20}
 	if c.Callback {
-		opts.Callback = func(n hostmeta.PackNotice) hostmeta.CopyPipelineAction {
-			index := map[hostmeta.PackEvent]int{hostmeta.PackStart: 0, hostmeta.PackProgress: 1, hostmeta.PackFinish: 2, hostmeta.PackError: 3}[n.Event]
+		opts.Callback = func(n hostdata.PackNotice) hostdata.CopyPipelineAction {
+			index := map[hostdata.PackEvent]int{hostdata.PackStart: 0, hostdata.PackProgress: 1, hostdata.PackFinish: 2, hostdata.PackError: 3}[n.Event]
 			action := c.Actions[index]
 			b.event(string(n.Event), n.Name, 0, 0, action, n.Copied)
-			return hostmeta.CopyPipelineAction(action)
+			return hostdata.CopyPipelineAction(action)
 		}
 	}
-	result, err := hostmeta.PackAppleDouble(context.Background(), opts, b)
+	result, err := hostdata.PackAppleDouble(context.Background(), opts, b)
 	if !reflect.DeepEqual(b.events, c.Native.Events) {
 		return fmt.Errorf("events mismatch\nGo: %+v\nC: %+v", b.events, c.Native.Events)
 	}

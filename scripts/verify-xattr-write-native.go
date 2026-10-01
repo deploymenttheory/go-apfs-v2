@@ -16,7 +16,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 )
 
 type native struct {
@@ -59,7 +59,7 @@ func main() {
 	passed := false
 	observations := []observation{}
 	hashes := map[string]string{}
-	paths, e := filepath.Glob("pkg/hostmeta/xattr_strict*.go")
+	paths, e := filepath.Glob("pkg/hostdata/xattr_strict*.go")
 	must(e)
 	paths = append(paths, source, "scripts/verify-xattr-write-native.go", "go.mod", "go.sum")
 	for _, p := range paths {
@@ -130,7 +130,7 @@ func main() {
 		encoded := hex.EncodeToString(value)
 		var expected, got native
 		must(json.Unmarshal(run(helper, "set", reference, kind, name, encoded), &expected))
-		err := hostmeta.SetXattr(f, name, value)
+		err := hostdata.SetXattr(f, name, value)
 		must(json.Unmarshal(run(helper, "read", actual, kind, name, ""), &got))
 		o := observation{Name: label, Attribute: name, InputHex: encoded, Native: expected, GoReadback: got}
 		if err != nil {
@@ -163,11 +163,11 @@ func main() {
 		{"finder-invalid", "com.apple.FinderInfo", []byte{1}},
 		{"finder-present", "com.apple.FinderInfo", append([]byte{1}, make([]byte, 31)...)},
 		{"finder-zero", "com.apple.FinderInfo", make([]byte, 32)},
-		{"fork-fresh-empty", hostmeta.ResourceForkName, nil},
-		{"fork-present", hostmeta.ResourceForkName, []byte{7, 8, 9}},
-		{"fork-short-overwrite", hostmeta.ResourceForkName, []byte{4}},
-		{"fork-empty-overwrite", hostmeta.ResourceForkName, nil},
-		{"security-invalid", hostmeta.SecurityName, []byte{1}},
+		{"fork-fresh-empty", hostdata.ResourceForkName, nil},
+		{"fork-present", hostdata.ResourceForkName, []byte{7, 8, 9}},
+		{"fork-short-overwrite", hostdata.ResourceForkName, []byte{4}},
+		{"fork-empty-overwrite", hostdata.ResourceForkName, nil},
+		{"security-invalid", hostdata.SecurityName, []byte{1}},
 	} {
 		capture(step.label, step.name, step.value, reference, actual, f, false)
 	}

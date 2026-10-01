@@ -8,9 +8,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
 	"io"
 	"strings"
+
+	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
 )
 
 // Attribute names are byte strings. Base64 JSON avoids silently replacing

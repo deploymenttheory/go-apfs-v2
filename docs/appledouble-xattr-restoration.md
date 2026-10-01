@@ -1,6 +1,6 @@
 # Ordinary AppleDouble xattr restoration
 
-`hostmeta.RestoreXattr` executes the ordinary `copyfile_unpack_xattr` stage on a
+`hostdata.RestoreXattr` executes the ordinary `copyfile_unpack_xattr` stage on a
 caller-bound destination. APFS and HFS+ writer entries expose
 `root.RestoreXattr(target, name, value, options)` to apply that policy to image
 trees. All implementations are pure Go and available on Linux, macOS and Windows.
@@ -60,7 +60,7 @@ executor retains the full logical name; it does not strip the suffix.
 
 ```go
 result, err := root.RestoreXattr(target, "org.example.metadata", value,
-    hostmeta.XattrRestoreOptions{})
+    hostdata.XattrRestoreOptions{})
 if err != nil {
     // Applied can still be true if a Finish callback canceled after publication.
     return err

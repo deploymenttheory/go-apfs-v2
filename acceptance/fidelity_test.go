@@ -14,7 +14,7 @@ import (
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/exitcode"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/fidelity"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 )
 
 // lossyTree builds a directory holding, as far as the platform allows, one of
@@ -264,7 +264,7 @@ func TestExtractXattrsRestoresAttributes(t *testing.T) {
 	// describe content the file no longer holds.
 	compressed := filepath.Join(withFlag, "compressed.txt")
 	if _, err := os.Stat(compressed); err == nil {
-		attrs, err := hostmeta.CaptureXattrsNoFollow(context.Background(), compressed, hostmeta.XattrCaptureLimits{NameBytes: hostmeta.MaxXattrListSize, ValueBytes: 64 << 20, TotalBytes: 256 << 20})
+		attrs, err := hostdata.CaptureXattrsNoFollow(context.Background(), compressed, hostdata.XattrCaptureLimits{NameBytes: hostdata.MaxXattrListSize, ValueBytes: 64 << 20, TotalBytes: 256 << 20})
 		if err != nil {
 			t.Fatalf("reading attributes of %s: %v", compressed, err)
 		}

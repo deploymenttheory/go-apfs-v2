@@ -1,6 +1,6 @@
 # Optional properties in extended chmod requests
 
-`hostmeta.DarwinChmodProperties.ChmodArguments` prepares libSystem-compatible
+`acl.DarwinChmodProperties.ChmodArguments` prepares libSystem-compatible
 extended chmod arguments when individual filesec properties may be absent. Use
 it for ordinary ACL-copy adapters, explicit ACL removal and other operations
 that must distinguish omission from a supplied zero value. It complements

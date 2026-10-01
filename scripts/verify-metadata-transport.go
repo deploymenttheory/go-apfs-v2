@@ -34,12 +34,12 @@ import (
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfswrite"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/hfsplus"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 )
 
 type volume interface {
 	tools.VolumeFS
-	hostmeta.ImageMetadataFS
+	hostdata.ImageMetadataFS
 	Xattrs(string) (map[string][]byte, error)
 }
 type value struct {
@@ -121,7 +121,7 @@ func detach(target string) {
 }
 
 func tree() *apfswrite.Entry {
-	times := &hostmeta.FileTimes{Birth: time.Unix(1400000000, 123456789).UTC(), Modify: time.Unix(1500000000, 234567890).UTC(), Change: time.Unix(1600000000, 345678901).UTC(), Access: time.Unix(1700000000, 456789012).UTC()}
+	times := &hostdata.FileTimes{Birth: time.Unix(1400000000, 123456789).UTC(), Modify: time.Unix(1500000000, 234567890).UTC(), Change: time.Unix(1600000000, 345678901).UTC(), Access: time.Unix(1700000000, 456789012).UTC()}
 	flags := uint32(0)
 	root := &apfswrite.Entry{Mode: os.ModeDir | 0755, UID: 501, GID: 20, Times: times, BSDFlags: &flags, Xattrs: map[string][]byte{"org.example.root": {1, 0, 255}}}
 	finder := make([]byte, 32)
@@ -132,16 +132,16 @@ func tree() *apfswrite.Entry {
 			e.LinkGroup = 1
 			e.Data = []byte("shared-data")
 			e.Xattrs[appledouble.FinderInfoName] = finder
-			e.Xattrs[hostmeta.ResourceForkName] = []byte{9, 8, 0, 7}
+			e.Xattrs[hostdata.ResourceForkName] = []byte{9, 8, 0, 7}
 		}
 		if name == "ordinary" {
 			e.Xattrs["org.example.Case"] = []byte{6}
 			e.Xattrs["org.example.case"] = []byte{7}
-			e.Xattrs[hostmeta.SecurityName] = imagesecurity.Profiles()[7].Data
+			e.Xattrs[hostdata.SecurityName] = imagesecurity.Profiles()[7].Data
 			e.Xattrs["com.apple.quarantine"] = []byte("0081;65000000;Transport;12345678-1234-1234-1234-123456789ABC")
 
 			e.Xattrs["org.example.large"] = bytes.Repeat([]byte{1, 0, 255, 17}, (16<<20)/4+1)
-			e.Xattrs[hostmeta.ResourceForkName] = bytes.Repeat([]byte{9, 0, 7}, (17<<20)/3)
+			e.Xattrs[hostdata.ResourceForkName] = bytes.Repeat([]byte{9, 0, 7}, (17<<20)/3)
 			e.Xattrs[appledouble.FinderInfoName] = finder
 		}
 		root.Children = append(root.Children, e)
@@ -163,7 +163,7 @@ func tree() *apfswrite.Entry {
 	for _, c := range fixture.Cases {
 		attrs := map[string][]byte{"com.apple.decmpfs": c.Attribute}
 		if c.Fork != nil {
-			attrs[hostmeta.ResourceForkName] = c.Fork
+			attrs[hostdata.ResourceForkName] = c.Fork
 		}
 		root.Children = append(root.Children, &apfswrite.Entry{Name: "compressed-" + c.Name, Mode: 0644, UID: 501, GID: 20, Times: times, Xattrs: attrs})
 	}
@@ -370,7 +370,7 @@ func native(image, kind string, want map[string]entry) {
 		}
 		for attr, value := range w.Attrs {
 			args := []string{oracle, "--xattr", p, attr}
-			if attr == hostmeta.SecurityName {
+			if attr == hostdata.SecurityName {
 				args = []string{oracle, "--security", p}
 			}
 			cmd := exec.Command(args[0], args[1:]...)
@@ -380,7 +380,7 @@ func native(image, kind string, want map[string]entry) {
 			if e != nil {
 				panic(fmt.Sprintf("native xattr %s/%s: %v %s", name, attr, e, stderr.String()))
 			}
-			if attr == hostmeta.SecurityName {
+			if attr == hostdata.SecurityName {
 				security, e := appledouble.ParseDarwinFileSecurity(b)
 				must(e)
 				b, e = security.MarshalBinary()
@@ -418,7 +418,7 @@ func main() {
 	must(os.MkdirAll(outputRoot, 0755))
 	evidence = report{Revision: strings.TrimSpace(string(run("git", "rev-parse", "HEAD"))), GOOS: runtime.GOOS, GOARCH: runtime.GOARCH, Go: runtime.Version(), SourceSHA256: map[string]string{}}
 	files := []string{"scripts/verify-metadata-transport.go", "testdata/appledouble/native/metadata-transport.c", "testdata/appledouble/native/decmpfs-formats.json.gz", "go.mod", "go.sum"}
-	files = append(files, "internal/evidenceaudit/*.go", "internal/testutil/diskimage/*.go", "internal/tools/extract*.go", "internal/hostwalk/*.go", "internal/decmpfs/*.go", "internal/bsdflags/*.go", "pkg/metatransport/*.go", "pkg/hostmeta/*.go", "pkg/apfs/*.go", "pkg/apfswrite/*.go", "pkg/hfsplus/*.go")
+	files = append(files, "internal/evidenceaudit/*.go", "internal/testutil/diskimage/*.go", "internal/tools/extract*.go", "internal/hostwalk/*.go", "internal/decmpfs/*.go", "internal/bsdflags/*.go", "pkg/metatransport/*.go", "pkg/hostdata/*.go", "pkg/hostdata/*/*.go", "internal/hosttime/*.go", "internal/testutil/heldfixture/*.go", "pkg/apfs/*.go", "pkg/apfswrite/*.go", "pkg/hfsplus/*.go")
 	evidence.SourceSHA256, e = evidenceaudit.SourceHashes(os.DirFS("."), files)
 	must(e)
 	defer func() { writeJSON(filepath.Join(outputRoot, "report.json"), evidence) }()
@@ -727,9 +727,9 @@ func hfsTree(a *apfswrite.Entry) *hfsplus.Entry {
 	var route func(*hfsplus.Entry)
 	route = func(e *hfsplus.Entry) {
 		e.Xattrs = maps.Clone(e.Xattrs)
-		if fork, ok := e.Xattrs[hostmeta.ResourceForkName]; ok {
+		if fork, ok := e.Xattrs[hostdata.ResourceForkName]; ok {
 			e.ResourceFork = fork
-			delete(e.Xattrs, hostmeta.ResourceForkName)
+			delete(e.Xattrs, hostdata.ResourceForkName)
 		}
 		for _, c := range e.Children {
 			route(c)

@@ -150,7 +150,7 @@ func verify(capture bool) error {
 		if err != nil {
 			return err
 		}
-		cmd := exec.Command("go", "test", "-json", "-count=1", "./pkg/hostmeta", "-run", "^TestAppleDoublePathNativeReplay$")
+		cmd := exec.Command("go", "test", "-json", "-count=1", "./pkg/hostdata", "-run", "^TestAppleDoublePathNativeReplay$")
 		cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 		cmd.Stdout, cmd.Stderr = io.MultiWriter(os.Stdout, log), io.MultiWriter(os.Stderr, log)
 		err = cmd.Run()
@@ -160,7 +160,7 @@ func verify(capture bool) error {
 		}
 	}
 	hashes := map[string]string{}
-	for _, p := range []string{source, "testdata/appledouble/native/xattr-provider-context.h", "testdata/appledouble/native/path-link-write.c", "scripts/verify-path-copyfile-native.go", "internal/testutil/pathnative/oracle.go", "internal/testutil/pathnative/removal.go", "pkg/hostmeta/appledouble_path_native_test.go"} {
+	for _, p := range []string{source, "testdata/appledouble/native/xattr-provider-context.h", "testdata/appledouble/native/path-link-write.c", "scripts/verify-path-copyfile-native.go", "internal/testutil/pathnative/oracle.go", "internal/testutil/pathnative/removal.go", "pkg/hostdata/appledouble_path_native_test.go"} {
 		b, err := os.ReadFile(p)
 		if err != nil {
 			return err

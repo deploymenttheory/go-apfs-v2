@@ -2,8 +2,9 @@ package apfs_test
 
 import (
 	"bytes"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
 	"testing"
+
+	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
 )
 
 func TestVolumeXattrValues(t *testing.T) {

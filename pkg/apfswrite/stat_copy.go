@@ -5,7 +5,7 @@ import (
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/imageacl"
 	"github.com/deploymenttheory/go-apfs-v2/internal/unixmode"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 )
 
 // CopyStat stages ordered stat restoration into target and its regular hard-link
@@ -20,7 +20,7 @@ import (
 // Execution.VolumeQueries even when execution completed. Serialization must still succeed.
 // This pure-Go image operation has no host authorization or kernel timestamp
 // side effects. Providers must not mutate the tree; exclude concurrent mutation.
-func (root *Entry) CopyStat(target *Entry, source hostmeta.StatCopySource, options hostmeta.StatCopyOptions) (hostmeta.ImageStatCopyResult, error) {
+func (root *Entry) CopyStat(target *Entry, source hostdata.StatCopySource, options hostdata.StatCopyOptions) (hostdata.ImageStatCopyResult, error) {
 	return imageacl.CopyStat(root, target, source, options, false, (*Entry).imageSecurityNode,
 		func(e *Entry) imageacl.StatMetadata { return imageacl.StatMetadata{Times: e.Times, Flags: e.BSDFlags} },
 		func(e *Entry, change imageacl.StatChange) {

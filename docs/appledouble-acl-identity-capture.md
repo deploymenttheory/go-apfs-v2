@@ -4,7 +4,7 @@ Darwin ACL text can refer to account names and numeric user or group IDs. Those
 identities belong to the source directory service. Looking up an identically
 named Linux or Windows account does not reproduce that source mapping.
 
-`hostmeta.NewNativeACLIdentityCapture(ctx)` provides explicit source acquisition
+`acl.NewNativeACLIdentityCapture(ctx)` provides explicit source acquisition
 on macOS through pure Go libSystem bindings. Its `Resolve` and `Lookup` methods
 record successful observations in both directions, including confirmed absence.
 Persist `Snapshot()` with the source metadata. `Snapshot.Resolvers()` validates

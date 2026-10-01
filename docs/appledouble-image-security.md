@@ -1,7 +1,7 @@
 # Security capture from filesystem images
 
 `apfs.Volume.Security` and `hfsplus.Volume.Security` read a file's ownership,
-mode, UUIDs and ACL from an image into a `hostmeta.SecurityCopySource`. Use them
+mode, UUIDs and ACL from an image into a `hostdata.SecurityCopySource`. Use them
 when copying security from APFS, HFS+ or HFSX without mounting the image or
 consulting the machine's account database. Both APIs are pure Go and run on
 Linux, macOS and Windows.
@@ -11,7 +11,7 @@ snapshot, err := volume.Security("Applications/Example.app")
 if err != nil {
     return err
 }
-result, err := hostmeta.CopySecurity(snapshot.Source, options, destination)
+result, err := hostdata.CopySecurity(snapshot.Source, options, destination)
 ```
 
 `destination` implements the existing `SecurityCopyBackend`. Capture does not

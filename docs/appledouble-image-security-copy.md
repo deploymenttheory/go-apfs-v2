@@ -12,7 +12,7 @@ if err != nil {
     return err
 }
 result, err := root.CopySecurity(destinationEntry, source.Source,
-    hostmeta.SecurityCopyOptions{ACL: true, Stat: true})
+    hostdata.SecurityCopyOptions{ACL: true, Stat: true})
 if err != nil {
     return err
 }
@@ -37,7 +37,7 @@ regular-file aliases. The caller excludes concurrent tree mutation.
 | ACL only | Explicit source entries followed by inherited destination entries; numeric UID/GID/mode omitted |
 | ACL and stat | Merged ACL and independently present numeric source properties; omitted properties retained |
 
-The shared `hostmeta.CopySecurity` executor still owns source-cache changes,
+The shared `hostdata.CopySecurity` executor still owns source-cache changes,
 selection, filtering and diagnostics. Writer adapters share graph validation
 with deferred restoration. They do not duplicate the selection algorithm.
 
@@ -126,7 +126,7 @@ layout controls and deferred-restoration evidence remain required.
 
 For direct reader-to-writer acquisition, use
 [`root.CopySecurityFrom`](appledouble-security-source.md) with
-`hostmeta.ImageSecurityCapture(sourceVolume, name)`. The shared acquisition stage
+`hostdata.ImageSecurityCapture(sourceVolume, name)`. The shared acquisition stage
 retains read/fallback diagnostics and refuses unsupported source types before
 ordinary copying. Native host bindings remain separate from this image binding.
 

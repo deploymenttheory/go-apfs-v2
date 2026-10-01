@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
 	"io"
 	"io/fs"
 	"os"
@@ -17,6 +16,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
 )
 
 var testContext = context.Background()

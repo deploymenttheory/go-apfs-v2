@@ -10,23 +10,24 @@ import (
 	"time"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
+	aclmeta "github.com/deploymenttheory/go-apfs-v2/pkg/hostdata/acl"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/metatransport"
 )
 
 type projectionMetadataFixture struct {
-	stat            hostmeta.StatCopySource
+	stat            hostdata.StatCopySource
 	security        *appledouble.FileSecurity
 	statErr, aclErr error
 }
 
-func (p projectionMetadataFixture) WriteSecurity(hostmeta.DarwinChmodArguments) error { return nil }
-func (p projectionMetadataFixture) Chflags(uint32) error                              { return nil }
-func (p projectionMetadataFixture) CaptureStat() (hostmeta.StatCopySource, error) {
+func (p projectionMetadataFixture) WriteSecurity(aclmeta.DarwinChmodArguments) error { return nil }
+func (p projectionMetadataFixture) Chflags(uint32) error                             { return nil }
+func (p projectionMetadataFixture) CaptureStat() (hostdata.StatCopySource, error) {
 	return p.stat, p.statErr
 }
-func (p projectionMetadataFixture) CaptureACL() (hostmeta.ACLMetadata, error) {
-	return hostmeta.ACLMetadata{Security: p.security}, p.aclErr
+func (p projectionMetadataFixture) CaptureACL() (aclmeta.ACLMetadata, error) {
+	return aclmeta.ACLMetadata{Security: p.security}, p.aclErr
 }
 func TestProjectionNativeReadback(t *testing.T) {
 	f, err := os.Create(filepath.Join(t.TempDir(), "file"))
@@ -47,18 +48,18 @@ func TestProjectionNativeReadback(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, _, s := projectionFixture(t)
-	r.Attributes, err = s.StoreAttributes(context.Background(), map[string][]byte{hostmeta.SecurityName: raw})
+	r.Attributes, err = s.StoreAttributes(context.Background(), map[string][]byte{hostdata.SecurityName: raw})
 	if err != nil {
 		t.Fatal(err)
 	}
-	captured := hostmeta.StatCopySource{UID: *r.Darwin.UID, GID: *r.Darwin.GID, Flags: 0, Times: hostmeta.FileTimes{Access: *r.Darwin.Access, Birth: *r.Darwin.Birth}}
+	captured := hostdata.StatCopySource{UID: *r.Darwin.UID, GID: *r.Darwin.GID, Flags: 0, Times: hostdata.FileTimes{Access: *r.Darwin.Access, Birth: *r.Darwin.Birth}}
 	fixture := projectionMetadataFixture{stat: captured, security: security}
 	p := nativeProjection{file: f, held: fixture}
 	checks, err := p.Readback(r)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, field := range []string{"modify", "ownership", "access", "birth", "flags", "xattr:" + hostmeta.SecurityName} {
+	for _, field := range []string{"modify", "ownership", "access", "birth", "flags", "xattr:" + hostdata.SecurityName} {
 		if !checks[field] {
 			t.Fatal(field, checks)
 		}
@@ -130,7 +131,7 @@ func TestProjectionReadbackFailureRetainsCarrier(t *testing.T) {
 	defer root.Close()
 	e := &Extractor{}
 	records := []metatransport.Record{{Original: "file", Materialized: "file", Kind: "file"}}
-	err = e.projectCarrier(context.Background(), root, s, records, hostmeta.XattrCaptureLimits{}, func(*os.File) projectionBackend { return &projectionReadbackFailure{} }, func(context.Context, *os.File, hostmeta.XattrCaptureLimits) (map[string][]byte, error) {
+	err = e.projectCarrier(context.Background(), root, s, records, hostdata.XattrCaptureLimits{}, func(*os.File) projectionBackend { return &projectionReadbackFailure{} }, func(context.Context, *os.File, hostdata.XattrCaptureLimits) (map[string][]byte, error) {
 		return nil, nil
 	})
 	if err != nil || !errors.Is(e.projectionError(), io.ErrClosedPipe) {
@@ -149,7 +150,7 @@ func TestProjectionAllStatMismatches(t *testing.T) {
 		t.Fatal(err)
 	}
 	r := projectionRecord()
-	checks, err := projectionChecks(r, info, &hostmeta.StatCopySource{Flags: 8, Times: hostmeta.FileTimes{Birth: time.Time{}}}, nil)
+	checks, err := projectionChecks(r, info, &hostdata.StatCopySource{Flags: 8, Times: hostdata.FileTimes{Birth: time.Time{}}}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -185,7 +186,7 @@ func (*projectionStreamFailure) ResourceFork(context.Context, appledouble.Value,
 func TestProjectionStreamingForkFailure(t *testing.T) {
 	e := &Extractor{}
 	backend := &projectionStreamFailure{}
-	attrs := map[string]appledouble.Value{hostmeta.ResourceForkName: projectionFaultValue{size: 1}}
+	attrs := map[string]appledouble.Value{hostdata.ResourceForkName: projectionFaultValue{size: 1}}
 	if err := e.applyProjection(context.Background(), metatransport.Record{Original: "file"}, attrs, 0, backend); err != nil {
 		t.Fatal(err)
 	}
@@ -194,7 +195,7 @@ func TestProjectionStreamingForkFailure(t *testing.T) {
 	}
 	// A failure before opening the native fork must also remain an explicit error.
 	p := nativeProjection{}
-	if err := p.ResourceFork(context.Background(), attrs[hostmeta.ResourceForkName], 1); !errors.Is(err, os.ErrInvalid) {
+	if err := p.ResourceFork(context.Background(), attrs[hostdata.ResourceForkName], 1); !errors.Is(err, os.ErrInvalid) {
 		t.Fatal(err)
 	}
 }

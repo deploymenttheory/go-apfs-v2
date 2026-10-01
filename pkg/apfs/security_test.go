@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 )
 
 type imageSecurityFault struct{ err error }
@@ -33,7 +33,7 @@ func TestImageSecurityErrorsAndStreams(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	attr := &AttributeValues{Name: []byte(hostmeta.SecurityName), Flags: ExtendedAttributeFlagDataStream, ValueDataSize: uint64(len(record))}
+	attr := &AttributeValues{Name: []byte(hostdata.SecurityName), Flags: ExtendedAttributeFlagDataStream, ValueDataSize: uint64(len(record))}
 	fe.ExtendedAttributes = []*AttributeValues{attr}
 	if _, e = fe.security(); e == nil {
 		t.Fatal("missing extents accepted")
@@ -56,7 +56,7 @@ func TestImageSecurityErrorsAndStreams(t *testing.T) {
 	// touch the inaccessible backing stream.
 	attr.ValueDataSize = 1 << 40
 	got, e := fe.security()
-	if e != nil || got.Disposition != hostmeta.SecurityRecordInvalid {
+	if e != nil || got.Disposition != hostdata.SecurityRecordInvalid {
 		t.Fatalf("extent bound: %+v %v", got, e)
 	}
 	attr.ValueDataSize = uint64(len(record))
@@ -64,7 +64,7 @@ func TestImageSecurityErrorsAndStreams(t *testing.T) {
 	copy(disk[4096:], record)
 	fe.FileHandle = bytes.NewReader(disk)
 	got, e = fe.security()
-	if e != nil || got.Disposition != hostmeta.SecurityRecordACL {
+	if e != nil || got.Disposition != hostdata.SecurityRecordACL {
 		t.Fatalf("valid stream: %+v %v", got, e)
 	}
 	fe.FileHandle = imageSecurityFault{io.ErrUnexpectedEOF}

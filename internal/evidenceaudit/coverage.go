@@ -107,7 +107,7 @@ func Coverage(sources, evidence fs.FS, dir, revision, goos string) error {
 		}
 	case "strict-xattrs":
 		for name, c := range actual {
-			if strings.HasPrefix(name, "pkg/hostmeta/xattr_strict") {
+			if strings.HasPrefix(name, "pkg/hostdata/xattr_strict") {
 				selected[name] = c
 			}
 		}

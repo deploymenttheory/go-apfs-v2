@@ -3,21 +3,22 @@ package imagecopy
 
 import (
 	"fmt"
+	"os"
+
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/imagerestore"
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/imagesecurity"
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/securitycopy"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfswrite"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/hfsplus"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
-	"os"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 )
 
 type Case struct {
 	Name, Target string
 	Aliases      []string
-	Source       hostmeta.SecurityCopySource
-	Options      hostmeta.SecurityCopyOptions
+	Source       hostdata.SecurityCopySource
+	Options      hostdata.SecurityCopyOptions
 }
 type Tree struct {
 	Name  string
@@ -34,7 +35,7 @@ type NativeCase struct {
 	Filesystem      string
 	Case            Case
 	Native, Written Observation
-	GoResult        hostmeta.SecurityCopyResult
+	GoResult        hostdata.SecurityCopyResult
 }
 type Fixture struct {
 	Revision, Host                                             string
@@ -44,14 +45,14 @@ type Fixture struct {
 	Aliases                                                    map[string]Observation
 }
 
-func Sources(uid, gid uint32) []hostmeta.SecurityCopySource {
-	var result []hostmeta.SecurityCopySource
+func Sources(uid, gid uint32) []hostdata.SecurityCopySource {
+	var result []hostdata.SecurityCopySource
 	for i := 0; i < 7; i++ {
 		mode := uint32(0106711)
 		if i == 0 {
 			mode = 0100000
 		}
-		s := hostmeta.SecurityCopySource{UID: uid, GID: gid, Mode: mode}
+		s := hostdata.SecurityCopySource{UID: uid, GID: gid, Mode: mode}
 		mask := []int{7, 0, 3, 4, 1, 2, 7}[i]
 		if mask&1 != 0 {
 			v := uid
@@ -115,9 +116,9 @@ func Trees(uid, gid uint32) []Tree {
 					}
 					entry := &apfswrite.Entry{Name: name, Mode: mode, ModeExplicit: true, UID: uid, GID: gid, Data: []byte("payload"), Xattrs: map[string][]byte{"user.unrelated": []byte("retained")}}
 					if p.Data != nil {
-						entry.Xattrs[hostmeta.SecurityName] = append([]byte{}, p.Data...)
+						entry.Xattrs[hostdata.SecurityName] = append([]byte{}, p.Data...)
 					}
-					options := hostmeta.SecurityCopyOptions{DestinationNoSetID: true, ACL: stage != 1, Stat: stage != 0}
+					options := hostdata.SecurityCopyOptions{DestinationNoSetID: true, ACL: stage != 1, Stat: stage != 0}
 					policy := (d + s + stage) % 3
 					options.ForbidCopySetID = policy != 0
 					options.AlwaysCopySetID = policy == 2
@@ -146,9 +147,9 @@ func Trees(uid, gid uint32) []Tree {
 		}
 	}
 	zero := &apfswrite.Entry{Mode: os.ModeDir, ModeExplicit: true, UID: uid, GID: gid}
-	return []Tree{{Name: "entries", Root: root, Cases: cases}, {Name: "root-zero", Root: zero, Cases: []Case{{Name: "root-zero", Target: ".", Source: Sources(uid, gid)[3], Options: hostmeta.SecurityCopyOptions{DestinationNoSetID: true, ACL: true, Stat: true}}}}}
+	return []Tree{{Name: "entries", Root: root, Cases: cases}, {Name: "root-zero", Root: zero, Cases: []Case{{Name: "root-zero", Target: ".", Source: Sources(uid, gid)[3], Options: hostdata.SecurityCopyOptions{DestinationNoSetID: true, ACL: true, Stat: true}}}}}
 }
-func ApplyAPFS(root *apfswrite.Entry, c Case) (hostmeta.SecurityCopyResult, error) {
+func ApplyAPFS(root *apfswrite.Entry, c Case) (hostdata.SecurityCopyResult, error) {
 	target := root
 	if c.Target != "." {
 		target = nil
@@ -159,11 +160,11 @@ func ApplyAPFS(root *apfswrite.Entry, c Case) (hostmeta.SecurityCopyResult, erro
 		}
 	}
 	if target == nil {
-		return hostmeta.SecurityCopyResult{}, fmt.Errorf("missing target %s", c.Target)
+		return hostdata.SecurityCopyResult{}, fmt.Errorf("missing target %s", c.Target)
 	}
 	return root.CopySecurity(target, c.Source, c.Options)
 }
-func ApplyHFS(root *hfsplus.Entry, c Case) (hostmeta.SecurityCopyResult, error) {
+func ApplyHFS(root *hfsplus.Entry, c Case) (hostdata.SecurityCopyResult, error) {
 	target := root
 	if c.Target != "." {
 		target = nil
@@ -174,7 +175,7 @@ func ApplyHFS(root *hfsplus.Entry, c Case) (hostmeta.SecurityCopyResult, error) 
 		}
 	}
 	if target == nil {
-		return hostmeta.SecurityCopyResult{}, fmt.Errorf("missing target %s", c.Target)
+		return hostdata.SecurityCopyResult{}, fmt.Errorf("missing target %s", c.Target)
 	}
 	return root.CopySecurity(target, c.Source, c.Options)
 }

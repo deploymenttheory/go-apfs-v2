@@ -12,13 +12,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/imagecopy"
-	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/imagerestore"
-	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/imagesecurity"
-	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/securitycopy"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/apfswrite"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hfsplus"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
 	"io"
 	"net/http"
 	"os"
@@ -29,6 +22,14 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/imagecopy"
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/imagerestore"
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/imagesecurity"
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/securitycopy"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/apfswrite"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hfsplus"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 )
 
 type command struct {
@@ -331,7 +332,7 @@ func normalize(f *imagecopy.Fixture, uid, gid uint32) {
 			*encoded = hex.EncodeToString(b)
 		}
 	}
-	normalizeSource := func(s *hostmeta.SecurityCopySource) {
+	normalizeSource := func(s *hostdata.SecurityCopySource) {
 		if s.UID != oldUID || s.GID != oldGID {
 			panic("source owner")
 		}

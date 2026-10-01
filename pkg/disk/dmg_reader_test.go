@@ -4,11 +4,12 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
-	"howett.net/plist"
 	"io"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"howett.net/plist"
 )
 
 type countedDMGSource struct {

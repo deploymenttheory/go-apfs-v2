@@ -1,6 +1,6 @@
 # Darwin ACL attribute records
 
-`hostmeta.ParseDarwinACLAttributes` and
+`acl.ParseDarwinACLAttributes` and
 `ACLMetadata.MarshalDarwinACLAttributes` decode and encode the attribute-list
 representation of ACLs, numeric ownership, mode and ownership UUIDs. They are
 pure Go, with the same implementation on Linux, macOS and Windows. Use them to

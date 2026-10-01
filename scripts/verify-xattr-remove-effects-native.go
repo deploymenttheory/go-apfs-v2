@@ -215,7 +215,7 @@ func verify(capture bool) error {
 		if err != nil {
 			return err
 		}
-		cmd := exec.Command("go", "test", "-json", "-count=1", "./pkg/hostmeta", "-run", "^TestPathCapturedMutationNativeObservations$")
+		cmd := exec.Command("go", "test", "-json", "-count=1", "./pkg/hostdata", "-run", "^TestPathCapturedMutationNativeObservations$")
 		cmd.Env = append(os.Environ(), "CGO_ENABLED=0", "APPLEDOUBLE_MUTATION_FIXTURE="+current)
 		var transcript bytes.Buffer
 		cmd.Stdout, cmd.Stderr = io.MultiWriter(os.Stdout, log, &transcript), io.MultiWriter(os.Stderr, log)

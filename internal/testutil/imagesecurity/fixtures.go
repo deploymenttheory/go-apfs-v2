@@ -12,13 +12,13 @@ import (
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfswrite"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/hfsplus"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 )
 
 type Profile struct {
 	Name        string
 	Data        []byte
-	Disposition hostmeta.SecurityRecordDisposition
+	Disposition hostdata.SecurityRecordDisposition
 }
 
 func Profiles() []Profile {
@@ -40,14 +40,14 @@ func Profiles() []Profile {
 	}
 	noacl := edit(record(0, 0), 36, 0xffffffff)
 	return []Profile{
-		{"absent", nil, hostmeta.SecurityRecordAbsent}, {"empty", []byte{}, hostmeta.SecurityRecordInvalid}, {"short", []byte{1}, hostmeta.SecurityRecordInvalid}, {"short-header", make([]byte, 43), hostmeta.SecurityRecordInvalid},
-		{"noacl", noacl, hostmeta.SecurityRecordEmpty}, {"empty-acl", record(0, 0), hostmeta.SecurityRecordEmpty}, {"empty-flags", record(0, 1<<17), hostmeta.SecurityRecordEmpty},
-		{"one", record(1, 0), hostmeta.SecurityRecordACL}, {"flags", record(1, 1<<17), hostmeta.SecurityRecordACL}, {"unknown", edit(edit(record(1, 0x80000000), 60, 0x8000000f), 64, 0xffffffff), hostmeta.SecurityRecordACL},
-		{"two", record(2, 0), hostmeta.SecurityRecordACL}, {"entries127", record(127, 0), hostmeta.SecurityRecordACL}, {"entries128", record(128, 0), hostmeta.SecurityRecordACL},
-		{"bad-magic", edit(record(1, 0), 0, 0xdeadbeef), hostmeta.SecurityRecordInvalid}, {"truncated", record(1, 0)[:50], hostmeta.SecurityRecordInvalid}, {"partial-extra", append(record(1, 0), 1), hostmeta.SecurityRecordInvalid},
-		{"aligned-extra", append(record(1, 0), make([]byte, 24)...), hostmeta.SecurityRecordACL}, {"padded-empty", append(record(0, 0), make([]byte, 24)...), hostmeta.SecurityRecordEmpty}, {"padded-noacl", append(append([]byte{}, noacl...), make([]byte, 24)...), hostmeta.SecurityRecordEmpty},
-		{"count-overflow", edit(record(1, 0), 36, 129), hostmeta.SecurityRecordInvalid}, {"count-short", edit(record(1, 0), 36, 2), hostmeta.SecurityRecordInvalid},
-		{"max-padding", edit(record(128, 0), 36, 1), hostmeta.SecurityRecordACL}, {"too-large", append(record(128, 0), make([]byte, 24)...), hostmeta.SecurityRecordInvalid}, {"streamed-invalid", append(record(128, 0), make([]byte, 32000)...), hostmeta.SecurityRecordInvalid},
+		{"absent", nil, hostdata.SecurityRecordAbsent}, {"empty", []byte{}, hostdata.SecurityRecordInvalid}, {"short", []byte{1}, hostdata.SecurityRecordInvalid}, {"short-header", make([]byte, 43), hostdata.SecurityRecordInvalid},
+		{"noacl", noacl, hostdata.SecurityRecordEmpty}, {"empty-acl", record(0, 0), hostdata.SecurityRecordEmpty}, {"empty-flags", record(0, 1<<17), hostdata.SecurityRecordEmpty},
+		{"one", record(1, 0), hostdata.SecurityRecordACL}, {"flags", record(1, 1<<17), hostdata.SecurityRecordACL}, {"unknown", edit(edit(record(1, 0x80000000), 60, 0x8000000f), 64, 0xffffffff), hostdata.SecurityRecordACL},
+		{"two", record(2, 0), hostdata.SecurityRecordACL}, {"entries127", record(127, 0), hostdata.SecurityRecordACL}, {"entries128", record(128, 0), hostdata.SecurityRecordACL},
+		{"bad-magic", edit(record(1, 0), 0, 0xdeadbeef), hostdata.SecurityRecordInvalid}, {"truncated", record(1, 0)[:50], hostdata.SecurityRecordInvalid}, {"partial-extra", append(record(1, 0), 1), hostdata.SecurityRecordInvalid},
+		{"aligned-extra", append(record(1, 0), make([]byte, 24)...), hostdata.SecurityRecordACL}, {"padded-empty", append(record(0, 0), make([]byte, 24)...), hostdata.SecurityRecordEmpty}, {"padded-noacl", append(append([]byte{}, noacl...), make([]byte, 24)...), hostdata.SecurityRecordEmpty},
+		{"count-overflow", edit(record(1, 0), 36, 129), hostdata.SecurityRecordInvalid}, {"count-short", edit(record(1, 0), 36, 2), hostdata.SecurityRecordInvalid},
+		{"max-padding", edit(record(128, 0), 36, 1), hostdata.SecurityRecordACL}, {"too-large", append(record(128, 0), make([]byte, 24)...), hostdata.SecurityRecordInvalid}, {"streamed-invalid", append(record(128, 0), make([]byte, 32000)...), hostdata.SecurityRecordInvalid},
 	}
 }
 
@@ -57,7 +57,7 @@ type Case struct {
 	Name, Profile, Kind string
 	UID, GID            uint32
 	Mode                uint16
-	Disposition         hostmeta.SecurityRecordDisposition
+	Disposition         hostdata.SecurityRecordDisposition
 }
 type Observation struct {
 	Times                                      [4]int64
@@ -93,8 +93,8 @@ type XattrObservation struct {
 }
 
 func Tree(uid, gid uint32) (*apfswrite.Entry, []Case) {
-	root := &apfswrite.Entry{Mode: os.ModeDir | 0755, UID: uid, GID: gid, Xattrs: map[string][]byte{hostmeta.SecurityName: Profiles()[7].Data}}
-	cases := []Case{{Name: ".", Profile: "one", Kind: "directory", UID: uid, GID: gid, Mode: 040755, Disposition: hostmeta.SecurityRecordACL}}
+	root := &apfswrite.Entry{Mode: os.ModeDir | 0755, UID: uid, GID: gid, Xattrs: map[string][]byte{hostdata.SecurityName: Profiles()[7].Data}}
+	cases := []Case{{Name: ".", Profile: "one", Kind: "directory", UID: uid, GID: gid, Mode: 040755, Disposition: hostdata.SecurityRecordACL}}
 	var linkGroup uint64 = 1
 	for _, p := range Profiles() {
 		for _, identity := range []struct {
@@ -121,7 +121,7 @@ func Tree(uid, gid uint32) (*apfswrite.Entry, []Case) {
 				}
 				e := &apfswrite.Entry{Name: name, Mode: mode, UID: identity.uid, GID: identity.gid, Data: data, LinkGroup: group, Xattrs: map[string][]byte{"user.unrelated": []byte("retained")}}
 				if p.Data != nil {
-					e.Xattrs[hostmeta.SecurityName] = p.Data
+					e.Xattrs[hostdata.SecurityName] = p.Data
 				}
 				root.Children = append(root.Children, e)
 				cases = append(cases, Case{Name: name, Profile: p.Name, Kind: kind, UID: identity.uid, GID: identity.gid, Mode: rawMode, Disposition: p.Disposition})
@@ -143,10 +143,10 @@ func HFSTree(s *apfswrite.Entry) *hfsplus.Entry {
 }
 
 type Volume interface {
-	FileTimes(string) (hostmeta.FileTimes, error)
+	FileTimes(string) (hostdata.FileTimes, error)
 	BSDFlags(string) (uint32, error)
 	fs.FS
-	Security(string) (hostmeta.ImageSecurity, error)
+	Security(string) (hostdata.ImageSecurity, error)
 	Xattrs(string) (map[string][]byte, error)
 	Readlink(string) (string, error)
 }

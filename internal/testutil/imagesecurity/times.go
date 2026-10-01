@@ -2,17 +2,18 @@ package imagesecurity
 
 import (
 	"fmt"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/apfswrite"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
 	"os"
 	"time"
+
+	"github.com/deploymenttheory/go-apfs-v2/pkg/apfswrite"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 )
 
 // TimeTree includes explicit epoch zero, legacy defaults, independent fields,
 // sparse tree shapes and hard-link aliases. Actor IDs are fixed for image hashes.
 func TimeTree(clamp bool) (*apfswrite.Entry, []Case) {
 	base := time.Unix(1600000000, 123456789).UTC()
-	distinct := hostmeta.FileTimes{Birth: base.Add(-24 * time.Hour), Modify: base, Change: base.Add(time.Second), Access: base.Add(2 * time.Second)}
+	distinct := hostdata.FileTimes{Birth: base.Add(-24 * time.Hour), Modify: base, Change: base.Add(time.Second), Access: base.Add(2 * time.Second)}
 	root := &apfswrite.Entry{Mode: os.ModeDir | 0755, Times: &distinct, UID: 501, GID: 20}
 	var cases []Case
 	add := func(name, kind string, e *apfswrite.Entry) {
@@ -30,18 +31,18 @@ func TimeTree(clamp bool) (*apfswrite.Entry, []Case) {
 			e.Data = []byte("payload")
 		}
 		root.Children = append(root.Children, e)
-		tc := Case{Name: name, Profile: "time", Kind: kind, UID: 501, GID: 20, Mode: mode, Disposition: hostmeta.SecurityRecordAbsent}
+		tc := Case{Name: name, Profile: "time", Kind: kind, UID: 501, GID: 20, Mode: mode, Disposition: hostdata.SecurityRecordAbsent}
 		tc.Times = expectedTimes(e, clamp)
 		cases = append(cases, tc)
 	}
-	cases = append(cases, Case{Name: ".", Profile: "time", Kind: "directory", UID: 501, GID: 20, Mode: 040755, Disposition: hostmeta.SecurityRecordAbsent, Times: expectedTimes(root, clamp)})
+	cases = append(cases, Case{Name: ".", Profile: "time", Kind: "directory", UID: 501, GID: 20, Mode: 040755, Disposition: hostdata.SecurityRecordAbsent, Times: expectedTimes(root, clamp)})
 	for i, profile := range []string{"distinct", "epoch", "legacy", "legacy-epoch", "future", "fractional", "hfs-last-second"} {
 		for _, kind := range []string{"file", "directory", "symlink", "hard-a", "hard-b"} {
 			times := distinct
 			e := &apfswrite.Entry{Times: &times}
 			switch profile {
 			case "epoch":
-				times = hostmeta.FileTimes{Birth: time.Unix(0, 0), Modify: time.Unix(0, 0), Change: time.Unix(0, 0), Access: time.Unix(0, 0)}
+				times = hostdata.FileTimes{Birth: time.Unix(0, 0), Modify: time.Unix(0, 0), Change: time.Unix(0, 0), Access: time.Unix(0, 0)}
 			case "legacy":
 				e.Times = nil
 				e.ModTime = base
@@ -52,10 +53,10 @@ func TimeTree(clamp bool) (*apfswrite.Entry, []Case) {
 				times.Modify = base.AddDate(10, 0, 0)
 				times.Access = times.Modify.Add(time.Hour)
 			case "fractional":
-				times = hostmeta.FileTimes{Birth: time.Unix(10, 1), Modify: time.Unix(20, 999999999), Change: time.Unix(30, 500000001), Access: time.Unix(40, 765432109)}
+				times = hostdata.FileTimes{Birth: time.Unix(10, 1), Modify: time.Unix(20, 999999999), Change: time.Unix(30, 500000001), Access: time.Unix(40, 765432109)}
 			case "hfs-last-second":
 				last := time.Unix(2212122495, 999999999)
-				times = hostmeta.FileTimes{Birth: last, Modify: last, Change: last, Access: last}
+				times = hostdata.FileTimes{Birth: last, Modify: last, Change: last, Access: last}
 			}
 			if kind == "hard-a" || kind == "hard-b" {
 				e.LinkGroup = uint64(i + 1)
@@ -66,7 +67,7 @@ func TimeTree(clamp bool) (*apfswrite.Entry, []Case) {
 	// Nested metadata must survive a snapshot too.
 	nested := &apfswrite.Entry{Name: "child", Data: []byte("payload"), Times: &distinct, UID: 501, GID: 20}
 	root.Children[1].Children = []*apfswrite.Entry{nested}
-	cases = append(cases, Case{Name: root.Children[1].Name + "/child", Profile: "time", Kind: "file", UID: 501, GID: 20, Mode: 0100644, Disposition: hostmeta.SecurityRecordAbsent, Times: expectedTimes(nested, clamp)})
+	cases = append(cases, Case{Name: root.Children[1].Name + "/child", Profile: "time", Kind: "file", UID: 501, GID: 20, Mode: 0100644, Disposition: hostdata.SecurityRecordAbsent, Times: expectedTimes(nested, clamp)})
 	return root, cases
 }
 func expectedTimes(e *apfswrite.Entry, clamp bool) *[4]int64 {

@@ -12,7 +12,7 @@ mount settings for a foreign source's captured settings.
 
 ## API and sequencing
 
-Implement `hostmeta.SecurityCopyVolumePolicy.NoSetID(volume)` and supply it in
+Implement `hostdata.SecurityCopyVolumePolicy.NoSetID(volume)` and supply it in
 `SecurityCopyOptions.VolumePolicy`. The endpoint is either
 `SecurityCopySourceVolume` or `SecurityCopyDestinationVolume`. The implementation
 must bind each endpoint to the copy's actual source/destination or captured

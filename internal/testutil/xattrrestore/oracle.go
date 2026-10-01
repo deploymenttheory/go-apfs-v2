@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 )
 
 type Event struct {
@@ -45,7 +45,7 @@ func WriteError(code int) error {
 	}
 	e := error(NativeError(code))
 	if code == 1 {
-		e = errors.Join(hostmeta.ErrXattrRestoreNotPermitted, e)
+		e = errors.Join(hostdata.ErrXattrRestoreNotPermitted, e)
 	}
 	return e
 }
@@ -58,18 +58,18 @@ func Value(n int) []byte {
 }
 func Replay(c Case, live bool) error {
 	events := []Event{}
-	options := hostmeta.XattrRestoreOptions{CopyIntent: c.Intent, Sandboxed: c.Sandboxed, InitialCopied: c.Initial}
+	options := hostdata.XattrRestoreOptions{CopyIntent: c.Intent, Sandboxed: c.Sandboxed, InitialCopied: c.Initial}
 	if c.Callback {
-		options.Callback = func(n hostmeta.XattrRestoreNotice) hostmeta.CopyPipelineAction {
+		options.Callback = func(n hostdata.XattrRestoreNotice) hostdata.CopyPipelineAction {
 			i := 0
-			if n.Event == hostmeta.XattrRestoreError {
+			if n.Event == hostdata.XattrRestoreError {
 				i = 1
 			}
-			if n.Event == hostmeta.XattrRestoreFinish {
+			if n.Event == hostdata.XattrRestoreFinish {
 				i = 2
 			}
 			events = append(events, Event{Kind: string(n.Event), Name: n.Name, Code: c.Actions[i], Copied: n.Copied})
-			return hostmeta.CopyPipelineAction(c.Actions[i])
+			return hostdata.CopyPipelineAction(c.Actions[i])
 		}
 	}
 	writeCode := c.WriteError
@@ -81,7 +81,7 @@ func Replay(c Case, live bool) error {
 		}
 	}
 	var stored []byte
-	r, err := hostmeta.RestoreXattr(c.Attr, Value(c.Length), options, func(name string, v []byte) error {
+	r, err := hostdata.RestoreXattr(c.Attr, Value(c.Length), options, func(name string, v []byte) error {
 		if name != c.Attr || !reflect.DeepEqual(v, Value(c.Length)) {
 			panic("write request mismatch")
 		}
@@ -105,10 +105,10 @@ func Replay(c Case, live bool) error {
 	if wrote && !errors.Is(r.WriteError, NativeError(writeCode)) && writeCode != 0 {
 		return fmt.Errorf("lost write error")
 	}
-	if c.Native.StateError == 89 && !errors.Is(err, hostmeta.ErrXattrRestoreCanceled) {
+	if c.Native.StateError == 89 && !errors.Is(err, hostdata.ErrXattrRestoreCanceled) {
 		return fmt.Errorf("lost cancellation")
 	}
-	if live && ((r.Applied && !(c.Attr == hostmeta.ResourceForkName && c.Length == 0)) != c.Native.Present || hex.EncodeToString(stored) != c.Native.Stored) {
+	if live && ((r.Applied && !(c.Attr == hostdata.ResourceForkName && c.Length == 0)) != c.Native.Present || hex.EncodeToString(stored) != c.Native.Stored) {
 		return fmt.Errorf("native stored value mismatch: %s", c.Name)
 	}
 	return nil

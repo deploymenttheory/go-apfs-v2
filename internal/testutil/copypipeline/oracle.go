@@ -8,7 +8,7 @@ import (
 	"os"
 	"reflect"
 
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hostmeta"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 )
 
 type Event struct {
@@ -35,7 +35,7 @@ type Fixture struct {
 	Cases                                        []Case
 }
 
-var stages = []hostmeta.CopyStage{hostmeta.CopyStagePack, hostmeta.CopyStageUnpack, hostmeta.CopyStageXattrs, hostmeta.CopyStageData, hostmeta.CopyStageSecurity, hostmeta.CopyStageStat, hostmeta.CopyStageRunInPlace, hostmeta.CopyStageQuarantine}
+var stages = []hostdata.CopyStage{hostdata.CopyStagePack, hostdata.CopyStageUnpack, hostdata.CopyStageXattrs, hostdata.CopyStageData, hostdata.CopyStageSecurity, hostdata.CopyStageStat, hostdata.CopyStageRunInPlace, hostdata.CopyStageQuarantine}
 var injected = errors.New("controlled native operation failure")
 
 type backend struct {
@@ -43,12 +43,12 @@ type backend struct {
 	events []Event
 }
 
-func (b *backend) Run(stage hostmeta.CopyStage) hostmeta.CopyStageResult {
+func (b *backend) Run(stage hostdata.CopyStage) hostdata.CopyStageResult {
 	for i, s := range stages {
 		if s == stage {
 			code := b.c.Codes[i]
 			b.events = append(b.events, Event{Operation: string(s), Code: code})
-			r := hostmeta.CopyStageResult{Code: code}
+			r := hostdata.CopyStageResult{Code: code}
 			if code != 0 {
 				r.Err = injected
 			}
@@ -58,18 +58,18 @@ func (b *backend) Run(stage hostmeta.CopyStage) hostmeta.CopyStageResult {
 	panic(stage)
 }
 func (b *backend) RemoveDestination() error {
-	b.events = append(b.events, Event{Operation: string(hostmeta.CopyStageRemove), Code: b.c.Cleanup})
+	b.events = append(b.events, Event{Operation: string(hostdata.CopyStageRemove), Code: b.c.Cleanup})
 	if b.c.Cleanup != 0 {
 		return injected
 	}
 	return nil
 }
-func (b *backend) AllowRunInPlace() hostmeta.CopyStageResult {
-	return b.Run(hostmeta.CopyStageRunInPlace)
+func (b *backend) AllowRunInPlace() hostdata.CopyStageResult {
+	return b.Run(hostdata.CopyStageRunInPlace)
 }
-func (b *backend) Apply() hostmeta.CopyStageResult { return b.Run(hostmeta.CopyStageQuarantine) }
-func Options(c Case) hostmeta.CopyPipelineOptions {
-	return hostmeta.CopyPipelineOptions{SourceReady: c.Source, DestinationReady: c.Destination, HasDestinationPath: c.Path, ACL: c.Flags&1 != 0, Stat: c.Flags&2 != 0, Xattrs: c.Flags&4 != 0, Data: c.Flags&8 != 0, Pack: c.Flags&16 != 0, Unpack: c.Flags&32 != 0, SparseData: c.Flags&64 != 0, RunInPlace: c.Flags&128 != 0}
+func (b *backend) Apply() hostdata.CopyStageResult { return b.Run(hostdata.CopyStageQuarantine) }
+func Options(c Case) hostdata.CopyPipelineOptions {
+	return hostdata.CopyPipelineOptions{SourceReady: c.Source, DestinationReady: c.Destination, HasDestinationPath: c.Path, ACL: c.Flags&1 != 0, Stat: c.Flags&2 != 0, Xattrs: c.Flags&4 != 0, Data: c.Flags&8 != 0, Pack: c.Flags&16 != 0, Unpack: c.Flags&32 != 0, SparseData: c.Flags&64 != 0, RunInPlace: c.Flags&128 != 0}
 }
 func Replay(c Case) error {
 	b := &backend{c: c, events: []Event{}}
@@ -78,24 +78,24 @@ func Replay(c Case) error {
 		o.Quarantine = b
 	}
 	if c.Callback != -99 {
-		o.OnQuarantineError = func(n hostmeta.CopyQuarantineNotice) hostmeta.CopyPipelineAction {
+		o.OnQuarantineError = func(n hostdata.CopyQuarantineNotice) hostdata.CopyPipelineAction {
 			b.events = append(b.events, Event{Operation: "callback", Code: c.Callback, Xattr: n.Xattr})
 			if n.Result.Code != c.Codes[7] || !errors.Is(n.Result.Err, injected) {
 				panic("callback diagnostics")
 			}
-			return hostmeta.CopyPipelineAction(c.Callback)
+			return hostdata.CopyPipelineAction(c.Callback)
 		}
 	}
-	r, err := hostmeta.RunCopyPipeline(o, b)
+	r, err := hostdata.RunCopyPipeline(o, b)
 	if r.Code != c.Native.Code || r.Completed != (c.Native.Code >= 0) || (err != nil) != (c.Native.Code < 0) || !reflect.DeepEqual(b.events, c.Native.Events) || !c.Native.CallbackCleared {
 		return fmt.Errorf("%s: got result %+v, error %v, events %+v; native %+v", c.Name, r, err, b.events, c.Native)
 	}
-	var want []hostmeta.CopyPipelineStep
+	var want []hostdata.CopyPipelineStep
 	for _, e := range b.events {
 		if e.Operation == "callback" {
 			continue
 		}
-		s := hostmeta.CopyPipelineStep{Stage: hostmeta.CopyStage(e.Operation), Result: hostmeta.CopyStageResult{Code: e.Code}}
+		s := hostdata.CopyPipelineStep{Stage: hostdata.CopyStage(e.Operation), Result: hostdata.CopyStageResult{Code: e.Code}}
 		if e.Code != 0 {
 			s.Result.Err = injected
 		}
@@ -117,7 +117,7 @@ func Replay(c Case) error {
 			}
 			break
 		}
-		var qe hostmeta.CopyQuarantineError
+		var qe hostdata.CopyQuarantineError
 		if !errors.As(err, &qe) || int(qe) != c.Native.StateError {
 			return fmt.Errorf("quarantine error mismatch")
 		}
