@@ -26,9 +26,9 @@ type Replacement struct {
 // source filesystem. Its initial data is unspecified: callers
 // must write the complete replacement and truncate to its intended length.
 //
-// On Darwin this requires clonefile support and preserves the clone's ACL,
-// extended attributes and creation time. Protected and compressed files are
-// unsupported. On Linux ownership, mode and readable extended attributes
+// On Darwin this requires clonefile support, preserves extended attributes and
+// creation time, and restores the source ACL after content writes. Protected and
+// compressed files are unsupported. On Linux ownership, mode and readable extended attributes
 // (including POSIX ACLs) are restored. On Windows CopyFile preserves streams
 // and attributes; the owner, group and DACL are restored explicitly. Unix xattr
 // names and values each have an 8 MiB aggregate limit. Modification/access

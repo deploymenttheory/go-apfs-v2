@@ -332,7 +332,12 @@ final rename; no transactional or crash-durability guarantee is made.
 - Darwin uses x/sys's libSystem-backed `Fclonefileat`, `Setattrlist` and
   `Fchflags` wrappers. It preserves ownership, mode, xattrs, source ACLs, birth
   time and supported flags. Its own staging directory has inherited ACLs
-  cleared before cloning. No deprecated raw syscall is used by this API.
+  cleared before cloning. Source ACL entries are omitted from the temporary clone
+  so a source deny-write entry cannot block staging; `RestoreMetadata` reads the
+  held source ACL and installs it on the held replacement through the released
+  typed metadata wrappers after content writes. Neither step changes the source
+  ACL. ACL read/write failures require discarding staging; callers must not
+  commit after a restoration error. No deprecated raw syscall is used by this API.
   Clone support is required; immutable, append-only and compressed inputs fail
   before commit. HFS+ and other filesystems without cloning are unsupported.
 - Linux copies owner/group, mode and readable xattrs (including POSIX ACLs),
