@@ -23,7 +23,7 @@ func prepareReplacementAt(source *os.File, stage *os.Root, info os.FileInfo) (*o
 	if err := clearReplacementACL(fmt.Sprintf("/dev/fd/%d", dir.Fd())); err != nil {
 		return nil, err
 	}
-	if err := unix.Fclonefileat(int(source.Fd()), int(dir.Fd()), "replacement", cloneACL); err != nil {
+	if err := unix.Fclonefileat(int(source.Fd()), int(dir.Fd()), "replacement", 0); err != nil {
 		return nil, err
 	}
 	if err := stage.Chmod("replacement", 0600); err != nil {

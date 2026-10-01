@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Darwin replacement staging remains writable when the source ACL denies writes.
+  Both replacement APIs restore the source ACL after content writes, retain source
+  permissions, and reject ACL restoration failures before caller commit.
+
 - AppleDouble name decoding now matches native UTF-8, length and NUL validation,
   including logical names in padded records; encode rejects invalid UTF-8 and
   record bounds avoid integer overflow. Native acceptance fixtures run on every OS.
