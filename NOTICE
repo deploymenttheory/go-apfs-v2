@@ -46,3 +46,10 @@ This product includes software design and code adapted from:
    one change found by comparing against libcompression: the LZVN match
    finder's hash. github.com/go-compressions/lzfse (BSD 3-Clause), which this
    project used before, informed the Go structure; no code is taken from it.
+
+6. golang.org/x/sys/unix v0.48.0 (https://github.com/golang/sys)
+   Copyright 2018 The Go Authors. All rights reserved.
+   The static Darwin import/trampoline/runtime-call pattern in
+   internal/darwinabi and the test-only quarantine observer follows x/sys.
+   Licensed under the BSD 3-Clause License; see
+   internal/darwinabi/LICENSE.go-authors.

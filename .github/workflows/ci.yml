@@ -66,6 +66,26 @@ jobs:
             exit 1
           fi
 
+  native-boundary:
+    name: Native dependency boundary
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Verify generated typed wrappers
+        run: go run scripts/generate-darwin-wrappers.go -check
+      - name: Audit all six CGO-disabled dependency graphs
+        run: go run scripts/audit-native-bindings.go -check
+      - name: Upload native boundary evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: native-boundary
+          path: artifacts/native-bindings/
+          if-no-files-found: error
+
   govulncheck:
     name: govulncheck
     runs-on: ubuntu-latest
@@ -501,6 +521,16 @@ jobs:
         with:
           name: appledouble-pack
           path: artifacts/appledouble-pack/
+          if-no-files-found: error
+      - name: Typed Darwin wrappers above 95% coverage
+        if: runner.os == 'macOS'
+        run: go run scripts/verify-darwin-wrappers.go
+      - name: Upload typed Darwin wrapper evidence
+        if: always() && runner.os == 'macOS'
+        uses: actions/upload-artifact@v7
+        with:
+          name: darwin-wrappers
+          path: artifacts/darwin-wrappers/
           if-no-files-found: error
       - name: Held metadata providers above 95% coverage
         env:

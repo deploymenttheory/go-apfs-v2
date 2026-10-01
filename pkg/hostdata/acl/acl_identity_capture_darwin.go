@@ -5,32 +5,16 @@ import (
 	"context"
 	"os"
 	"runtime"
-	"sync"
 	"syscall"
 	"unsafe"
 
+	"github.com/deploymenttheory/go-apfs-v2/internal/darwinabi"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
-	"github.com/ebitengine/purego"
 )
 
-// Public pwd.h/grp.h structures; Clang layout assertions accompany qualification.
-// Only names and numeric IDs are copied. Password/gecos/home/member fields are
-// deliberately never inspected or placed in snapshots.
-type darwinPasswd struct {
-	name                      *byte
-	password                  *byte //nolint:unused // Required pwd.h ABI slot; account secrets are never read.
-	uid                       uint32
-	gid                       uint32 //nolint:unused // Required pwd.h ABI slot; this lookup uses the requested account namespace.
-	change                    int64  //nolint:unused // Required pwd.h ABI slot; not part of an ACL identity.
-	class, gecos, home, shell *byte  //nolint:unused // Required pwd.h ABI slots; personal account properties are never read.
-	expire                    int64
-}
-type darwinGroup struct {
-	name     *byte
-	password *byte //nolint:unused // Required grp.h ABI slot; account secrets are never read.
-	gid      uint32
-	members  **byte
-}
+type darwinPasswd = darwinabi.Passwd
+type darwinGroup = darwinabi.Group
+
 type darwinIdentityABI struct {
 	userID              func(uint32, *darwinPasswd, *byte, uintptr, **darwinPasswd) int32
 	userName            func(*byte, *darwinPasswd, *byte, uintptr, **darwinPasswd) int32
@@ -40,30 +24,8 @@ type darwinIdentityABI struct {
 	uuidID              func(*[16]byte, *uint32, *int32) int32
 }
 
-var loadDarwinIdentity = sync.OnceValues(func() (*darwinIdentityABI, error) {
-	h, err := purego.Dlopen("/usr/lib/libSystem.B.dylib", purego.RTLD_NOW|purego.RTLD_LOCAL)
-	if err != nil {
-		return nil, err
-	}
-	return bindDarwinIdentity(func(name string) (uintptr, error) { return purego.Dlsym(h, name) })
-})
-
-func bindDarwinIdentity(symbol func(string) (uintptr, error)) (*darwinIdentityABI, error) {
-	a := &darwinIdentityABI{}
-	for _, item := range []struct {
-		name   string
-		target any
-	}{
-		{"getpwuid_r", &a.userID}, {"getpwnam_r", &a.userName}, {"getgrgid_r", &a.groupID}, {"getgrnam_r", &a.groupName},
-		{"mbr_uid_to_uuid", &a.userUUID}, {"mbr_gid_to_uuid", &a.groupUUID}, {"mbr_uuid_to_id", &a.uuidID},
-	} {
-		p, err := symbol(item.name)
-		if err != nil {
-			return nil, err
-		}
-		purego.RegisterFunc(item.target, p)
-	}
-	return a, nil
+var loadDarwinIdentity = func() (*darwinIdentityABI, error) {
+	return &darwinIdentityABI{userID: darwinabi.Getpwuid, userName: darwinabi.Getpwnam, groupID: darwinabi.Getgrgid, groupName: darwinabi.Getgrnam, userUUID: darwinabi.UserUUID, groupUUID: darwinabi.GroupUUID, uuidID: darwinabi.UUIDIdentity}, nil
 }
 
 func newNativeACLIdentityCapture(ctx context.Context, limit int) (*appledouble.ACLIdentityCapture, error) {
@@ -173,7 +135,7 @@ func (a *darwinIdentityABI) accountRecord(identity appledouble.ACLIdentity, name
 		if result != &record {
 			return appledouble.ACLPrincipal{}, false, 0, appledouble.ErrACLResolver
 		}
-		resultName, id = record.name, record.gid
+		resultName, id = record.Name, record.GID
 	} else {
 		var record darwinPasswd
 		var result *darwinPasswd
@@ -188,7 +150,7 @@ func (a *darwinIdentityABI) accountRecord(identity appledouble.ACLIdentity, name
 		if result != &record {
 			return appledouble.ACLPrincipal{}, false, 0, appledouble.ErrACLResolver
 		}
-		resultName, id = record.name, record.uid
+		resultName, id = record.Name, record.UID
 	}
 	text, err := identityName(buffer, resultName)
 	runtime.KeepAlive(buffer)

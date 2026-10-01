@@ -108,7 +108,7 @@ For portable transport, stream large values into the carrier or image when nativ
 
 Resource-fork positioned I/O is a separate qualified operation. Carrier blobs can retain values beyond AppleDouble wire capacity without producing invalid AppleDouble data.
 
-Complete Darwin bindings through supported `x/sys` wrappers where available. Use isolated Darwin-only [`purego v0.11.1`](<https://github.com/ebitengine/purego/tree/v0.11.1>) bindings for required signatures unavailable through those wrappers.
+Use supported `x/sys` wrappers where available. Extend missing Darwin signatures with the finite typed `internal/darwinabi` layer following x/sys's static import/runtime-call pattern; no generic FFI, runtime symbol lookup, numbered Darwin syscalls or CGo production dependency. Preserve all portable policy/codec and native host features. See [wrapper qualification](docs/darwin-wrappers.md).
 
 Verify ABI layouts, options, positions, pointer lifetime, empty buffers and errno independently. Pin the OS thread through calls and errno capture. Remove deprecated raw-syscall dependencies from the production preservation path.
 

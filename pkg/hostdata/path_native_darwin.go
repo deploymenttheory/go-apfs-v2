@@ -5,54 +5,27 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
-	"sync"
 	"syscall"
 	"unsafe"
 
+	"github.com/deploymenttheory/go-apfs-v2/internal/darwinabi"
 	aclmeta "github.com/deploymenttheory/go-apfs-v2/pkg/hostdata/acl"
-	"github.com/ebitengine/purego"
 	"golang.org/x/sys/unix"
 )
 
 type darwinPathABI struct {
-	native        map[string]uintptr
 	security      *darwinSecurityABI
-	stat, lstat   func(*byte, *unix.Stat_t, uintptr) int32
-	chmod         func(*byte, uint32, uint32, int32, uintptr) int32
-	protectedOpen func(*byte, int32, int32, int32, uint32) int32
+	stat, lstat   func(*byte, *unix.Stat_t, uintptr) (int32, error)
+	chmod         func(*byte, uint32, uint32, int32, uintptr) (int32, error)
+	protectedOpen func(*byte, int32, int32, int32, uint32) (int32, error)
 }
 
-var loadDarwinPath = sync.OnceValues(func() (*darwinPathABI, error) {
+var loadDarwinPath = func() (*darwinPathABI, error) {
 	security, err := loadDarwinSecurity()
 	if err != nil {
 		return nil, err
 	}
-	h, err := purego.Dlopen("/usr/lib/libSystem.B.dylib", purego.RTLD_NOW|purego.RTLD_LOCAL)
-	if err != nil {
-		return nil, err
-	}
-	return bindDarwinPath(security, func(name string) (uintptr, error) { return purego.Dlsym(h, name) }, runtime.GOARCH)
-})
-
-func bindDarwinPath(security *darwinSecurityABI, symbol func(string) (uintptr, error), arch string) (*darwinPathABI, error) {
-	a := &darwinPathABI{security: security, native: make(map[string]uintptr)}
-	suffix := ""
-	if arch == "amd64" {
-		suffix = "$INODE64"
-	}
-	for _, item := range []struct {
-		name   string
-		target any
-	}{{"statx_np" + suffix, &a.stat}, {"lstatx_np" + suffix, &a.lstat}, {"__chmod_extended", &a.chmod}, {"__open_dprotected_np", &a.protectedOpen}} {
-		p, err := symbol(item.name)
-		if err != nil {
-			return nil, err
-		}
-		a.native[strings.TrimSuffix(item.name, "$INODE64")] = p
-		purego.RegisterFunc(item.target, p)
-	}
-	return a, nil
+	return &darwinPathABI{security: security, stat: darwinabi.Statx, lstat: darwinabi.Lstatx, chmod: darwinabi.ChmodExtended, protectedOpen: darwinabi.OpenDprotected}, nil
 }
 
 // CapturePathMetadata obtains identity, size and filesec/stat from one native
@@ -77,13 +50,11 @@ func (a *darwinPathABI) capture(path string, nofollow bool) (result PathMetadata
 	}
 	defer a.security.free(sec)
 	stat := a.stat
-	symbol := "statx_np"
 	if nofollow {
 		stat = a.lstat
-		symbol = "lstatx_np"
 	}
 	var st unix.Stat_t
-	if _, err = callDarwinInt(a.native[symbol], func() int32 { return stat(p, &st, sec) }, a.security.errno, uintptr(unsafe.Pointer(p)), uintptr(unsafe.Pointer(&st)), sec); err != nil {
+	if _, err = stat(p, &st, sec); err != nil {
 		return result, err
 	}
 	properties, err := a.security.properties(sec)
@@ -121,7 +92,7 @@ func (a *darwinPathABI) write(path string, arguments aclmeta.DarwinChmodArgument
 	if arguments.SecurityArgument == aclmeta.DarwinSecurityRemove {
 		security = 1
 	}
-	_, err = callDarwinInt(a.native["__chmod_extended"], func() int32 { return a.chmod(p, arguments.UID, arguments.GID, arguments.Mode, security) }, a.security.errno, uintptr(unsafe.Pointer(p)), uintptr(arguments.UID), uintptr(arguments.GID), uintptr(arguments.Mode), security)
+	_, err = a.chmod(p, arguments.UID, arguments.GID, arguments.Mode, security)
 	runtime.KeepAlive(arguments.Security)
 	return err
 }
@@ -203,7 +174,7 @@ func openProtectedPath(path string, flags int, protectionClass int, mode uint32,
 		mode = 0
 	}
 	var fd int32
-	fd, err = callDarwinInt(a.native["__open_dprotected_np"], func() int32 { return a.protectedOpen(p, int32(flags), int32(protectionClass), 0, mode) }, a.security.errno, uintptr(unsafe.Pointer(p)), uintptr(flags), uintptr(protectionClass), 0, uintptr(mode))
+	fd, err = a.protectedOpen(p, int32(flags), int32(protectionClass), 0, mode)
 	if err != nil {
 		return nil, err
 	}

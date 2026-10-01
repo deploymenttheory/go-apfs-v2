@@ -26,10 +26,6 @@ func TestQuarantineCaptureDarwinABI(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	marker := errors.New("symbol absent")
-	if _, err := bindQuarantineCapture(func(string) (uintptr, error) { return 0, marker }); !errors.Is(err, marker) {
-		t.Fatal(err)
-	}
 	a, err := loadQuarantineCapture()
 	if err != nil {
 		t.Fatal(err)
@@ -60,8 +56,8 @@ func TestQuarantineCaptureDarwinBoundsAndErrors(t *testing.T) {
 		t.Fatal(err)
 	}
 	var errno int32
-	a := &quarantineCaptureABI{errno: func() *int32 { return &errno }}
-	a.query = func(_ *byte, operation int32, i *quarantineProcessInfo) int32 {
+	a := &quarantineCaptureABI{}
+	a.query = func(_ *byte, operation int32, i *quarantineProcessInfo) (int32, error) {
 		if operation != 84 || i.pid != 0 || i.reserved != 0 {
 			t.Fatal("not a valid self query")
 		}
@@ -72,19 +68,19 @@ func TestQuarantineCaptureDarwinBoundsAndErrors(t *testing.T) {
 		copy(unsafe.Slice(i.tracking, 64), []byte{2, 0})
 		i.trackingLength = 2
 		i.flags = 0x200
-		return 0
+		return 0, nil
 	}
 	got, err := a.read(appledouble.QuarantineMacOS27)
 	if err != nil || string(got.Agent) != "A\\\xff" || len(got.Metadata) != 2 || len(got.Tracking) != 2 || got.Flags != 0x200 {
 		t.Fatalf("raw capture: %#v %v", got, err)
 	}
 	for _, mutate := range []func(*quarantineProcessInfo){func(i *quarantineProcessInfo) { i.agentLength = 256 }, func(i *quarantineProcessInfo) { i.metadataLength = 65 }, func(i *quarantineProcessInfo) { i.trackingLength = 65 }, func(i *quarantineProcessInfo) { i.flags = 1 << 32 }} {
-		a.query = func(_ *byte, _ int32, i *quarantineProcessInfo) int32 { mutate(i); return 0 }
+		a.query = func(_ *byte, _ int32, i *quarantineProcessInfo) (int32, error) { mutate(i); return 0, nil }
 		if _, err := a.read(0); !errors.Is(err, appledouble.ErrQuarantineContext) {
 			t.Fatal(err)
 		}
 	}
-	a.query = func(*byte, int32, *quarantineProcessInfo) int32 { return -1 }
+	a.query = func(*byte, int32, *quarantineProcessInfo) (int32, error) { return -1, syscall.Errno(errno) }
 	errno = int32(syscall.EPERM)
 	if _, err := a.read(0); !errors.Is(err, syscall.EPERM) {
 		t.Fatal(err)
@@ -100,7 +96,7 @@ func TestQuarantineCaptureDarwinBoundsAndErrors(t *testing.T) {
 	a.alloc = func() uintptr { return 1 }
 	freed := 0
 	a.free = func(uintptr) { freed++ }
-	a.capture = func(uintptr) int32 { return -1 }
+	a.capture = func(uintptr) (int32, error) { return -1, syscall.Errno(errno) }
 	if err := a.confirmAbsent(); err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +104,7 @@ func TestQuarantineCaptureDarwinBoundsAndErrors(t *testing.T) {
 	if err := a.confirmAbsent(); !errors.Is(err, syscall.EPERM) {
 		t.Fatal(err)
 	}
-	a.capture = func(uintptr) int32 { return 0 }
+	a.capture = func(uintptr) (int32, error) { return 0, nil }
 	if err := a.confirmAbsent(); !errors.Is(err, ErrQuarantineCaptureChanged) {
 		t.Fatal(err)
 	}

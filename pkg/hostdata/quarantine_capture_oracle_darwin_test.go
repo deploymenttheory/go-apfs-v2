@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/ebitengine/purego"
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/quarantineoracle"
 )
 
 func TestQuarantineCaptureNativeOracle(t *testing.T) {
@@ -17,19 +17,13 @@ func TestQuarantineCaptureNativeOracle(t *testing.T) {
 	if path == "" {
 		t.Fatal("native oracle library path is required")
 	}
-	h, err := purego.Dlopen(path, purego.RTLD_NOW|purego.RTLD_LOCAL)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer purego.Dlclose(h)
-	var capture func(*byte, *uint64, *byte, *uint64, *byte, *uint64, *uint64, *int32) int32
-	purego.RegisterLibFunc(&capture, h, "appledouble_quarantine_capture")
+
 	var agent [257]byte
 	var metadata [65]byte
 	var tracking [64]byte
 	var al, ml, tl, flags uint64
 	var errno int32
-	status := capture(&agent[0], &al, &metadata[0], &ml, &tracking[0], &tl, &flags, &errno)
+	status := quarantineoracle.Capture(&agent[0], &al, &metadata[0], &ml, &tracking[0], &tl, &flags, &errno)
 	got, err := CaptureQuarantineProcess(context.Background())
 	if err != nil {
 		t.Fatal(err)

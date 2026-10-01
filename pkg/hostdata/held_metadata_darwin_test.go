@@ -4,7 +4,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"runtime"
 	"syscall"
 	"testing"
 	"time"
@@ -12,7 +11,6 @@ import (
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
 	aclmeta "github.com/deploymenttheory/go-apfs-v2/pkg/hostdata/acl"
-	"github.com/ebitengine/purego"
 	"golang.org/x/sys/unix"
 )
 
@@ -153,7 +151,7 @@ func TestHeldMetadataNativeErrors(t *testing.T) {
 	}
 	defer f.Close()
 	var eno int32
-	a := &darwinSecurityABI{errno: func() *int32 { return &eno }, init: func() uintptr { return 1 }, free: func(uintptr) {}, stat: func(int32, *unix.Stat_t, uintptr) int32 { return -1 }, chmod: func(int32, uint32, uint32, int32, uintptr) int32 { return -1 }, fsctl: func(int32, uintptr, unsafe.Pointer, uint32) int32 { return -1 }}
+	a := &darwinSecurityABI{init: func() uintptr { return 1 }, free: func(uintptr) {}, stat: func(int32, *unix.Stat_t, uintptr) (int32, error) { return -1, syscall.Errno(eno) }, chmod: func(int32, uint32, uint32, int32, uintptr) (int32, error) { return -1, syscall.Errno(eno) }, fsctl: func(int32, uintptr, unsafe.Pointer, uint32) (int32, error) { return -1, syscall.Errno(eno) }}
 	m := &nativeHeldMetadata{file: f, abi: a}
 	for _, e := range []syscall.Errno{syscall.ENOTSUP, syscall.EPERM, syscall.EIO} {
 		eno = int32(e)
@@ -174,9 +172,12 @@ func TestHeldMetadataNativeErrors(t *testing.T) {
 	if _, err = m.CompareAndSwapFlags(0, 1); !errors.Is(err, ErrStatFlagsAgain) {
 		t.Fatal(err)
 	}
-	a.stat = func(int32, *unix.Stat_t, uintptr) int32 { return 0 }
+	a.stat = func(int32, *unix.Stat_t, uintptr) (int32, error) { return 0, nil }
 	a.init = func() uintptr { return 1 }
-	a.get = func(uintptr, int32, unsafe.Pointer) int32 { eno = int32(syscall.EIO); return -1 }
+	a.get = func(uintptr, int32, unsafe.Pointer) (int32, error) {
+		eno = int32(syscall.EIO)
+		return -1, syscall.Errno(eno)
+	}
 	if _, err = m.CaptureSecurity(); !errors.Is(err, syscall.EIO) {
 		t.Fatal(err)
 	}
@@ -194,14 +195,14 @@ func TestDarwinSecurityProperties(t *testing.T) {
 	raw, _ := (&appledouble.FileSecurity{ACL: &appledouble.ACL{}, Trailing: make([]byte, 24)}).MarshalDarwinBinary()
 	var eno int32
 	makeABI := func(fail int32, missing bool) *darwinSecurityABI {
-		return &darwinSecurityABI{errno: func() *int32 { return &eno }, get: func(_ uintptr, name int32, out unsafe.Pointer) int32 {
+		return &darwinSecurityABI{get: func(_ uintptr, name int32, out unsafe.Pointer) (int32, error) {
 			if name == fail {
 				if missing {
 					eno = int32(syscall.ENOENT)
 				} else {
 					eno = int32(syscall.EIO)
 				}
-				return -1
+				return -1, syscall.Errno(eno)
 			}
 			switch name {
 			case 1, 2:
@@ -215,7 +216,7 @@ func TestDarwinSecurityProperties(t *testing.T) {
 			case 101:
 				*(*uintptr)(out) = uintptr(len(raw))
 			}
-			return 0
+			return 0, nil
 		}}
 	}
 	for _, property := range []int32{1, 2, 4, 3, 6, 100, 101} {
@@ -244,27 +245,17 @@ func TestDarwinSecurityProperties(t *testing.T) {
 }
 
 func TestDarwinSecurityBinding(t *testing.T) {
-	h, err := purego.Dlopen("/usr/lib/libSystem.B.dylib", purego.RTLD_NOW|purego.RTLD_LOCAL)
+	a, err := loadDarwinSecurity()
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, arch := range []string{"arm64", "amd64"} {
-		seen := false
-		_, err = bindDarwinSecurity(func(name string) (uintptr, error) {
-			if name == "fstatx_np$INODE64" {
-				seen = true
-				name = "fstatx_np"
-			}
-			if name == "fstatx_np" && runtime.GOARCH == "amd64" {
-				name += "$INODE64"
-			}
-			return purego.Dlsym(h, name)
-		}, arch)
-		if err != nil || seen != (arch == "amd64") {
-			t.Fatal(arch, seen, err)
-		}
+	sec := a.init()
+	if sec == 0 {
+		t.Fatal("filesec allocation")
 	}
-	if _, err = bindDarwinSecurity(func(string) (uintptr, error) { return 0, syscall.EIO }, "arm64"); !errors.Is(err, syscall.EIO) {
-		t.Fatal(err)
+	defer a.free(sec)
+	var st unix.Stat_t
+	if n, err := a.stat(-1, &st, sec); n != -1 || !errors.Is(err, syscall.EBADF) {
+		t.Fatal(n, err)
 	}
 }
