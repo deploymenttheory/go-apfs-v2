@@ -43,6 +43,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   preserving supported metadata using opened roots and handles. Tests cover both
   preparation APIs, containment, renamed roots, Windows streams and cleanup.
 
+## [0.15.1](https://github.com/deploymenttheory/go-apfs-v2/compare/v0.15.0...v0.15.1) (2026-10-01)
+
+
+### Bug Fixes
+
+* defer replacement ACL restoration until after content writes ([#186](https://github.com/deploymenttheory/go-apfs-v2/issues/186)) ([ee3efb4](https://github.com/deploymenttheory/go-apfs-v2/commit/ee3efb47ff845ff87f0c8bb49e61304c8a4199c7))
+
 ## [0.15.0](https://github.com/deploymenttheory/go-apfs-v2/compare/v0.14.0...v0.15.0) (2026-10-01)
 
 
