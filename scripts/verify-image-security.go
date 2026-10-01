@@ -6,6 +6,7 @@ package main
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"errors"
@@ -24,6 +25,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/diskimage"
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/imagesecurity"
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/imagestat"
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/securitycopy"
@@ -34,8 +36,10 @@ import (
 )
 
 type command struct {
-	Args          []string
-	Output, Error string
+	Args           []string
+	Output, Error  string
+	Stdout, Stderr string `json:",omitempty"`
+	ExitCode       *int   `json:",omitempty"`
 }
 
 var commands []command
@@ -69,6 +73,33 @@ func run(args ...string) []byte {
 	}
 	return b
 }
+
+// Retry only hdiutil's transient busy status through the shared strict policy.
+// Every attempt is recorded; exhaustion, launch failures and other statuses fail.
+// Ordinary detach is required: force ejection would hide leaked mount users.
+func detach(target string) error {
+	return diskimage.RetryDetach(context.Background(), func() (int, error) {
+		args := []string{"hdiutil", "detach", target}
+		cmd := exec.Command(args[0], args[1:]...)
+		var stdout, stderr bytes.Buffer
+		cmd.Stdout, cmd.Stderr = &stdout, &stderr
+		err := cmd.Run()
+		code := -1
+		if cmd.ProcessState != nil {
+			code = cmd.ProcessState.ExitCode()
+		}
+		record := command{Args: args, Stdout: stdout.String(), Stderr: stderr.String(), ExitCode: &code}
+		if err != nil {
+			record.Error = err.Error()
+		}
+		commands = append(commands, record)
+		if err != nil {
+			err = fmt.Errorf("%v: %w: %s", args, err, stderr.String())
+		}
+		return code, err
+	})
+}
+
 func download(url, hash, target string) []byte {
 	client := http.Client{Timeout: 30 * time.Second}
 	r, e := client.Get(url)
@@ -342,7 +373,7 @@ func main() {
 					if device == "" {
 						panic("missing HFS device")
 					}
-					defer run("hdiutil", "detach", device)
+					defer func() { must(detach(device)) }()
 					args := []string{"/sbin/fsck_hfs", "-n", device}
 					output, err := exec.Command(args[0], args[1:]...).CombinedOutput()
 					c := command{Args: args, Output: string(output)}
@@ -381,7 +412,11 @@ func main() {
 		must(e)
 		run("hdiutil", "attach", image, "-readonly", "-owners", "on", "-nobrowse", "-mountpoint", mount)
 		func() {
-			defer func() { run("hdiutil", "detach", mount); must(os.Remove(mount)); must(file.Close()) }()
+			defer func() {
+				// Release our reader before detaching, even if qualification panics.
+				must(errors.Join(file.Close(), detach(mount)))
+				must(os.Remove(mount))
+			}()
 			if *roots {
 				attrs, e := volume.Xattrs(".")
 				must(e)
