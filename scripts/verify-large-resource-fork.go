@@ -252,8 +252,9 @@ func nativeImage(name, workspace string) {
 	mount := filepath.Join(workspace, "mount")
 	must(os.Mkdir(mount, 0700))
 	defer func() { must(os.Remove(mount)) }()
-	run("hdiutil", "attach", name, "-readonly", "-nobrowse", "-mountpoint", mount)
-	defer detach(mount)
+	device, err := diskimage.AttachmentDevice(run("hdiutil", "attach", "-plist", name, "-readonly", "-nobrowse", "-mountpoint", mount))
+	must(err)
+	defer detach(device)
 	var got nativeResult
 	must(json.Unmarshal(run(oracle, "--hash", filepath.Join(mount, "file")), &got))
 	checkNative(got)

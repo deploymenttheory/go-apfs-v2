@@ -19,7 +19,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
-	"regexp"
 	"runtime"
 	"strings"
 	"syscall"
@@ -368,11 +367,9 @@ func main() {
 				run("/sbin/fsck_apfs", "-n", image)
 			} else {
 				func() {
-					attached := run("hdiutil", "attach", "-imagekey", "diskimage-class=CRawDiskImage", "-nomount", "-readonly", image)
-					device := regexp.MustCompile(`/dev/disk[0-9]+`).FindString(string(attached))
-					if device == "" {
-						panic("missing HFS device")
-					}
+					attached := run("hdiutil", "attach", "-plist", "-imagekey", "diskimage-class=CRawDiskImage", "-nomount", "-readonly", image)
+					device, err := diskimage.AttachmentDevice(attached)
+					must(err)
 					defer func() { must(detach(device)) }()
 					args := []string{"/sbin/fsck_hfs", "-n", device}
 					output, err := exec.Command(args[0], args[1:]...).CombinedOutput()
@@ -410,11 +407,12 @@ func main() {
 		}
 		mount, e := os.MkdirTemp("", "image-security-")
 		must(e)
-		run("hdiutil", "attach", image, "-readonly", "-owners", "on", "-nobrowse", "-mountpoint", mount)
+		device, e := diskimage.AttachmentDevice(run("hdiutil", "attach", "-plist", image, "-readonly", "-owners", "on", "-nobrowse", "-mountpoint", mount))
+		must(e)
 		func() {
 			defer func() {
 				// Release our reader before detaching, even if qualification panics.
-				must(errors.Join(file.Close(), detach(mount)))
+				must(errors.Join(file.Close(), detach(device)))
 				must(os.Remove(mount))
 			}()
 			if *roots {
