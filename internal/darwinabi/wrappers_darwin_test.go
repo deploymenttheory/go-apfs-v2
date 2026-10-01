@@ -1,8 +1,11 @@
 package darwinabi
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"syscall"
 	"testing"
 	"unsafe"
@@ -62,5 +65,95 @@ func TestTypedNativeErrors(t *testing.T) {
 	var request [12]byte
 	if n, err := Ffsctl(-1, 0xc00c4114, unsafe.Pointer(&request), 0); n != -1 || !errors.Is(err, syscall.EBADF) {
 		t.Fatal(n, err)
+	}
+}
+
+func TestTypedHeldErrors(t *testing.T) {
+	name, err := unix.BytePtrFromString("com.apple.ResourceFork")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n, err := Fgetxattr(-1, name, nil, 0, 0, 0); n != 0 || !errors.Is(err, syscall.EBADF) {
+		t.Fatalf("fgetxattr: size=%d err=%v", n, err)
+	}
+	list := unix.Attrlist{Bitmapcount: 5, Commonattr: unix.ATTR_CMN_CRTIME}
+	value := unix.Timespec{Sec: 1700000000, Nsec: 1234}
+	if n, err := Fsetattrlist(-1, &list, unsafe.Pointer(&value), unsafe.Sizeof(value), 0); n != -1 || !errors.Is(err, syscall.EBADF) {
+		t.Fatalf("fsetattrlist: status=%d err=%v", n, err)
+	}
+}
+
+// Call the actual protected-open entry point even on filesystems where the
+// higher-level API correctly chooses ordinary open. The independent C result
+// determines native support and errno; neither outcome is skipped or invented.
+func TestTypedProtectedOpenNative(t *testing.T) {
+	oracle := os.Getenv("APFS_DARWIN_WRAPPERS_ORACLE")
+	if oracle == "" {
+		oracle = filepath.Join(t.TempDir(), "darwin-wrappers")
+		source := filepath.Join("..", "..", "testdata", "appledouble", "native", "darwin-wrappers.c")
+		if out, err := exec.Command("xcrun", "clang", "-Wall", "-Wextra", "-Werror", "-DDARWIN_WRAPPERS_ORACLE", source, "-o", oracle).CombinedOutput(); err != nil {
+			t.Fatalf("compile native observer: %v\n%s", err, out)
+		}
+	}
+	directory := t.TempDir()
+	existing := filepath.Join(directory, "existing")
+	if err := os.WriteFile(existing, []byte("typed wrapper payload"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"existing", "missing"} {
+		t.Run(name, func(t *testing.T) {
+			path := filepath.Join(directory, name)
+			output, err := exec.Command(oracle, path).Output()
+			if err != nil {
+				t.Fatalf("native observation: %v", err)
+			}
+			var want struct {
+				Success bool `json:"success"`
+				Errno   int  `json:"errno"`
+			}
+			if err := json.Unmarshal(output, &want); err != nil {
+				t.Fatal(err)
+			}
+			if want.Success && want.Errno != 0 || !want.Success && want.Errno == 0 {
+				t.Fatalf("invalid native observation: %s", output)
+			}
+			p, err := unix.BytePtrFromString(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			fd, err := OpenDprotected(p, unix.O_RDONLY, -1, 0, 0)
+			if fd >= 0 {
+				defer unix.Close(int(fd))
+			}
+			if !want.Success {
+				if fd != -1 || !errors.Is(err, syscall.Errno(want.Errno)) {
+					t.Fatalf("protected open: fd=%d err=%v, native=%s", fd, err, output)
+				}
+				t.Logf("native and Go errno=%d", want.Errno)
+				return
+			}
+			if err != nil || fd < 0 {
+				t.Fatalf("protected open: fd=%d err=%v, native=%s", fd, err, output)
+			}
+			var actual, expected unix.Stat_t
+			if err := unix.Fstat(int(fd), &actual); err != nil {
+				t.Fatal(err)
+			}
+			if err := unix.Stat(path, &expected); err != nil {
+				t.Fatal(err)
+			}
+			if actual.Dev != expected.Dev || actual.Ino != expected.Ino || actual.Mode != expected.Mode {
+				t.Fatalf("protected open returned a different object: %+v != %+v", actual, expected)
+			}
+			var payload [64]byte
+			n, err := unix.Read(int(fd), payload[:])
+			if err != nil {
+				t.Fatalf("readback: %v", err)
+			}
+			if string(payload[:n]) != "typed wrapper payload" {
+				t.Fatalf("readback: %q", payload[:n])
+			}
+			t.Log("native and Go protected opens succeeded with matching identity and payload")
+		})
 	}
 }

@@ -37,3 +37,18 @@ _Static_assert(sizeof(struct passwd)==72 && offsetof(struct passwd,pw_uid)==16 &
 _Static_assert(sizeof(struct group)==32 && offsetof(struct group,gr_gid)==16 && offsetof(struct group,gr_mem)==24,"group layout");
 _Static_assert(sizeof(struct stat)==144 && offsetof(struct stat,st_ino)==8,"stat64 layout");
 _Static_assert(sizeof(struct attrlist)==24,"attrlist layout");
+
+// Private signature also used by the existing path/copyfile native observer.
+extern int __open_dprotected_np(const char *, int, int, int, int);
+#ifdef DARWIN_WRAPPERS_ORACLE
+#include <errno.h>
+#include <stdio.h>
+int main(int argc, char **argv) {
+    if (argc != 2) return 2;
+    int fd = __open_dprotected_np(argv[1], O_RDONLY, -1, 0, 0);
+    int saved = fd < 0 ? errno : 0;
+    if (fd >= 0 && close(fd) != 0) return 3;
+    printf("{\"success\":%s,\"errno\":%d}\n", fd >= 0 ? "true" : "false", saved);
+    return 0;
+}
+#endif

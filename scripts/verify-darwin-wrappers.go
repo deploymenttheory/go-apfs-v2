@@ -40,7 +40,7 @@ func verify() error {
 		return err
 	}
 	for _, arch := range []string{"arm64", "x86_64"} {
-		cmd := exec.Command("xcrun", "clang", "-arch", arch, "-isysroot", strings.TrimSpace(string(sdk)), "-Wall", "-Wextra", "-Werror", "-fsyntax-only", "-Xclang", "-ast-dump=json", "testdata/appledouble/native/darwin-wrappers.c")
+		cmd := exec.Command("xcrun", "clang", "-arch", arch, "-isysroot", strings.TrimSpace(string(sdk)), "-Wall", "-Wextra", "-Werror", "-DDARWIN_WRAPPERS_ORACLE", "-fsyntax-only", "-Xclang", "-ast-dump=json", "testdata/appledouble/native/darwin-wrappers.c")
 		var stderr bytes.Buffer
 		cmd.Stderr = &stderr
 		ast, err := cmd.Output()
@@ -58,6 +58,13 @@ func verify() error {
 			return fmt.Errorf("%s wrapper link: %w: %s", arch, err, out)
 		}
 	}
+	oracle, err := filepath.Abs(filepath.Join(dir, "native-observer"))
+	if err != nil {
+		return err
+	}
+	if out, err := exec.Command("xcrun", "clang", "-Wall", "-Wextra", "-Werror", "-DDARWIN_WRAPPERS_ORACLE", "testdata/appledouble/native/darwin-wrappers.c", "-o", oracle).CombinedOutput(); err != nil {
+		return fmt.Errorf("native observer: %w: %s", err, out)
+	}
 	log, e := os.Create(filepath.Join(dir, "tests.jsonl"))
 	if e != nil {
 		return e
@@ -66,12 +73,20 @@ func verify() error {
 	var transcript bytes.Buffer
 	profile := filepath.Join(dir, "coverage.out")
 	cmd := exec.Command("go", "test", "-count=1", "-json", "-run", "^Test(Typed|Darwin|Held|Path|Quarantine|ACLIdentity|LibSystem|SandboxCapture|CaptureXattrs|XattrCapture|XattrValues|Metadata|OpenMetadata)", "-covermode=atomic", "-coverprofile="+profile, "-coverpkg=./internal/darwinabi", "./pkg/hostdata", "./pkg/hostdata/acl", "./pkg/hostdata/sandbox", "./internal/darwinabi")
-	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
+	cmd.Env = append(os.Environ(), "CGO_ENABLED=0", "APFS_DARWIN_WRAPPERS_ORACLE="+oracle)
 	cmd.Stdout = io.MultiWriter(os.Stdout, log, &transcript)
 	cmd.Stderr = io.MultiWriter(os.Stderr, log)
 	if e := cmd.Run(); e != nil {
 		return e
 	}
+	functions, err := exec.Command("go", "tool", "cover", "-func="+profile).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("coverage diagnostics: %w: %s", err, functions)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "functions.txt"), functions, 0600); err != nil {
+		return err
+	}
+	fmt.Print(string(functions))
 	passed := 0
 	for _, line := range bytes.Split(transcript.Bytes(), []byte{'\n'}) {
 		if len(line) == 0 {

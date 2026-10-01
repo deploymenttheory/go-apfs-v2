@@ -64,6 +64,13 @@ JSON test events, source hashes, SDK path and both Clang ASTs, and links both
 Darwin architectures with CGo disabled. Existing held metadata, path lifecycle,
 metadata transport, scheduling-stress, large-fork, authorization, signed sandbox,
 foreign-image, commercial-DMG, fuzz and portable evidence gates remain required.
+Direct invalid-descriptor tests cover held read/write errors independently of
+filesystem state. Protected-open tests call the typed entry point even when the
+higher-level API selects ordinary open; existing and missing paths must match
+an independent C observer, with descriptor identity and payload checked on
+success. The coverage artifact includes a per-function report to diagnose runner
+differences without changing thresholds.
+
 The wide native xattr result test writes the final byte and closes the resource
 fork before querying its length, so the assertion does not depend on an
 unmaterialized truncated fork.
