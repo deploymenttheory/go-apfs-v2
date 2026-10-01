@@ -39,6 +39,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   preserving supported metadata using opened roots and handles. Tests cover both
   preparation APIs, containment, renamed roots, Windows streams and cleanup.
 
+## [0.14.0](https://github.com/deploymenttheory/go-apfs-v2/compare/v0.13.0...v0.14.0) (2026-10-01)
+
+
+### Features
+
+* **apfswrite:** preserve volume root security and metadata ([#166](https://github.com/deploymenttheory/go-apfs-v2/issues/166)) ([db83848](https://github.com/deploymenttheory/go-apfs-v2/commit/db838481b95fd151f3f564f83d05481e774c640f))
+* **appledouble:** add portable ACL text interpretation ([#140](https://github.com/deploymenttheory/go-apfs-v2/issues/140)) ([3edc40d](https://github.com/deploymenttheory/go-apfs-v2/commit/3edc40dc2e80abb12ba1640ee9afe1daa55b1ee2))
+* **appledouble:** capture and replay source ACL identities ([#156](https://github.com/deploymenttheory/go-apfs-v2/issues/156)) ([79d98f5](https://github.com/deploymenttheory/go-apfs-v2/commit/79d98f517c0aa59e15ab83a6ac221ad382ca3cf2))
+* **appledouble:** complete portable metadata transport and native operations ([#181](https://github.com/deploymenttheory/go-apfs-v2/issues/181)) ([25706ec](https://github.com/deploymenttheory/go-apfs-v2/commit/25706ec514645c4fbd19aba2ffdf19ba936e45fe))
+* **appledouble:** import external ACLs and format native text ([#143](https://github.com/deploymenttheory/go-apfs-v2/issues/143)) ([2f1fd0b](https://github.com/deploymenttheory/go-apfs-v2/commit/2f1fd0b22f7942062088816b6b083c8b7e37a9e1))
+* **appledouble:** import filesystem quarantine values ([#147](https://github.com/deploymenttheory/go-apfs-v2/issues/147)) ([20d18e4](https://github.com/deploymenttheory/go-apfs-v2/commit/20d18e47b06c12b4d97505c7f66143b54879fdc5))
+* **appledouble:** model ACL creation inheritance and qualify restoration ([#155](https://github.com/deploymenttheory/go-apfs-v2/issues/155)) ([a07125e](https://github.com/deploymenttheory/go-apfs-v2/commit/a07125e7827ad6d54f9f8cdf56978c3cc5c01460))
+* **appledouble:** model confirmed absent quarantine process state ([#152](https://github.com/deploymenttheory/go-apfs-v2/issues/152)) ([dc7f8f9](https://github.com/deploymenttheory/go-apfs-v2/commit/dc7f8f9a3b992e9230f1fd6191c93a6e481cc5a5))
+* **appledouble:** parse and serialize quarantine envelopes ([#145](https://github.com/deploymenttheory/go-apfs-v2/issues/145)) ([4e121db](https://github.com/deploymenttheory/go-apfs-v2/commit/4e121dbc6cd9ec88db4f3fbf0b0f7698c5853888))
+* **appledouble:** plan application against raw quarantine state ([#153](https://github.com/deploymenttheory/go-apfs-v2/issues/153)) ([4c8edfd](https://github.com/deploymenttheory/go-apfs-v2/commit/4c8edfd36e5f34d02d497b9e1d4ea155bf240431))
+* **appledouble:** plan quarantine destination normalization ([#149](https://github.com/deploymenttheory/go-apfs-v2/issues/149)) ([a7d024a](https://github.com/deploymenttheory/go-apfs-v2/commit/a7d024ac0ec9901a46da621b715b00b645a23a61))
+* **appledouble:** preserve ownership in ACL security records ([#157](https://github.com/deploymenttheory/go-apfs-v2/issues/157)) ([70f65c3](https://github.com/deploymenttheory/go-apfs-v2/commit/70f65c341da7915b8c2d87f1ccb3212c95caaea8))
+* **appledouble:** qualify additional quarantine process flags ([#150](https://github.com/deploymenttheory/go-apfs-v2/issues/150)) ([564a5cd](https://github.com/deploymenttheory/go-apfs-v2/commit/564a5cd5061af7d3f09b5c3fe98439d2df44df09))
+* **appledouble:** qualify ordinary ACL copy selection ([#162](https://github.com/deploymenttheory/go-apfs-v2/issues/162)) ([0d8e5bd](https://github.com/deploymenttheory/go-apfs-v2/commit/0d8e5bd3636d21beabf94c8656b2b05bb25999cc))
+* **appledouble:** qualify symlink quarantine destination policy ([#154](https://github.com/deploymenttheory/go-apfs-v2/issues/154)) ([b2896b3](https://github.com/deploymenttheory/go-apfs-v2/commit/b2896b3a872472b2e45cdb495c7fa62bec94b309))
+* **appledouble:** resolve deferred ACL replacement policy ([#144](https://github.com/deploymenttheory/go-apfs-v2/issues/144)) ([2416713](https://github.com/deploymenttheory/go-apfs-v2/commit/24167135c4ec836582da04e7f7a11aed52089bfb))
+* **appledouble:** resolve ordered quarantine update decisions ([#146](https://github.com/deploymenttheory/go-apfs-v2/issues/146)) ([60df620](https://github.com/deploymenttheory/go-apfs-v2/commit/60df620891106c8999420a06e4d1b2b3e2e4bca0))
+* complete AppleDouble path lifecycle and large-fork qualification ([352c1e3](https://github.com/deploymenttheory/go-apfs-v2/commit/352c1e39079912143431ec2599b01c23c66b7bdc))
+* execute ordered stat restoration with BSD flag retries ([#173](https://github.com/deploymenttheory/go-apfs-v2/issues/173)) ([40a210f](https://github.com/deploymenttheory/go-apfs-v2/commit/40a210f0c1c88e616366adde3e2be6039d460247))
+* **hostmeta:** acquire security sources before image copies ([#171](https://github.com/deploymenttheory/go-apfs-v2/issues/171)) ([38f3305](https://github.com/deploymenttheory/go-apfs-v2/commit/38f33054e768bafe85d9131424540d7a3c61ea16))
+* **hostmeta:** acquire security-copy volume policy in native order ([#170](https://github.com/deploymenttheory/go-apfs-v2/issues/170)) ([b0816c6](https://github.com/deploymenttheory/go-apfs-v2/commit/b0816c697306aef5e2b6085d6b9b74baf8e3c02a))
+* **hostmeta:** assign held extended attributes on all supported OSes ([#180](https://github.com/deploymenttheory/go-apfs-v2/issues/180)) ([3bfb5ab](https://github.com/deploymenttheory/go-apfs-v2/commit/3bfb5ab5272d796fe89e0bab854e35b7aaf356be))
+* **hostmeta:** capture security from APFS and HFS images ([#165](https://github.com/deploymenttheory/go-apfs-v2/issues/165)) ([8245a36](https://github.com/deploymenttheory/go-apfs-v2/commit/8245a367794d9f4f4506929acb55a661e1f9c651))
+* **hostmeta:** coordinate native copy stage ordering and cleanup ([#176](https://github.com/deploymenttheory/go-apfs-v2/issues/176)) ([43c59f3](https://github.com/deploymenttheory/go-apfs-v2/commit/43c59f3d4014233bb3965b15c558b7b10aa7022c))
+* **hostmeta:** encode portable Darwin ACL attribute records ([#159](https://github.com/deploymenttheory/go-apfs-v2/issues/159)) ([b9f839a](https://github.com/deploymenttheory/go-apfs-v2/commit/b9f839a581260c3ee9a113bb38701b313156b8d2))
+* **hostmeta:** enumerate held extended attributes on every supported OS ([#179](https://github.com/deploymenttheory/go-apfs-v2/issues/179)) ([a6cde0f](https://github.com/deploymenttheory/go-apfs-v2/commit/a6cde0f917383fcce9537aebb9620db48ee17487))
+* **hostmeta:** execute deferred AppleDouble ACL restoration ([#158](https://github.com/deploymenttheory/go-apfs-v2/issues/158)) ([cb7492e](https://github.com/deploymenttheory/go-apfs-v2/commit/cb7492e9f50c861e660a925356212bcc78bd097b))
+* **hostmeta:** execute ordered AppleDouble unpack restoration ([#178](https://github.com/deploymenttheory/go-apfs-v2/issues/178)) ([9f801c0](https://github.com/deploymenttheory/go-apfs-v2/commit/9f801c0da7708920143693ff65376d705bf32af5))
+* **hostmeta:** execute portable security copy fallbacks ([#164](https://github.com/deploymenttheory/go-apfs-v2/issues/164)) ([2bca430](https://github.com/deploymenttheory/go-apfs-v2/commit/2bca43052ac1279ff1f526b78cabb27e1e644096))
+* **hostmeta:** prepare extended ACL chmod requests ([#160](https://github.com/deploymenttheory/go-apfs-v2/issues/160)) ([84e80ba](https://github.com/deploymenttheory/go-apfs-v2/commit/84e80ba0f75ed189774606a9cc1fc197e2e9ec84))
+* **hostmeta:** prepare optional extended chmod properties ([#163](https://github.com/deploymenttheory/go-apfs-v2/issues/163)) ([89ae029](https://github.com/deploymenttheory/go-apfs-v2/commit/89ae029e597f5d1fb0539d64e049d1504b20f005))
+* **hostmeta:** restore AppleDouble xattrs and qualify commercial DMGs ([#177](https://github.com/deploymenttheory/go-apfs-v2/issues/177)) ([5687f39](https://github.com/deploymenttheory/go-apfs-v2/commit/5687f3955bfd2f600c90cbeacca65c817e2b0dfe))
+* **images:** preserve explicit permissions and special mode bits ([#167](https://github.com/deploymenttheory/go-apfs-v2/issues/167)) ([265f7bb](https://github.com/deploymenttheory/go-apfs-v2/commit/265f7bb0d3081e3d543c798669fc42feff3596a0))
+* **images:** restore deferred AppleDouble ACLs in image trees ([#168](https://github.com/deploymenttheory/go-apfs-v2/issues/168)) ([5f1f60d](https://github.com/deploymenttheory/go-apfs-v2/commit/5f1f60d0d83a9baa231358921d51a93c6542bf35))
+* **images:** stage ordinary security copies in APFS and HFS trees ([#169](https://github.com/deploymenttheory/go-apfs-v2/issues/169)) ([8828a5c](https://github.com/deploymenttheory/go-apfs-v2/commit/8828a5c79412960e6d804f5b77e573a00acd9b14))
+* preserve BSD flags in APFS and HFS images ([#174](https://github.com/deploymenttheory/go-apfs-v2/issues/174)) ([ff2e94f](https://github.com/deploymenttheory/go-apfs-v2/commit/ff2e94fbcb00c96c7575242836cf7ff99bb2398c))
+* preserve independent APFS and HFS inode timestamps ([#172](https://github.com/deploymenttheory/go-apfs-v2/issues/172)) ([e960086](https://github.com/deploymenttheory/go-apfs-v2/commit/e96008661a8383d6c74cae4b21ac3bc03ca17013))
+* stage ordered stat restoration in APFS and HFS images ([#175](https://github.com/deploymenttheory/go-apfs-v2/issues/175)) ([a007973](https://github.com/deploymenttheory/go-apfs-v2/commit/a007973bd739e5714d031f96baaa6687bd53774b))
+
+
+### Bug Fixes
+
+* **appledouble:** match native attribute name validation ([#137](https://github.com/deploymenttheory/go-apfs-v2/issues/137)) ([3048558](https://github.com/deploymenttheory/go-apfs-v2/commit/3048558cfe8493e9d98c91d535d5628704bc45a1))
+* **appledouble:** match native record selection and read bounds ([#138](https://github.com/deploymenttheory/go-apfs-v2/issues/138)) ([c0c3080](https://github.com/deploymenttheory/go-apfs-v2/commit/c0c3080a9a91ec6ac6a074f5d48b6156d6607aa7))
+* **appledouble:** match native size limits and empty values ([#135](https://github.com/deploymenttheory/go-apfs-v2/issues/135)) ([0966c7d](https://github.com/deploymenttheory/go-apfs-v2/commit/0966c7d4a559a17205e01c3e10a37ba850a7e192))
+* **appledouble:** validate FinderInfo and preserve fork write semantics ([#139](https://github.com/deploymenttheory/go-apfs-v2/issues/139)) ([e297980](https://github.com/deploymenttheory/go-apfs-v2/commit/e29798082935cd320992e59094f7b0533f2701b4))
+* **hfsplus:** enforce stored ACLs with security catalog flags ([#161](https://github.com/deploymenttheory/go-apfs-v2/issues/161)) ([3821865](https://github.com/deploymenttheory/go-apfs-v2/commit/38218654c7a03b5bc61ada6c0c22f300562aa00b))
+
 ## [0.13.0](https://github.com/deploymenttheory/go-apfs-v2/compare/v0.12.0...v0.13.0) (2026-09-27)
 
 
