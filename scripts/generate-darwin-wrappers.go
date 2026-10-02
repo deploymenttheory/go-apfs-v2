@@ -26,6 +26,7 @@ func main() {
 	const quarantine = "/usr/lib/system/libquarantine.dylib"
 	const xpc = "/usr/lib/system/libxpc.dylib"
 	entries := []binding{
+		{name: "Getattrlistat", symbol: "getattrlistat", params: "fd int32, path *byte, attributes *unix.Attrlist, data unsafe.Pointer, size uintptr, options uint64", args: "uintptr(fd), uintptr(unsafe.Pointer(path)), uintptr(unsafe.Pointer(attributes)), uintptr(data), size, uintptr(options)", result: "int"},
 		{name: "Listxattr", symbol: "listxattr", params: "path, data *byte, size uintptr, options int32", args: "uintptr(unsafe.Pointer(path)), uintptr(unsafe.Pointer(data)), size, uintptr(options)", result: "size"},
 		{name: "Getxattr", symbol: "getxattr", params: "path, name, data *byte, size uintptr, position uint32, options int32", args: "uintptr(unsafe.Pointer(path)), uintptr(unsafe.Pointer(name)), uintptr(unsafe.Pointer(data)), size, uintptr(position), uintptr(options)", result: "size"},
 		{name: "Flistxattr", symbol: "flistxattr", params: "fd int32, data *byte, size uintptr, options int32", args: "uintptr(fd), uintptr(unsafe.Pointer(data)), size, uintptr(options)", result: "size"},

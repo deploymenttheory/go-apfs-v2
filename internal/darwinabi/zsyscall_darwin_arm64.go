@@ -9,6 +9,21 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// Getattrlistat is the typed getattrlistat wrapper.
+//
+//go:uintptrescapes
+func Getattrlistat(fd int32, path *byte, attributes *unix.Attrlist, data unsafe.Pointer, size uintptr, options uint64) (int32, error) {
+	r, _, e := syscall6(addrGetattrlistat, uintptr(fd), uintptr(unsafe.Pointer(path)), uintptr(unsafe.Pointer(attributes)), uintptr(data), size, uintptr(options))
+	if e != 0 {
+		return int32(r), e
+	}
+	return int32(r), nil
+}
+
+var addrGetattrlistat uintptr
+
+//go:cgo_import_dynamic importedGetattrlistat getattrlistat "/usr/lib/libSystem.B.dylib"
+
 // Listxattr is the typed listxattr wrapper.
 //
 //go:uintptrescapes

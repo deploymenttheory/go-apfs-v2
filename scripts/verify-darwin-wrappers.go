@@ -72,7 +72,7 @@ func verify() error {
 	defer log.Close()
 	var transcript bytes.Buffer
 	profile := filepath.Join(dir, "coverage.out")
-	cmd := exec.Command("go", "test", "-count=1", "-json", "-run", "^Test(Typed|Darwin|Held|Path|Quarantine|ACLIdentity|LibSystem|SandboxCapture|CaptureXattrs|XattrCapture|XattrValues|Metadata|OpenMetadata)", "-covermode=atomic", "-coverprofile="+profile, "-coverpkg=./internal/darwinabi", "./pkg/hostdata", "./pkg/hostdata/acl", "./pkg/hostdata/sandbox", "./internal/darwinabi")
+	cmd := exec.Command("go", "test", "-count=1", "-json", "-run", "^Test(Typed|Darwin|Held|Path|Quarantine|ACLIdentity|LibSystem|SandboxCapture|CaptureXattrs|XattrCapture|XattrValues|Metadata|OpenMetadata|EntryType)", "-covermode=atomic", "-coverprofile="+profile, "-coverpkg=./internal/darwinabi", "./pkg/hostdata", "./pkg/hostdata/acl", "./pkg/hostdata/sandbox", "./internal/darwinabi")
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0", "APFS_DARWIN_WRAPPERS_ORACLE="+oracle)
 	cmd.Stdout = io.MultiWriter(os.Stdout, log, &transcript)
 	cmd.Stderr = io.MultiWriter(os.Stderr, log)
@@ -154,7 +154,7 @@ func verify() error {
 	if passed < 1150 {
 		return fmt.Errorf("incomplete metadata provider tests: %d", passed)
 	}
-	files := []string{"scripts/verify-darwin-wrappers.go", "scripts/generate-darwin-wrappers.go", "scripts/audit-native-bindings.go", "testdata/appledouble/native/darwin-wrappers.c", "go.mod", "go.sum"}
+	files := []string{"scripts/capture-entry-type.go", "testdata/appledouble/native/entry-type.c", "testdata/appledouble/native/entry-type.json", "internal/testutil/entrytype/fixture_darwin.go", "scripts/verify-darwin-wrappers.go", "scripts/generate-darwin-wrappers.go", "scripts/audit-native-bindings.go", "testdata/appledouble/native/darwin-wrappers.c", "go.mod", "go.sum"}
 	for _, pattern := range []string{"internal/darwinabi/*", "pkg/hostdata/*.go", "pkg/hostdata/acl/*.go", "pkg/hostdata/sandbox/*.go"} {
 		matches, err := filepath.Glob(pattern)
 		if err != nil {
