@@ -112,7 +112,9 @@ func TestContentOpenDescriptorLifecycle(t *testing.T) {
 	if _, err := checkContentFile(dir); !errors.Is(err, ErrContentType) {
 		t.Fatal("wrong type", err)
 	}
-	if _, err := dir.Stat(); !errors.Is(err, os.ErrClosed) {
+	// A second Close must report the Go lifetime sentinel on every host.
+	// Windows directory Stat instead returns native ERROR_INVALID_HANDLE.
+	if err := dir.Close(); !errors.Is(err, os.ErrClosed) {
 		t.Fatal("rejected descriptor leaked", err)
 	}
 }
