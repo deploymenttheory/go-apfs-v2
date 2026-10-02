@@ -31,6 +31,7 @@ formats remain in `pkg/appledouble`; portable persistence remains in
 
 | Need | API and contract |
 | --- | --- |
+| Discover a contained entry without reading its data or EAs | `StatMetadata(root, name)`; final symlinks are not followed and host metadata permissions remain effective. See [rooted metadata discovery](../../docs/rooted-metadata-stat.md). |
 | Inspect or assign one native host attribute | Strict held xattr APIs below; inspect actual errors and readback normalization. |
 | Preserve complete logical metadata between hosts/images | `pkg/metatransport` plus APFS/HFS streaming readers/writers; unsupported local native storage does not discard a logical value. |
 | Restore a validated complete AppleDouble snapshot | `RestoreAppleDouble`; validate first, then perform ordered destination effects. |
