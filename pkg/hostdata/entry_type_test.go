@@ -152,8 +152,10 @@ func TestEntryTypeParentComponents(t *testing.T) {
 	if err := os.Mkdir(filepath.Join(dir, "kind"), 0700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Symlink("sub/deep", filepath.Join(dir, "route")); err != nil {
-		t.Fatal(err)
+	for name, target := range map[string]string{"route": "sub/deep", "chain": "route/.."} {
+		if err := os.Symlink(target, filepath.Join(dir, name)); err != nil {
+			t.Fatal(err)
+		}
 	}
 	root, err := os.OpenRoot(dir)
 	if err != nil {
@@ -161,8 +163,8 @@ func TestEntryTypeParentComponents(t *testing.T) {
 	}
 	defer root.Close()
 	for name, want := range map[string]os.FileMode{
-		"route/../kind": 0,
-		"sub/":          os.ModeDir, "sub/.": os.ModeDir, "route/..": os.ModeDir,
+		"route/../kind": 0, "chain/kind": 0,
+		"sub/": os.ModeDir, "sub/.": os.ModeDir, "route/..": os.ModeDir,
 	} {
 		got, err := ReadEntryType(root, name)
 		if err != nil || got != want {
