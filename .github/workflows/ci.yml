@@ -134,6 +134,17 @@ jobs:
 
       - name: Vet
         run: go vet ./...
+      - name: Held metadata providers above 95% coverage
+        env:
+          CGO_ENABLED: "0"
+        run: go run scripts/verify-held-metadata.go
+      - name: Upload held metadata coverage
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: held-metadata-${{ matrix.os }}
+          path: artifacts/held-metadata/
+          if-no-files-found: error
       - name: Strict xattr API tests and coverage above 95%
         env:
           CGO_ENABLED: "0"
@@ -531,17 +542,6 @@ jobs:
         with:
           name: darwin-wrappers
           path: artifacts/darwin-wrappers/
-          if-no-files-found: error
-      - name: Held metadata providers above 95% coverage
-        env:
-          CGO_ENABLED: "0"
-        run: go run scripts/verify-held-metadata.go
-      - name: Upload held metadata coverage
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: held-metadata-${{ matrix.os }}
-          path: artifacts/held-metadata/
           if-no-files-found: error
       - name: Compression storage above 95% coverage
         env:

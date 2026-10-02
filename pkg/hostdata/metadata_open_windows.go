@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"runtime"
+	"strings"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -57,4 +58,15 @@ func openWindowsMetadataRights(directory *os.File, base string, access uint32) (
 		return nil, err
 	}
 	return os.NewFile(uintptr(handle), base), nil
+}
+
+func openMetadataParent(root *os.Root, name string) (*os.File, error) {
+	if strings.Contains(name, "..") {
+		var err error
+		name, err = metadataParentPath(root, name)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return root.Open(name)
 }

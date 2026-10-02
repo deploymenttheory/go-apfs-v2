@@ -58,7 +58,7 @@ func metadataParent(root *os.Root, name string, open func(*os.File, string) (*os
 	if parent == "" {
 		parent = "."
 	}
-	directory, err := root.Open(parent)
+	directory, err := openMetadataParent(root, parent)
 	if err != nil {
 		return nil, err
 	}

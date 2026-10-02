@@ -33,7 +33,9 @@ including dangling links and links pointing outside the root. Renaming the root
 and replacing its old pathname does not redirect the query. Parent components
 resolve before the final leaf is interpreted: `link/../file` is not lexically
 collapsed to `file`. The shared parent resolver also retains this behavior for
-the existing content and metadata openers. Nil/closed roots,
+the existing content and metadata openers. Windows uses a rooted, bounded
+component walk before its native lexical cleaning can erase `link/..`; missing
+parents, non-directories, escaping links and link loops remain errors. Nil/closed roots,
 missing entries, escapes and actual authorization failures return errors; native
 causes remain available through `errors.Is` and `errors.As`.
 
@@ -53,6 +55,13 @@ This is a point-in-time observation, not a held identity or an access guarantee.
 A subsequent content or mutation operation must bind its own descriptor and
 exclude or detect concurrent changes. The API does not provide a transaction
 between discovery and acquisition.
+
+For rename qualification on Windows, acquire a child root through a held parent
+with `parent.OpenRoot(name)`, which grants delete sharing. A root acquired with
+`os.OpenRoot(path)` uses Go's ordinary Windows open and can itself prevent a
+directory rename. The query never closes or changes caller-owned handles. The
+same rename-and-decoy assertion uses child-root acquisition on every host; a
+failed Windows rename is not skipped or accepted as success.
 
 ## Native boundary and evidence
 

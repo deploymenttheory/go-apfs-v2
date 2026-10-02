@@ -120,7 +120,12 @@ func TestEntryTypeHeldRootRename(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "file"), nil, 0600); err != nil {
 		t.Fatal(err)
 	}
-	root, err := os.OpenRoot(dir)
+	parentRoot, err := os.OpenRoot(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer parentRoot.Close()
+	root, err := parentRoot.OpenRoot("original")
 	if err != nil {
 		t.Fatal(err)
 	}
