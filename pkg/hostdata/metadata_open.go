@@ -30,7 +30,7 @@ func openMetadataChecked(root *os.Root, name string, open func(*os.Root, string,
 	if root == nil || !filepath.IsLocal(name) {
 		return nil, os.ErrInvalid
 	}
-	before, err := root.Lstat(name)
+	before, err := StatMetadata(root, name)
 	if err != nil {
 		return nil, err
 	}

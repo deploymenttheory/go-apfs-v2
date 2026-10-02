@@ -24,6 +24,14 @@ func openWindowsMetadataAt(directory *os.File, base string) (*os.File, error) {
 }
 
 func openWindowsMetadataAccess(directory *os.File, base string, write bool) (*os.File, error) {
+	access := uint32(windows.SYNCHRONIZE | windows.READ_CONTROL | windows.FILE_READ_ATTRIBUTES | windows.FILE_READ_EA)
+	if write {
+		access |= windows.FILE_WRITE_ATTRIBUTES | windows.FILE_WRITE_EA
+	}
+	return openWindowsMetadataRights(directory, base, access)
+}
+
+func openWindowsMetadataRights(directory *os.File, base string, access uint32) (*os.File, error) {
 	if base == "." {
 		base = ""
 	}
@@ -37,10 +45,6 @@ func openWindowsMetadataAccess(directory *os.File, base string, write bool) (*os
 	}
 	var handle windows.Handle
 	var nativeErr error
-	access := uint32(windows.SYNCHRONIZE | windows.READ_CONTROL | windows.FILE_READ_ATTRIBUTES | windows.FILE_READ_EA)
-	if write {
-		access |= windows.FILE_WRITE_ATTRIBUTES | windows.FILE_WRITE_EA
-	}
 	controlErr := conn.Control(func(fd uintptr) {
 		attributes := windows.OBJECT_ATTRIBUTES{Length: uint32(unsafe.Sizeof(windows.OBJECT_ATTRIBUTES{})), RootDirectory: windows.Handle(fd), ObjectName: objectName, Attributes: windows.OBJ_DONT_REPARSE}
 		var status windows.IO_STATUS_BLOCK
