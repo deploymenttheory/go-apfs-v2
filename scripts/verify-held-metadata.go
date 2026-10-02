@@ -5,8 +5,6 @@ package main
 
 import (
 	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -16,6 +14,8 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/evidenceaudit"
 )
 
 func main() {
@@ -142,28 +142,13 @@ func verify() error {
 	}
 	files := []string{"pkg/hostdata/held_metadata.go", "pkg/hostdata/held_metadata_test.go", "pkg/hostdata/held_metadata_darwin.go", "pkg/hostdata/held_metadata_darwin_test.go", "pkg/hostdata/held_metadata_other.go", "pkg/hostdata/held_metadata_other_test.go", "pkg/hostdata/libsystem_security_darwin.go", "pkg/hostdata/metadata_open.go", "pkg/hostdata/metadata_open_test.go", "pkg/hostdata/metadata_open_darwin.go", "pkg/hostdata/metadata_open_darwin_test.go", "pkg/hostdata/metadata_open_linux.go", "pkg/hostdata/metadata_open_windows.go", "scripts/verify-held-metadata.go", "scripts/verify-held-metadata-native.go", "testdata/appledouble/native/held-metadata.c", "go.mod", "go.sum"}
 	files = append(files, "pkg/hostdata/metadata_stat.go", "pkg/hostdata/metadata_stat_other.go", "pkg/hostdata/metadata_stat_windows.go", "pkg/hostdata/metadata_stat_test.go", "pkg/hostdata/metadata_stat_windows_test.go")
-	hashes := map[string]string{}
 	files = append(files, "pkg/hostdata/held_metadata_fixture_test.go", "pkg/hostdata/metadata_open_windows_test.go", "testdata/appledouble/native/held-metadata.json.gz")
 	files = append(files, "pkg/hostdata/held_lifecycle.go", "pkg/hostdata/held_lifecycle_test.go", "pkg/hostdata/held_lifecycle_native_test.go", "internal/testutil/heldlifecycle/oracle.go", "testdata/appledouble/native/held-lifecycle.c", "testdata/appledouble/native/held-lifecycle.json.gz", "scripts/verify-held-lifecycle.go")
 	files = append(files, "pkg/hostdata/content_open.go", "pkg/hostdata/content_open_unix.go", "pkg/hostdata/content_open_windows.go", "pkg/hostdata/content_open_other.go", "pkg/hostdata/content_open_test.go", "pkg/hostdata/content_open_unix_test.go", "pkg/hostdata/content_open_windows_test.go", "pkg/hostdata/content_open_darwin_test.go", "pkg/hostdata/content_open_fixture_test.go", "scripts/capture-content-open.go", "testdata/appledouble/native/content-open.c", "testdata/appledouble/native/content-open.json")
-	for _, pattern := range []string{"pkg/hostdata/entry_type*.go", "pkg/hostdata/metadata_parent*.go", "internal/testutil/entrytype/*.go"} {
-		matches, err := filepath.Glob(pattern)
-		if err != nil {
-			return err
-		}
-		if len(matches) == 0 {
-			return fmt.Errorf("unmatched entry-type sources: %s", pattern)
-		}
-		files = append(files, matches...)
-	}
-	files = append(files, "scripts/capture-entry-type.go", "testdata/appledouble/native/entry-type.c", "testdata/appledouble/native/entry-type.json")
-	for _, path := range files {
-		b, e := os.ReadFile(path)
-		if e != nil {
-			return e
-		}
-		h := sha256.Sum256(b)
-		hashes[path] = hex.EncodeToString(h[:])
+	files = append(files, "pkg/hostdata/entry_type*.go", "pkg/hostdata/metadata_parent*.go", "internal/testutil/entrytype/*.go", "scripts/capture-entry-type.go", "testdata/appledouble/native/entry-type.c", "testdata/appledouble/native/entry-type.json")
+	hashes, e := evidenceaudit.SourceHashes(os.DirFS("."), files)
+	if e != nil {
+		return e
 	}
 	revision, e := exec.Command("git", "rev-parse", "HEAD").Output()
 	if e != nil {
@@ -175,6 +160,9 @@ func verify() error {
 		return e
 	}
 	if e = os.WriteFile(filepath.Join(dir, "coverage.json"), append(b, '\n'), 0600); e != nil {
+		return e
+	}
+	if e = evidenceaudit.Coverage(os.DirFS("."), os.DirFS(filepath.Dir(dir)), filepath.Base(dir), strings.TrimSpace(string(revision)), runtime.GOOS); e != nil {
 		return e
 	}
 	fmt.Printf("Held metadata providers: %d/%d covered statements; %d passing test records on %s/%s\n", covered, total, passed, runtime.GOOS, runtime.GOARCH)
