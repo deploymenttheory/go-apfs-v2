@@ -1,0 +1,71 @@
+{
+  "cases": {
+    "directory": {
+      "errno": 0,
+      "wrong_type": true,
+      "hex": ""
+    },
+    "fifo": {
+      "errno": 0,
+      "wrong_type": true,
+      "hex": ""
+    },
+    "missing": {
+      "errno": 2,
+      "wrong_type": false,
+      "hex": ""
+    },
+    "ordinary": {
+      "errno": 0,
+      "wrong_type": false,
+      "hex": "756e6368616e676564"
+    },
+    "read": {
+      "errno": 13,
+      "wrong_type": false,
+      "hex": ""
+    },
+    "readattr": {
+      "errno": 0,
+      "wrong_type": false,
+      "hex": "756e6368616e676564"
+    },
+    "readextattr": {
+      "errno": 0,
+      "wrong_type": false,
+      "hex": "756e6368616e676564"
+    },
+    "readsecurity": {
+      "errno": 0,
+      "wrong_type": false,
+      "hex": "756e6368616e676564"
+    },
+    "symlink": {
+      "errno": 62,
+      "wrong_type": false,
+      "hex": ""
+    },
+    "write": {
+      "errno": 0,
+      "wrong_type": false,
+      "hex": "756e6368616e676564"
+    },
+    "writeextattr": {
+      "errno": 0,
+      "wrong_type": false,
+      "hex": "756e6368616e676564"
+    },
+    "writesecurity": {
+      "errno": 0,
+      "wrong_type": false,
+      "hex": "756e6368616e676564"
+    }
+  },
+  "compiler": "Apple clang version 21.0.0 (clang-2100.3.34.2)\nTarget: arm64-apple-darwin27.0.0\nThread model: posix\nInstalledDir: /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin\n",
+  "macos": "ProductName:\t\tmacOS\nProductVersion:\t\t27.0.1\nBuildVersion:\t\t26A434\n",
+  "schema": 1,
+  "source_sha256": {
+    "scripts/capture-content-open.go": "fc2bf84ceb34c70138287d487927b61d46a5650f22b566a3253d37d0d193a909",
+    "testdata/appledouble/native/content-open.c": "c2631fb274e0ca2c5a17a4cecebd1b2633fde54e7d70b911ca41a8fd2c3f0341"
+  }
+}

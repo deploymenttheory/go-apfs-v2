@@ -36,7 +36,7 @@ func verify() error {
 	defer log.Close()
 	var transcript bytes.Buffer
 	profile := filepath.Join(dir, "coverage.out")
-	cmd := exec.Command("go", "test", "-count=1", "-json", "-run", "^Test(HeldMetadata|HeldLifecycle|LogicalMetadata|MetadataArgument|DarwinSecurity|OpenMetadata|MetadataOpen|MetadataStat|DarwinMetadata)", "-covermode=atomic", "-coverprofile="+profile, "-coverpkg=./pkg/hostdata/...", "./pkg/hostdata")
+	cmd := exec.Command("go", "test", "-count=1", "-json", "-run", "^Test(HeldMetadata|HeldLifecycle|LogicalMetadata|MetadataArgument|DarwinSecurity|OpenMetadata|MetadataOpen|MetadataStat|DarwinMetadata|ContentOpen)", "-covermode=atomic", "-coverprofile="+profile, "-coverpkg=./pkg/hostdata/...", "./pkg/hostdata")
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 	cmd.Stdout = io.MultiWriter(os.Stdout, log, &transcript)
 	cmd.Stderr = io.MultiWriter(os.Stderr, log)
@@ -67,6 +67,12 @@ func verify() error {
 	coverageFiles := map[string][2]int{"pkg/hostdata/held_metadata.go": {}, "pkg/hostdata/metadata_open.go": {}}
 	coverageFiles["pkg/hostdata/held_lifecycle.go"] = [2]int{}
 	coverageFiles["pkg/hostdata/metadata_stat.go"] = [2]int{}
+	coverageFiles["pkg/hostdata/content_open.go"] = [2]int{}
+	if runtime.GOOS == "windows" {
+		coverageFiles["pkg/hostdata/content_open_windows.go"] = [2]int{}
+	} else {
+		coverageFiles["pkg/hostdata/content_open_unix.go"] = [2]int{}
+	}
 	if runtime.GOOS == "windows" {
 		coverageFiles["pkg/hostdata/metadata_stat_windows.go"] = [2]int{}
 	} else {
@@ -133,6 +139,7 @@ func verify() error {
 	hashes := map[string]string{}
 	files = append(files, "pkg/hostdata/held_metadata_fixture_test.go", "pkg/hostdata/metadata_open_windows_test.go", "testdata/appledouble/native/held-metadata.json.gz")
 	files = append(files, "pkg/hostdata/held_lifecycle.go", "pkg/hostdata/held_lifecycle_test.go", "pkg/hostdata/held_lifecycle_native_test.go", "internal/testutil/heldlifecycle/oracle.go", "testdata/appledouble/native/held-lifecycle.c", "testdata/appledouble/native/held-lifecycle.json.gz", "scripts/verify-held-lifecycle.go")
+	files = append(files, "pkg/hostdata/content_open.go", "pkg/hostdata/content_open_unix.go", "pkg/hostdata/content_open_windows.go", "pkg/hostdata/content_open_other.go", "pkg/hostdata/content_open_test.go", "pkg/hostdata/content_open_unix_test.go", "pkg/hostdata/content_open_windows_test.go", "pkg/hostdata/content_open_darwin_test.go", "pkg/hostdata/content_open_fixture_test.go", "scripts/capture-content-open.go", "testdata/appledouble/native/content-open.c", "testdata/appledouble/native/content-open.json")
 	for _, path := range files {
 		b, e := os.ReadFile(path)
 		if e != nil {
