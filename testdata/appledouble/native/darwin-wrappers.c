@@ -6,6 +6,7 @@
 #include <sys/xattr.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <sys/unistd.h>
 #include <pwd.h>
 #include <grp.h>
 #include <membership.h>
@@ -22,6 +23,7 @@ SIGNATURE(filesec_get_property, int, filesec_t, filesec_property_t, void *);
 SIGNATURE(fstatx_np, int, int, struct stat *, filesec_t);
 SIGNATURE(statx_np, int, const char *, struct stat *, filesec_t);
 SIGNATURE(lstatx_np, int, const char *, struct stat *, filesec_t);
+SIGNATURE(getattrlistat, int, int, const char *, void *, void *, size_t, unsigned long);
 SIGNATURE(fsetattrlist, int, int, void *, void *, size_t, unsigned int);
 SIGNATURE(ffsctl, int, int, unsigned long, void *, unsigned int);
 SIGNATURE(getpwuid_r, int, uid_t, struct passwd *, char *, size_t, struct passwd **);

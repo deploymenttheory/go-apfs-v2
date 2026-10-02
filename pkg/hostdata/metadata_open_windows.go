@@ -58,3 +58,11 @@ func openWindowsMetadataRights(directory *os.File, base string, access uint32) (
 	}
 	return os.NewFile(uintptr(handle), base), nil
 }
+
+func openMetadataParent(root *os.Root, name string) (*os.File, error) {
+	name, err := metadataParentPath(root, name)
+	if err != nil {
+		return nil, err
+	}
+	return root.Open(name)
+}

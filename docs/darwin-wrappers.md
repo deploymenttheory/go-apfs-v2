@@ -2,12 +2,12 @@
 
 `internal/darwinabi` supplies the macOS host operations that the pinned
 `golang.org/x/sys/unix` v0.48.0 does not expose with the required signatures.
-It replaces the `purego` dependency without removing host features. The target
-release is v0.15.0; this document does not claim that an unpublished branch is
-already qualified for downstream adoption.
+It replaced the `purego` dependency in v0.15.0 without removing host features.
+The additional basic entry-type query requires its own passing qualification
+and published release before downstream adoption.
 
 The extension follows x/sys's fixed libSystem import and Go runtime call pattern.
-There are 27 typed functions, generated for amd64 and arm64. There is no public
+There are 28 typed functions, generated for amd64 and arm64. There is no public
 function-pointer dispatch, runtime symbol lookup, generic FFI, CGo production
 code, helper process, or numbered Darwin syscall. The production code still
 calls macOS libraries for macOS host observations, just as x/sys does. It is not
@@ -15,7 +15,7 @@ an implementation of the macOS kernel in Go.
 
 | Boundary | Operations retained |
 | --- | --- |
-| libSystem | Option-aware xattr reads/listing, filesec properties, held/path metadata, extended ACL writes, held creation time, flag compare-and-swap, protected open, quarantine MAC entry point, account/group/UUID lookup |
+| libSystem | Basic entry-type queries, option-aware xattr reads/listing, filesec properties, held/path metadata, extended ACL writes, held creation time, flag compare-and-swap, protected open, quarantine MAC entry point, account/group/UUID lookup |
 | libquarantine | Allocate/capture/free the process record used to independently confirm absent quarantine state |
 | libxpc | Query the current process's App Sandbox state |
 
@@ -33,7 +33,7 @@ that could read a different thread's errno after a scheduling event. Signed
 error codes and the one-byte C boolean are handled separately. Intel statx
 imports retain the `$INODE64` suffix.
 
-`Passwd` and `Group` match the measured SDK layouts. Clang checks 19 public
+`Passwd` and `Group` match the measured SDK layouts. Clang checks 20 public
 function signatures and the relevant layouts on both architectures. The private
 interfaces continue to be qualified by the existing independent native C
 observers, SDK/source research and signed process-context CI. Their signatures
@@ -97,6 +97,5 @@ These internal entry points require requalification when changing Go versions.
 
 After maintainer merge and publication, downstream projects must pin the released
 module and rerun their full checks. Local replacement testing proves a candidate,
-not the published v0.14.0 dependency currently used by codesign PR70 and package
-PR72. Neither downstream PR should be treated as qualified for this correction
-until the replacement version is published and tested.
+not a published dependency. Codesign currently uses v0.16.0; the new
+[rooted entry-type query](rooted-entry-type.md) must be released before adoption.

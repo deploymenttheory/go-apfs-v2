@@ -1,0 +1,114 @@
+{
+  "cases": {
+    "dangling": {
+      "errno": 0,
+      "vnode_type": 5,
+      "size": 8,
+      "stat_errno": 0
+    },
+    "directory": {
+      "errno": 0,
+      "vnode_type": 2,
+      "size": 8,
+      "stat_errno": 0
+    },
+    "fifo": {
+      "errno": 0,
+      "vnode_type": 7,
+      "size": 8,
+      "stat_errno": 0
+    },
+    "missing": {
+      "errno": 2,
+      "vnode_type": 0,
+      "size": 0,
+      "stat_errno": 2
+    },
+    "ordinary": {
+      "errno": 0,
+      "vnode_type": 1,
+      "size": 8,
+      "stat_errno": 0
+    },
+    "read": {
+      "errno": 0,
+      "vnode_type": 1,
+      "size": 8,
+      "stat_errno": 0
+    },
+    "read+readsecurity+readextattr": {
+      "errno": 0,
+      "vnode_type": 1,
+      "size": 8,
+      "stat_errno": 13
+    },
+    "readattr": {
+      "errno": 13,
+      "vnode_type": 0,
+      "size": 0,
+      "stat_errno": 13
+    },
+    "readattr+readsecurity": {
+      "errno": 13,
+      "vnode_type": 0,
+      "size": 0,
+      "stat_errno": 13
+    },
+    "readextattr": {
+      "errno": 0,
+      "vnode_type": 1,
+      "size": 8,
+      "stat_errno": 0
+    },
+    "readsecurity": {
+      "errno": 0,
+      "vnode_type": 1,
+      "size": 8,
+      "stat_errno": 13
+    },
+    "socket": {
+      "errno": 0,
+      "vnode_type": 6,
+      "size": 8,
+      "stat_errno": 0
+    },
+    "symlink": {
+      "errno": 0,
+      "vnode_type": 5,
+      "size": 8,
+      "stat_errno": 0
+    },
+    "write": {
+      "errno": 0,
+      "vnode_type": 1,
+      "size": 8,
+      "stat_errno": 0
+    },
+    "writeattr": {
+      "errno": 0,
+      "vnode_type": 1,
+      "size": 8,
+      "stat_errno": 0
+    },
+    "writeextattr": {
+      "errno": 0,
+      "vnode_type": 1,
+      "size": 8,
+      "stat_errno": 0
+    },
+    "writesecurity": {
+      "errno": 0,
+      "vnode_type": 1,
+      "size": 8,
+      "stat_errno": 0
+    }
+  },
+  "compiler": "Apple clang version 21.0.0 (clang-2100.3.34.2)\nTarget: arm64-apple-darwin27.0.0\nThread model: posix\nInstalledDir: /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin\n",
+  "macos": "ProductName:\t\tmacOS\nProductVersion:\t\t27.0.1\nBuildVersion:\t\t26A434\n",
+  "schema": 1,
+  "source_sha256": {
+    "internal/testutil/entrytype/fixture_darwin.go": "3c0ce7f9baca902842cf19a8ba6d5c78fd9af4d219e3166101d7ea31a32edee8",
+    "scripts/capture-entry-type.go": "7e7fcdeae06ae69797dfc606704aaa723969273aa4c31d6b92014dcf4ada47fb",
+    "testdata/appledouble/native/entry-type.c": "7790af7496dfa0a708883d91268ef54cb2bc639903068cbb4784df13ca96d57c"
+  }
+}

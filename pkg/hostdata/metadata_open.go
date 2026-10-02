@@ -49,11 +49,16 @@ func openMetadataChecked(root *os.Root, name string, open func(*os.Root, string,
 }
 
 func metadataParent(root *os.Root, name string, open func(*os.File, string) (*os.File, error)) (result *os.File, err error) {
-	parent, base := filepath.Split(filepath.Clean(name))
+	// Resolve parent components through the held root before interpreting the leaf.
+	// Lexical cleaning here changes paths such as link/../file.
+	parent, base := filepath.Split(name)
+	if base == "" || base == "." || base == ".." {
+		parent, base = name, "."
+	}
 	if parent == "" {
 		parent = "."
 	}
-	directory, err := root.Open(parent)
+	directory, err := openMetadataParent(root, parent)
 	if err != nil {
 		return nil, err
 	}
