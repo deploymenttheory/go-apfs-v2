@@ -30,7 +30,10 @@ if kind == 0 {
 Names must be local to the supplied `os.Root`. Intermediate links must remain
 inside that root. A final symlink is inspected without following its target,
 including dangling links and links pointing outside the root. Renaming the root
-and replacing its old pathname does not redirect the query. Nil/closed roots,
+and replacing its old pathname does not redirect the query. Parent components
+resolve before the final leaf is interpreted: `link/../file` is not lexically
+collapsed to `file`. The shared parent resolver also retains this behavior for
+the existing content and metadata openers. Nil/closed roots,
 missing entries, escapes and actual authorization failures return errors; native
 causes remain available through `errors.Is` and `errors.As`.
 

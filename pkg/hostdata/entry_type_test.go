@@ -135,3 +135,49 @@ func TestEntryTypeHeldRootRename(t *testing.T) {
 		t.Fatal("query reopened stale root name", got, err)
 	}
 }
+
+func TestEntryTypeParentComponents(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "sub/deep"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "sub/kind"), nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(dir, "kind"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("sub/deep", filepath.Join(dir, "route")); err != nil {
+		t.Fatal(err)
+	}
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	for name, want := range map[string]os.FileMode{
+		"route/../kind": 0,
+		"sub/":          os.ModeDir, "sub/.": os.ModeDir, "route/..": os.ModeDir,
+	} {
+		got, err := ReadEntryType(root, name)
+		if err != nil || got != want {
+			t.Fatal("parent components changed selection", name, got, want, err)
+		}
+	}
+	for name, open := range map[string]func(*os.Root, string) (*os.File, error){
+		"content": OpenContentFileRead, "metadata": OpenMetadataFileRead,
+	} {
+		file, err := open(root, "route/../kind")
+		if err != nil {
+			t.Fatal(name, "shared opener changed selection", err)
+		}
+		info, statErr := file.Stat()
+		closeErr := file.Close()
+		if statErr != nil || closeErr != nil || !info.Mode().IsRegular() {
+			t.Fatal(name, info, statErr, closeErr)
+		}
+	}
+	if _, err := ReadEntryType(root, "route/../kind/"); err == nil {
+		t.Fatal("trailing separator accepted regular file")
+	}
+}
