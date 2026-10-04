@@ -1,14 +1,10 @@
 package hostdata
 
 import (
-	"bufio"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
 	"os"
-	"strings"
-	"unicode/utf16"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -47,8 +43,8 @@ func prepareReplacementAt(source *os.File, stage *os.Root, _ os.FileInfo) (*os.F
 	if err != nil {
 		return nil, err
 	}
-	if basic.Attributes&(windows.FILE_ATTRIBUTE_COMPRESSED|windows.FILE_ATTRIBUTE_ENCRYPTED|windows.FILE_ATTRIBUTE_SPARSE_FILE|windows.FILE_ATTRIBUTE_REPARSE_POINT) != 0 {
-		return nil, fmt.Errorf("%w: compressed, encrypted, sparse or reparse source", ErrUnsupportedReplacement)
+	if basic.Attributes&(windows.FILE_ATTRIBUTE_COMPRESSED|windows.FILE_ATTRIBUTE_ENCRYPTED|windows.FILE_ATTRIBUTE_REPARSE_POINT) != 0 {
+		return nil, fmt.Errorf("%w: compressed, encrypted or reparse source", ErrUnsupportedReplacement)
 	}
 	f, err := stage.OpenFile("replacement", os.O_CREATE|os.O_EXCL|os.O_RDWR, 0600)
 	if err != nil {
@@ -62,6 +58,13 @@ func prepareReplacementAt(source *os.File, stage *os.Root, _ os.FileInfo) (*os.F
 	if closeErr != nil {
 		target.Close()
 		return nil, closeErr
+	}
+	if basic.Attributes&windows.FILE_ATTRIBUTE_SPARSE_FILE != 0 {
+		var returned uint32
+		if err := windows.DeviceIoControl(windows.Handle(target.Fd()), windows.FSCTL_SET_SPARSE, nil, 0, nil, 0, &returned, nil); err != nil {
+			target.Close()
+			return nil, err
+		}
 	}
 	if err := copyReplacementStreams(source, target); err != nil {
 		target.Close()
@@ -145,59 +148,5 @@ func copyReplacementStreams(source, target *os.File) (err error) {
 	r := &replacementBackup{file: input, proc: backupRead}
 	w := &replacementBackup{file: target, proc: backupWrite}
 	defer func() { err = errors.Join(err, r.close(), w.close()) }()
-	reader := bufio.NewReaderSize(r, 64<<10)
-	writer := bufio.NewWriterSize(w, 64<<10)
-	budget := uint64(8 << 20)
-	for count := 0; count < 65536; count++ {
-		var header [20]byte
-		if _, err := io.ReadFull(reader, header[:]); err != nil {
-			if err == io.EOF {
-				return writer.Flush()
-			}
-			return err
-		}
-		id := binary.LittleEndian.Uint32(header[:4])
-		size := binary.LittleEndian.Uint64(header[8:16])
-		nameSize := binary.LittleEndian.Uint32(header[16:])
-		if size > 1<<63-1 || nameSize > 64<<10 || nameSize%2 != 0 {
-			return fmt.Errorf("invalid backup stream size")
-		}
-		name := make([]byte, int(nameSize))
-		if _, err := io.ReadFull(reader, name); err != nil {
-			return err
-		}
-		switch id {
-		case 1, 5, 7: // main data, hard-link records, object identity
-			if _, err := io.CopyN(io.Discard, reader, int64(size)); err != nil {
-				return err
-			}
-		case 2, 4: // extended attributes, alternate data
-			if uint64(nameSize) > budget || size > budget-uint64(nameSize) {
-				return fmt.Errorf("%w: extended attributes/streams exceed limit", ErrUnsupportedReplacement)
-			}
-			budget -= uint64(nameSize) + size
-			if id == 4 {
-				units := make([]uint16, len(name)/2)
-				for i := range units {
-					units[i] = binary.LittleEndian.Uint16(name[2*i:])
-				}
-				text := string(utf16.Decode(units))
-				if !strings.HasPrefix(text, ":") || !strings.HasSuffix(text, ":$DATA") || strings.Count(text, ":") != 2 || strings.ContainsAny(text, "\\/\x00") {
-					return fmt.Errorf("%w: alternate stream name", ErrUnsupportedReplacement)
-				}
-			}
-			if _, err := writer.Write(header[:]); err != nil {
-				return err
-			}
-			if _, err := writer.Write(name); err != nil {
-				return err
-			}
-			if _, err := io.CopyN(writer, reader, int64(size)); err != nil {
-				return err
-			}
-		default:
-			return fmt.Errorf("%w: backup stream type %d", ErrUnsupportedReplacement, id)
-		}
-	}
-	return fmt.Errorf("%w: backup stream count", ErrUnsupportedReplacement)
+	return filterReplacementStreams(r, w)
 }
