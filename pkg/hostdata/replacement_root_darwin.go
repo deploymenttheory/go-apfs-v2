@@ -23,13 +23,20 @@ func prepareReplacementAt(source *os.File, stage *os.Root, info os.FileInfo) (*o
 	if err := clearReplacementACL(fmt.Sprintf("/dev/fd/%d", dir.Fd())); err != nil {
 		return nil, err
 	}
-	if err := unix.Fclonefileat(int(source.Fd()), int(dir.Fd()), "replacement", 0); err != nil {
-		return nil, err
-	}
-	if err := stage.Chmod("replacement", 0600); err != nil {
-		return nil, err
-	}
-	return stage.OpenFile("replacement", os.O_RDWR, 0)
+	return prepareReplacementUsing(
+		func() error { return unix.Fclonefileat(int(source.Fd()), int(dir.Fd()), "replacement", 0) },
+		replacementCloneUnavailable,
+		func(cloned bool) (*os.File, error) {
+			if !cloned {
+				return stage.OpenFile("replacement", os.O_CREATE|os.O_EXCL|os.O_RDWR, 0600)
+			}
+			if err := stage.Chmod("replacement", 0600); err != nil {
+				return nil, err
+			}
+			return stage.OpenFile("replacement", os.O_RDWR, 0)
+		},
+		func(target *os.File) error { return copyReplacementMetadata(source, target, info) },
+	)
 }
 
 func restoreReplacementMetadataAt(source, target *os.File, info os.FileInfo) error {

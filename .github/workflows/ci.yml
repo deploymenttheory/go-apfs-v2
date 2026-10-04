@@ -134,6 +134,29 @@ jobs:
 
       - name: Vet
         run: go vet ./...
+      - name: Replacement fallback coverage above 95%
+        env:
+          CGO_ENABLED: "0"
+        run: go run scripts/verify-replacement.go
+      - name: Upload replacement fallback coverage
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: replacement-coverage-${{ matrix.os }}
+          path: artifacts/replacement-coverage/
+          if-no-files-found: error
+      - name: Native APFS and HFS+ replacement qualification
+        if: runner.os == 'macOS'
+        env:
+          CGO_ENABLED: "0"
+        run: go run scripts/verify-replacement-native.go
+      - name: Upload native replacement qualification
+        if: always() && runner.os == 'macOS'
+        uses: actions/upload-artifact@v7
+        with:
+          name: replacement-native
+          path: artifacts/replacement-native/
+          if-no-files-found: error
       - name: Held metadata providers above 95% coverage
         env:
           CGO_ENABLED: "0"

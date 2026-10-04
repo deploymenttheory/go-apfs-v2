@@ -32,7 +32,7 @@ type RootReplacement struct {
 // handles rather than reconstructing absolute paths. The initial content of
 // File is unspecified; write the complete replacement and truncate it.
 //
-// The supported metadata and Darwin clone requirement match PrepareReplacement.
+// The supported metadata and Darwin cloning/copying behavior match PrepareReplacement.
 // Windows additionally rejects compressed, encrypted, sparse and reparse files;
 // ordinary alternate data streams, attributes, owner/group and DACL are retained.
 // Concurrent modification of the source or staging tree is unsupported. The

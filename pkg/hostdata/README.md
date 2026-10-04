@@ -341,8 +341,14 @@ final rename; no transactional or crash-durability guarantee is made.
   typed metadata wrappers after content writes. Neither step changes the source
   ACL. ACL read/write failures require discarding staging; callers must not
   commit after a restoration error. No deprecated raw syscall is used by this API.
-  Clone support is required; immutable, append-only and compressed inputs fail
-  before commit. HFS+ and other filesystems without cloning are unsupported.
+  Clone-capability errors (`ENOTSUP`, `EXDEV`, `ENOSYS`) use an exclusively
+  created writable file instead. Held-descriptor APIs copy visible xattrs and
+  creation time; resource forks stream in 64 KiB chunks with 64-bit offsets.
+  The fallback bounds xattr names to 1 MiB and ordinary values to 8 MiB in
+  aggregate, excluding resource forks. It works on HFS+ without cloning and
+  fails rather than discarding metadata on any capture, transfer or restoration
+  error. Permission, storage and other clone errors do not trigger fallback.
+  Immutable, append-only and compressed inputs still fail before commit.
 - Linux copies owner/group, mode and readable xattrs (including POSIX ACLs),
   with an 8 MiB aggregate limit each for names and values. Inherited staging
   ACLs are removed first. Linux inode flags and birth time are not preserved.
@@ -355,6 +361,25 @@ an external tool or signing service. Tests run on Linux, macOS and Windows in
 the existing CI matrix. Darwin tests compare ACL text, xattr values, ownership,
 BSD flags and creation time on the host; Windows tests compare streams and
 security descriptors.
+Replacement qualification adds `go run scripts/verify-replacement.go` on every
+CI host, requiring coverage strictly above 95% for each new fallback file,
+no skipped tests, raw test transcripts and source hashes. On macOS,
+`go run scripts/verify-replacement-native.go` creates disposable APFS and HFS+
+images, compiles the C control with Clang, retains arm64/x86_64 ASTs and checks
+both public APIs with inherited/deny-write ACLs and a resource fork exceeding
+8 MiB. Linux and Windows replay the committed native corpus and run the shared
+failure/budget/64-bit boundary tests alongside their existing native replacement
+suite. A sparse fork boundary test above 4 GiB checks offset forwarding; it is
+not a claim of a full native 4 GiB transfer acceptance run.
+
+The control retains raw `fcopyfile(COPYFILE_SECURITY | COPYFILE_METADATA)`
+results separately. That native operation can preserve destination creation
+time, merge inherited ACLs and normalize quarantine's agent/timestamp; this
+SDK's existing replacement contract instead
+preserves source creation time and restores the source ACL after writing. The
+corpus verifies both observations rather than treating this generic metadata
+API as a complete `codesign` timestamp or inheritance policy.
+
 # Root-relative replacements
 
 `PrepareReplacementAt(source, root, parent)` stages a replacement beneath an
@@ -365,7 +390,7 @@ Always call `Close` to discard staging. Keep the caller-owned source open throug
 metadata restoration and the root open through cleanup. The API never commits
 or closes those caller-owned objects and is not safe for concurrent method calls.
 
-Darwin clones relative to the opened staging directory and uses the held
+Darwin clones or exclusively creates relative to the opened staging directory and uses the held
 directory's `/dev/fd/N` name with the supported `Setattrlist` wrapper to clear
 inherited ACLs. Linux creates through the root and copies metadata by descriptor.
 Windows reopens existing handles with `ReOpenFile`, then copies bounded EAs and
@@ -373,7 +398,7 @@ alternate data streams through `BackupRead`/`BackupWrite`; it never reopens the
 source by its pathname or restores backup hard-link/object-identity records.
 Owner, group, DACL, creation time and ordinary Windows attributes are preserved.
 The root API rejects compressed, encrypted, sparse and reparse Windows files and
-bounds combined stream/EA names and data to 8 MiB. Darwin's existing clone,
+bounds combined stream/EA names and data to 8 MiB. Darwin's
 protected/compressed-file limitations remain. SACLs are outside the contract.
 
 The existing path API remains available. Both APIs run the same platform metadata

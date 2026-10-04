@@ -24,15 +24,21 @@ func prepareReplacement(source *os.File, path string, info os.FileInfo) (*os.Fil
 	if err := clearReplacementACL(filepath.Dir(path)); err != nil {
 		return nil, err
 	}
-	if err := unix.Fclonefileat(int(source.Fd()), unix.AT_FDCWD, path, 0); err != nil {
-		return nil, err
-	}
-	// A read-only source must produce a writable staging file; restore its mode
-	// only after writing. The caller's private directory prevents access to it.
-	if err := os.Chmod(path, 0600); err != nil {
-		return nil, err
-	}
-	return os.OpenFile(path, os.O_RDWR, 0)
+	return prepareReplacementUsing(
+		func() error { return unix.Fclonefileat(int(source.Fd()), unix.AT_FDCWD, path, 0) },
+		replacementCloneUnavailable,
+		func(cloned bool) (*os.File, error) {
+			if !cloned {
+				return os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0600)
+			}
+			// A readonly source must remain writable until metadata restoration.
+			if err := os.Chmod(path, 0600); err != nil {
+				return nil, err
+			}
+			return os.OpenFile(path, os.O_RDWR, 0)
+		},
+		func(target *os.File) error { return copyReplacementMetadata(source, target, info) },
+	)
 }
 
 func clearReplacementACL(path string) error {
