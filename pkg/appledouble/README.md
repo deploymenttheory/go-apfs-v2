@@ -190,7 +190,7 @@ The architecture has separate operations, without a global compatibility mode:
 | Restoration | Prevalidated and sequential executors; complete object/path composition; ACL/quarantine/stat, inheritance, temporary permissions and cleanup | Retain production replay, partial-error/close diagnostics and qualification against measured native versions |
 | Host capture | Strict held/no-follow capture on all three OSes; native Darwin source/process/identity/protection observations | Keep real privileged/nonowner and signed-sandbox CI; unknown observations remain explicit errors |
 | Portable transport | Streamed carrier with hashes/generations/conflict detection; extraction/repacking and native projection/readback; roots, names, links, hardlinks and four times | Keep three-OS transport/large-value matrices and independent Mac validation of foreign images |
-| Evidence | Retained C/native corpus, Clang ASTs, image oracles, four vendor DMGs, strict 23-report coverage inventory | Run complete CI again for the refactor, retaining every greater-than-95% file gate and fuzz/race/lint/build check |
+| Evidence | Retained C/native corpus, Clang ASTs, image oracles, four vendor DMGs, strict 24-report coverage inventory (including replacement fallback) | Run complete CI again for the refactor, retaining every greater-than-95% file gate and fuzz/race/lint/build check |
 | Consumers | APFS owns the codec and transport; package PR72 remains draft | Qualified APFS release, downstream adoption in PR72, then codesign work |
 
 Use `apfs extract IMAGE -C PAYLOAD --xattrs --preserve-meta --metadata-root METADATA`

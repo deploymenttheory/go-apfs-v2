@@ -26,13 +26,16 @@ type Replacement struct {
 // source filesystem. Its initial data is unspecified: callers
 // must write the complete replacement and truncate to its intended length.
 //
-// On Darwin this requires clonefile support, preserves extended attributes and
-// creation time, and restores the source ACL after content writes. Protected and
-// compressed files are unsupported. On Linux ownership, mode and readable extended attributes
-// (including POSIX ACLs) are restored. On Windows CopyFile preserves streams
-// and attributes; the owner, group and DACL are restored explicitly. Unix xattr
-// names and values each have an 8 MiB aggregate limit. Modification/access
-// timestamps and Linux inode flags are not preserved. No cgo is required.
+// On Darwin this uses cloning when available and otherwise copies metadata. It
+// preserves extended attributes and creation time, and restores the source ACL
+// after content writes. Protected and compressed files are unsupported. On Linux
+// ownership, mode and readable extended attributes (including POSIX ACLs) are
+// restored. On Windows CopyFile preserves streams and attributes; the owner,
+// group and DACL are restored explicitly. Linux xattr names and values each have
+// an 8 MiB aggregate limit. Darwin's copying fallback bounds names to 1 MiB and
+// ordinary values to 8 MiB in aggregate; resource forks stream in 64 KiB chunks
+// without that value limit. Modification/access timestamps and Linux inode flags
+// are not preserved. No cgo is required.
 func PrepareReplacement(source *os.File, parent string) (*Replacement, error) {
 	info, err := source.Stat()
 	if err != nil {
