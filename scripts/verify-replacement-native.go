@@ -79,7 +79,7 @@ func verify(capture string) (result error) {
 		hashes[path] = hex.EncodeToString(sum[:])
 		return nil
 	}
-	for _, p := range []string{source, "scripts/verify-replacement-native.go", "pkg/hostdata/replacement_copy_darwin_test.go", "pkg/hostdata/replacement_copy.go", "pkg/hostdata/replacement_copy_darwin.go", "pkg/hostdata/replacement_darwin.go", "pkg/hostdata/replacement_root_darwin.go", "go.mod", "go.sum"} {
+	for _, p := range []string{source, "testdata/appledouble/native/quarantine-process-capture.h", "scripts/verify-replacement-native.go", "pkg/hostdata/replacement_copy_darwin_test.go", "pkg/hostdata/replacement_copy.go", "pkg/hostdata/replacement_copy_darwin.go", "pkg/hostdata/replacement_darwin.go", "pkg/hostdata/replacement_root_darwin.go", "go.mod", "go.sum"} {
 		if err := hashFile(p); err != nil {
 			return err
 		}

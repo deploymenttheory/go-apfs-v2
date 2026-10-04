@@ -36,7 +36,7 @@ func verify() error {
 	defer log.Close()
 	var transcript bytes.Buffer
 	profile := filepath.Join(dir, "coverage.out")
-	cmd := exec.Command("go", "test", "-count=1", "-json", "-run", "^TestReplacement", "-covermode=atomic", "-coverprofile="+profile, "-coverpkg=./pkg/hostdata/...", "./pkg/hostdata")
+	cmd := exec.Command("go", "test", "-count=1", "-json", "-run", "^Test(Replacement|RootReplacement)", "-covermode=atomic", "-coverprofile="+profile, "-coverpkg=./pkg/hostdata/...", "./pkg/hostdata")
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 	cmd.Stdout = io.MultiWriter(os.Stdout, log, &transcript)
 	cmd.Stderr = io.MultiWriter(os.Stderr, log)
@@ -127,7 +127,7 @@ func verify() error {
 	if passed < 23 {
 		return fmt.Errorf("incomplete replacement tests: %d", passed)
 	}
-	files := []string{"pkg/hostdata/replacement*.go", "scripts/verify-replacement.go", "scripts/verify-replacement-native.go", "testdata/appledouble/native/replacement-copy.c", "testdata/appledouble/native/replacement-copy.json", "go.mod", "go.sum"}
+	files := []string{"pkg/hostdata/replacement*.go", "scripts/verify-replacement.go", "scripts/verify-replacement-native.go", "testdata/appledouble/native/replacement-copy.c", "testdata/appledouble/native/quarantine-process-capture.h", "testdata/appledouble/native/replacement-copy.json", "go.mod", "go.sum"}
 	hashes, e := evidenceaudit.SourceHashes(os.DirFS("."), files)
 	if e != nil {
 		return e

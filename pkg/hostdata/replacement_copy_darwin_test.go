@@ -159,12 +159,7 @@ func TestReplacementCopyDarwinNative(t *testing.T) {
 				if err != nil {
 					t.Fatalf("native oracle: %v %s", err, output)
 				}
-				var outcomes struct {
-					CloneErrno int   `json:"clone_errno"`
-					CopyErrno  int   `json:"copy_errno"`
-					CopyBegin  int64 `json:"copy_begin"`
-					CopyEnd    int64 `json:"copy_end"`
-				}
+				var outcomes replacementNativeOutcome
 				if err := json.Unmarshal(output, &outcomes); err != nil {
 					t.Fatal(err)
 				}
@@ -181,7 +176,7 @@ func TestReplacementCopyDarwinNative(t *testing.T) {
 				}
 				defer native.Close()
 				nativeMetadata := replacementSnapshotOf(t, native)
-				replacementNativeAttributes(t, before.Attributes, nativeMetadata.Attributes, outcomes.CopyBegin, outcomes.CopyEnd)
+				replacementNativeAttributes(t, before.Attributes, nativeMetadata.Attributes, outcomes)
 				if before.ForkSize != nativeMetadata.ForkSize || before.ForkSHA256 != nativeMetadata.ForkSHA256 || before.Mode != nativeMetadata.Mode || before.UID != nativeMetadata.UID || before.GID != nativeMetadata.GID || before.Flags != nativeMetadata.Flags {
 					t.Fatalf("native metadata mismatch:\nsource=%+v\nnative=%+v", before, nativeMetadata)
 				}

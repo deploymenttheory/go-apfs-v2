@@ -69,7 +69,7 @@ func TestReplacementCopyStrategy(t *testing.T) {
 					t.Fatal("returned failed stage")
 				}
 				if file != nil {
-					if _, e := file.Stat(); !errors.Is(e, os.ErrClosed) {
+					if n, e := file.Write([]byte("closed-stage-probe")); n != 0 || !errors.Is(e, os.ErrClosed) {
 						t.Fatalf("stage leaked: %v", e)
 					}
 				}
@@ -277,10 +277,59 @@ func TestReplacementCopyLargeFork(t *testing.T) {
 // Raw copyfile applies quarantine policy, while replacement preserves the exact
 // source bytes. Keep this independent native observation separate from the SDK
 // contract, including the C control's clock interval and normalized agent.
-func replacementNativeAttributes(t *testing.T, source, native map[string]string, begin, end int64) {
+type replacementNativeOutcome struct {
+	CloneErrno       int   `json:"clone_errno"`
+	CopyErrno        int   `json:"copy_errno"`
+	CopyBegin        int64 `json:"copy_begin"`
+	CopyEnd          int64 `json:"copy_end"`
+	HostMajor        int   `json:"host_major"`
+	ProcessInitCode  int   `json:"process_init_code"`
+	ProcessInitErrno int   `json:"process_init_errno"`
+	Raw              struct {
+		Self struct {
+			Code, Errno     int
+			Flags           uint32
+			Agent, Metadata string
+			TrackingLength  int
+		}
+	}
+}
+
+func replacementNativeAttributes(t *testing.T, source, native map[string]string, outcome replacementNativeOutcome) {
 	t.Helper()
 	if len(source) != len(native) {
 		t.Fatalf("native attribute count: %d want %d", len(native), len(source))
+	}
+	if outcome.CopyBegin <= 0 || outcome.CopyEnd < outcome.CopyBegin {
+		t.Fatal("invalid native clock interval")
+	}
+	var profile appledouble.QuarantineProfile
+	switch outcome.HostMajor {
+	case 26:
+		profile = appledouble.QuarantineMacOS26
+	case 27:
+		profile = appledouble.QuarantineMacOS27
+	default:
+		t.Fatalf("unqualified host profile %d", outcome.HostMajor)
+	}
+	process := &appledouble.QuarantineProcess{}
+	rawProcess := outcome.Raw.Self
+	if rawProcess.Code != 0 {
+		// Darwin ENOATTR is 93. Absence needs the independent libquarantine control.
+		if rawProcess.Code != -1 || rawProcess.Errno != 93 || outcome.ProcessInitCode != -1 || outcome.ProcessInitErrno != 93 {
+			t.Fatalf("unqualified process absence: %+v", outcome)
+		}
+		process.Absent = true
+	} else {
+		if outcome.ProcessInitCode != 0 {
+			t.Fatalf("inconsistent process controls: %+v", outcome)
+		}
+		agent, err := hex.DecodeString(rawProcess.Agent)
+		if err != nil {
+			t.Fatal(err)
+		}
+		process.Flags = rawProcess.Flags
+		process.Agent = string(agent)
 	}
 	for name, value := range source {
 		got, ok := native[name]
@@ -293,16 +342,29 @@ func replacementNativeAttributes(t *testing.T, source, native map[string]string,
 			}
 			continue
 		}
-		raw, err := hex.DecodeString(got)
+		raw, err := hex.DecodeString(value)
 		if err != nil {
 			t.Fatal(err)
 		}
-		quarantine, err := appledouble.ParseQuarantineXattr(raw)
+		quarantine, err := appledouble.ParseQuarantineXattrWithProfile(raw, profile)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if quarantine.Flags != 0x81 || quarantine.Identifier != "12345678-1234-1234-1234-123456789abc" || quarantine.Agent != "" || int64(quarantine.Timestamp) < begin || int64(quarantine.Timestamp) > end {
-			t.Fatalf("native quarantine: %+v, interval %d..%d", quarantine, begin, end)
+		applied, err := hex.DecodeString(got)
+		if err != nil {
+			t.Fatal(err)
+		}
+		parsed, err := appledouble.ParseQuarantineXattrWithProfile(applied, profile)
+		if err != nil {
+			t.Fatal(err)
+		}
+		clock := int64(parsed.Timestamp)
+		if !process.Absent && (clock < outcome.CopyBegin || clock > outcome.CopyEnd) {
+			t.Fatalf("quarantine clock %d outside %d..%d", clock, outcome.CopyBegin, outcome.CopyEnd)
+		}
+		plan, err := quarantine.PlanApplication(appledouble.QuarantineApplicationContext{Profile: profile, Process: process, Timestamp: parsed.Timestamp})
+		if err != nil || !plan.Write || !bytes.Equal(plan.Value, applied) {
+			t.Fatalf("native quarantine=%q plan=%+v error=%v context=%+v", applied, plan, err, outcome)
 		}
 		if value != hex.EncodeToString([]byte("0081;65000000;ReplacementTest;12345678-1234-1234-1234-123456789abc")) {
 			t.Fatal("source quarantine changed")

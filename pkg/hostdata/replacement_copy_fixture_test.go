@@ -22,13 +22,13 @@ func TestReplacementCopyNativeFixture(t *testing.T) {
 		Hashes map[string]string `json:"source_sha256"`
 		Cases  []struct {
 			Case, Filesystem string
-			Outcomes         map[string]int `json:"native"`
-			Source           map[string]any `json:"source_metadata"`
-			Replacement      map[string]any `json:"replacement_metadata"`
-			Copy             map[string]any `json:"native_metadata"`
-			PayloadMatches   bool           `json:"copyfile_payload_matches"`
-			SourceUnchanged  bool           `json:"source_unchanged"`
-			Removed          bool           `json:"staging_removed"`
+			Outcomes         replacementNativeOutcome `json:"native"`
+			Source           map[string]any           `json:"source_metadata"`
+			Replacement      map[string]any           `json:"replacement_metadata"`
+			Copy             map[string]any           `json:"native_metadata"`
+			PayloadMatches   bool                     `json:"copyfile_payload_matches"`
+			SourceUnchanged  bool                     `json:"source_unchanged"`
+			Removed          bool                     `json:"staging_removed"`
 		} `json:"cases"`
 	}
 	if err := json.Unmarshal(data, &fixture); err != nil {
@@ -56,10 +56,7 @@ func TestReplacementCopyNativeFixture(t *testing.T) {
 			if record.Filesystem != "APFS" && record.Filesystem != "HFS+" {
 				t.Fatal("unqualified filesystem")
 			}
-			cloneErr, ok := record.Outcomes["clone_errno"]
-			if !ok {
-				t.Fatal("missing clone outcome")
-			}
+			cloneErr := record.Outcomes.CloneErrno
 			want := 0
 			if record.Filesystem == "HFS+" {
 				want = 45
@@ -67,8 +64,8 @@ func TestReplacementCopyNativeFixture(t *testing.T) {
 			if cloneErr != want {
 				t.Fatalf("clone errno=%d want=%d", cloneErr, want)
 			}
-			if err, ok := record.Outcomes["copy_errno"]; !ok || err != 0 {
-				t.Fatalf("copyfile errno=%d present=%v", err, ok)
+			if err := record.Outcomes.CopyErrno; err != 0 {
+				t.Fatalf("copyfile errno=%d", err)
 			}
 			if !record.PayloadMatches || !record.SourceUnchanged || !record.Removed {
 				t.Fatal("failed native lifecycle")
@@ -96,7 +93,7 @@ func TestReplacementCopyNativeFixture(t *testing.T) {
 				}
 				return result
 			}
-			replacementNativeAttributes(t, attributes(record.Source["Attributes"]), attributes(record.Copy["Attributes"]), int64(record.Outcomes["copy_begin"]), int64(record.Outcomes["copy_end"]))
+			replacementNativeAttributes(t, attributes(record.Source["Attributes"]), attributes(record.Copy["Attributes"]), record.Outcomes)
 
 			if record.Source["ForkSize"] != float64(MaxXattrReadSize+37) || record.Source["ForkSHA256"] != "403ace7ea43715da12562603d3abd9a6df0bf46f8d14011abd84d71cd8239ca8" {
 				t.Fatal("large fork fixture changed")
