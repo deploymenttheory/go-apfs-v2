@@ -61,7 +61,7 @@ func verify() error {
 			passedNames[event.Test] = true
 		}
 	}
-	for _, name := range []string{"TestReplacementCopyStrategy", "TestReplacementCopyMetadata", "TestReplacementCopyNativeFixture", "TestReplacementCopyLargeFork"} {
+	for _, name := range []string{"TestReplacementCopyStrategy", "TestReplacementCopyMetadata", "TestReplacementCopyNativeFixture", "TestReplacementCopyLargeFork", "TestReplacementBackupSparseStreams", "TestReplacementBackupMalformed", "TestReplacementBackupWriteFailures"} {
 		if !passedNames[name] {
 			return fmt.Errorf("required replacement suite missing: %s", name)
 		}
@@ -73,12 +73,15 @@ func verify() error {
 			}
 		}
 	}
+	if runtime.GOOS == "windows" && !passedNames["TestRootReplacementWindowsSparse"] {
+		return fmt.Errorf("required Windows sparse replacement suite missing")
+	}
 	b, e := os.ReadFile(profile)
 	if e != nil {
 		return e
 	}
 	covered, total := 0, 0
-	coverageFiles := map[string][2]int{"pkg/hostdata/replacement_copy.go": {}}
+	coverageFiles := map[string][2]int{"pkg/hostdata/replacement_copy.go": {}, "pkg/hostdata/replacement_backup.go": {}}
 	if runtime.GOOS == "darwin" {
 		coverageFiles["pkg/hostdata/replacement_copy_darwin.go"] = [2]int{}
 	}

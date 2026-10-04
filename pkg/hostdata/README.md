@@ -397,7 +397,7 @@ Windows reopens existing handles with `ReOpenFile`, then copies bounded EAs and
 alternate data streams through `BackupRead`/`BackupWrite`; it never reopens the
 source by its pathname or restores backup hard-link/object-identity records.
 Owner, group, DACL, creation time and ordinary Windows attributes are preserved.
-The root API rejects compressed, encrypted, sparse and reparse Windows files and
+The root API rejects compressed, encrypted and reparse Windows files and
 bounds combined stream/EA names and data to 8 MiB. Darwin's
 protected/compressed-file limitations remain. SACLs are outside the contract.
 
@@ -567,3 +567,21 @@ private executor completion. Explicit destination times are required; failed
 staging leaves entries untouched. See [image stat staging](../../docs/appledouble-image-stat.md)
 for validation and diagnostics. The complete held/path APIs provide the qualified
 live-host lifecycle integration.
+
+### Sparse Windows replacements
+
+`PrepareReplacementAt` supports NTFS sparse sources. It marks the private
+replacement sparse, preserves named streams (including sparse streams), and
+leaves all main-data writes to the caller. Original sparse main-data extents
+never overwrite the new content. The API preserves the sparse attribute; it
+does not promise the original allocation map for content the caller rewrites.
+Creation time, ordinary attributes, owner/group and DACL retain the existing
+restoration contract. Preparation and discard never modify the source.
+
+The backup filter follows Microsoft's [sparse block stream format](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-bkup/6be866e6-6d1f-4183-8b78-b10c2941228a):
+sparse blocks belong to the preceding main or named data stream. Named-stream
+logical extents and transferred metadata retain the existing 8 MiB bound.
+Malformed, orphaned, overflowing and truncated records fail before commit.
+The portable filter has a strict coverage gate above 95%; Windows CI also
+exercises a source above 4 GiB with populated regions, sparse/ordinary named
+streams, hard-link neighbours, commit, discard and staging cleanup.

@@ -33,8 +33,10 @@ type RootReplacement struct {
 // File is unspecified; write the complete replacement and truncate it.
 //
 // The supported metadata and Darwin cloning/copying behavior match PrepareReplacement.
-// Windows additionally rejects compressed, encrypted, sparse and reparse files;
-// ordinary alternate data streams, attributes, owner/group and DACL are retained.
+// Windows additionally rejects compressed, encrypted and reparse files;
+// ordinary and sparse alternate data streams, attributes, owner/group and DACL
+// are retained. Sparse source replacements retain the sparse attribute; the
+// caller supplies all new main data and controls its physical allocation.
 // Concurrent modification of the source or staging tree is unsupported. The
 // caller must validate destination identity before committing its own rename.
 func PrepareReplacementAt(source *os.File, root *os.Root, parent string) (*RootReplacement, error) {
