@@ -35,7 +35,9 @@ jobs:
         run: go run scripts/capture-compression-lz4.go -check
       - name: Recapture guarded native compression queries
         if: ${{ !cancelled() }}
-        run: go run scripts/capture-compression-query.go -check
+        run: |
+          go test scripts/capture-compression-query.go scripts/capture-compression-query_test.go
+          go run scripts/capture-compression-query.go -check
       - name: Recapture compression installation and partial failures
         if: ${{ !cancelled() }}
         run: go run scripts/capture-compression-lifecycle.go -check
