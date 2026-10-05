@@ -74,7 +74,11 @@ func TestInstallCompressionForeignFiles(t *testing.T) {
 			if e != nil || !r.Fork.Complete || !r.Commit.Activated || !r.Commit.Completed || len(r.Fork.Failures) != 0 || len(r.Commit.Failures) != 0 {
 				t.Fatal(r, e)
 			}
-			if _, e = fork.Stat(); !errors.Is(e, os.ErrClosed) {
+			// Windows Stat reports ERROR_INVALID_HANDLE after close. A nonempty
+			// read uses Go's descriptor lifetime check on every host and must
+			// fail as closed, rather than succeeding or returning ordinary EOF.
+			var probe [1]byte
+			if _, e = fork.ReadAt(probe[:], 0); !errors.Is(e, os.ErrClosed) {
 				t.Fatal("fork ownership leaked", e)
 			}
 			st, e := data.Stat()
