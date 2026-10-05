@@ -577,6 +577,17 @@ jobs:
           name: decmpfs-formats-coverage-${{ matrix.os }}
           path: artifacts/decmpfs-formats-coverage/
           if-no-files-found: error
+      - name: Read complete native compressed corpus across 1 2 and 4 GiB
+        env:
+          CGO_ENABLED: "0"
+        run: go run scripts/verify-large-compression-portable.go
+      - name: Upload portable large compression evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: large-compression-portable-${{ matrix.os }}
+          path: artifacts/large-compression-portable/
+          if-no-files-found: error
       - name: Native held metadata and projection comparisons
         if: runner.os == 'macOS'
         env:
@@ -610,6 +621,18 @@ jobs:
         with:
           name: decmpfs-formats-native
           path: artifacts/decmpfs-formats/
+          if-no-files-found: error
+      - name: Recapture native large compression and kernel layout boundaries
+        if: runner.os == 'macOS'
+        env:
+          CGO_ENABLED: "0"
+        run: go run scripts/verify-large-compression.go
+      - name: Upload native large compression evidence
+        if: always() && runner.os == 'macOS'
+        uses: actions/upload-artifact@v7
+        with:
+          name: large-compression-native
+          path: artifacts/large-compression/
           if-no-files-found: error
       - name: Audit portable AppleDouble qualification evidence
         env:

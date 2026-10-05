@@ -45,6 +45,11 @@ writers and the CLI bind that carrier to extraction and repacking.
 - **Streamed metadata:** `Value`, `StreamFile`, `DecodeStream` and `EncodeTo`
   retain sized borrowed readers and use bounded scratch space. Keep their image,
   file or carrier owners open and exclude mutation until consumption finishes.
+- **Compressed logical contents:** the shared storage decoder reads large
+  resource-fork indexes without retaining the complete table. Native kernel
+  controls cover logical sizes around 1, 2 and 4 GiB; Linux, macOS and Windows
+  verify complete decoded hashes. See [compression storage](../../docs/appledouble-compression-storage.md#large-compressed-files)
+  for the distinction between retained compression metadata and recompression.
 - **Complete metadata operations:** `hostdata.PackAppleDoubleObject` and
   `UnpackAppleDoubleObject` operate on held objects; `CopyAppleDoublePath` adds
   creation/opening, temporary permission handling, retries and owned-descriptor

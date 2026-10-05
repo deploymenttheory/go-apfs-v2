@@ -1,0 +1,448 @@
+{
+  "Host": "ProductName:\t\tmacOS\nProductVersion:\t\t27.0.1\nBuildVersion:\t\t26A434\n",
+  "Compiler": "Apple clang version 21.0.0 (clang-2100.3.34.2)\nTarget: arm64-apple-darwin27.0.0\nThread model: posix\nInstalledDir: /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin\n",
+  "SDK": "27.0\n",
+  "Sources": {
+    "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/sys/stat.h": "1546ce7485287bec0d15a643ef5d5f882d21272f2f089fed71c36457e609b92a",
+    "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/sys/xattr.h": "60e1518429a9df2501dbec28b09642cc3a67cf1508bef0c6d8e9c1de3e1ef408",
+    "decmpfs-expand.c-arm64.ast.json": "8f9d5e8866df605f21dc6831c2c2a842389a35aba386e5c3ef5863f0319a2a5c",
+    "decmpfs-expand.c-x86_64.ast.json": "3dd44ef534f265422f9f3aea7e2153026cc42374df26352e6fa59410bb1c05e4",
+    "decmpfs-large.c-arm64.ast.json": "165ea065c9e483c877022513fc706ec105fbcd680fb2d285849d05776c4b495e",
+    "decmpfs-large.c-x86_64.ast.json": "d61d4879f2114bec14109bdec470d1652ff0671f6f1f37a71fb1a17dc27159b4",
+    "scripts/verify-large-compression.go": "4d730c607abf1c094890d9fe097d1a7a07cf11cfa3994bd6c377679164412f5f",
+    "testdata/appledouble/native/decmpfs-expand.c": "8e4560804785b09be082ef3fbe03aa9c122e94a7e9e6a2961d68178879c909d1",
+    "testdata/appledouble/native/decmpfs-large.c": "5d378e49a4afb31d5ffc935ab1eaf141c941b9ba04e98462f935e0de2f70102e"
+  },
+  "Cases": [
+    {
+      "Name": "native-4-65536",
+      "Origin": "AppleFSCompression producer and complete kernel readback",
+      "SHA256": "a3354d1446d738ce1fad0c19c41a9eb4c08c75022b93d71a3fa19161f4f01502",
+      "ForkSHA256": "d936c8b629d4a2836c6d90cb4347845a007df98978b335a4b8f20499fff2b702",
+      "StoredCompressed": true,
+      "Type": 4,
+      "Size": 65536,
+      "Attribute": "ZnBtYwQAAAAAAAEAAAAAAA=="
+    },
+    {
+      "Name": "kernel-4-1073741823",
+      "Origin": "C-constructed repeated native block with stored final tail; complete kernel readback",
+      "SHA256": "4412074b0a0eeb020fa36f93afe8ad9a3b9c6f9c0653acfd5955ac76a7595287",
+      "ForkSHA256": "c96668f196100c30d1fc680303cc7ec1f78e538507071222e8057eb98f3928ed",
+      "StoredCompressed": true,
+      "Type": 4,
+      "Size": 1073741823,
+      "Attribute": "ZnBtYwQAAAD///8/AAAAAA=="
+    },
+    {
+      "Name": "kernel-4-1073741824",
+      "Origin": "C-constructed repeated native block with stored final tail; complete kernel readback",
+      "SHA256": "fcc422f75b9c0aa831746d52d3ca56a29425f28d79714022837266fa7e065269",
+      "ForkSHA256": "478beb8627c5feb243a9134f9de49c700de8de90146f950975c0a16431a86abf",
+      "StoredCompressed": true,
+      "Type": 4,
+      "Size": 1073741824,
+      "Attribute": "ZnBtYwQAAAAAAABAAAAAAA=="
+    },
+    {
+      "Name": "kernel-4-1073741825",
+      "Origin": "C-constructed repeated native block with stored final tail; complete kernel readback",
+      "SHA256": "3c2ad0577346866977cef3cc584dad47d83c392e0d8aef7c028ae7eee46956c9",
+      "ForkSHA256": "8b759035bed82b5c1dc67dc2f8fdc345dfde61b3365da0fcf25b6cc84e29fd93",
+      "StoredCompressed": true,
+      "Type": 4,
+      "Size": 1073741825,
+      "Attribute": "ZnBtYwQAAAABAABAAAAAAA=="
+    },
+    {
+      "Name": "kernel-4-2147483647",
+      "Origin": "C-constructed repeated native block with stored final tail; complete kernel readback",
+      "SHA256": "38ffd000d00c879288c9997dea02e91604b74e2f526804ad745b5c47af6896de",
+      "ForkSHA256": "883fa90d54bd64c48c9a1086799ab8901cdd29e22947234145444d75e3e0be8d",
+      "StoredCompressed": true,
+      "Type": 4,
+      "Size": 2147483647,
+      "Attribute": "ZnBtYwQAAAD///9/AAAAAA=="
+    },
+    {
+      "Name": "kernel-4-2147483648",
+      "Origin": "C-constructed repeated native block with stored final tail; complete kernel readback",
+      "SHA256": "ac09138937fa65ef1070c7b3c676610f9a651a5504e6f0446739ec4155f198fa",
+      "ForkSHA256": "58554fca54724c87091db1f0964da03065fd67e755c43de538c6e3f52a42f8fe",
+      "StoredCompressed": true,
+      "Type": 4,
+      "Size": 2147483648,
+      "Attribute": "ZnBtYwQAAAAAAACAAAAAAA=="
+    },
+    {
+      "Name": "kernel-4-2147483649",
+      "Origin": "C-constructed repeated native block with stored final tail; complete kernel readback",
+      "SHA256": "756d356a375d41c3a3156a4c9804cc945db3f375835218a4ceac1b19b0a629cf",
+      "ForkSHA256": "4d321ed984dd32df38abc6a7a88416b0d10fc4cf0378315f32cac9bbbbb44d7e",
+      "StoredCompressed": true,
+      "Type": 4,
+      "Size": 2147483649,
+      "Attribute": "ZnBtYwQAAAABAACAAAAAAA=="
+    },
+    {
+      "Name": "kernel-4-4294967295",
+      "Origin": "C-constructed repeated native block with stored final tail; complete kernel readback",
+      "SHA256": "51578b575ee477003e0e6e9ba47ea626593ce9ef2b03f2270e5e16baff3311a7",
+      "ForkSHA256": "40cefa0f9934aae4fbe5366ff93a4d36fc49aebf3ec9f72706e5535d9c4c60c3",
+      "StoredCompressed": true,
+      "Type": 4,
+      "Size": 4294967295,
+      "Attribute": "ZnBtYwQAAAD/////AAAAAA=="
+    },
+    {
+      "Name": "kernel-4-4294967296",
+      "Origin": "C-constructed repeated native block with stored final tail; complete kernel readback",
+      "SHA256": "e25d2407746491591256411b5773a3b9b5086eaa0b192500600b0369d66ee958",
+      "ForkSHA256": "934c8f9b996f67773b1f0efdb005a86784027d36faa4fa5c192a4185e0923a95",
+      "StoredCompressed": true,
+      "Type": 4,
+      "Size": 4294967296,
+      "Attribute": "ZnBtYwQAAAAAAAAAAQAAAA=="
+    },
+    {
+      "Name": "kernel-4-4294967297",
+      "Origin": "C-constructed repeated native block with stored final tail; complete kernel readback",
+      "SHA256": "449e6c61e7f64b50a179c9abff0e6c5de8ecb845bcc22cb3adccb8ff0fb7e6bc",
+      "ForkSHA256": "f60de004bd7e08c873cfcc1cc9141e3c094cfe9ad858481c606901b7f9656f01",
+      "StoredCompressed": true,
+      "Type": 4,
+      "Size": 4294967297,
+      "Attribute": "ZnBtYwQAAAABAAAAAQAAAA=="
+    },
+    {
+      "Name": "native-8-65536",
+      "Origin": "AppleFSCompression producer and complete kernel readback",
+      "SHA256": "a3354d1446d738ce1fad0c19c41a9eb4c08c75022b93d71a3fa19161f4f01502",
+      "ForkSHA256": "6df98e1c2a63be6d86566d18152bf4b6cf72e09bae8df18f388b458a0546de06",
+      "StoredCompressed": true,
+      "Type": 8,
+      "Size": 65536,
+      "Attribute": "ZnBtYwgAAAAAAAEAAAAAAA=="
+    },
+    {
+      "Name": "kernel-8-1073741823",
+      "Origin": "C-constructed repeated native block with stored final tail; complete kernel readback",
+      "SHA256": "4412074b0a0eeb020fa36f93afe8ad9a3b9c6f9c0653acfd5955ac76a7595287",
+      "ForkSHA256": "bd3c64765225ae035a286e6b1cf682dabe96a07af20e2e8718969aed71a00b40",
+      "StoredCompressed": true,
+      "Type": 8,
+      "Size": 1073741823,
+      "Attribute": "ZnBtYwgAAAD///8/AAAAAA=="
+    },
+    {
+      "Name": "kernel-8-1073741824",
+      "Origin": "C-constructed repeated native block with stored final tail; complete kernel readback",
+      "SHA256": "fcc422f75b9c0aa831746d52d3ca56a29425f28d79714022837266fa7e065269",
+      "ForkSHA256": "27e85babbe68f2da0c4db95164dfb4423393fffd63944ec303e64d8e4db51503",
+      "StoredCompressed": true,
+      "Type": 8,
+      "Size": 1073741824,
+      "Attribute": "ZnBtYwgAAAAAAABAAAAAAA=="
+    },
+    {
+      "Name": "kernel-8-1073741825",
+      "Origin": "C-constructed repeated native block with stored final tail; complete kernel readback",
+      "SHA256": "3c2ad0577346866977cef3cc584dad47d83c392e0d8aef7c028ae7eee46956c9",
+      "ForkSHA256": "50b92241a54b6a7d0590b2163edef2505366a442854802454e64cbcad0caf9da",
+      "StoredCompressed": true,
+      "Type": 8,
+      "Size": 1073741825,
+      "Attribute": "ZnBtYwgAAAABAABAAAAAAA=="
+    },
+    {
+      "Name": "kernel-8-2147483647",
+      "Origin": "C-constructed repeated native block with stored final tail; complete kernel readback",
+      "SHA256": "38ffd000d00c879288c9997dea02e91604b74e2f526804ad745b5c47af6896de",
+      "ForkSHA256": "aab47dbba9fb8ac80938269ac6069b22dc2f5f80dc404ba4aeb936af87151b65",
+      "StoredCompressed": true,
+      "Type": 8,
+      "Size": 2147483647,
+      "Attribute": "ZnBtYwgAAAD///9/AAAAAA=="
+    },
+    {
+      "Name": "kernel-8-2147483648",
+      "Origin": "C-constructed repeated native block with stored final tail; complete kernel readback",
+      "SHA256": "ac09138937fa65ef1070c7b3c676610f9a651a5504e6f0446739ec4155f198fa",
+      "ForkSHA256": "663c2ef73dbc5269721f14157f6c17b6830e31e0d96ec3d8f0eb42e41ffa8a15",
+      "StoredCompressed": true,
+      "Type": 8,
+      "Size": 2147483648,
+      "Attribute": "ZnBtYwgAAAAAAACAAAAAAA=="
+    },
+    {
+      "Name": "kernel-8-2147483649",
+      "Origin": "C-constructed repeated native block with stored final tail; complete kernel readback",
+      "SHA256": "756d356a375d41c3a3156a4c9804cc945db3f375835218a4ceac1b19b0a629cf",
+      "ForkSHA256": "28492cb388dd280c1b0b032b9b8bd09fac2e1075c7ac5c89b0b55e7954a93e5f",
+      "StoredCompressed": true,
+      "Type": 8,
+      "Size": 2147483649,
+      "Attribute": "ZnBtYwgAAAABAACAAAAAAA=="
+    },
+    {
+      "Name": "kernel-8-4294967295",
+      "Origin": "C-constructed repeated native block with stored final tail; complete kernel readback",
+      "SHA256": "51578b575ee477003e0e6e9ba47ea626593ce9ef2b03f2270e5e16baff3311a7",
+      "ForkSHA256": "356102d064230b324efa0ff3641fd427442588dda62d8e51d2eb3bb48f66e5ae",
+      "StoredCompressed": true,
+      "Type": 8,
+      "Size": 4294967295,
+      "Attribute": "ZnBtYwgAAAD/////AAAAAA=="
+    },
+    {
+      "Name": "kernel-8-4294967296",
+      "Origin": "C-constructed repeated native block with stored final tail; complete kernel readback",
+      "SHA256": "e25d2407746491591256411b5773a3b9b5086eaa0b192500600b0369d66ee958",
+      "ForkSHA256": "0fe8db1717e1c8cb9400a2f16372e23fb6e8bec50e367910cd679569d0cf4bf6",
+      "StoredCompressed": true,
+      "Type": 8,
+      "Size": 4294967296,
+      "Attribute": "ZnBtYwgAAAAAAAAAAQAAAA=="
+    },
+    {
+      "Name": "kernel-8-4294967297",
+      "Origin": "C-constructed repeated native block with stored final tail; complete kernel readback",
+      "SHA256": "449e6c61e7f64b50a179c9abff0e6c5de8ecb845bcc22cb3adccb8ff0fb7e6bc",
+      "ForkSHA256": "807311fa90b288d636b78852d59caad2f1663c42bff79c132a38499eadd42acd",
+      "StoredCompressed": true,
+      "Type": 8,
+      "Size": 4294967297,
+      "Attribute": "ZnBtYwgAAAABAAAAAQAAAA=="
+    },
+    {
+      "Name": "native-12-65536",
+      "Origin": "AppleFSCompression producer and complete kernel readback",
+      "SHA256": "a3354d1446d738ce1fad0c19c41a9eb4c08c75022b93d71a3fa19161f4f01502",
+      "ForkSHA256": "887b819c3faf10453efd1c61de5398b6fa27a710122f6d6d57e44ca739fd1ed9",
+      "StoredCompressed": true,
+      "Type": 12,
+      "Size": 65536,
+      "Attribute": "ZnBtYwwAAAAAAAEAAAAAAA=="
+    },
+    {
+      "Name": "kernel-12-1073741823",
+      "Origin": "C-constructed repeated native block with stored final tail; complete kernel readback",
+      "SHA256": "4412074b0a0eeb020fa36f93afe8ad9a3b9c6f9c0653acfd5955ac76a7595287",
+      "ForkSHA256": "4ea0125173acd71b12cfe29aec949134c5b542837400c285f7d947a455e20462",
+      "StoredCompressed": true,
+      "Type": 12,
+      "Size": 1073741823,
+      "Attribute": "ZnBtYwwAAAD///8/AAAAAA=="
+    },
+    {
+      "Name": "kernel-12-1073741824",
+      "Origin": "C-constructed repeated native block with stored final tail; complete kernel readback",
+      "SHA256": "fcc422f75b9c0aa831746d52d3ca56a29425f28d79714022837266fa7e065269",
+      "ForkSHA256": "610cd28a025dd96711d004e3f6a74668b164fa2847a2666cf5275aa4f2ecfbc6",
+      "StoredCompressed": true,
+      "Type": 12,
+      "Size": 1073741824,
+      "Attribute": "ZnBtYwwAAAAAAABAAAAAAA=="
+    },
+    {
+      "Name": "kernel-12-1073741825",
+      "Origin": "C-constructed repeated native block with stored final tail; complete kernel readback",
+      "SHA256": "3c2ad0577346866977cef3cc584dad47d83c392e0d8aef7c028ae7eee46956c9",
+      "ForkSHA256": "86ef3f243b50f73236d5f086d50dbbdd326d6fd3960b3471636ceb3630c871cc",
+      "StoredCompressed": true,
+      "Type": 12,
+      "Size": 1073741825,
+      "Attribute": "ZnBtYwwAAAABAABAAAAAAA=="
+    },
+    {
+      "Name": "kernel-12-2147483647",
+      "Origin": "C-constructed repeated native block with stored final tail; complete kernel readback",
+      "SHA256": "38ffd000d00c879288c9997dea02e91604b74e2f526804ad745b5c47af6896de",
+      "ForkSHA256": "85e31febc59abe56cbfe2f9ace4b368d8a55653d8e3c2bef135b5840cfec6b92",
+      "StoredCompressed": true,
+      "Type": 12,
+      "Size": 2147483647,
+      "Attribute": "ZnBtYwwAAAD///9/AAAAAA=="
+    },
+    {
+      "Name": "kernel-12-2147483648",
+      "Origin": "C-constructed repeated native block with stored final tail; complete kernel readback",
+      "SHA256": "ac09138937fa65ef1070c7b3c676610f9a651a5504e6f0446739ec4155f198fa",
+      "ForkSHA256": "7f8d07004d5f9b6c098f0b010dc116ca899445f6e386d6dee64fd909b9132548",
+      "StoredCompressed": true,
+      "Type": 12,
+      "Size": 2147483648,
+      "Attribute": "ZnBtYwwAAAAAAACAAAAAAA=="
+    },
+    {
+      "Name": "kernel-12-2147483649",
+      "Origin": "C-constructed repeated native block with stored final tail; complete kernel readback",
+      "SHA256": "756d356a375d41c3a3156a4c9804cc945db3f375835218a4ceac1b19b0a629cf",
+      "ForkSHA256": "cab0ebbdef7155cffbb5bfbf981f25d5b125ecf0c0aec746ee05e81e3e9e753d",
+      "StoredCompressed": true,
+      "Type": 12,
+      "Size": 2147483649,
+      "Attribute": "ZnBtYwwAAAABAACAAAAAAA=="
+    },
+    {
+      "Name": "kernel-12-4294967295",
+      "Origin": "C-constructed repeated native block with stored final tail; complete kernel readback",
+      "SHA256": "51578b575ee477003e0e6e9ba47ea626593ce9ef2b03f2270e5e16baff3311a7",
+      "ForkSHA256": "00771bc734874c3dfb559669047079fb2f99020e4eb55e9c9c8801e873748d39",
+      "StoredCompressed": true,
+      "Type": 12,
+      "Size": 4294967295,
+      "Attribute": "ZnBtYwwAAAD/////AAAAAA=="
+    },
+    {
+      "Name": "kernel-12-4294967296",
+      "Origin": "C-constructed repeated native block with stored final tail; complete kernel readback",
+      "SHA256": "e25d2407746491591256411b5773a3b9b5086eaa0b192500600b0369d66ee958",
+      "ForkSHA256": "884c08efb8da4b209c0c9abc5c07113bded66d9535b4f44b21c4d5b125b12ac2",
+      "StoredCompressed": true,
+      "Type": 12,
+      "Size": 4294967296,
+      "Attribute": "ZnBtYwwAAAAAAAAAAQAAAA=="
+    },
+    {
+      "Name": "kernel-12-4294967297",
+      "Origin": "C-constructed repeated native block with stored final tail; complete kernel readback",
+      "SHA256": "449e6c61e7f64b50a179c9abff0e6c5de8ecb845bcc22cb3adccb8ff0fb7e6bc",
+      "ForkSHA256": "60b837298c616ae0c70aaa673a13f641688bec7717651565c381b561f5567d7f",
+      "StoredCompressed": true,
+      "Type": 12,
+      "Size": 4294967297,
+      "Attribute": "ZnBtYwwAAAABAAAAAQAAAA=="
+    },
+    {
+      "Name": "native-14-65536",
+      "Origin": "AppleFSCompression producer and complete kernel readback",
+      "SHA256": "a3354d1446d738ce1fad0c19c41a9eb4c08c75022b93d71a3fa19161f4f01502",
+      "ForkSHA256": "9a2c37194be0de39d0142a428da170619bc1e165170b8cbd96cc9716bb4d0791",
+      "StoredCompressed": true,
+      "Type": 14,
+      "Size": 65536,
+      "Attribute": "ZnBtYw4AAAAAAAEAAAAAAA=="
+    },
+    {
+      "Name": "kernel-14-1073741823",
+      "Origin": "C-constructed repeated native block with stored final tail; complete kernel readback",
+      "SHA256": "4412074b0a0eeb020fa36f93afe8ad9a3b9c6f9c0653acfd5955ac76a7595287",
+      "ForkSHA256": "feb6d4a8d93a124dac6ee23477398dd53f590069881d6771a23e56e174c76de7",
+      "StoredCompressed": true,
+      "Type": 14,
+      "Size": 1073741823,
+      "Attribute": "ZnBtYw4AAAD///8/AAAAAA=="
+    },
+    {
+      "Name": "kernel-14-1073741824",
+      "Origin": "C-constructed repeated native block with stored final tail; complete kernel readback",
+      "SHA256": "fcc422f75b9c0aa831746d52d3ca56a29425f28d79714022837266fa7e065269",
+      "ForkSHA256": "61eedc297b7fce142852254d232de49b16dde91ef8065f9f4a344ab090abca2b",
+      "StoredCompressed": true,
+      "Type": 14,
+      "Size": 1073741824,
+      "Attribute": "ZnBtYw4AAAAAAABAAAAAAA=="
+    },
+    {
+      "Name": "kernel-14-1073741825",
+      "Origin": "C-constructed repeated native block with stored final tail; complete kernel readback",
+      "SHA256": "3c2ad0577346866977cef3cc584dad47d83c392e0d8aef7c028ae7eee46956c9",
+      "ForkSHA256": "faeb7eec028941e5f69bcda828de6bf54307f670f5b47d2dc2cbcac6d9a61f8c",
+      "StoredCompressed": true,
+      "Type": 14,
+      "Size": 1073741825,
+      "Attribute": "ZnBtYw4AAAABAABAAAAAAA=="
+    },
+    {
+      "Name": "kernel-14-2147483647",
+      "Origin": "C-constructed repeated native block with stored final tail; complete kernel readback",
+      "SHA256": "38ffd000d00c879288c9997dea02e91604b74e2f526804ad745b5c47af6896de",
+      "ForkSHA256": "a0e98c66bdb177f3102df091669d7f927f95b8ebc7f7c6190d4869a83121aa41",
+      "StoredCompressed": true,
+      "Type": 14,
+      "Size": 2147483647,
+      "Attribute": "ZnBtYw4AAAD///9/AAAAAA=="
+    },
+    {
+      "Name": "kernel-14-2147483648",
+      "Origin": "C-constructed repeated native block with stored final tail; complete kernel readback",
+      "SHA256": "ac09138937fa65ef1070c7b3c676610f9a651a5504e6f0446739ec4155f198fa",
+      "ForkSHA256": "144f5d0bb31f30b1601148d7844879c1b2f3cf959813ebb397d733c52b6d1d50",
+      "StoredCompressed": true,
+      "Type": 14,
+      "Size": 2147483648,
+      "Attribute": "ZnBtYw4AAAAAAACAAAAAAA=="
+    },
+    {
+      "Name": "kernel-14-2147483649",
+      "Origin": "C-constructed repeated native block with stored final tail; complete kernel readback",
+      "SHA256": "756d356a375d41c3a3156a4c9804cc945db3f375835218a4ceac1b19b0a629cf",
+      "ForkSHA256": "2b1c7918a41a6628ae6e0a35fd4558e2b124633e6857d38b179b7c28894c0226",
+      "StoredCompressed": true,
+      "Type": 14,
+      "Size": 2147483649,
+      "Attribute": "ZnBtYw4AAAABAACAAAAAAA=="
+    },
+    {
+      "Name": "kernel-14-4294967295",
+      "Origin": "C-constructed repeated native block with stored final tail; complete kernel readback",
+      "SHA256": "51578b575ee477003e0e6e9ba47ea626593ce9ef2b03f2270e5e16baff3311a7",
+      "ForkSHA256": "5ae19d8239ee73761f41b2428f69c7cc58cb4975b65ed43f9886b69fd06a7d2d",
+      "StoredCompressed": true,
+      "Type": 14,
+      "Size": 4294967295,
+      "Attribute": "ZnBtYw4AAAD/////AAAAAA=="
+    },
+    {
+      "Name": "kernel-14-4294967296",
+      "Origin": "C-constructed repeated native block with stored final tail; complete kernel readback",
+      "SHA256": "e25d2407746491591256411b5773a3b9b5086eaa0b192500600b0369d66ee958",
+      "ForkSHA256": "ec21283f66ac5fbdd4a8f4206c701334e4a78086ecdc728a970253321211c051",
+      "StoredCompressed": true,
+      "Type": 14,
+      "Size": 4294967296,
+      "Attribute": "ZnBtYw4AAAAAAAAAAQAAAA=="
+    },
+    {
+      "Name": "kernel-14-4294967297",
+      "Origin": "C-constructed repeated native block with stored final tail; complete kernel readback",
+      "SHA256": "449e6c61e7f64b50a179c9abff0e6c5de8ecb845bcc22cb3adccb8ff0fb7e6bc",
+      "ForkSHA256": "b35e24faacdacdd7c4271a6e27af5909b253eacbe38d229aa45dbba38bb1a2cc",
+      "StoredCompressed": true,
+      "Type": 14,
+      "Size": 4294967297,
+      "Attribute": "ZnBtYw4AAAABAAAAAQAAAA=="
+    },
+    {
+      "Name": "native-4-536870911",
+      "Origin": "AppleFSCompression producer and complete kernel readback",
+      "SHA256": "4b3060aaf81bfcaed64a7cdc30317292bf1f366fdbe738a26c7f3f9ebe75d47e",
+      "ForkSHA256": "472b96b5731982cb43de8c5b8418c0eaefa9adef34f84e891177474b31d3f653",
+      "StoredCompressed": true,
+      "Type": 4,
+      "Size": 536870911,
+      "Attribute": "ZnBtYwQAAAD///8fAAAAAA=="
+    },
+    {
+      "Name": "native-4-536870912",
+      "Origin": "AppleFSCompression producer and complete kernel readback",
+      "SHA256": "fb3e43bafb18104624a726e2530d87a2bfabf28ea7d6d20be71a7520c058a843",
+      "ForkSHA256": "5b01724ce502ab0e944e8e26663f37e26c121b1f5763a99921d12c81a98f9c48",
+      "StoredCompressed": true,
+      "Type": 4,
+      "Size": 536870912,
+      "Attribute": "ZnBtYwQAAAAAAAAgAAAAAA=="
+    },
+    {
+      "Name": "native-4-536870913",
+      "Origin": "AppleFSCompression producer and complete kernel readback",
+      "SHA256": "3ea63e6ee7c6651855d282cc8a577e22ffd24b510a1c8f7fa219b8356ee45cd1",
+      "ForkSHA256": "",
+      "StoredCompressed": false,
+      "Type": 4,
+      "Size": 536870913,
+      "Attribute": null
+    }
+  ]
+}
