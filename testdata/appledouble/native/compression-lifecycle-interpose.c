@@ -53,7 +53,8 @@ if(strcmp(stage,operation))return 0;
 
     const char *limit=getenv("APFS_NATIVE_FAULT_COUNT");
     int n=atomic_fetch_add(&fault_count,1)+1, count=limit?atoi(limit):1;
-    if(count>=0&&n>count)return 0;
+    const char *skip_value=getenv("APFS_NATIVE_FAULT_SKIP");int skip=skip_value?atoi(skip_value):0;
+    if(n<=skip||(count>=0&&n-skip>count))return 0;
     const char *error=getenv("APFS_NATIVE_FAULT_ERRNO");
     errno=error?atoi(error):EACCES;
     return 1;

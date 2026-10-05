@@ -22,7 +22,7 @@ import (
 
 type trial struct {
 	Filesystem, Scenario, Requested, Inline, Fault string
-	FaultCount, FaultErrno                         int
+	FaultCount, FaultErrno, FaultSkip              int
 	Observation                                    json.RawMessage
 	Trace                                          string
 	Attribute, Fork, Data                          []byte
@@ -214,6 +214,16 @@ func run(out string, check bool) (result error) {
 					cases = append(cases, trial{Scenario: "hidden", Requested: "default", Inline: inline, Fault: "cas-mismatch", FaultCount: count})
 				}
 			}
+			for _, kind := range []string{"3", "7", "9", "11", "13"} {
+				for _, inline := range []string{"default", "no"} {
+					cases = append(cases, trial{Scenario: "multi-block", Requested: kind, Inline: inline})
+				}
+				for _, skip := range []int{1, 2} {
+					for _, errno := range []int{5, 28} {
+						cases = append(cases, trial{Scenario: "multi-block", Requested: kind, Inline: "no", Fault: "pwrite", FaultCount: 1, FaultSkip: skip, FaultErrno: errno})
+					}
+				}
+			}
 			for index, c := range cases {
 				c.Filesystem = filesystem
 				root := filepath.Join(mount, fmt.Sprint(index))
@@ -228,7 +238,7 @@ func run(out string, check bool) (result error) {
 				var stdout, stderr bytes.Buffer
 				ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 				cmd := exec.CommandContext(ctx, helper, c.Scenario, path, prefix, c.Requested, c.Inline)
-				cmd.Env = append(os.Environ(), "DYLD_INSERT_LIBRARIES="+library, "APFS_NATIVE_FAULT_TARGET="+path, "APFS_NATIVE_FAULT_STAGE="+c.Fault, fmt.Sprintf("APFS_NATIVE_FAULT_COUNT=%d", c.FaultCount), fmt.Sprintf("APFS_NATIVE_FAULT_ERRNO=%d", c.FaultErrno))
+				cmd.Env = append(os.Environ(), "DYLD_INSERT_LIBRARIES="+library, "APFS_NATIVE_FAULT_TARGET="+path, "APFS_NATIVE_FAULT_STAGE="+c.Fault, fmt.Sprintf("APFS_NATIVE_FAULT_COUNT=%d", c.FaultCount), fmt.Sprintf("APFS_NATIVE_FAULT_ERRNO=%d", c.FaultErrno), fmt.Sprintf("APFS_NATIVE_FAULT_SKIP=%d", c.FaultSkip))
 				cmd.Stdout = &stdout
 				cmd.Stderr = &stderr
 				e := cmd.Run()
@@ -262,7 +272,7 @@ func run(out string, check bool) (result error) {
 			return e
 		}
 	}
-	if len(capture.Cases) != 456 {
+	if len(capture.Cases) != 546 {
 		return fmt.Errorf("incomplete lifecycle inventory: %d", len(capture.Cases))
 	}
 	f, e := os.Create(out)
@@ -314,7 +324,7 @@ func run(out string, check bool) (result error) {
 			if before.Volume&0x80 != after.Volume&0x80 && fresh.Filesystem == "host" && after.Filesystem == "apfs" && after.Volume&0x80 == 0 {
 				found := false
 				for _, candidate := range prior.Cases {
-					if candidate.Filesystem == "APFS" && candidate.Scenario == fresh.Scenario && candidate.Requested == fresh.Requested && candidate.Inline == fresh.Inline && candidate.Fault == fresh.Fault && candidate.FaultCount == fresh.FaultCount && candidate.FaultErrno == fresh.FaultErrno {
+					if candidate.Filesystem == "APFS" && candidate.Scenario == fresh.Scenario && candidate.Requested == fresh.Requested && candidate.Inline == fresh.Inline && candidate.Fault == fresh.Fault && candidate.FaultCount == fresh.FaultCount && candidate.FaultErrno == fresh.FaultErrno && candidate.FaultSkip == fresh.FaultSkip {
 						old = candidate
 						old.Filesystem = "host"
 						found = true

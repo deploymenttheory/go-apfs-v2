@@ -25,9 +25,10 @@ type compressionLifecycleEvent struct {
 }
 type compressionLifecycleTrial struct {
 	Filesystem, Scenario, Requested, Inline, Fault, Trace string
-	FaultCount, FaultErrno                                int
+	FaultCount, FaultErrno, FaultSkip                     int
 	Attribute, Fork, Data                                 []byte
 	Observation                                           struct {
+		BeforeSize  int64  `json:"before_size"`
 		BeforeMode  uint32 `json:"before_mode"`
 		AfterMode   uint32 `json:"after_mode"`
 		TargetFlags uint32 `json:"target_flags"`
@@ -54,7 +55,7 @@ func compressionLifecycleTrials(t *testing.T) []compressionLifecycleTrial {
 	if e = json.NewDecoder(z).Decode(&corpus); e != nil {
 		t.Fatal(e)
 	}
-	if corpus.Schema != 1 || len(corpus.Cases) != 456 {
+	if corpus.Schema != 1 || len(corpus.Cases) != 546 {
 		t.Fatal("incomplete lifecycle fixture")
 	}
 	return corpus.Cases
@@ -173,9 +174,13 @@ func TestCommitCompressionNativeLifecycle(t *testing.T) {
 		} // Native eligibility/storage stopped before this stage.
 		compared++
 		t.Run(fmt.Sprintf("%d/%s/%s/%s/%s/%s/%d/%d", index, trial.Filesystem, trial.Scenario, trial.Requested, trial.Inline, trial.Fault, trial.FaultCount, trial.FaultErrno), func(t *testing.T) {
+			controlScenario := "ordinary"
+			if trial.Scenario == "multi-block" {
+				controlScenario = "multi-block"
+			}
 			var storage decmpfs.EncodedFile
 			for _, candidate := range trials {
-				if candidate.Filesystem == trial.Filesystem && candidate.Scenario == "ordinary" && candidate.Requested == trial.Requested && candidate.Inline == trial.Inline && candidate.Fault == "" {
+				if candidate.Filesystem == trial.Filesystem && candidate.Scenario == controlScenario && candidate.Requested == trial.Requested && candidate.Inline == trial.Inline && candidate.Fault == "" {
 					storage = decmpfs.EncodedFile{Attribute: candidate.Attribute, ForkSize: int64(len(candidate.Fork))}
 					break
 				}
@@ -187,7 +192,10 @@ func TestCommitCompressionNativeLifecycle(t *testing.T) {
 			if trial.Scenario == "symlink" {
 				mode = 0100600
 			}
-			b := &recordedCompressionCommit{t: t, events: events, wantAttribute: storage.Attribute, mode: mode, size: 65536}
+			b := &recordedCompressionCommit{t: t, events: events, wantAttribute: storage.Attribute, mode: mode, size: trial.Observation.BeforeSize}
+			if trial.Scenario == "symlink" {
+				b.size = 65536
+			}
 			if trial.Scenario == "hidden" {
 				b.flags = 0x8000
 			}
@@ -208,7 +216,7 @@ func TestCommitCompressionNativeLifecycle(t *testing.T) {
 			}
 		})
 	}
-	if compared != 332 {
+	if compared != 362 {
 		t.Fatal("incomplete native installation inventory", compared)
 	}
 }

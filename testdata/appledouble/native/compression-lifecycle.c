@@ -12,7 +12,7 @@ static void retained_data(const char *path,const char *prefix) {
     if(input<0){printf(",\"read_errno\":%d,\"read_bytes\":0",error);return;}
     FILE *out=fopen(output,"wb");if(!out)die("data output");
     unsigned char buffer[4096];size_t total=0;ssize_t n;error=0;
-    while((n=read(input,buffer,sizeof(buffer)))>0){total+=(size_t)n;if(total>65536)die("unexpected logical growth");if(fwrite(buffer,1,(size_t)n,out)!=(size_t)n)die("save logical bytes");}
+    while((n=read(input,buffer,sizeof(buffer)))>0){total+=(size_t)n;if(total>131076)die("unexpected logical growth");if(fwrite(buffer,1,(size_t)n,out)!=(size_t)n)die("save logical bytes");}
     if(n<0)error=errno;
     if(close(input)||fclose(out))die("close logical capture");
     printf(",\"read_errno\":%d,\"read_bytes\":%zu",error,total);
@@ -33,8 +33,8 @@ int main(int argc, char **argv) {
         if (mkfifo(path,0600)) die("mkfifo");
     } else {
         int f=open(path,O_CREAT|O_EXCL|O_RDWR,0600); if(f<0)die("create");
-        unsigned char content[65536];for(size_t i=0;i<sizeof(content);i++)content[i]="abcd"[i%4];
-        if(write(f,content,sizeof(content))!=sizeof(content))die("write");
+        size_t length=!strcmp(scenario,"multi-block")?131076:65536;unsigned char content[131076];for(size_t i=0;i<length;i++)content[i]="abcd"[i%4];
+        if(write(f,content,length)!=(ssize_t)length)die("write");
         if(!strcmp(scenario,"fork")&&fsetxattr(f,"com.apple.ResourceFork","independent",11,0,0))die("fork");
         if(!strcmp(scenario,"empty-fork")&&fsetxattr(f,"com.apple.ResourceFork","",0,0,0))die("empty fork");
         if(!strcmp(scenario,"stale-attribute")&&fsetxattr(f,"com.apple.decmpfs","stale",5,0,0))die("stale attr");

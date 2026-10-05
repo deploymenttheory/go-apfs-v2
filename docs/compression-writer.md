@@ -106,12 +106,21 @@ comparisons never fall back to an unconditional flag overwrite. Results retain
 attempt counts and recovered errors. This operation assumes completed compressed
 storage and an already truncated data fork; it is not a complete installer.
 
-The retained lifecycle corpus contains 456 independent host/APFS/HFS+ cases,
-including 242 activation sequences. Eligibility, existing forks, modes, ACLs,
+The retained lifecycle corpus contains 546 independent host/APFS/HFS+ cases,
+including 272 activation sequences. Eligibility, existing forks, modes, ACLs,
 links, all supported codecs, temporary permissions and injected storage,
 truncation, flag, synchronization, close and timestamp errors retain actual native
 outcomes. Test-only interposition is confined to the disposable target inode.
 The production implementation does not load the native framework or interposer.
+
+`hostdata.InstallCompressionFork` installs staged fork bytes with native write
+boundaries: the full index, each encoded block, then the zlib resource map. It
+retains partial writes, declines fork output when an independent fork exists,
+and synchronizes/closes its writer even for inline output or failure. Sync and
+close errors stay visible without changing native continuation policy. All 456
+retained fork-stage sequences are replayed, including multi-block EIO/ENOSPC
+after the index and after the first block. The caller owns the stable stage,
+existing-fork observation, earlier authorization and later commit decision.
 
 `hostdata.CommitCompression` installs the attribute and performs truncation,
 activation and restoration after the resource-fork writer has completed. Native
