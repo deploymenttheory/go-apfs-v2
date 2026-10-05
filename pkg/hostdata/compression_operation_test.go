@@ -238,8 +238,17 @@ func countOperation(events []string, name string) int {
 }
 
 func TestRecompressNativeStorage(t *testing.T) {
+	testRecompressNativeStorage(t, compressionLifecycleTrials(t))
+}
+func TestRecompressNativeOperationProfiles(t *testing.T) {
+	for _, name := range []string{"compression-operation", "compression-operation-macos26", "compression-operation-macos15"} {
+		t.Run(name, func(t *testing.T) { testRecompressNativeStorage(t, compressionTrials(t, name, 330)) })
+	}
+}
+func testRecompressNativeStorage(t *testing.T, trials []compressionLifecycleTrial) {
+	t.Helper()
 	count := 0
-	for index, c := range compressionLifecycleTrials(t) {
+	for index, c := range trials {
 		if c.Fault != "" || c.Scenario != "ordinary" && c.Scenario != "multi-block" {
 			continue
 		}

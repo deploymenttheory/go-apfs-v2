@@ -69,7 +69,7 @@ func run() (result error) {
 		}
 		report[filesystem] = counts
 	}
-	hashes, e := evidenceaudit.SourceHashes(os.DirFS("."), []string{"pkg/hostdata/compression_*.go", "scripts/verify-compression-installation-native.go", "testdata/appledouble/native/compression-lifecycle.json.gz", "go.mod", "go.sum"})
+	hashes, e := evidenceaudit.SourceHashes(os.DirFS("."), []string{"pkg/hostdata/compression_*.go", "pkg/osversion/*.go", "testdata/appledouble/native/compression-operation*.json.gz", "scripts/verify-compression-installation-native.go", "testdata/appledouble/native/compression-lifecycle.json.gz", "go.mod", "go.sum"})
 	if e != nil {
 		return e
 	}

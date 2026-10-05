@@ -42,9 +42,6 @@ type compressionLifecycleTrial struct {
 func compressionLifecycleTrials(t *testing.T) []compressionLifecycleTrial {
 	return compressionTrials(t, "compression-lifecycle", 591)
 }
-func compressionOperationTrials(t *testing.T) []compressionLifecycleTrial {
-	return compressionTrials(t, "compression-operation", 330)
-}
 func compressionTrials(t *testing.T, name string, count int) []compressionLifecycleTrial {
 	t.Helper()
 	f, e := os.Open("../../testdata/appledouble/native/" + name + ".json.gz")

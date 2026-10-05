@@ -44,7 +44,7 @@ func verify() error {
 		return e
 	}
 	required := map[string]bool{}
-	for _, name := range []string{"TestRecompressNativeStorage", "TestRecompressAdmissionAndDeclines", "TestRecompressFailuresAndCancellation", "TestCompressionOperationProvenance", "TestInstallHeldCompressionBindingFailures", "TestInstallCompressionForeignFiles", "TestInstallCompressionStageFailures", "TestInstallCompressionForkNativeLifecycle", "TestInstallCompressionForkMultiBlockAndFailures", "TestInstallCompressionForkInvalidStorage", "TestCompressionMetadataHeldProviderBinding", "TestCommitHeldCompressionBinding", "TestCommitCompressionNativeLifecycle", "TestCommitCompressionCancellationAndValidation", "TestActivateCompressionNativeComparisons", "TestActivateCompressionCancellationAndReadFailures", "TestCaptureCompressionMetadataBounded", "TestCaptureCompressionMetadataFailures", "TestCaptureCompressionMetadataAbsent", "TestCompressionMetadataInvalidArguments", "TestCompressionLifecycleProvenance"} {
+	for _, name := range []string{"TestRecompressNativeStorage", "TestRecompressNativeOperationProfiles", "TestRecompressAdmissionAndDeclines", "TestRecompressFailuresAndCancellation", "TestCompressionOperationProvenance", "TestInstallHeldCompressionBindingFailures", "TestInstallCompressionForeignFiles", "TestInstallCompressionStageFailures", "TestInstallCompressionForkNativeLifecycle", "TestInstallCompressionForkMultiBlockAndFailures", "TestInstallCompressionForkInvalidStorage", "TestCompressionMetadataHeldProviderBinding", "TestCommitHeldCompressionBinding", "TestCommitCompressionNativeLifecycle", "TestCommitCompressionCancellationAndValidation", "TestActivateCompressionNativeComparisons", "TestActivateCompressionCancellationAndReadFailures", "TestCaptureCompressionMetadataBounded", "TestCaptureCompressionMetadataFailures", "TestCaptureCompressionMetadataAbsent", "TestCompressionMetadataInvalidArguments", "TestCompressionLifecycleProvenance"} {
 		required[name] = true
 	}
 	if runtime.GOOS == "darwin" {
@@ -169,7 +169,7 @@ func verify() error {
 	if packageTotal == 0 || packageCovered*100 <= packageTotal*95 {
 		return fmt.Errorf("complete hostdata package coverage must exceed 95%%: %d/%d", packageCovered, packageTotal)
 	}
-	hashes, e := evidenceaudit.SourceHashes(os.DirFS("."), []string{"pkg/hostdata/compression_*.go", "scripts/verify-compression-lifecycle.go", "scripts/capture-compression-lifecycle.go", "testdata/appledouble/native/compression-lifecycle*", "testdata/appledouble/native/compression-operation*", "scripts/capture-compression-operation*.go", "testdata/appledouble/native/compression-policy.c", "testdata/appledouble/native/compression-query.json.gz", "go.mod", "go.sum"})
+	hashes, e := evidenceaudit.SourceHashes(os.DirFS("."), []string{"pkg/hostdata/compression_*.go", "pkg/osversion/*.go", "scripts/verify-compression-lifecycle.go", "scripts/capture-compression-lifecycle.go", "testdata/appledouble/native/compression-lifecycle*", "testdata/appledouble/native/compression-operation*", "scripts/capture-compression-operation*.go", "testdata/appledouble/native/compression-policy.c", "testdata/appledouble/native/compression-query.json.gz", "go.mod", "go.sum"})
 	if e != nil {
 		return e
 	}

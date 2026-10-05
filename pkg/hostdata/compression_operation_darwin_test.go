@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/deploymenttheory/go-apfs-v2/pkg/osversion"
 	"golang.org/x/sys/unix"
 )
 
@@ -35,8 +36,21 @@ func TestRecompressNativeFiles(t *testing.T) {
 		t.Fatal(e)
 	}
 	filesystem := unix.ByteSliceToString(mounted.Fstypename[:])
+	version, e := osversion.Detect(t.Context())
+	if e != nil {
+		t.Fatal(e)
+	}
+	profile, e := osversion.ProfileForMacOS(version)
+	if e != nil {
+		t.Fatal(e)
+	}
+	fixture := map[osversion.MacOSProfile]string{osversion.MacOS15: "compression-operation-macos15", osversion.MacOS26: "compression-operation-macos26", osversion.MacOS27: "compression-operation"}[profile]
+	if fixture == "" {
+		t.Fatal("unqualified native compression OS profile", version)
+	}
 	cases := map[string]compressionLifecycleTrial{}
-	for _, c := range compressionOperationTrials(t) {
+	for _, c := range compressionTrials(t, fixture, 330) {
+
 		if c.Fault != "" || c.Scenario != "ordinary" && c.Scenario != "multi-block" || c.Observation.VolumeFlags&0x80 != volume&0x80 || c.Observation.FilesystemType != filesystem {
 			continue
 		}

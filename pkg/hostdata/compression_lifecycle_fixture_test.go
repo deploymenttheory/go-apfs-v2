@@ -14,17 +14,24 @@ func TestCompressionLifecycleProvenance(t *testing.T) {
 	testCompressionProvenance(t, "compression-lifecycle", 591, nil)
 }
 func TestCompressionOperationProvenance(t *testing.T) {
-	testCompressionProvenance(t, "compression-operation", 330, []string{"testdata/appledouble/native/compression-lifecycle-interpose.c", "scripts/capture-compression-operation_test.go"})
-	for i, c := range compressionOperationTrials(t) {
-		if c.Filesystem == "" || c.Scenario == "" || c.Requested == "" || c.Inline == "" || c.Trace == "" {
-			t.Fatal("incomplete typed native operation observation", i)
-		}
+	for _, name := range []string{"compression-operation", "compression-operation-macos26", "compression-operation-macos15"} {
+		t.Run(name, func(t *testing.T) {
+			testCompressionProvenanceFrom(t, name, "compression-operation", 330, []string{"testdata/appledouble/native/compression-lifecycle-interpose.c", "scripts/capture-compression-operation_test.go", "pkg/osversion/version.go", "pkg/osversion/macos.go", "pkg/osversion/host.go", "pkg/osversion/host_darwin.go", "pkg/osversion/host_other.go"})
+			for i, c := range compressionTrials(t, name, 330) {
+				if c.Filesystem == "" || c.Scenario == "" || c.Requested == "" || c.Inline == "" || c.Trace == "" {
+					t.Fatal("incomplete typed native operation observation", i)
+				}
+			}
+		})
 	}
-
 }
 func testCompressionProvenance(t *testing.T, name string, count int, additional []string) {
 	t.Helper()
-	file, e := os.Open("../../testdata/appledouble/native/" + name + ".json.gz")
+	testCompressionProvenanceFrom(t, name, name, count, additional)
+}
+func testCompressionProvenanceFrom(t *testing.T, fixture, name string, count int, additional []string) {
+	t.Helper()
+	file, e := os.Open("../../testdata/appledouble/native/" + fixture + ".json.gz")
 	if e != nil {
 		t.Fatal(e)
 	}
