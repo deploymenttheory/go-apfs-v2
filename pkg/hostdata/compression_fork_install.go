@@ -49,16 +49,7 @@ func InstallCompressionFork(ctx context.Context, storage decmpfs.EncodedFile, st
 	if fork == nil {
 		return result, fs.ErrInvalid
 	}
-	defer func() {
-		for _, op := range []struct {
-			name string
-			run  func() error
-		}{{"fork-sync", fork.Sync}, {"fork-close", fork.Close}} {
-			if e := op.run(); e != nil {
-				result.Failures = append(result.Failures, StatCopyFailure{op.name, e})
-			}
-		}
-	}()
+	defer finishCompressionFork(fork, &result)
 	if existingForkSize < 0 {
 		return result, fs.ErrInvalid
 	}

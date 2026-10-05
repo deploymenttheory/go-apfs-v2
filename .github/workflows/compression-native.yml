@@ -48,6 +48,9 @@ jobs:
       - name: Qualify every effective quarantine process flag independently
         if: ${{ !cancelled() }}
         run: go run scripts/verify-appledouble-quarantine-runtime.go -raw-processes
+      - name: Verify held Go installation on host, APFS and HFS+
+        if: ${{ !cancelled() }}
+        run: go run scripts/verify-compression-installation-native.go
       - name: Replay compression lifecycle and complete hostdata coverage
         if: ${{ !cancelled() }}
         run: go run scripts/verify-compression-lifecycle.go
@@ -64,6 +67,7 @@ jobs:
             artifacts/compression-query/
             artifacts/compression-lifecycle/
             artifacts/compression-lifecycle-coverage/
+            artifacts/compression-installation-native/
             artifacts/appledouble-quarantine-runtime-raw-processes/
             artifacts/appledouble-quarantine-runtime-contexts/
             artifacts/appledouble-quarantine-runtime-existing/

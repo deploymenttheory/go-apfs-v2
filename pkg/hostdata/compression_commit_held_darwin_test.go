@@ -14,10 +14,12 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-func TestCommitHeldCompressionNativeReadback(t *testing.T) {
+func TestCommitHeldCompressionNativeReadback(t *testing.T)  { compressionHeldNativeReadback(t, false) }
+func TestInstallHeldCompressionNativeReadback(t *testing.T) { compressionHeldNativeReadback(t, true) }
+func compressionHeldNativeReadback(t *testing.T, install bool) {
 	count := 0
 	for index, c := range compressionLifecycleTrials(t) {
-		if c.Scenario != "ordinary" || c.Fault != "" {
+		if c.Scenario != "ordinary" && c.Scenario != "multi-block" || c.Fault != "" {
 			continue
 		}
 		count++
@@ -51,7 +53,7 @@ func TestCommitHeldCompressionNativeReadback(t *testing.T) {
 			if e != nil {
 				t.Fatal(e)
 			}
-			if len(c.Fork) > 0 {
+			if !install && len(c.Fork) > 0 {
 				if n, e := ReplaceResourceFork(t.Context(), f, bytes.NewReader(c.Fork)); e != nil || n != int64(len(c.Fork)) {
 					t.Fatal(n, e)
 				}
@@ -64,7 +66,19 @@ func TestCommitHeldCompressionNativeReadback(t *testing.T) {
 			if e = os.WriteFile(path, []byte("unrelated replacement"), 0600); e != nil {
 				t.Fatal(e)
 			}
-			r, e := CommitHeldCompression(t.Context(), f, decmpfs.EncodedFile{Attribute: c.Attribute, ForkSize: int64(len(c.Fork))}, source)
+			var r CompressionCommitResult
+			storage := decmpfs.EncodedFile{Attribute: c.Attribute, ForkSize: int64(len(c.Fork))}
+			if install {
+				var installed CompressionInstallationResult
+				installed, e = InstallHeldCompression(t.Context(), f, storage, bytes.NewReader(c.Fork), source)
+				r = installed.Commit
+				if !installed.Fork.Complete || len(installed.Fork.Failures) != 0 {
+					t.Fatal(installed, e)
+				}
+			} else {
+				r, e = CommitHeldCompression(t.Context(), f, storage, source)
+			}
+
 			if e != nil || !r.Completed || !r.Activated || !r.TimesRestored || len(r.Failures) != 0 {
 				t.Fatal(r, e)
 			}
@@ -94,7 +108,7 @@ func TestCommitHeldCompressionNativeReadback(t *testing.T) {
 			}
 		})
 	}
-	if count != 36 {
+	if count != 66 {
 		t.Fatal("incomplete native storage inventory", count)
 	}
 }

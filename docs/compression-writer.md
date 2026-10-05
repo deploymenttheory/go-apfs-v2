@@ -122,6 +122,24 @@ retained fork-stage sequences are replayed, including multi-block EIO/ENOSPC
 after the index and after the first block, plus positive short writes at all\nthree frame boundaries. The caller owns the stable stage,
 existing-fork observation, earlier authorization and later commit decision.
 
+`hostdata.InstallCompression` composes fork installation with the final commit
+against a native or explicit foreign backend. It preserves a pre-existing
+independent fork, synchronizes the data handle and restores times on that
+decline path. It never reaches data truncation after a failed or short fork
+write. `InstallHeldCompression` supplies the Darwin binding and keeps the
+caller's held data file open; Linux and Windows bind the same operation to
+explicit foreign state rather than reinterpreting host flags.
+
+The portable suite installs 66 independent native storage choices into real
+ordinary and resource-fork files and verifies complete bytes, physical data-fork
+truncation, logical flags, modes, timestamps and handle ownership. The macOS
+harness runs 396 held-file kernel readbacks across the host volume and separately
+mounted APFS/HFS+ volumes. It records each volume, all cases and every ordinary
+detach attempt. A skipped case or missing storage choice fails qualification.
+These APIs still require the caller to qualify eligibility, select volume policy,
+stage fresh encoded storage and publish foreign metadata; they are not a complete
+path-based recompression operation.
+
 `hostdata.CommitCompression` installs the attribute and performs truncation,
 activation and restoration after the resource-fork writer has completed. Native
 `EACCES` alone permits mode 0600 and one attribute retry; even `EPERM` does not.
