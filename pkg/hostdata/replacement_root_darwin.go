@@ -10,8 +10,8 @@ import (
 
 func prepareReplacementAt(source *os.File, stage *os.Root, info os.FileInfo) (*os.File, error) {
 	flags, _ := hostflags.Flags(info)
-	if flags&(unix.UF_IMMUTABLE|unix.UF_APPEND|unix.SF_IMMUTABLE|unix.SF_APPEND|UFCompressed) != 0 {
-		return nil, fmt.Errorf("%w: protected or compressed source", ErrUnsupportedReplacement)
+	if flags&(unix.UF_IMMUTABLE|unix.UF_APPEND|unix.SF_IMMUTABLE|unix.SF_APPEND) != 0 {
+		return nil, fmt.Errorf("%w: protected source", ErrUnsupportedReplacement)
 	}
 	dir, err := stage.Open(".")
 	if err != nil {
@@ -24,7 +24,15 @@ func prepareReplacementAt(source *os.File, stage *os.Root, info os.FileInfo) (*o
 		return nil, err
 	}
 	return prepareReplacementUsing(
-		func() error { return unix.Fclonefileat(int(source.Fd()), int(dir.Fd()), "replacement", 0) },
+		func() error {
+			// Rewritten logical contents must not inherit the old compressed
+			// storage. A fresh file also avoids decompression writes against
+			// a clone before the caller has supplied the replacement bytes.
+			if flags&UFCompressed != 0 {
+				return unix.ENOTSUP
+			}
+			return unix.Fclonefileat(int(source.Fd()), int(dir.Fd()), "replacement", 0)
+		},
 		replacementCloneUnavailable,
 		func(cloned bool) (*os.File, error) {
 			if !cloned {

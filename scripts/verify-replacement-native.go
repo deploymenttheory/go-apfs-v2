@@ -21,13 +21,14 @@ import (
 
 func main() {
 	capture := flag.String("capture", "", "also write a reviewed native fixture at this path")
+	compressedCapture := flag.String("capture-compressed", "", "also write the compressed replacement corpus")
 	flag.Parse()
-	if err := verify(*capture); err != nil {
+	if err := verify(*capture, *compressedCapture); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
-func verify(capture string) (result error) {
+func verify(capture, compressedCapture string) (result error) {
 	if runtime.GOOS != "darwin" {
 		return fmt.Errorf("native qualification requires macOS; portable replay runs on every host")
 	}
@@ -79,7 +80,7 @@ func verify(capture string) (result error) {
 		hashes[path] = hex.EncodeToString(sum[:])
 		return nil
 	}
-	for _, p := range []string{source, "testdata/appledouble/native/quarantine-process-capture.h", "scripts/verify-replacement-native.go", "pkg/hostdata/replacement_copy_darwin_test.go", "pkg/hostdata/replacement_copy.go", "pkg/hostdata/replacement_copy_darwin.go", "pkg/hostdata/replacement_darwin.go", "pkg/hostdata/replacement_root_darwin.go", "go.mod", "go.sum"} {
+	for _, p := range []string{source, "testdata/appledouble/native/quarantine-process-capture.h", "scripts/verify-replacement-native.go", "pkg/hostdata/replacement_copy_darwin_test.go", "pkg/hostdata/replacement_copy.go", "pkg/hostdata/replacement_copy_darwin.go", "pkg/hostdata/replacement_darwin.go", "pkg/hostdata/replacement_root_darwin.go", "testdata/appledouble/native/replacement-compressed.c", "testdata/appledouble/native/decmpfs-formats.c", "testdata/appledouble/native/decmpfs-formats.json.gz", "pkg/hostdata/replacement_compressed_darwin_test.go", "go.mod", "go.sum"} {
 		if err := hashFile(p); err != nil {
 			return err
 		}
@@ -115,7 +116,25 @@ func verify(capture string) (result error) {
 			return err
 		}
 	}
+	for _, arch := range []string{"arm64", "x86_64"} {
+		ast, err := run("xcrun", "clang", "-arch", arch, "-fsyntax-only", "-Xclang", "-ast-dump=json", "-Xclang", "-ast-dump-filter=replacement_compressed_oracle", "testdata/appledouble/native/replacement-compressed.c")
+		if err != nil {
+			return err
+		}
+		name := filepath.Join(out, "compressed-"+arch+".ast.json")
+		commands[len(commands)-1]["stdout"] = "retained in " + name
+		if !json.Valid(ast) || !bytes.Contains(ast, []byte("fcopyfile")) || !bytes.Contains(ast, []byte("pwrite")) || !bytes.Contains(ast, []byte("ftruncate")) {
+			return fmt.Errorf("incomplete compressed oracle AST: %s", arch)
+		}
+		if err := os.WriteFile(name, ast, 0600); err != nil {
+			return err
+		}
+		if err := hashFile(name); err != nil {
+			return err
+		}
+	}
 	records := []json.RawMessage{}
+	compressedRecords := []json.RawMessage{}
 	for _, filesystem := range []string{"APFS", "HFS+"} {
 		err := func() (result error) {
 			image := filepath.Join(temp, strings.ReplaceAll(filesystem, "+", "plus")+".dmg")
@@ -131,7 +150,7 @@ func verify(capture string) (result error) {
 				return err
 			}
 			defer func() { _, err := run("hdiutil", "detach", mount); result = errors.Join(result, err) }()
-			cmd := exec.Command("go", "test", "-count=1", "-json", "-run", "^TestReplacementCopyDarwinNative$", "./pkg/hostdata")
+			cmd := exec.Command("go", "test", "-count=1", "-json", "-run", "^TestReplacement(Copy|Compressed)DarwinNative$", "./pkg/hostdata")
 			cmd.Env = append(os.Environ(), "CGO_ENABLED=0", "APFS_REPLACEMENT_MOUNT="+mount, "APFS_REPLACEMENT_ORACLE="+helper, "APFS_REPLACEMENT_FS="+filesystem)
 			data, err := cmd.CombinedOutput()
 			if e := os.WriteFile(filepath.Join(out, strings.ReplaceAll(filesystem, "+", "plus")+".jsonl"), data, 0600); e != nil {
@@ -143,6 +162,8 @@ func verify(capture string) (result error) {
 			scanner := bufio.NewScanner(bytes.NewReader(data))
 			scanner.Buffer(make([]byte, 4096), 1<<20)
 			cases := 0
+			compressedCases := 0
+			seenCompressed := map[string]bool{}
 			pending := map[string]string{}
 			packagePass := false
 			for scanner.Scan() {
@@ -164,6 +185,22 @@ func verify(capture string) (result error) {
 							break
 						}
 						pending[event.Test] = rest
+						if _, value, found := strings.Cut(line, "COMPRESSED_REPLACEMENT_NATIVE "); found {
+							raw := json.RawMessage(strings.TrimSpace(value))
+							var record struct {
+								Case string `json:"case"`
+							}
+							if err := json.Unmarshal(raw, &record); err != nil {
+								return err
+							}
+							if record.Case == "" || seenCompressed[record.Case] {
+								return fmt.Errorf("duplicate or missing compressed case: %s", record.Case)
+							}
+							seenCompressed[record.Case] = true
+							compressedRecords = append(compressedRecords, raw)
+							compressedCases++
+							continue
+						}
 						if _, value, found := strings.Cut(line, "REPLACEMENT_NATIVE "); found {
 							raw := json.RawMessage(strings.TrimSpace(value))
 							if !json.Valid(raw) {
@@ -186,6 +223,9 @@ func verify(capture string) (result error) {
 				if rest != "" {
 					return fmt.Errorf("incomplete native output: %s", name)
 				}
+			}
+			if compressedCases != 34 {
+				return fmt.Errorf("incomplete %s compressed evidence: %d", filesystem, compressedCases)
 			}
 			if cases != 4 || !packagePass {
 				return fmt.Errorf("incomplete %s evidence: %d cases, package pass %v", filesystem, cases, packagePass)
@@ -210,6 +250,21 @@ func verify(capture string) (result error) {
 			return err
 		}
 	}
+	compressedReport := map[string]any{"schema": 1, "purpose": "Compressed source replacement; SDK source birth preservation and native metadata-only copy birth semantics are qualified separately", "versions": versions, "source_sha256": hashes, "commands": commands, "cases": compressedRecords}
+	compressedData, err := json.MarshalIndent(compressedReport, "", "  ")
+	if err != nil {
+		return err
+	}
+	compressedData = append(compressedData, '\n')
+	if err := os.WriteFile(filepath.Join(out, "compressed-capture.json"), compressedData, 0600); err != nil {
+		return err
+	}
+	if compressedCapture != "" {
+		if err := os.WriteFile(compressedCapture, compressedData, 0644); err != nil {
+			return err
+		}
+	}
+	fmt.Printf("Compressed replacement native qualification: %d cases across APFS and HFS+\n", len(compressedRecords))
 	fmt.Printf("Replacement native qualification: %d cases across APFS and HFS+\n", len(records))
 	return nil
 }

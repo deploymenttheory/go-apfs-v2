@@ -348,7 +348,14 @@ final rename; no transactional or crash-durability guarantee is made.
   aggregate, excluding resource forks. It works on HFS+ without cloning and
   fails rather than discarding metadata on any capture, transfer or restoration
   error. Permission, storage and other clone errors do not trigger fallback.
-  Immutable, append-only and compressed inputs still fail before commit.
+  Immutable and append-only inputs still fail before commit. Compressed Darwin
+  sources use a fresh uncompressed stage. The metadata copier reads the hidden
+  compression header through the existing typed host wrapper, excludes the old
+  compression attribute and its owned storage fork, and preserves independent
+  forks on inline-compressed files. Unknown/missing headers fail without
+  discarding an unclassified fork. Restoration keeps the target's compression
+  state; it never reattaches the source flag to rewritten logical data.
+  Recompression is a separate caller policy, not an automatic replacement step.
 - Linux copies owner/group, mode and readable xattrs (including POSIX ACLs),
   with an 8 MiB aggregate limit each for names and values. Inherited staging
   ACLs are removed first. Linux inode flags and birth time are not preserved.
@@ -367,7 +374,11 @@ no skipped tests, raw test transcripts and source hashes. On macOS,
 `go run scripts/verify-replacement-native.go` creates disposable APFS and HFS+
 images, compiles the C control with Clang, retains arm64/x86_64 ASTs and checks
 both public APIs with inherited/deny-write ACLs and a resource fork exceeding
-8 MiB. Linux and Windows replay the committed native corpus and run the shared
+8 MiB. It also qualifies 34 compressed replacement cases per filesystem:
+17 native storage profiles through both APIs, including fresh zlib/LZVN/LZFSE
+producers, inline and resource-fork containers, empty/type-1 boundaries and
+independent forks. Raw captures retain native creation intervals alongside the
+SDK's source creation time. Linux and Windows replay the committed native corpus and run the shared
 failure/budget/64-bit boundary tests alongside their existing native replacement
 suite. A sparse fork boundary test above 4 GiB checks offset forwarding; it is
 not a claim of a full native 4 GiB transfer acceptance run.
@@ -399,7 +410,7 @@ source by its pathname or restores backup hard-link/object-identity records.
 Owner, group, DACL, creation time and ordinary Windows attributes are preserved.
 The root API rejects compressed, encrypted and reparse Windows files and
 bounds combined stream/EA names and data to 8 MiB. Darwin's
-protected/compressed-file limitations remain. SACLs are outside the contract.
+protected-file limitations remain. SACLs are outside the contract.
 
 The existing path API remains available. Both APIs run the same platform metadata
 tests. Root-specific tests cover containment, a moved root with an old-path decoy,

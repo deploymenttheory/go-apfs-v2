@@ -18,8 +18,21 @@ func replacementCloneUnavailable(err error) bool {
 func copyReplacementMetadata(source, target *os.File, info os.FileInfo) error {
 	birth := info.Sys().(*syscall.Stat_t).Birthtimespec
 	return copyReplacementMetadataUsing(replacementCopyOps{
-		list:     func() ([]string, error) { return ListXattrNames(source, MaxXattrListSize) },
-		read:     func(name string, limit int) ([]byte, bool, error) { return ReadXattr(source, name, limit) },
+		compressed: info.Sys().(*syscall.Stat_t).Flags&UFCompressed != 0,
+		list:       func() ([]string, error) { return ListXattrNames(source, MaxXattrListSize) },
+		read: func(name string, limit int) ([]byte, bool, error) {
+			if name != DecmpfsName {
+				return ReadXattr(source, name, limit)
+			}
+			var value []byte
+			var present bool
+			err := withXattrFile(source, name, func(fd int) error {
+				var err error
+				value, present, err = readVisibleXattr(func(buf []byte) (int, error) { return getCaptureXattrFD(fd, name, buf) }, limit)
+				return err
+			})
+			return value, present, err
+		},
 		write:    func(name string, value []byte) error { return SetXattr(target, name, value) },
 		openFork: func() (replacementFork, error) { return OpenResourceFork(source, false) },
 		replaceFork: func(value appledouble.Value) error {
