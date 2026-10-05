@@ -99,6 +99,7 @@ jobs:
   race:
     name: Race detector
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
@@ -111,7 +112,20 @@ jobs:
       - name: Unit tests with -race
         env:
           CGO_ENABLED: "1"
-        run: go test -race -short ./pkg/... ./internal/...
+        # The complete native codec replay exceeds Go's default ten-minute
+        # package timeout under instrumentation on the Linux runner. Retain
+        # every case and record individual test timings for stall diagnosis.
+        shell: bash
+        run: |
+          mkdir -p artifacts/race
+          go test -race -short -timeout 30m -json ./pkg/... ./internal/... | tee artifacts/race/tests.json
+      - name: Upload race results and timings
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: race-results
+          path: artifacts/race/
+          if-no-files-found: error
 
   test:
     name: Test (${{ matrix.os }})
