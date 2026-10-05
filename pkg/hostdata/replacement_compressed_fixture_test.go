@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"os"
 	"reflect"
 	"strings"
@@ -24,16 +25,16 @@ func TestReplacementCompressedNativeFixture(t *testing.T) {
 			Filesystem                  string `json:"filesystem"`
 			Type                        uint32 `json:"type"`
 			Source, Replacement, Native map[string]json.RawMessage
-			Begin                       int64 `json:"native_begin"`
-			End                         int64 `json:"native_end"`
-			SourceUnchanged             bool  `json:"source_unchanged"`
-			StageRemoved                bool  `json:"stage_removed"`
+			Times                       replacementNativeTimes `json:"native_times"`
+
+			SourceUnchanged bool `json:"source_unchanged"`
+			StageRemoved    bool `json:"stage_removed"`
 		} `json:"cases"`
 	}
 	if err := json.Unmarshal(b, &capture); err != nil {
 		t.Fatal(err)
 	}
-	if capture.Schema != 1 || len(capture.Cases) != 68 {
+	if capture.Schema != 2 || len(capture.Cases) != 68 {
 		t.Fatalf("incomplete native capture: %d/%d", capture.Schema, len(capture.Cases))
 	}
 	for _, name := range []string{"testdata/appledouble/native/replacement-compressed.c", "testdata/appledouble/native/decmpfs-formats.c", "testdata/appledouble/native/decmpfs-formats.json.gz"} {
@@ -81,12 +82,18 @@ func TestReplacementCompressedNativeFixture(t *testing.T) {
 			if !bytes.Equal(tc.Source["Birth"], tc.Replacement["Birth"]) {
 				t.Fatal("SDK lost source birth time")
 			}
-			var nativeBirth struct{ Sec int64 }
+			var nativeBirth, sourceBirth replacementNativeTime
 			if err := json.Unmarshal(tc.Native["Birth"], &nativeBirth); err != nil {
 				t.Fatal(err)
 			}
-			if tc.Begin > tc.End || nativeBirth.Sec < tc.Begin || nativeBirth.Sec > tc.End {
-				t.Fatal("native birth outside capture interval")
+			if err := json.Unmarshal(tc.Source["Birth"], &sourceBirth); err != nil {
+				t.Fatal(err)
+			}
+			if err := tc.Times.validate(nativeBirth); err != nil {
+				t.Fatal(err)
+			}
+			if tc.Times.SourceModified != (replacementNativeTime{1610000000, 0}) || nativeBirth == sourceBirth {
+				t.Fatal("missing deterministic birth-clamping control")
 			}
 			for _, field := range []string{"Mode", "UID", "GID", "Flags", "Attributes", "ForkSize", "ForkSHA256", "ACL"} {
 				if tc.Replacement[field] == nil || !bytes.Equal(tc.Replacement[field], tc.Native[field]) {
@@ -113,5 +120,74 @@ func TestReplacementCompressedNativeFixture(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+// Keep the native intermediate observations in the portable corpus so the
+// filesystem's timestamp clamping is checked independently of Go wall time.
+type replacementNativeTime struct{ Sec, Nsec int64 }
+type replacementNativeTimes struct {
+	SourceModified replacementNativeTime `json:"source_modified"`
+	Created        replacementNativeTime `json:"created"`
+	CopiedBirth    replacementNativeTime `json:"copied_birth"`
+	CopiedModified replacementNativeTime `json:"copied_modified"`
+	RewrittenBirth replacementNativeTime `json:"rewritten_birth"`
+}
+
+func (times replacementNativeTimes) validate(final replacementNativeTime) error {
+	expected := times.Created
+	if times.SourceModified.Sec < expected.Sec ||
+		(times.SourceModified.Sec == expected.Sec && times.SourceModified.Nsec < expected.Nsec) {
+		expected = times.SourceModified
+	}
+	if times.Created.Sec == 0 || times.SourceModified.Sec == 0 ||
+		times.CopiedModified != times.SourceModified || times.CopiedBirth != expected ||
+		times.RewrittenBirth != expected || final != expected {
+		return fmt.Errorf("native timestamp transition: %+v final %+v expected birth %+v", times, final, expected)
+	}
+	return nil
+}
+
+func TestReplacementNativeTimestampOracle(t *testing.T) {
+	early := replacementNativeTime{1610000000, 123}
+	late := replacementNativeTime{1710000000, 456}
+	for _, tc := range []struct {
+		name                        string
+		modified, created, expected replacementNativeTime
+	}{
+		{"older-mtime-clamps", early, late, early},
+		{"newer-mtime-preserves", late, early, early},
+		{"equal-times", early, early, early},
+		{"nanosecond-clamp", replacementNativeTime{1710000000, 123}, late, replacementNativeTime{1710000000, 123}},
+		{"nanosecond-preserve", late, replacementNativeTime{1710000000, 123}, replacementNativeTime{1710000000, 123}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			valid := replacementNativeTimes{tc.modified, tc.created, tc.expected, tc.modified, tc.expected}
+			if err := valid.validate(tc.expected); err != nil {
+				t.Fatal(err)
+			}
+			for _, field := range []string{"source", "created", "copied-birth", "copied-mtime", "rewritten-birth", "final"} {
+				t.Run(field, func(t *testing.T) {
+					altered, final := valid, tc.expected
+					switch field {
+					case "source":
+						altered.SourceModified = replacementNativeTime{}
+					case "created":
+						altered.Created = replacementNativeTime{}
+					case "copied-birth":
+						altered.CopiedBirth.Nsec++
+					case "copied-mtime":
+						altered.CopiedModified.Nsec++
+					case "rewritten-birth":
+						altered.RewrittenBirth.Nsec++
+					case "final":
+						final.Nsec++
+					}
+					if err := altered.validate(final); err == nil {
+						t.Fatal("accepted corrupt native transition")
+					}
+				})
+			}
+		})
 	}
 }

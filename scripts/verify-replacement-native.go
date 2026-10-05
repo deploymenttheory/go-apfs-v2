@@ -250,7 +250,7 @@ func verify(capture, compressedCapture string) (result error) {
 			return err
 		}
 	}
-	compressedReport := map[string]any{"schema": 1, "purpose": "Compressed source replacement; SDK source birth preservation and native metadata-only copy birth semantics are qualified separately", "versions": versions, "source_sha256": hashes, "commands": commands, "cases": compressedRecords}
+	compressedReport := map[string]any{"schema": 2, "purpose": "Compressed source replacement; SDK source birth preservation and native metadata-only copy birth semantics are qualified separately", "versions": versions, "source_sha256": hashes, "commands": commands, "cases": compressedRecords}
 	compressedData, err := json.MarshalIndent(compressedReport, "", "  ")
 	if err != nil {
 		return err

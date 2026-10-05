@@ -377,15 +377,21 @@ both public APIs with inherited/deny-write ACLs and a resource fork exceeding
 8 MiB. It also qualifies 34 compressed replacement cases per filesystem:
 17 native storage profiles through both APIs, including fresh zlib/LZVN/LZFSE
 producers, inline and resource-fork containers, empty/type-1 boundaries and
-independent forks. Raw captures retain native creation intervals alongside the
-SDK's source creation time. Linux and Windows replay the committed native corpus and run the shared
+independent forks. Raw captures retain the native destination birth time before
+copying, source modification time, and destination birth/modification times after
+copying and rewriting. Copying an older modification time clamps destination
+birth to that time; the corpus checks the exact transition rather than comparing
+against the test process's wall clock. A fixed historical modification time makes
+this regression deterministic on both filesystems. Linux and Windows replay the
+committed native corpus and run the shared
 failure/budget/64-bit boundary tests alongside their existing native replacement
 suite. A sparse fork boundary test above 4 GiB checks offset forwarding; it is
 not a claim of a full native 4 GiB transfer acceptance run.
 
 The control retains raw `fcopyfile(COPYFILE_SECURITY | COPYFILE_METADATA)`
 results separately. That native operation can preserve destination creation
-time, merge inherited ACLs and normalize quarantine's agent/timestamp; this
+time (subject to modification-time clamping), merge inherited ACLs and normalize
+quarantine's agent/timestamp; this
 SDK's existing replacement contract instead
 preserves source creation time and restores the source ACL after writing. The
 corpus verifies both observations rather than treating this generic metadata

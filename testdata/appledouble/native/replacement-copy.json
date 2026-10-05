@@ -7,8 +7,8 @@
       "native": {
         "clone_errno": 0,
         "copy_errno": 0,
-        "copy_begin": 1791102980,
-        "copy_end": 1791102980,
+        "copy_begin": 1791197223,
+        "copy_end": 1791197223,
         "host_major": 27,
         "process_init_code": 0,
         "process_init_errno": 0,
@@ -29,13 +29,13 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791102980,
-          "Nsec": 63075748
+          "Sec": 1791197223,
+          "Nsec": 351281629
         },
         "Attributes": {
           "com.apple.FinderInfo": "5445585474657374000000000000000000000000000000000000000000000000",
           "com.apple.provenance": "010200953c7ac2a6fe63b9",
-          "com.apple.quarantine": "303038313b36616332313030343b3b31323334353637382d313233342d313233342d313233342d313233343536373839616263",
+          "com.apple.quarantine": "303038313b36616333383032373b3b31323334353637382d313233342d313233342d313233342d313233343536373839616263",
           "user.empty": "",
           "user.replacement": "010203"
         },
@@ -93,8 +93,8 @@
       "native": {
         "clone_errno": 0,
         "copy_errno": 0,
-        "copy_begin": 1791102980,
-        "copy_end": 1791102980,
+        "copy_begin": 1791197223,
+        "copy_end": 1791197223,
         "host_major": 27,
         "process_init_code": 0,
         "process_init_errno": 0,
@@ -115,13 +115,13 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791102980,
-          "Nsec": 324617964
+          "Sec": 1791197223,
+          "Nsec": 706280315
         },
         "Attributes": {
           "com.apple.FinderInfo": "5445585474657374000000000000000000000000000000000000000000000000",
           "com.apple.provenance": "010200953c7ac2a6fe63b9",
-          "com.apple.quarantine": "303038313b36616332313030343b3b31323334353637382d313233342d313233342d313233342d313233343536373839616263",
+          "com.apple.quarantine": "303038313b36616333383032373b3b31323334353637382d313233342d313233342d313233342d313233343536373839616263",
           "user.empty": "",
           "user.replacement": "010203"
         },
@@ -179,8 +179,8 @@
       "native": {
         "clone_errno": 0,
         "copy_errno": 0,
-        "copy_begin": 1791102980,
-        "copy_end": 1791102980,
+        "copy_begin": 1791197223,
+        "copy_end": 1791197223,
         "host_major": 27,
         "process_init_code": 0,
         "process_init_errno": 0,
@@ -201,13 +201,13 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791102980,
-          "Nsec": 414143021
+          "Sec": 1791197223,
+          "Nsec": 866664071
         },
         "Attributes": {
           "com.apple.FinderInfo": "5445585474657374000000000000000000000000000000000000000000000000",
           "com.apple.provenance": "010200953c7ac2a6fe63b9",
-          "com.apple.quarantine": "303038313b36616332313030343b3b31323334353637382d313233342d313233342d313233342d313233343536373839616263",
+          "com.apple.quarantine": "303038313b36616333383032373b3b31323334353637382d313233342d313233342d313233342d313233343536373839616263",
           "user.empty": "",
           "user.replacement": "010203"
         },
@@ -265,8 +265,8 @@
       "native": {
         "clone_errno": 0,
         "copy_errno": 0,
-        "copy_begin": 1791102980,
-        "copy_end": 1791102980,
+        "copy_begin": 1791197224,
+        "copy_end": 1791197224,
         "host_major": 27,
         "process_init_code": 0,
         "process_init_errno": 0,
@@ -287,13 +287,13 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791102980,
-          "Nsec": 499884663
+          "Sec": 1791197224,
+          "Nsec": 33341344
         },
         "Attributes": {
           "com.apple.FinderInfo": "5445585474657374000000000000000000000000000000000000000000000000",
           "com.apple.provenance": "010200953c7ac2a6fe63b9",
-          "com.apple.quarantine": "303038313b36616332313030343b3b31323334353637382d313233342d313233342d313233342d313233343536373839616263",
+          "com.apple.quarantine": "303038313b36616333383032383b3b31323334353637382d313233342d313233342d313233342d313233343536373839616263",
           "user.empty": "",
           "user.replacement": "010203"
         },
@@ -351,8 +351,8 @@
       "native": {
         "clone_errno": 45,
         "copy_errno": 0,
-        "copy_begin": 1791102982,
-        "copy_end": 1791102982,
+        "copy_begin": 1791197227,
+        "copy_end": 1791197227,
         "host_major": 27,
         "process_init_code": 0,
         "process_init_errno": 0,
@@ -373,13 +373,13 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791102982,
+          "Sec": 1791197227,
           "Nsec": 0
         },
         "Attributes": {
           "com.apple.FinderInfo": "5445585474657374400000000000000000000000000000000000000000000000",
           "com.apple.provenance": "010200953c7ac2a6fe63b9",
-          "com.apple.quarantine": "303038313b36616332313030363b3b31323334353637382d313233342d313233342d313233342d313233343536373839616263",
+          "com.apple.quarantine": "303038313b36616333383032623b3b31323334353637382d313233342d313233342d313233342d313233343536373839616263",
           "user.empty": "",
           "user.replacement": "010203"
         },
@@ -437,8 +437,8 @@
       "native": {
         "clone_errno": 45,
         "copy_errno": 0,
-        "copy_begin": 1791102982,
-        "copy_end": 1791102982,
+        "copy_begin": 1791197227,
+        "copy_end": 1791197227,
         "host_major": 27,
         "process_init_code": 0,
         "process_init_errno": 0,
@@ -459,13 +459,13 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791102982,
+          "Sec": 1791197227,
           "Nsec": 0
         },
         "Attributes": {
           "com.apple.FinderInfo": "5445585474657374400000000000000000000000000000000000000000000000",
           "com.apple.provenance": "010200953c7ac2a6fe63b9",
-          "com.apple.quarantine": "303038313b36616332313030363b3b31323334353637382d313233342d313233342d313233342d313233343536373839616263",
+          "com.apple.quarantine": "303038313b36616333383032623b3b31323334353637382d313233342d313233342d313233342d313233343536373839616263",
           "user.empty": "",
           "user.replacement": "010203"
         },
@@ -523,8 +523,8 @@
       "native": {
         "clone_errno": 45,
         "copy_errno": 0,
-        "copy_begin": 1791102982,
-        "copy_end": 1791102982,
+        "copy_begin": 1791197227,
+        "copy_end": 1791197227,
         "host_major": 27,
         "process_init_code": 0,
         "process_init_errno": 0,
@@ -545,13 +545,13 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791102982,
+          "Sec": 1791197227,
           "Nsec": 0
         },
         "Attributes": {
           "com.apple.FinderInfo": "5445585474657374400000000000000000000000000000000000000000000000",
           "com.apple.provenance": "010200953c7ac2a6fe63b9",
-          "com.apple.quarantine": "303038313b36616332313030363b3b31323334353637382d313233342d313233342d313233342d313233343536373839616263",
+          "com.apple.quarantine": "303038313b36616333383032623b3b31323334353637382d313233342d313233342d313233342d313233343536373839616263",
           "user.empty": "",
           "user.replacement": "010203"
         },
@@ -609,8 +609,8 @@
       "native": {
         "clone_errno": 45,
         "copy_errno": 0,
-        "copy_begin": 1791102982,
-        "copy_end": 1791102982,
+        "copy_begin": 1791197227,
+        "copy_end": 1791197227,
         "host_major": 27,
         "process_init_code": 0,
         "process_init_errno": 0,
@@ -631,13 +631,13 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791102982,
+          "Sec": 1791197227,
           "Nsec": 0
         },
         "Attributes": {
           "com.apple.FinderInfo": "5445585474657374400000000000000000000000000000000000000000000000",
           "com.apple.provenance": "010200953c7ac2a6fe63b9",
-          "com.apple.quarantine": "303038313b36616332313030363b3b31323334353637382d313233342d313233342d313233342d313233343536373839616263",
+          "com.apple.quarantine": "303038313b36616333383032623b3b31323334353637382d313233342d313233342d313233342d313233343536373839616263",
           "user.empty": "",
           "user.replacement": "010203"
         },
@@ -744,7 +744,7 @@
         "-Werror",
         "testdata/appledouble/native/replacement-copy.c",
         "-o",
-        "/var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-580065802/oracle"
+        "/var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-538379713/oracle"
       ],
       "stderr": "",
       "stdout": "",
@@ -786,6 +786,40 @@
     },
     {
       "argv": [
+        "xcrun",
+        "clang",
+        "-arch",
+        "arm64",
+        "-fsyntax-only",
+        "-Xclang",
+        "-ast-dump=json",
+        "-Xclang",
+        "-ast-dump-filter=replacement_compressed_oracle",
+        "testdata/appledouble/native/replacement-compressed.c"
+      ],
+      "stderr": "",
+      "stdout": "retained in artifacts/replacement-native/compressed-arm64.ast.json",
+      "success": true
+    },
+    {
+      "argv": [
+        "xcrun",
+        "clang",
+        "-arch",
+        "x86_64",
+        "-fsyntax-only",
+        "-Xclang",
+        "-ast-dump=json",
+        "-Xclang",
+        "-ast-dump-filter=replacement_compressed_oracle",
+        "testdata/appledouble/native/replacement-compressed.c"
+      ],
+      "stderr": "",
+      "stdout": "retained in artifacts/replacement-native/compressed-x86_64.ast.json",
+      "success": true
+    },
+    {
+      "argv": [
         "hdiutil",
         "create",
         "-size",
@@ -794,10 +828,10 @@
         "APFS",
         "-volname",
         "ReplacementOracle",
-        "/var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-580065802/APFS.dmg"
+        "/var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-538379713/APFS.dmg"
       ],
       "stderr": "hdiutil: WARNING: 'hdiutil create -size -volname ...' is deprecated. Please use 'diskutil image create from/blank -size --volumeName ...' instead.\n",
-      "stdout": "created: /var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-580065802/APFS.dmg\n",
+      "stdout": "created: /var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-538379713/APFS.dmg\n",
       "success": true
     },
     {
@@ -808,18 +842,18 @@
         "-owners",
         "on",
         "-mountpoint",
-        "/var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-580065802/mount",
-        "/var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-580065802/APFS.dmg"
+        "/var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-538379713/mount",
+        "/var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-538379713/APFS.dmg"
       ],
       "stderr": "hdiutil: WARNING: 'hdiutil attach -nobrowse -owners -mountpoint ...' is deprecated. Please use 'diskutil image attach --mountOptions nobrowse --mountOptions owners --mountPoint ...' instead.\n",
-      "stdout": "/dev/disk4          \tGUID_partition_scheme          \t\n/dev/disk4s1        \tApple_APFS                     \t\n/dev/disk5          \tEF57347C-0000-11AA-AA11-0030654\t\n/dev/disk5s1        \t41504653-0000-11AA-AA11-0030654\t/private/var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-580065802/mount\n",
+      "stdout": "/dev/disk4          \tGUID_partition_scheme          \t\n/dev/disk4s1        \tApple_APFS                     \t\n/dev/disk5          \tEF57347C-0000-11AA-AA11-0030654\t\n/dev/disk5s1        \t41504653-0000-11AA-AA11-0030654\t/private/var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-538379713/mount\n",
       "success": true
     },
     {
       "argv": [
         "hdiutil",
         "detach",
-        "/var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-580065802/mount"
+        "/var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-538379713/mount"
       ],
       "stderr": "hdiutil: WARNING: 'hdiutil detach ...' is deprecated. Please use 'diskutil eject ...' instead.\n",
       "stdout": "\"disk4\" ejected.\n",
@@ -835,10 +869,10 @@
         "HFS+",
         "-volname",
         "ReplacementOracle",
-        "/var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-580065802/HFSplus.dmg"
+        "/var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-538379713/HFSplus.dmg"
       ],
       "stderr": "hdiutil: WARNING: 'hdiutil create -size -volname ...' is deprecated. Please use 'diskutil image create from/blank -size --volumeName ...' instead.\n",
-      "stdout": "created: /var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-580065802/HFSplus.dmg\n",
+      "stdout": "created: /var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-538379713/HFSplus.dmg\n",
       "success": true
     },
     {
@@ -849,18 +883,18 @@
         "-owners",
         "on",
         "-mountpoint",
-        "/var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-580065802/mount",
-        "/var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-580065802/HFSplus.dmg"
+        "/var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-538379713/mount",
+        "/var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-538379713/HFSplus.dmg"
       ],
       "stderr": "hdiutil: WARNING: 'hdiutil attach -nobrowse -owners -mountpoint ...' is deprecated. Please use 'diskutil image attach --mountOptions nobrowse --mountOptions owners --mountPoint ...' instead.\n",
-      "stdout": "/dev/disk4          \tGUID_partition_scheme          \t\n/dev/disk4s1        \tApple_HFS                      \t/private/var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-580065802/mount\n",
+      "stdout": "/dev/disk4          \tGUID_partition_scheme          \t\n/dev/disk4s1        \tApple_HFS                      \t/private/var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-538379713/mount\n",
       "success": true
     },
     {
       "argv": [
         "hdiutil",
         "detach",
-        "/var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-580065802/mount"
+        "/var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-538379713/mount"
       ],
       "stderr": "hdiutil: WARNING: 'hdiutil detach ...' is deprecated. Please use 'diskutil eject ...' instead.\n",
       "stdout": "\"disk4\" ejected.\n",
@@ -875,17 +909,23 @@
     "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/sys/attr.h": "5118b9245bc932bc32dcc60084b1e40d70bb5479a360b31cdbf188ef866deefe",
     "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/sys/clonefile.h": "1efe4ef4241c360905ecc40092245334725a9f1b208be8886ce87e2538b89cbd",
     "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/sys/xattr.h": "60e1518429a9df2501dbec28b09642cc3a67cf1508bef0c6d8e9c1de3e1ef408",
-    "artifacts/replacement-native/oracle-arm64.ast.json": "7a67549f5001d065e908615181d7d3f5e475a99094fd33cfc6f894714c206c36",
-    "artifacts/replacement-native/oracle-x86_64.ast.json": "120dd3ea5c661017f25844d01dabeb3c04ae9814df6aa8d730cba48259e7cd50",
+    "artifacts/replacement-native/compressed-arm64.ast.json": "b7aa4723d3be7fe04c0d0c2f6d0aebfc59467e14222e804236d55c2aa73dc7b6",
+    "artifacts/replacement-native/compressed-x86_64.ast.json": "47610b18db874589de82775e64f9bc1f0318cae29a303112043f159fcd1116dc",
+    "artifacts/replacement-native/oracle-arm64.ast.json": "0821b6a84321cc68043a884a08275c5e3636b56671c69472fa21d5fc21dff9a4",
+    "artifacts/replacement-native/oracle-x86_64.ast.json": "66776e927351f1aeeb611a6c0c241d215c931a7fea77cb032f72aa6f97e786f9",
     "go.mod": "76795672275ac3d60ba3de19ee78905412c498d1986f1cdf90822fe17f7ef6a7",
     "go.sum": "778f6ac1c0bde003e457fd2ff00399b33d054338c64b3bae6cc65f42ce027c1a",
-    "pkg/hostdata/replacement_copy.go": "26ef7ccfb8b63377dd8a8e642d5fa3066a395fa60410288cdd12500e833b2bb6",
-    "pkg/hostdata/replacement_copy_darwin.go": "fd0d84f511263af2bba7cd635ded3559cbd22886feda486fdebd9311863d08f9",
+    "pkg/hostdata/replacement_compressed_darwin_test.go": "fbf3ead89cc5631c8c5cc3d6193faecc096ff9e917134eabeae7e6642b4ce652",
+    "pkg/hostdata/replacement_copy.go": "0c2ac6f407d72fffb7e55c9156ade3fafaa1eaf9b570e130abcf0a17541ddfeb",
+    "pkg/hostdata/replacement_copy_darwin.go": "5339cafdbe9d409fe9eabedbca683c09e7aeb6eea130cb3a647c22893cd5c664",
     "pkg/hostdata/replacement_copy_darwin_test.go": "0af924bb5a09e244e9fb417a84c717c8929dbde7fe61887901388ff1a90a6e3f",
-    "pkg/hostdata/replacement_darwin.go": "0e9756d4fc1775b9858915818e731a3363a27aa7f267c9e0ee995ea5874c0db3",
-    "pkg/hostdata/replacement_root_darwin.go": "e148cfe47434c0b60cad3cc2452ef4697cc1e24c17e8aba83d8dcc3224e80401",
-    "scripts/verify-replacement-native.go": "ab0ec316edb35341d8f78c8f90954d3507b884321630e3967a25aec65df379a5",
+    "pkg/hostdata/replacement_darwin.go": "6fef22fcf036192c675bdbc3bd45793deb9c34a0304ffc0c05bc300b61e805cd",
+    "pkg/hostdata/replacement_root_darwin.go": "fabdb2629e46fee38124716ad1be0e2c189d60f70df5586d30b75b044c5dab51",
+    "scripts/verify-replacement-native.go": "9bfdea4a5ac4a633de9b57acf69db1dfaac9cea90f2ec5e1550db82f601d5ff6",
+    "testdata/appledouble/native/decmpfs-formats.c": "6e49c855d738664284fc51a064822db1603e7bdd870dfbc3130d2fd99317159c",
+    "testdata/appledouble/native/decmpfs-formats.json.gz": "d38a8d622f2b230244b447a0d4a9f7afdd806a55a38e01fe0a6c07f5b30b9079",
     "testdata/appledouble/native/quarantine-process-capture.h": "acaa57a512f800763ae2832e32b641d3038c33cbda8fe88081bd9cae79c5ee3b",
+    "testdata/appledouble/native/replacement-compressed.c": "a79ceb00141df12ad0d33e470d7f13ceaf53d01d3a9be658d9223b295a3727f9",
     "testdata/appledouble/native/replacement-copy.c": "e56db1ef44dd6d8acd434d22b31132548c82759c56ac230c239cfb1af7114ebc"
   },
   "versions": {
