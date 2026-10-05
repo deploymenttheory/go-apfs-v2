@@ -88,7 +88,7 @@ func run() (result error) {
 	if e = os.WriteFile(filepath.Join(artifact, "report.json"), b, 0600); e != nil {
 		return e
 	}
-	fmt.Println("Native Go installation: 396 complete held-file kernel-readback cases across host/APFS/HFS+; all cases required")
+	fmt.Println("Native Go installation: 462 complete held-file installation/recompression kernel-readback cases across host/APFS/HFS+; all cases required")
 	return nil
 }
 func qualify(root, filesystem string) (counts map[string]int, result error) {
@@ -155,7 +155,7 @@ func qualify(root, filesystem string) (counts map[string]int, result error) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "go", "test", "-count=1", "-json", "-run=^Test(Install|Commit)HeldCompressionNativeReadback$", "./pkg/hostdata")
+	cmd := exec.CommandContext(ctx, "go", "test", "-count=1", "-json", "-run=^Test((Install|Commit)HeldCompressionNativeReadback|RecompressNativeFiles)$", "./pkg/hostdata")
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0", "APFS_COMPRESSION_MOUNT="+mount)
 	var transcript bytes.Buffer
 	cmd.Stdout = io.MultiWriter(log, &transcript)
@@ -164,7 +164,7 @@ func qualify(root, filesystem string) (counts map[string]int, result error) {
 	if e = errors.Join(runErr, log.Close(), ctx.Err()); e != nil {
 		return nil, e
 	}
-	counts = map[string]int{"TestInstallHeldCompressionNativeReadback": 0, "TestCommitHeldCompressionNativeReadback": 0}
+	counts = map[string]int{"TestInstallHeldCompressionNativeReadback": 0, "TestCommitHeldCompressionNativeReadback": 0, "TestRecompressNativeFiles": 0}
 	top := map[string]bool{}
 	for _, line := range bytes.Split(transcript.Bytes(), []byte{'\n'}) {
 		if len(line) == 0 {
@@ -191,8 +191,12 @@ func qualify(root, filesystem string) (counts map[string]int, result error) {
 		}
 	}
 	for name, n := range counts {
-		if n != 66 || !top[name] {
-			return nil, fmt.Errorf("incomplete %s/%s: %d/66", filesystem, name, n)
+		want := 66
+		if name == "TestRecompressNativeFiles" {
+			want = 22
+		}
+		if n != want || !top[name] {
+			return nil, fmt.Errorf("incomplete %s/%s: %d/%d", filesystem, name, n, want)
 		}
 	}
 	return counts, nil

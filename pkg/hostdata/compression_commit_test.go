@@ -28,17 +28,26 @@ type compressionLifecycleTrial struct {
 	FaultCount, FaultErrno, FaultSkip                     int
 	Attribute, Fork, Data                                 []byte
 	Observation                                           struct {
-		BeforeSize  int64  `json:"before_size"`
-		BeforeMode  uint32 `json:"before_mode"`
-		AfterMode   uint32 `json:"after_mode"`
-		TargetFlags uint32 `json:"target_flags"`
-		TargetSize  int64  `json:"target_size"`
+		FilesystemType            string `json:"filesystem_type"`
+		ObserverOpenAccessChanged *bool  `json:"observer_open_access_changed"`
+		VolumeFlags               uint32 `json:"volume_flags"`
+		BeforeSize                int64  `json:"before_size"`
+		BeforeMode                uint32 `json:"before_mode"`
+		AfterMode                 uint32 `json:"after_mode"`
+		TargetFlags               uint32 `json:"target_flags"`
+		TargetSize                int64  `json:"target_size"`
 	}
 }
 
 func compressionLifecycleTrials(t *testing.T) []compressionLifecycleTrial {
+	return compressionTrials(t, "compression-lifecycle", 591)
+}
+func compressionOperationTrials(t *testing.T) []compressionLifecycleTrial {
+	return compressionTrials(t, "compression-operation", 330)
+}
+func compressionTrials(t *testing.T, name string, count int) []compressionLifecycleTrial {
 	t.Helper()
-	f, e := os.Open("../../testdata/appledouble/native/compression-lifecycle.json.gz")
+	f, e := os.Open("../../testdata/appledouble/native/" + name + ".json.gz")
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -55,7 +64,7 @@ func compressionLifecycleTrials(t *testing.T) []compressionLifecycleTrial {
 	if e = json.NewDecoder(z).Decode(&corpus); e != nil {
 		t.Fatal(e)
 	}
-	if corpus.Schema != 1 || len(corpus.Cases) != 591 {
+	if corpus.Schema != 1 || len(corpus.Cases) != count {
 		t.Fatal("incomplete lifecycle fixture")
 	}
 	return corpus.Cases

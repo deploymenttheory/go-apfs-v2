@@ -39,6 +39,9 @@ jobs:
       - name: Recapture compression installation and partial failures
         if: ${{ !cancelled() }}
         run: go run scripts/capture-compression-lifecycle.go -check
+      - name: Recapture native acquisition, read failures and surviving states
+        if: ${{ !cancelled() }}
+        run: go run scripts/capture-compression-operation.go -check
       - name: Qualify complete quarantine contexts and destination outcomes
         if: ${{ !cancelled() }}
         run: |
@@ -65,6 +68,7 @@ jobs:
           path: |
             artifacts/compression-lz4/
             artifacts/compression-query/
+            artifacts/compression-operation/
             artifacts/compression-lifecycle/
             artifacts/compression-lifecycle-coverage/
             artifacts/compression-installation-native/

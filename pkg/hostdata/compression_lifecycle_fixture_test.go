@@ -11,7 +11,14 @@ import (
 )
 
 func TestCompressionLifecycleProvenance(t *testing.T) {
-	file, e := os.Open("../../testdata/appledouble/native/compression-lifecycle.json.gz")
+	testCompressionProvenance(t, "compression-lifecycle", 591, nil)
+}
+func TestCompressionOperationProvenance(t *testing.T) {
+	testCompressionProvenance(t, "compression-operation", 330, []string{"testdata/appledouble/native/compression-lifecycle-interpose.c"})
+}
+func testCompressionProvenance(t *testing.T, name string, count int, additional []string) {
+	t.Helper()
+	file, e := os.Open("../../testdata/appledouble/native/" + name + ".json.gz")
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -30,10 +37,10 @@ func TestCompressionLifecycleProvenance(t *testing.T) {
 	if e = json.NewDecoder(z).Decode(&corpus); e != nil {
 		t.Fatal(e)
 	}
-	if corpus.Schema != 1 || len(corpus.Cases) != 591 || corpus.Host == "" || corpus.SDK == "" || !strings.Contains(corpus.Compiler, "clang") || !strings.Contains(corpus.Library, "-uuid:") {
+	if corpus.Schema != 1 || len(corpus.Cases) != count || corpus.Host == "" || corpus.SDK == "" || !strings.Contains(corpus.Compiler, "clang") || !strings.Contains(corpus.Library, "-uuid:") {
 		t.Fatal("incomplete native lifecycle provenance")
 	}
-	for _, path := range []string{"scripts/capture-compression-lifecycle.go", "testdata/appledouble/native/compression-lifecycle.c", "testdata/appledouble/native/compression-lifecycle-interpose.c", "testdata/appledouble/native/compression-policy.c", "go.mod", "go.sum"} {
+	for _, path := range append(additional, "scripts/capture-"+name+".go", "testdata/appledouble/native/"+name+".c", "testdata/appledouble/native/"+name+"-interpose.c", "testdata/appledouble/native/compression-policy.c", "go.mod", "go.sum") {
 		data, e := os.ReadFile("../../" + path)
 		if e != nil {
 			t.Fatal(e)
@@ -42,7 +49,7 @@ func TestCompressionLifecycleProvenance(t *testing.T) {
 			t.Fatal("stale native lifecycle source", path)
 		}
 	}
-	for _, key := range []string{"arm64-compression-lifecycle.c.ast.json", "x86_64-compression-lifecycle.c.ast.json", "arm64-compression-lifecycle-interpose.c.ast.json", "x86_64-compression-lifecycle-interpose.c.ast.json", "AppleFSCompression.disassembly.txt"} {
+	for _, key := range []string{"arm64-" + name + ".c.ast.json", "x86_64-" + name + ".c.ast.json", "arm64-" + name + "-interpose.c.ast.json", "x86_64-" + name + "-interpose.c.ast.json", "AppleFSCompression.disassembly.txt"} {
 		if len(corpus.Sources[key]) != 64 {
 			t.Fatal("missing AST/disassembly evidence", key)
 		}

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"io"
 	"io/fs"
-	"time"
 
 	internal "github.com/deploymenttheory/go-apfs-v2/internal/decmpfs"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/compression/decmpfs"
@@ -74,15 +73,7 @@ func InstallCompression(ctx context.Context, storage decmpfs.EncodedFile, stage 
 		return result, err
 	}
 	if result.Fork.Declined {
-		if e := backend.SyncData(); e != nil {
-			result.Commit.Failures = append(result.Commit.Failures, StatCopyFailure{"sync", e})
-		}
-		e := backend.SetCompressionTimes(source.Times.Modify.Truncate(time.Microsecond), source.Times.Access.Truncate(time.Microsecond))
-		result.Commit.TimesRestored = e == nil
-		if e != nil {
-			result.Commit.Failures = append(result.Commit.Failures, StatCopyFailure{"times", e})
-		}
-		result.Commit.Completed = true
+		restoreCompressionDecline(source, backend, &result.Commit)
 		return result, ctx.Err()
 	}
 	result.Commit, err = CommitCompression(ctx, storage, source, backend)
