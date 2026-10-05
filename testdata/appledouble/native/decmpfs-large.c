@@ -32,6 +32,7 @@ int main(int argc,char **argv){
  CFMutableDictionaryRef opts=CFDictionaryCreateMutable(NULL,0,&kCFTypeDictionaryKeyCallBacks,&kCFTypeDictionaryValueCallBacks);CFStringRef type=CFStringCreateWithCString(NULL,argv[1],kCFStringEncodingUTF8);
  CFDictionarySetValue(opts,CFSTR("CompressionTypes"),type);
  CFDictionarySetValue(opts,CFSTR("AllowLargeResourceForks"),kCFBooleanTrue);
+ CFDictionarySetValue(opts,CFSTR("AllowStoringDataInXattr"),kCFBooleanFalse);
  void*q=create(NULL,NULL,NULL,NULL,opts);if(!q)return 2;bool accepted=compress(q,argv[2],NULL);finish(q);CFRelease(type);CFRelease(opts);dlclose(lib);
  struct stat st;if(stat(argv[2],&st))fail("stat");
  capture(argv[2],"com.apple.decmpfs",argv[3],"attr");capture(argv[2],"com.apple.ResourceFork",argv[3],"fork");

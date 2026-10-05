@@ -5,13 +5,13 @@
   "Sources": {
     "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/sys/stat.h": "1546ce7485287bec0d15a643ef5d5f882d21272f2f089fed71c36457e609b92a",
     "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/sys/xattr.h": "60e1518429a9df2501dbec28b09642cc3a67cf1508bef0c6d8e9c1de3e1ef408",
-    "decmpfs-expand.c-arm64.ast.json": "8f9d5e8866df605f21dc6831c2c2a842389a35aba386e5c3ef5863f0319a2a5c",
-    "decmpfs-expand.c-x86_64.ast.json": "3dd44ef534f265422f9f3aea7e2153026cc42374df26352e6fa59410bb1c05e4",
-    "decmpfs-large.c-arm64.ast.json": "165ea065c9e483c877022513fc706ec105fbcd680fb2d285849d05776c4b495e",
-    "decmpfs-large.c-x86_64.ast.json": "d61d4879f2114bec14109bdec470d1652ff0671f6f1f37a71fb1a17dc27159b4",
-    "scripts/verify-large-compression.go": "4d730c607abf1c094890d9fe097d1a7a07cf11cfa3994bd6c377679164412f5f",
+    "decmpfs-expand.c-arm64.ast.json": "68b375d6c151972d1c8cfe069c1ec8a6ac4594681b5738bf7b2b13e971633c8f",
+    "decmpfs-expand.c-x86_64.ast.json": "ed604f5253c7bcaafc68781af98bd2c5835fb454f30c7166a6823919149dab4f",
+    "decmpfs-large.c-arm64.ast.json": "aa8251867d13b8b4fb353a8eb39dc6eb5472941285311b30a63e03d2ba2e8baa",
+    "decmpfs-large.c-x86_64.ast.json": "728d6930ca443bfb400f1f067185e77dab0a6d6a7ce3745bb6237d48971dc293",
+    "scripts/verify-large-compression.go": "ec37786e0fd79a5b5d63ddcc492e4d0f58bcbd806faacfa3e7e3c4f2af9bed3d",
     "testdata/appledouble/native/decmpfs-expand.c": "8e4560804785b09be082ef3fbe03aa9c122e94a7e9e6a2961d68178879c909d1",
-    "testdata/appledouble/native/decmpfs-large.c": "5d378e49a4afb31d5ffc935ab1eaf141c941b9ba04e98462f935e0de2f70102e"
+    "testdata/appledouble/native/decmpfs-large.c": "596f7eb524d6f190d2c86e16ebbbfccaae434a3190df6a66c78671ab7931f91e"
   },
   "Cases": [
     {

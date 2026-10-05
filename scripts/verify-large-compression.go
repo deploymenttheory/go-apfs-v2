@@ -139,6 +139,9 @@ func main() {
 		attr, err := os.ReadFile(prefix + ".attr")
 		if err == nil {
 			s.Attribute, s.StoredCompressed = attr, true
+			// Retain the actual header even if a producer unexpectedly chooses
+			// inline storage and the following resource-fork read fails.
+			save(filepath.Join(*out, name+".attr"), attr)
 			s.ForkSHA256 = saveFork(prefix+".fork", filepath.Join(*out, name+".fork.gz"))
 			if *capture {
 				save(filepath.Join(fixture, name+".fork.gz"), read(filepath.Join(*out, name+".fork.gz")))

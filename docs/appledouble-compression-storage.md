@@ -61,6 +61,8 @@ next source read fails.
 `testdata/appledouble/native/large-compression/` retains 43 observations:
 
 - Four 64 KiB files produced by AppleFSCompression: zlib, LZVN, LZFSE and LZBITMAP.
+  The producer explicitly disables inline storage so that OS-specific defaults
+  cannot turn a resource-fork control into an inline attribute.
 - Thirty-six independently constructed resource forks at one byte below, at and
   above 1, 2 and 4 GiB logical size. The C constructor repeats a native-produced
   block and uses the documented stored-block form for a short final block.
