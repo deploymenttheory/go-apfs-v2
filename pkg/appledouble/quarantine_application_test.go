@@ -61,8 +61,12 @@ func TestNativeQuarantineApplication(t *testing.T) {
 		{"existing-macos27.json.gz", QuarantineMacOS27, 6672},
 		{"contexts-macos26.json.gz", QuarantineMacOS26, 3324},
 		{"contexts-macos27.json.gz", QuarantineMacOS27, 3328},
+		{"contexts-macos27-absent.json.gz", QuarantineMacOS27, 3328},
+		{"existing-macos27-absent.json.gz", QuarantineMacOS27, 6672},
+		{"destinations-macos27-absent.json.gz", QuarantineMacOS27, 2499},
 		{"processes-macos26.json.gz", QuarantineMacOS26, 4388},
 		{"processes-macos27.json.gz", QuarantineMacOS27, 4396},
+		{"raw-processes-macos27.json.gz", QuarantineMacOS27, 4396},
 		{"runtime-macos26.json", QuarantineMacOS26, 768},
 		{"runtime-macos27.json", QuarantineMacOS27, 768},
 		{"runtime-macos27-no-creation.json.gz", QuarantineMacOS27, 768},
@@ -150,7 +154,7 @@ func verifyApplicationFixture(t *testing.T, tc applicationFixtureCase, profile Q
 		ctx.Process = nil
 		if raw.Self.Code == 0 {
 			ctx.Process = &QuarantineProcess{Flags: uint32(raw.Self.Flags), Agent: string(applicationHex(t, raw.Self.Agent))}
-		} else if raw.Self.Code == -1 && raw.Self.Errno == 93 && r.Effective.InitCode == -1 && r.Effective.InitErrno == 93 && profile == QuarantineMacOS26 {
+		} else if raw.Self.Code == -1 && raw.Self.Errno == 93 && r.Effective.InitCode == -1 && r.Effective.InitErrno == 93 {
 			ctx.Process = &QuarantineProcess{Absent: true}
 		}
 	}
@@ -206,6 +210,9 @@ func verifyApplicationFixture(t *testing.T, tc applicationFixtureCase, profile Q
 		actual := bytes.Clone(after)
 		// Allow only a native current timestamp independently bounded by the call.
 		if len(got.Value) >= 13 && string(got.Value[5:13]) == strconv.FormatInt(r.Start, 16) {
+			if len(actual) < 13 {
+				t.Fatalf("native value has no current timestamp: %q", actual)
+			}
 			stamp, err := strconv.ParseInt(string(actual[5:13]), 16, 64)
 			if err != nil || stamp < r.Start || stamp > r.End {
 				t.Fatal("native current time outside call", string(actual), err)
@@ -258,7 +265,7 @@ func TestQuarantineApplicationValidationAndOwnership(t *testing.T) {
 		t.Fatal(e)
 	}
 	ctx.Profile = QuarantineMacOS27
-	for _, bad := range []*QuarantineProcess{nil, {}, {Flags: 1}, {Flags: 0x220}, {Absent: true}, {Flags: 0x201, Agent: strings.Repeat("X", 256)}, {Flags: 0x201, Agent: "A\x00B"}} {
+	for _, bad := range []*QuarantineProcess{nil, {}, {Flags: 0x20}, {Flags: 0x1ff}, {Flags: 0x220}, {Flags: 0x201, Agent: strings.Repeat("X", 256)}, {Flags: 0x201, Agent: "A\x00B"}} {
 		ctx.Process = bad
 		if p, e := q.PlanApplication(ctx); p != nil || !errors.Is(e, ErrQuarantineContext) {
 			t.Fatal("unqualified process", p, e)
@@ -322,7 +329,7 @@ func FuzzQuarantineApplication(f *testing.F) {
 		q := &Quarantine{Flags: flags, Agent: string(b[4:]), Identifier: string(b[4:]), Timestamp: 17}
 		ctx := QuarantineApplicationContext{Profile: profile, Process: &QuarantineProcess{Flags: pflags, Agent: string(b[4:])}, Timestamp: 23, Directory: b[3]&1 != 0}
 		ctx.Kind = QuarantineDestinationKind(b[3] >> 3)
-		if profile == QuarantineMacOS26 && b[3]&4 != 0 {
+		if b[3]&4 != 0 {
 			ctx.Process = &QuarantineProcess{Absent: true}
 		}
 		if b[3]&2 != 0 {

@@ -116,10 +116,17 @@ func main() {
 	existing := flag.Bool("existing", false, "qualify raw and malformed destination quarantine state")
 	contexts := flag.Bool("contexts", false, "qualify raw process capture and confirmed absent state")
 	processes := flag.Bool("processes", false, "qualify additional effective process flag combinations")
+	rawProcesses := flag.Bool("raw-processes", false, "qualify every process flag with independent raw capture")
 	normalization := flag.Bool("normalization", false, "qualify extended destination normalization inputs")
 	fixtureOverride := flag.String("fixture", "", "explicit independently captured fixture for a qualified host preparation context")
 	capture := flag.Bool("capture", false, "record independent observations without claiming qualification")
 	flag.Parse()
+	if *rawProcesses {
+		if *processes {
+			panic("choose one process matrix")
+		}
+		*processes = true
+	}
 	if (*processes && *normalization) || (*contexts && (*processes || *normalization)) || (*existing && (*contexts || *processes || *normalization)) || (*destinations && (*existing || *contexts || *processes || *normalization)) {
 		panic("choose one extended matrix")
 	}
@@ -128,7 +135,11 @@ func main() {
 		root += "-normalization"
 	}
 	if *processes {
-		root += "-processes"
+		if *rawProcesses {
+			root += "-raw-processes"
+		} else {
+			root += "-processes"
+		}
 	}
 	if *contexts {
 		root += "-contexts"
@@ -181,7 +192,7 @@ func main() {
 		}
 	}
 	source := "testdata/appledouble/native/quarantine-runtime.c"
-	if *contexts || *existing || *destinations {
+	if *contexts || *existing || *destinations || *rawProcesses {
 		base := readRuntime(source)
 		capture := readRuntime("testdata/appledouble/native/quarantine-process-capture.h")
 		observed.BaseHelperSHA256 = hashRuntime(base)
@@ -276,7 +287,7 @@ func main() {
 		validateRuntime(tc)
 		observed.Records = append(observed.Records, tc)
 	}
-	if *contexts || *existing || *destinations {
+	if *contexts || *existing || *destinations || *rawProcesses {
 		absent, present := 0, 0
 		for _, tc := range observed.Records {
 			raw := tc.Result.Effective.Raw
@@ -304,6 +315,9 @@ func main() {
 	}
 	if *processes {
 		fixturePath = "testdata/appledouble/native/quarantine-processes-" + observed.Profile + ".json.gz"
+		if *rawProcesses {
+			fixturePath = "testdata/appledouble/native/quarantine-raw-processes-" + observed.Profile + ".json.gz"
+		}
 	}
 	if *contexts {
 		fixturePath = "testdata/appledouble/native/quarantine-contexts-" + observed.Profile + ".json.gz"
@@ -313,6 +327,12 @@ func main() {
 	}
 	if *destinations {
 		fixturePath = "testdata/appledouble/native/quarantine-destinations-" + observed.Profile + ".json.gz"
+	}
+	if observed.Profile == "macos27" && (*contexts || *existing || *destinations || *rawProcesses) {
+		initial := observed.Records[0].Result.Before
+		if initial.Raw != nil && initial.Raw.Self.Code == -1 && initial.Raw.Self.Errno == 93 && initial.InitCode == -1 && initial.InitErrno == 93 {
+			fixturePath = strings.TrimSuffix(fixturePath, ".json.gz") + "-absent.json.gz"
+		}
 	}
 	if *fixtureOverride != "" {
 		fixturePath = *fixtureOverride
@@ -823,7 +843,7 @@ func verifyApplicationPlan(tc runtimeCase, profileName string) applicationCompar
 			result.ContextKnown = true
 		} else if raw.Self.Code == -1 && raw.Self.Errno == 93 && r.Effective.InitCode == -1 && r.Effective.InitErrno == 93 {
 			ctx.Process = &appledouble.QuarantineProcess{Absent: true}
-			result.ContextKnown = profile == appledouble.QuarantineMacOS26
+			result.ContextKnown = profile == appledouble.QuarantineMacOS26 || profile == appledouble.QuarantineMacOS27
 		}
 	}
 	before, after := decode(r.Prepared.Bytes), decode(r.Applied.Bytes)

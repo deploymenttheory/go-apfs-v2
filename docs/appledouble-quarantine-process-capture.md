@@ -31,7 +31,7 @@ toolchain/OS/source hashes and completion, not raw process tracking bytes.
 ## Using an absent context
 
 `QuarantineProcess{Absent: true}` represents confirmed label absence for the
-macOS 26 target profile. Its `Flags` and `Agent` must be empty. A nil `Process`
+macOS 26 and 27 target profiles. Its `Flags` and `Agent` must be empty. A nil `Process`
 still means unavailable state; a successful zero-flags snapshot is also distinct.
 Unknown or contradictory contexts return `ErrQuarantineContext`. The absent
 context behaves identically in Go on Linux, macOS and Windows.
@@ -40,7 +40,9 @@ Without a process label, application retains the source's encoded agent, full
 identifier and original timestamp, including for directories. It still normalizes
 zero source flags and adds bit `0x80` when either low quarantine bit is set
 without bit `0x40`. Existing destination flags do not replace source fields. The same
-381-byte canonical application limit applies before a write is planned.
+381-byte canonical application limit applies before a write is planned. The
+macOS 27 profile also removes file flag bits `0x218`; if no bits remain, it
+preserves the prepared destination, including attribute absence.
 
 ```go
 plan, err := source.PlanApplication(appledouble.QuarantineApplicationContext{
@@ -52,8 +54,10 @@ plan, err := source.PlanApplication(appledouble.QuarantineApplicationContext{
 
 The caller must establish absence before constructing this value. Do not map an
 arbitrary capture failure, permission denial, unknown process or empty buffer to
-`Absent`. The macOS 27 profile still rejects this context until native evidence
-qualifies it; this profile restriction applies on every Go operating system.
+`Absent`. The independently captured macOS 27 absent-context corpus includes
+3,328 process/context cases, 6,672 existing-value cases and 2,499 destination
+cases. Native field filtering and process-label substitution are separate
+decisions; receiving-host OS detection never supplies either input.
 
 ## Lossless native evidence
 

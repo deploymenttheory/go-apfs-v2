@@ -39,12 +39,15 @@ jobs:
       - name: Recapture compression installation and partial failures
         if: ${{ !cancelled() }}
         run: go run scripts/capture-compression-lifecycle.go -check
-      - name: Capture independent quarantine contexts exposed by complete hostdata tests
+      - name: Qualify complete quarantine contexts and destination outcomes
         if: ${{ !cancelled() }}
         run: |
-          go run scripts/verify-appledouble-quarantine-runtime.go -contexts -capture
-          go run scripts/verify-appledouble-quarantine-runtime.go -existing -capture
-          go run scripts/verify-appledouble-quarantine-runtime.go -destinations -capture
+          go run scripts/verify-appledouble-quarantine-runtime.go -contexts
+          go run scripts/verify-appledouble-quarantine-runtime.go -existing
+          go run scripts/verify-appledouble-quarantine-runtime.go -destinations
+      - name: Capture every effective quarantine process flag independently
+        if: ${{ !cancelled() }}
+        run: go run scripts/verify-appledouble-quarantine-runtime.go -raw-processes -capture
       - name: Replay compression lifecycle and complete hostdata coverage
         if: ${{ !cancelled() }}
         run: go run scripts/verify-compression-lifecycle.go
@@ -61,6 +64,7 @@ jobs:
             artifacts/compression-query/
             artifacts/compression-lifecycle/
             artifacts/compression-lifecycle-coverage/
+            artifacts/appledouble-quarantine-runtime-raw-processes/
             artifacts/appledouble-quarantine-runtime-contexts/
             artifacts/appledouble-quarantine-runtime-existing/
             artifacts/appledouble-quarantine-runtime-destinations/
