@@ -70,7 +70,7 @@ func run(out string, check bool) (result error) {
 	if runtime.GOOS != "darwin" {
 		return fmt.Errorf("native capture requires macOS")
 	}
-	const baseline = "testdata/appledouble/native/compression-query.json.gz"
+	baseline := "testdata/appledouble/native/compression-query.json.gz"
 	if check {
 		a, e := filepath.Abs(out)
 		if e != nil {
@@ -80,7 +80,7 @@ func run(out string, check bool) (result error) {
 		if e != nil {
 			return e
 		}
-		if a == b {
+		if a == b || strings.HasSuffix(filepath.ToSlash(a), "/testdata/appledouble/native/compression-query-macos26.json.gz") {
 			return fmt.Errorf("check must preserve fresh observations separately")
 		}
 	}
@@ -118,6 +118,11 @@ func run(out string, check bool) (result error) {
 			return e
 		}
 		*v.target = string(b)
+	}
+	// macOS 26's kernel and framework do not recognize decmpfs LZ4.
+	// Keep its complete native outcomes, including all rejection controls.
+	if strings.Contains(c.Host, "BuildVersion:\t\t25G83") {
+		baseline = "testdata/appledouble/native/compression-query-macos26.json.gz"
 	}
 	digest := func(b []byte) string { sum := sha256.Sum256(b); return hex.EncodeToString(sum[:]) }
 	hashFile := func(path string) error {

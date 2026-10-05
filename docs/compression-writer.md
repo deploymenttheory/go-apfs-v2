@@ -94,7 +94,7 @@ stored decmpfs LZ4 block; all other first bytes enter the framed decoder.
 Native file compression requests for 15/16 currently fall back to LZVN; the
 filesystem queue does not produce these types. Read support is independently
 qualified with native Compression API output installed on both APFS and HFS+,
-including full kernel readback. `Encode` and `EncodeFork` continue to accept
+including full kernel readback on macOS 27. `Encode` and `EncodeFork` continue to accept
 the explicitly documented writable codec types.
 
 ## Native encoding decisions
@@ -126,7 +126,34 @@ and remain decoder compatibility fixtures. Independently captured native outputs
 for those same inputs now qualify encoding. The original native `aa` fixtures,
 8 MiB incompressible performance check and fuzz properties remain required.
 
+## Native runtime profiles
+
+macOS 26.6.2 (25G83) does not register decmpfs LZ4 types 15/16: every retained
+kernel control fails at open with `EIO`, and its metadata query treats these
+numbers as unknown storage. macOS 27.0 (26A428) and 27.0.1 (26A434) recognize
+these types. Their complete buffer, kernel and query captures agree. The public
+native LZ4 codec's 140 buffers and 900 capacity/terminator observations agree
+between both runtime families. `Query` describes the current recognized storage
+layouts uniformly on every Go host, including hosts with older native kernels.
+
+The older complete observations are retained in `compression-lz4-macos26.json.gz`
+and `compression-query-macos26.json.gz`. Native recapture checks the complete
+matching profile; an unknown or changed outcome fails the gate. No case is
+removed because a host kernel does not support it.
+
+The four-by-four carrier/image harness includes all 144 current-kernel accepted
+LZ4 cases on every producer OS. Both `macos-latest` and `xcode-27` independently
+mount and inspect the resulting images, including foreign Linux/Windows output.
+The former must reproduce the observed open-time `EIO`; the latter must read
+all logical bytes through the kernel. An additional Clang-built C oracle reads
+compression storage from each mounted image and decodes every byte through
+Apple's public LZ4 API on both runtimes. The report's `LZ4Reads` records the kernel
+outcome and independent native-codec byte count/hash separately. This preserves
+strict assertions for the old kernel and complete positive kernel acceptance
+on the current runtime, while the Go reader supports the storage on every OS.
+
 ## Reproducing qualification
+
 
 The retained observations are in `testdata/appledouble/native/`:
 

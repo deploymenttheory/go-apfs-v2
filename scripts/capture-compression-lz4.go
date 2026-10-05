@@ -65,7 +65,7 @@ func run(out string, check bool) (result error) {
 	if runtime.GOOS != "darwin" {
 		return fmt.Errorf("native capture requires macOS")
 	}
-	const baseline = "testdata/appledouble/native/compression-lz4.json.gz"
+	baseline := "testdata/appledouble/native/compression-lz4.json.gz"
 	a, err := filepath.Abs(out)
 	if err != nil {
 		return err
@@ -74,7 +74,7 @@ func run(out string, check bool) (result error) {
 	if err != nil {
 		return err
 	}
-	if check && a == b {
+	if check && (a == b || strings.HasSuffix(filepath.ToSlash(a), "/testdata/appledouble/native/compression-lz4-macos26.json.gz")) {
 		return fmt.Errorf("fresh evidence must not replace the baseline")
 	}
 	dir, err := os.MkdirTemp("", "compression-lz4-")
@@ -106,7 +106,7 @@ func run(out string, check bool) (result error) {
 	mustCommand := func(name string, args ...string) ([]byte, error) {
 		b, e, code, err := command(name, args...)
 		if err != nil || code != 0 {
-			return nil, fmt.Errorf("%s %v: exit=%d %w %s", name, args, code, err, e)
+			return nil, errors.Join(err, fmt.Errorf("%s %v: exit=%d stderr=%s", name, args, code, e))
 		}
 		return b, nil
 	}
@@ -125,6 +125,11 @@ func run(out string, check bool) (result error) {
 			return e
 		}
 		*x.target = string(b)
+	}
+	// macOS 26's kernel and framework do not recognize decmpfs LZ4.
+	// Keep its complete native outcomes, including all rejection controls.
+	if strings.Contains(c.Host, "BuildVersion:\t\t25G83") {
+		baseline = "testdata/appledouble/native/compression-lz4-macos26.json.gz"
 	}
 	for _, path := range []string{"scripts/capture-compression-lz4.go", "testdata/appledouble/native/compression-lz4.c", "testdata/appledouble/native/decmpfs-formats.c", "go.mod", "go.sum"} {
 		b, e := os.ReadFile(path)

@@ -15,15 +15,16 @@ permissions:
 
 jobs:
   transport:
-    name: Metadata transport journeys (${{ matrix.goos }})
+    name: Metadata transport journeys (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { os: ubuntu-latest, goos: linux }
-          - { os: macos-latest, goos: darwin }
-          - { os: windows-latest, goos: windows }
+          - { os: ubuntu-latest, goos: linux, artifact: linux }
+          - { os: macos-latest, goos: darwin, artifact: darwin }
+          - { os: xcode-27, goos: darwin, artifact: darwin-current }
+          - { os: windows-latest, goos: windows, artifact: windows }
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
@@ -37,14 +38,20 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: metadata-transport-${{ matrix.goos }}
+          name: metadata-transport-${{ matrix.artifact }}
           path: artifacts/metadata-transport/
           if-no-files-found: error
 
   native-foreign:
-    name: Native Mac verification of Linux and Windows images
+    name: Native Mac verification of Linux and Windows images (${{ matrix.os }})
     needs: transport
-    runs-on: macos-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-latest, reference: darwin }
+          - { os: xcode-27, reference: darwin-current }
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
@@ -61,7 +68,7 @@ jobs:
           go run scripts/verify-metadata-transport.go
           -foreign artifacts/foreign/metadata-transport-linux
           -foreign-goos linux
-          -reference artifacts/foreign/metadata-transport-darwin
+          -reference artifacts/foreign/metadata-transport-${{ matrix.reference }}
           -out artifacts/metadata-transport-linux-native
       - name: Independently mount and read Windows output
         env:
@@ -70,13 +77,13 @@ jobs:
           go run scripts/verify-metadata-transport.go
           -foreign artifacts/foreign/metadata-transport-windows
           -foreign-goos windows
-          -reference artifacts/foreign/metadata-transport-darwin
+          -reference artifacts/foreign/metadata-transport-${{ matrix.reference }}
           -out artifacts/metadata-transport-windows-native
       - name: Upload independent foreign-host readback evidence
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: metadata-transport-foreign-native
+          name: metadata-transport-foreign-native-${{ matrix.os }}
           path: |
             artifacts/metadata-transport-linux-native/
             artifacts/metadata-transport-windows-native/

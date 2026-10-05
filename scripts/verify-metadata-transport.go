@@ -11,6 +11,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -24,6 +25,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/evidenceaudit"
@@ -69,11 +71,20 @@ type report struct {
 	SourceSHA256                                    map[string]string
 	Results                                         []result
 	Commands                                        []command
+	LZ4Reads                                        []nativeLZ4Read
 }
 
 var outputRoot string
 var evidence report
 var oracle string
+var lz4Oracle string
+var lz4KernelOutcomes map[string]bool
+
+type nativeLZ4Read struct {
+	Image, Entry, KernelError, NativeCodecSHA256 string
+	NativeCodecBytes                             int
+}
+
 var formats = []string{"apfs", "apfs-sensitive", "hfsplus", "hfsx"}
 
 func must(err error) {
@@ -310,11 +321,87 @@ func compressImage(name string) string {
 	must(out.Close())
 	return hex.EncodeToString(h.Sum(nil))
 }
+func prepareLZ4Oracle() {
+	fixture := "testdata/appledouble/native/compression-lz4.json.gz"
+	if strings.Contains(evidence.Host, "BuildVersion:\t\t25G83") {
+		fixture = "testdata/appledouble/native/compression-lz4-macos26.json.gz"
+	}
+	z, err := gzip.NewReader(bytes.NewReader(read(fixture)))
+	must(err)
+	var profile struct {
+		Kernel []struct {
+			Name, Filesystem, Stderr string
+			Exit                     int
+		}
+	}
+	must(json.NewDecoder(z).Decode(&profile))
+	must(z.Close())
+	if len(profile.Kernel) != 1172 {
+		panic("incomplete native LZ4 outcome inventory")
+	}
+	lz4KernelOutcomes = map[string]bool{}
+	for _, c := range profile.Kernel {
+		name := "lz4-" + strings.ReplaceAll(c.Filesystem, "+", "plus") + "-" + strings.ReplaceAll(c.Name, "/", "-")
+		if _, duplicate := lz4KernelOutcomes[name]; duplicate {
+			panic("duplicate native LZ4 outcome")
+		}
+		if c.Exit != 0 && (c.Exit != 2 || c.Stderr != "open input: Input/output error\n") {
+			// The current corpus also has readable-but-invalid block controls.
+			// These never enter a positive transport tree, but are still replayed.
+			if strings.Contains(evidence.Host, "BuildVersion:\t\t25G83") {
+				panic("unexpected native old-kernel rejection")
+			}
+		}
+		lz4KernelOutcomes[name] = c.Exit == 0
+	}
+	lz4Oracle = filepath.Join(outputRoot, "lz4-storage-oracle")
+	const source = "testdata/appledouble/native/compression-lz4-storage.c"
+	run("xcrun", "clang", "-Wall", "-Wextra", "-Werror", "-lcompression", source, "-o", lz4Oracle)
+	for _, arch := range []string{"arm64", "x86_64"} {
+		ast := run("xcrun", "clang", "-arch", arch, "-fsyntax-only", "-Xclang", "-ast-dump=json", source)
+		if !json.Valid(ast) || !bytes.Contains(ast, []byte("compression_decode_buffer")) || !bytes.Contains(ast, []byte("CompoundStmt")) {
+			panic("incomplete native LZ4 storage AST")
+		}
+		must(os.WriteFile(filepath.Join(outputRoot, "lz4-storage-"+arch+".ast.json"), ast, 0600))
+		evidence.Commands[len(evidence.Commands)-1].Output = fmt.Sprintf("AST %d bytes SHA256 %s", len(ast), digest(ast))
+	}
+}
+
+func qualifyNativeLZ4(image, name, path string, want value, kernel []byte, kernelErr error) {
+	accepted, present := lz4KernelOutcomes[name]
+	if !present {
+		panic("missing native LZ4 outcome: " + name)
+	}
+	record := nativeLZ4Read{Image: filepath.Base(image), Entry: name}
+	if accepted {
+		must(kernelErr)
+		if len(kernel) != want.Size || digest(kernel) != want.SHA256 {
+			panic("native LZ4 kernel data differs")
+		}
+	} else {
+		var pathErr *os.PathError
+		if !errors.As(kernelErr, &pathErr) || pathErr.Op != "open" || !errors.Is(kernelErr, syscall.EIO) || len(kernel) != 0 {
+			panic(fmt.Sprintf("native LZ4 rejection changed: %s: %v", name, kernelErr))
+		}
+		record.KernelError = "open: EIO"
+	}
+	// The public native codec validates every logical byte independently even
+	// on a kernel which explicitly rejects this newer storage type.
+	decoded := run(lz4Oracle, path)
+	record.NativeCodecBytes, record.NativeCodecSHA256 = len(decoded), digest(decoded)
+	if record.NativeCodecBytes != want.Size || record.NativeCodecSHA256 != want.SHA256 {
+		panic("native LZ4 codec data differs")
+	}
+	evidence.Commands[len(evidence.Commands)-1].Output = fmt.Sprintf("%d bytes SHA256 %s", len(decoded), digest(decoded))
+	evidence.LZ4Reads = append(evidence.LZ4Reads, record)
+}
+
 func prepareOracle() {
 	evidence.Host = strings.TrimSpace(string(run("sw_vers")))
 	evidence.Compiler = strings.TrimSpace(string(run("xcrun", "clang", "--version")))
 	evidence.SDK = strings.TrimSpace(string(run("xcrun", "--show-sdk-version")))
 	sdk := strings.TrimSpace(string(run("xcrun", "--show-sdk-path")))
+	prepareLZ4Oracle()
 	evidence.SDKHeaders = map[string]string{}
 	for _, header := range []string{"sys/stat.h", "sys/fcntl.h", "sys/xattr.h", "sys/acl.h"} {
 		evidence.SDKHeaders[header] = digest(read(filepath.Join(sdk, "usr", "include", header)))
@@ -428,7 +515,12 @@ func native(image, kind string, want map[string]entry) {
 				panic("native link target")
 			}
 		} else if w.Data != nil {
-			b := read(p)
+			b, err := os.ReadFile(p)
+			if strings.HasPrefix(name, "lz4-") {
+				qualifyNativeLZ4(image, name, p, *w.Data, b, err)
+				continue
+			}
+			must(err)
 			if len(b) != w.Data.Size || digest(b) != w.Data.SHA256 {
 				panic("native data")
 			}
@@ -448,7 +540,7 @@ func main() {
 	must(os.MkdirAll(outputRoot, 0755))
 	evidence = report{Revision: strings.TrimSpace(string(run("git", "rev-parse", "HEAD"))), GOOS: runtime.GOOS, GOARCH: runtime.GOARCH, Go: runtime.Version(), SourceSHA256: map[string]string{}}
 	files := []string{"scripts/verify-metadata-transport.go", "testdata/appledouble/native/metadata-transport.c", "testdata/appledouble/native/decmpfs-formats.json.gz", "go.mod", "go.sum"}
-	files = append(files, "testdata/appledouble/native/compression-lz4.json.gz", "pkg/compression/lz4/*.go", "internal/evidenceaudit/*.go", "internal/testutil/diskimage/*.go", "internal/tools/extract*.go", "internal/hostwalk/*.go", "internal/decmpfs/*.go", "internal/bsdflags/*.go", "pkg/metatransport/*.go", "pkg/hostdata/*.go", "pkg/hostdata/*/*.go", "internal/hosttime/*.go", "internal/testutil/heldfixture/*.go", "pkg/apfs/*.go", "pkg/apfswrite/*.go", "pkg/hfsplus/*.go")
+	files = append(files, "testdata/appledouble/native/compression-lz4-storage.c", "testdata/appledouble/native/compression-lz4-macos26.json.gz", "testdata/appledouble/native/compression-lz4.json.gz", "pkg/compression/lz4/*.go", "internal/evidenceaudit/*.go", "internal/testutil/diskimage/*.go", "internal/tools/extract*.go", "internal/hostwalk/*.go", "internal/decmpfs/*.go", "internal/bsdflags/*.go", "pkg/metatransport/*.go", "pkg/hostdata/*.go", "pkg/hostdata/*/*.go", "internal/hosttime/*.go", "internal/testutil/heldfixture/*.go", "pkg/apfs/*.go", "pkg/apfswrite/*.go", "pkg/hfsplus/*.go")
 	evidence.SourceSHA256, e = evidenceaudit.SourceHashes(os.DirFS("."), files)
 	must(e)
 	defer func() { writeJSON(filepath.Join(outputRoot, "report.json"), evidence) }()
