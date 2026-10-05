@@ -26,14 +26,18 @@ import (
 // explicit image/carrier state supplies decmpfs.Metadata directly; Linux flags
 // and Windows attributes must never be reinterpreted as Darwin BSD flags.
 func QueryCompression(ctx context.Context, file *os.File, attributeBytes int) (decmpfs.Info, error) {
+	return queryCompressionUsing(ctx, file, attributeBytes, nativeCompressionStat, getCaptureXattrFD)
+}
+
+func queryCompressionUsing(ctx context.Context, file *os.File, attributeBytes int, stat func(int) (uint32, uint64, error), get func(int, string, []byte) (int, error)) (decmpfs.Info, error) {
 	if ctx == nil || attributeBytes < 0 {
 		return decmpfs.Info{}, fs.ErrInvalid
 	}
 	var info decmpfs.Info
 	err := withXattrDescriptor(file, func(fd int) error {
 		metadata, err := captureCompressionMetadata(ctx, attributeBytes,
-			func() (uint32, uint64, error) { return nativeCompressionStat(fd) },
-			func(name string, p []byte) (int, error) { return getCaptureXattrFD(fd, name, p) })
+			func() (uint32, uint64, error) { return stat(fd) },
+			func(name string, p []byte) (int, error) { return get(fd, name, p) })
 		if err != nil {
 			return err
 		}
@@ -100,6 +104,10 @@ func captureCompressionMetadata(ctx context.Context, limit int, stat func() (uin
 // prevents Apple's compressor from selecting inline storage. An unknown native
 // host is an explicit error, never a fabricated unprotected Darwin volume.
 func CompressionVolumeFlags(ctx context.Context, file *os.File) (uint32, error) {
+	return compressionVolumeFlagsUsing(ctx, file, nativeCompressionVolumeFlags)
+}
+
+func compressionVolumeFlagsUsing(ctx context.Context, file *os.File, query func(int) (uint32, error)) (uint32, error) {
 	if ctx == nil {
 		return 0, fs.ErrInvalid
 	}
@@ -107,7 +115,7 @@ func CompressionVolumeFlags(ctx context.Context, file *os.File) (uint32, error) 
 		return 0, err
 	}
 	var flags uint32
-	err := withXattrDescriptor(file, func(fd int) error { var e error; flags, e = nativeCompressionVolumeFlags(fd); return e })
+	err := withXattrDescriptor(file, func(fd int) error { var e error; flags, e = query(fd); return e })
 	err = errors.Join(err, ctx.Err())
 	if err != nil {
 		return 0, err
