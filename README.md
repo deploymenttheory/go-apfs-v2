@@ -449,7 +449,10 @@ data, _ := fs.ReadFile(vol, "Applications/Some.app/Contents/Info.plist")
 Key packages: `pkg/apfs` (APFS reader), `pkg/hfsplus` (HFS+ reader and writer),
 `pkg/disk` (DMG/UDIF reader and writer, partition tables), and `pkg/apfswrite`
 (APFS container writer), `pkg/appledouble` (shared AppleDouble codec), and
-`pkg/hostdata` (shared host metadata operations). See the
+`pkg/hostdata` (shared host metadata operations), and
+[`pkg/osversion`](pkg/osversion/README.md) (explicit macOS 15/26/27 behavior
+targets and native product-version detection). Version recognition does not imply
+that every feature has been qualified for that release. See the
 [AppleDouble migration plan](docs/appledouble-migration.md) for the codec and
 metadata transport release gates.
 
