@@ -122,7 +122,7 @@ func run() error {
 	if total == 0 || covered*100 <= total*95 {
 		return fmt.Errorf("compression storage coverage must exceed 95%%: %d/%d", covered, total)
 	}
-	hashes, e := evidenceaudit.SourceHashes(os.DirFS("."), []string{"pkg/apfs/*.go", "pkg/apfswrite/*.go", "pkg/hfsplus/*.go", "internal/bsdflags/*.go", "internal/hostwalk/*.go", "internal/tools/*.go", "acceptance/compression_state_test.go", "scripts/*compression-state.go", "testdata/appledouble/native/compression-state.c", "testdata/appledouble/native/compression-state.json.gz", "testdata/appledouble/native/compression-state/*.dmg", "go.mod", "go.sum"})
+	hashes, e := evidenceaudit.SourceHashes(os.DirFS("."), []string{"pkg/apfs/*.go", "pkg/apfswrite/*.go", "pkg/hfsplus/*.go", "internal/bsdflags/*.go", "internal/hostwalk/*.go", "internal/tools/*.go", "acceptance/compression_state_test.go", "scripts/*compression-state.go", "testdata/appledouble/native/compression-state.c", "testdata/appledouble/native/compression-state.json.gz", "testdata/appledouble/native/compression-state-*.dmg", "go.mod", "go.sum"})
 	if e != nil {
 		return e
 	}

@@ -141,7 +141,7 @@ func TestCompressionStateImages(t *testing.T) {
 	}
 	for _, filesystem := range []string{"APFS", "HFS+"} {
 		t.Run(filesystem, func(t *testing.T) {
-			nativePath := filepath.Join("../testdata/appledouble/native/compression-state", filesystem+".dmg")
+			nativePath := filepath.Join("../testdata/appledouble/native", "compression-state-"+filesystem+".dmg")
 			raw, e := os.ReadFile(nativePath)
 			if e != nil {
 				t.Fatal(e)
