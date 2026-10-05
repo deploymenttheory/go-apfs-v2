@@ -89,21 +89,22 @@ func prepareXattrs(e *Entry) (embedded map[string][]byte, streamed map[string]ap
 		case resourceForkName:
 			flags = flags&^uint64(inodeNoRsrcFork) | inodeHasRsrcFork
 		case decmpfsName:
-			header := make([]byte, min(size, uint64(decmpfs.HeaderSize)))
-			if err = readValueExact(value, header, 0); err != nil {
-				return nil, nil, 0, 0, err
-			}
-			var forkSize uint64
-			if fork, ok := values[resourceForkName]; ok {
-				forkSize, err = checkedValueSize(fork)
-				if err != nil {
+			if bsd&inoBSDCompressed != 0 {
+				header := make([]byte, min(size, uint64(decmpfs.HeaderSize)))
+				if err = readValueExact(value, header, 0); err != nil {
 					return nil, nil, 0, 0, err
 				}
+				var forkSize uint64
+				if fork, ok := values[resourceForkName]; ok {
+					forkSize, err = checkedValueSize(fork)
+					if err != nil {
+						return nil, nil, 0, 0, err
+					}
+				}
+				if err = decmpfs.ValidateLayout(header, size, dataSize, forkSize); err != nil {
+					return nil, nil, 0, 0, fmt.Errorf("apfswrite: %q: %w", e.Name, err)
+				}
 			}
-			if err = decmpfs.ValidateLayout(header, size, dataSize, forkSize); err != nil {
-				return nil, nil, 0, 0, fmt.Errorf("apfswrite: %q: %w", e.Name, err)
-			}
-			bsd |= inoBSDCompressed
 		case securityName:
 			flags |= inodeHasSecurityEA
 		case finderInfoName:

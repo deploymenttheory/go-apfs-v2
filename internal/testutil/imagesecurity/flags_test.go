@@ -190,6 +190,15 @@ func TestImageFlagsInvalidBeforeWrite(t *testing.T) {
 				} else {
 					e = apfswrite.CreateContainer(w, 64<<20, &apfswrite.CreateOptions{Root: root})
 				}
+				// Native failure captures qualify inactive attributes with explicit
+				// clear flags. These cases now reach output; active storage without
+				// attributes and the existing directory restriction still fail early.
+				if compressed && (!hfs || !rootFlag) {
+					if !errors.Is(e, errRefuseImageWrite) || w.calls != 1 {
+						t.Fatal(e, w.calls)
+					}
+					continue
+				}
 				// HFS rejects compressed directories before flag selection.
 				invalid := errors.Is(e, fs.ErrInvalid) || (hfs && rootFlag && compressed && e != nil)
 				if !invalid || w.calls != 0 {

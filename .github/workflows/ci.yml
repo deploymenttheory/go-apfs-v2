@@ -602,6 +602,17 @@ jobs:
           name: compression-lifecycle-coverage-${{ matrix.os }}
           path: artifacts/compression-lifecycle-coverage/
           if-no-files-found: error
+      - name: Active and inactive compression storage above 95 percent coverage
+        env:
+          CGO_ENABLED: "0"
+        run: go run scripts/verify-compression-state.go
+      - name: Upload compression state coverage and images
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: compression-state-coverage-${{ matrix.os }}
+          path: artifacts/compression-state-portable/
+          if-no-files-found: error
       - name: Read complete native compressed corpus across 1 2 and 4 GiB
         env:
           CGO_ENABLED: "0"

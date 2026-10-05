@@ -13,7 +13,8 @@ import (
 // metadata. Source modification/access times, numeric ownership, permissions and
 // selected flags change; destination birth/change times, xattrs and data remain.
 // Nil BSDFlags retains the writer's compression inference. Source compression
-// must agree with destination decmpfs storage; this operation does not copy data.
+// requires destination decmpfs storage when set. A clear flag leaves any
+// retained compression metadata inactive; this operation does not copy data.
 //
 // Applied means all staged writes succeeded and the tree was updated. On any
 // validation/execution failure no entry changes; inspect Execution.Failures and

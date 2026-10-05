@@ -173,7 +173,8 @@ type Entry struct {
 	// only Times.Modify. Explicit times retain nanoseconds and Unix epoch zero.
 	Times *hostdata.FileTimes
 	// BSDFlags explicitly selects the inode's chflags word. Nil retains legacy
-	// compression inference. UF_COMPRESSED must agree with decmpfs storage.
+	// compression inference. UF_COMPRESSED requires valid decmpfs storage;
+	// an explicit clear flag preserves inactive attributes and ordinary data.
 	// The first hard-link entry supplies the shared inode flags.
 	BSDFlags *uint32
 	// UID and GID are the inode's owner and group ids.

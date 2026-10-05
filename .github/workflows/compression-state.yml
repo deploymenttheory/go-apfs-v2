@@ -1,0 +1,88 @@
+name: Compression storage state
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: compression-state-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  CGO_ENABLED: "0"
+  GOTOOLCHAIN: local
+
+jobs:
+  portable:
+    name: Compression state (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, artifact: linux }
+          - { os: windows-latest, artifact: windows }
+          - { os: macos-latest, artifact: darwin }
+          - { os: xcode-27, artifact: darwin-current }
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Replay every native image and writer/carrier state above 95 percent coverage
+        run: go run scripts/verify-compression-state.go
+      - name: Upload complete producer images and test evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: compression-state-${{ matrix.artifact }}
+          path: artifacts/compression-state-portable/
+          if-no-files-found: error
+
+  native:
+    name: Native compression state (${{ matrix.os }})
+    needs: portable
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, xcode-27]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - uses: actions/download-artifact@v8.0.1
+        with:
+          pattern: compression-state-*
+          path: artifacts/compression-state-foreign
+      - name: Rebuild both Clang ASTs and recapture every native storage state
+        run: go run scripts/capture-compression-state.go -check
+      - name: Independently mount all Linux and Windows writer and carrier outputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          for producer in linux windows; do
+            root="artifacts/compression-state-foreign/compression-state-${producer}"
+            go run scripts/capture-compression-state.go -foreign "$root"
+            go run scripts/capture-compression-state.go -foreign "$root/carrier"
+          done
+      - name: Upload native observations and foreign readback evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: compression-state-native-${{ matrix.os }}
+          path: |
+            artifacts/compression-state/
+            artifacts/compression-state-foreign/**/native-readback.txt
+            artifacts/compression-state-foreign/**/native-readback.json.gz
+            artifacts/compression-state-foreign/**/*.attach.plist
+            artifacts/compression-state-foreign/**/*.detach.json
+          if-no-files-found: error

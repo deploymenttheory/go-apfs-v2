@@ -22,7 +22,7 @@ func TestImageFlagsSelection(t *testing.T) {
 				t.Run(fmt.Sprintf("hfs%t-c%t-%x", hfs, compressed, flags), func(t *testing.T) {
 					before := flags
 					got, e := Select(&flags, compressed, hfs)
-					valid := (flags&Compressed != 0) == compressed && (!hfs || flags&^0x00ff80ff == 0)
+					valid := (flags&Compressed == 0 || compressed) && (!hfs || flags&^0x00ff80ff == 0)
 					if valid {
 						if e != nil || got != flags {
 							t.Fatal(got, e)

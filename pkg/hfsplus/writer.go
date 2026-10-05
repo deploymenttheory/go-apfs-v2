@@ -51,8 +51,9 @@ type Entry struct {
 	// is clamped by ClampModTimes. Explicit out-of-range values fail.
 	Times *hostdata.FileTimes
 	// BSDFlags selects owner/admin catalog flags plus Finder invisibility.
-	// Nil retains legacy compression inference. UF_COMPRESSED must agree with
-	// decmpfs storage. Unrepresentable bits fail before output writes. The
+	// Nil retains legacy compression inference. UF_COMPRESSED requires valid
+	// decmpfs storage; an explicit clear flag preserves inactive attributes
+	// and ordinary data. Unrepresentable bits fail before output writes. The
 	// first hard-link entry supplies the shared inode flags; stubs stay internal.
 	BSDFlags *uint32
 	UID, GID uint32

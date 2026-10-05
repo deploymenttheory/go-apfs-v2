@@ -9,7 +9,7 @@ import (
 	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 )
 
-func (w *walker[E]) collectValueXattrs(rel string) (kept map[string]appledouble.Value, compressed bool, err error) {
+func (w *walker[E]) collectValueXattrs(rel string, active bool) (kept map[string]appledouble.Value, compressed bool, err error) {
 	if !w.opts.Xattrs {
 		return nil, false, nil
 	}
@@ -22,7 +22,7 @@ func (w *walker[E]) collectValueXattrs(rel string) (kept map[string]appledouble.
 		return nil, false, err
 	}
 	accepts := func(name string) bool { return w.opts.KeepName != nil && w.opts.KeepName(name) }
-	if value, present := attrs[hostdata.DecmpfsName]; present {
+	if value, present := attrs[hostdata.DecmpfsName]; present && active {
 		forkBacked, e := decmpfs.UsesResourceFork(value)
 		if e != nil {
 			return nil, false, e

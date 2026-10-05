@@ -151,7 +151,7 @@ func compressedValue(e *Entry) (appledouble.Value, bool) {
 }
 func validateCompressedValue(e *Entry) error {
 	v, ok := compressedValue(e)
-	if !ok {
+	if !ok || e.BSDFlags != nil && *e.BSDFlags&ufCompressed == 0 {
 		return nil
 	}
 	header := make([]byte, min(v.Size(), int64(decmpfs.HeaderSize)))

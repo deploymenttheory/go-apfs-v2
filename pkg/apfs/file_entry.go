@@ -918,79 +918,11 @@ func (fe *FileEntry) getDataStream() error {
 		return nil
 	}
 
-	// Check for compressed data attribute first
-	// Files with com.apple.decmpfs may not have file extents
-	if err := fe.getExtendedAttributes(); err == nil {
-
-		if fe.CompressedDataAttributeValues != nil {
-
-			// Parse compressed data header from attribute
-			if len(fe.CompressedDataAttributeValues.ValueData) >= 16 {
-				header, err := ParseCompressedDataHeader(fe.CompressedDataAttributeValues.ValueData)
-				if err != nil {
-					return fmt.Errorf("unable to parse compressed data header: %w", err)
-				}
-
-				if header != nil {
-					fe.CompressedDataHeader = header
-
-					// Map the raw decmpfs type to the internal method code
-					method, err := internalCompressionMethod(header.CompressionMethod)
-					if err != nil {
-						return err
-					}
-
-					// Check if data is embedded in the attribute (inline compression)
-					if len(fe.CompressedDataAttributeValues.ValueData) > 16 {
-						dataStream, err := newInlineDecmpfsStream(
-							fe.CompressedDataAttributeValues.ValueData,
-							header.UncompressedDataSize,
-							method,
-							fe.FileHandle,
-						)
-						if err != nil {
-							return err
-						}
-
-						fe.DataStream = dataStream
-						return nil
-					} else {
-						// Compressed data is stored in resource fork
-						if fe.ResourceForkAttributeValues != nil {
-							resourceForkStream, err := fe.ResourceForkAttributeValues.DataStream(
-								fe.IOHandle,
-								fe.FileHandle,
-								fe.EncryptionContext,
-								fe.FileSystemBTree,
-								fe.XID,
-							)
-							if err != nil {
-								return fmt.Errorf("unable to get resource fork data stream: %w", err)
-							}
-
-							if resourceForkStream != nil {
-								// Create decompressed data stream from resource fork
-								dataStream, err := NewDataStreamFromCompressedDataStream(
-									resourceForkStream,
-									header.UncompressedDataSize,
-									method,
-								)
-								if err != nil {
-									return fmt.Errorf("unable to create decompressed data stream from resource fork: %w", err)
-								}
-
-								if cdReader, ok := dataStream.readerAt.(*compressedDataReader); ok {
-									cdReader.SetFileHandle(fe.FileHandle)
-								}
-
-								fe.DataStream = dataStream
-								return nil
-							}
-						}
-					}
-				}
-			}
-		}
+	// UF_COMPRESSED, rather than the presence of an attribute, selects storage.
+	if fe.Inode != nil && fe.Inode.BSDFlags&BSDFlagCompressed != 0 {
+		var err error
+		fe.DataStream, err = fe.compressedStream()
+		return err
 	}
 
 	// Try to get file extents for normal files
@@ -1145,17 +1077,13 @@ func (fe *FileEntry) DataSize() (int64, error) {
 		return 0, fmt.Errorf("invalid inode")
 	}
 
-	// decmpfs-compressed files record their uncompressed size in the
-	// com.apple.decmpfs header; their inode data stream is empty
-	if fe.Inode.DataStreamSize == 0 {
-		if err := fe.getExtendedAttributes(); err == nil && fe.CompressedDataAttributeValues != nil {
-			if len(fe.CompressedDataAttributeValues.ValueData) >= 16 {
-				if header, err := ParseCompressedDataHeader(fe.CompressedDataAttributeValues.ValueData); err == nil && header != nil {
-					fe.dataSize = int64(header.UncompressedDataSize)
-					return fe.dataSize, nil
-				}
-			}
+	if fe.Inode.BSDFlags&BSDFlagCompressed != 0 {
+		_, header, err := fe.compressionAttribute()
+		if err != nil {
+			return 0, err
 		}
+		fe.dataSize = int64(header.UncompressedDataSize)
+		return fe.dataSize, nil
 	}
 
 	// Use data stream size from inode

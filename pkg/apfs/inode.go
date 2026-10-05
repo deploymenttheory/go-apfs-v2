@@ -30,8 +30,8 @@ const (
 	// BSDFlagCompressed is UF_COMPRESSED: the file's content is held by its
 	// com.apple.decmpfs attribute rather than by its data fork, which is empty.
 	//
-	// macOS dispatches on this flag, so a file carrying the attribute without
-	// it reads as empty rather than as its contents.
+	// macOS dispatches on this flag. Without it the ordinary data fork is
+	// authoritative, including an empty fork; decmpfs attributes are inactive.
 	BSDFlagCompressed uint32 = 0x00000020
 )
 
