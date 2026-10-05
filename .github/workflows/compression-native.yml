@@ -81,32 +81,32 @@ jobs:
             artifacts/decmpfs-formats-coverage/
           if-no-files-found: error
 
-macos15:
-  name: Native compression compatibility (macos-15)
-  runs-on: macos-15
-  timeout-minutes: 45
-  steps:
-    - uses: actions/checkout@v7
-    - uses: actions/setup-go@v7
-      with:
-        go-version-file: go.mod
-    - name: Qualify native version detection and explicit targets above 95%
-      run: go run scripts/verify-osversion.go
-    - name: Recapture complete acquisition, read failures and surviving states
-      if: ${{ !cancelled() }}
-      run: |
-        go test scripts/capture-compression-operation.go scripts/capture-compression-operation_test.go
-        go run scripts/capture-compression-operation.go -check
-    - name: Verify held Go installation on host, APFS and HFS+
-      if: ${{ !cancelled() }}
-      run: go run scripts/verify-compression-installation-native.go
-    - name: Retain macOS 15 version and compression evidence
-      if: always()
-      uses: actions/upload-artifact@v7
-      with:
-        name: compression-native-macos-15
-        path: |
-          artifacts/osversion-coverage/
-          artifacts/compression-operation/
-          artifacts/compression-installation-native/
-        if-no-files-found: error
+  macos15:
+    name: Native compression compatibility (macos-15)
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Qualify native version detection and explicit targets above 95%
+        run: go run scripts/verify-osversion.go
+      - name: Recapture complete acquisition, read failures and surviving states
+        if: ${{ !cancelled() }}
+        run: |
+          go run scripts/capture-compression-operation.go -check
+          go test scripts/capture-compression-operation.go scripts/capture-compression-operation_test.go
+      - name: Verify held Go installation on host, APFS and HFS+
+        if: ${{ !cancelled() }}
+        run: go run scripts/verify-compression-installation-native.go
+      - name: Retain macOS 15 version and compression evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: compression-native-macos-15
+          path: |
+            artifacts/osversion-coverage/
+            artifacts/compression-operation/
+            artifacts/compression-installation-native/
+          if-no-files-found: error
