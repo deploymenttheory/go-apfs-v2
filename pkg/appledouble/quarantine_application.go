@@ -56,14 +56,15 @@ type QuarantineProcess struct {
 	// Absent means a valid process-info query confirmed no quarantine label.
 	// It is distinct from unavailable capture (nil Process) or successful capture
 	// with zero flags. Flags and Agent must be empty. This context is currently
-	// qualified for the macOS 26 profile on every Go operating system.
+	// qualified for both profiles on every Go operating system.
 	Absent bool
 }
 
 // QuarantineApplicationContext supplies policy inputs independently of the Go
 // host. Process must be known; nil is unavailable, not unquarantined. Qualified
 // process flags are 0x001 through 0x01f for macOS 26 and 0x200 through 0x21f for macOS
-// 27. Confirmed Absent state is qualified for macOS 26. Other contexts require
+// 27, whose confirmed initially unlabelled processes also use 0x001..0x01f.
+// Confirmed Absent state is qualified for both profiles. Other contexts require
 // further native qualification.
 //
 // Existing describes the actual prepared destination, after cleanup or baseline
@@ -133,6 +134,12 @@ func (q *Quarantine) PlanApplication(ctx QuarantineApplicationContext) (*Quarant
 		flags = 1
 	}
 	if ctx.Process.Absent {
+		if ctx.Profile == QuarantineMacOS27 {
+			flags &^= 0x218
+			if flags == 0 {
+				return &QuarantineApplication{}, nil
+			}
+		}
 		// Without a process label, native preserves the encoded source fields,
 		// full identifier and original timestamp even for directories.
 		copy(raw[:4], fmt.Sprintf("%04x", normalizedQuarantineApplicationFlags(flags)))
@@ -158,7 +165,7 @@ func (q *Quarantine) PlanApplication(ctx QuarantineApplicationContext) (*Quarant
 			return &QuarantineApplication{Write: true, Value: raw}, nil
 		}
 	}
-	if ctx.Process.Flags&0x200 != 0 {
+	if ctx.Profile == QuarantineMacOS27 {
 		flags &^= 0x218
 	}
 	if flags == 0 {
@@ -208,13 +215,13 @@ func qualifiedQuarantineProcess(profile QuarantineProfile, p *QuarantineProcess)
 		return false
 	}
 	if p.Absent {
-		return profile == QuarantineMacOS26 && p.Flags == 0 && p.Agent == ""
+		return (profile == QuarantineMacOS26 || profile == QuarantineMacOS27) && p.Flags == 0 && p.Agent == ""
 	}
 	switch profile {
 	case QuarantineMacOS26:
 		return p.Flags >= 1 && p.Flags <= 0x1f
 	case QuarantineMacOS27:
-		return p.Flags >= 0x200 && p.Flags <= 0x21f
+		return p.Flags >= 1 && p.Flags <= 0x1f || p.Flags >= 0x200 && p.Flags <= 0x21f
 	default:
 		return false
 	}

@@ -83,6 +83,87 @@ A successful query is not proof that the payload is readable. Compression
 readers continue to validate the actual format, indexes and compressed blocks.
 Querying does not install attributes or change filesystem flags.
 
+## Held native metadata and activation
+
+`hostdata.QueryCompression` pins a caller-held Darwin descriptor while capturing
+compression metadata and applying the portable query. It reads only the decmpfs
+attribute within an explicit allocation budget and obtains fork length without
+reading the resource fork. Changed flags or logical size cause an error; callers
+must still exclude same-size concurrent edits. Explicit image/carrier metadata
+supplies `decmpfs.Metadata` directly on every OS.
+
+`hostdata.CompressionVolumeFlags` observes the held file's actual Darwin mount
+context. `MNT_CPROTECT` (`0x80`) prevents inline compression on that volume. A
+newly mounted APFS image and the host APFS volume can differ on the same macOS
+release. Foreign operations must retain the producer's context instead of
+inferring it from the receiving OS or filesystem name.
+
+`hostdata.ActivateCompression` performs the compressor's final flag operation
+against either held native metadata or logical foreign metadata. It reads flags
+afresh before each of at most four comparisons, preserves concurrent unrelated
+flag changes and retries contention. Other errors stop immediately; exhausted
+comparisons never fall back to an unconditional flag overwrite. Results retain
+attempt counts and recovered errors. This operation assumes completed compressed
+storage and an already truncated data fork; it is not a complete installer.
+
+The retained lifecycle corpus contains 591 independent host/APFS/HFS+ cases,
+including 272 activation sequences. Eligibility, existing forks, modes, ACLs,
+links, all supported codecs, temporary permissions and injected storage,
+truncation, flag, synchronization, close and timestamp errors retain actual native
+outcomes. Test-only interposition is confined to the disposable target inode.
+The production implementation does not load the native framework or interposer.
+
+`hostdata.InstallCompressionFork` installs staged fork bytes with native write
+boundaries: the full index, each encoded block, then the zlib resource map. It
+retains partial writes, declines fork output when an independent fork exists,
+and synchronizes/closes its writer even for inline output or failure. Sync and
+close errors stay visible without changing native continuation policy. All 501
+retained fork-stage sequences are replayed, including multi-block EIO/ENOSPC
+after the index and after the first block, plus positive short writes at all\nthree frame boundaries. The caller owns the stable stage,
+existing-fork observation, earlier authorization and later commit decision.
+
+`hostdata.InstallCompression` composes fork installation with the final commit
+against a native or explicit foreign backend. It preserves a pre-existing
+independent fork, synchronizes the data handle and restores times on that
+decline path. It never reaches data truncation after a failed or short fork
+write. `InstallHeldCompression` supplies the Darwin binding and keeps the
+caller's held data file open; Linux and Windows bind the same operation to
+explicit foreign state rather than reinterpreting host flags.
+
+The portable suite installs 66 independent native storage choices into real
+ordinary and resource-fork files and verifies complete bytes, physical data-fork
+truncation, logical flags, modes, timestamps and handle ownership. The macOS
+harness runs 396 held-file kernel readbacks across the host volume and separately
+mounted APFS/HFS+ volumes. It records each volume, all cases and every ordinary
+detach attempt. A skipped case or missing storage choice fails qualification.
+These APIs still require the caller to qualify eligibility, select volume policy,
+stage fresh encoded storage and publish foreign metadata; they are not a complete
+path-based recompression operation.
+
+`hostdata.CommitCompression` installs the attribute and performs truncation,
+activation and restoration after the resource-fork writer has completed. Native
+`EACCES` alone permits mode 0600 and one attribute retry; even `EPERM` does not.
+The result records each mutation and recovered or ignored failure. Exhausted
+successful flag comparisons still restore timestamps, matching the native trace,
+while reporting that activation failed. Cancellation before truncation stops at
+the next boundary. Once truncation succeeds, flag activation and restoration
+finish before a late cancellation is returned. No rollback is promised.
+
+`hostdata.CommitHeldCompression` binds that transition to the caller-held native
+Darwin file. It uses typed x/sys operations and the existing held metadata
+adapter, including native microsecond timestamp restoration. The resource-fork
+writer must already be complete and closed. Native tests replay 36 independently
+captured storage choices, verify full kernel readback through held and reopened
+files, and ensure a rename plus replacement at the original name cannot redirect
+the transition. The shared `CommitCompression` protocol supplies the same policy
+for explicit foreign metadata on Linux, macOS and Windows.
+
+Complete installation, eligibility and foreign carrier publication remain
+integration prerequisites. Queue acceptance alone does not establish successful
+compression, and errors after truncation can leave partial native state. These
+observations must be honored by the eventual high-level operation.
+
+
 ## Native-readable LZ4 storage
 
 The shared APFS/HFS+ decoder also reads types 15/16 using Apple's framed LZ4
@@ -193,6 +274,7 @@ go run scripts/verify-compression-zlib-source.go
 go run scripts/capture-compression-policy.go -check
 go run scripts/capture-compression-lz4.go -check
 go run scripts/capture-compression-query.go -check
+go run scripts/capture-compression-lifecycle.go -check
 ```
 
 These commands preserve fresh artifacts before comparing the retained evidence.
@@ -206,6 +288,7 @@ On every supported host, run:
 
 ```sh
 go run scripts/verify-decmpfs-formats-coverage.go
+go run scripts/verify-compression-lifecycle.go
 ```
 
 The existing gate retains its per-file checks and additionally requires complete
@@ -214,3 +297,8 @@ packages, rejecting skipped tests. Existing large-file, mounted-image, foreign
 producer, race and fuzz jobs remain mandatory. See
 [compression storage](appledouble-compression-storage.md) for the separate
 native and kernel-accepted large-file controls.
+
+The compression lifecycle gate requires every new production file above 95%
+coverage and separately runs the complete hostdata package above 95%. Its focused
+transcript permits no skipped cases. The evidence audit inventory includes this
+gate alongside all 24 pre-existing portable reports.

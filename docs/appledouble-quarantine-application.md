@@ -49,14 +49,16 @@ for numeric-header interpretation and the `ErrQuarantineExisting` outcome.
 
 The caller selects the target profile independently of its operating system.
 Qualified effective process flags are `0001` through `001f` for macOS 26 and
-`0200` through `021f` for macOS 27. These include every combination of the five
+both `0001..001f` and `0200..021f` for macOS 27. These include every combination of the five
 low process bits; other combinations return
 `ErrQuarantineContext`. A nil process is unavailable state and returns that error;
-it never becomes an unquarantined context. For the macOS 26 profile,
+it never becomes an unquarantined context. For both profiles,
 `QuarantineProcess{Absent: true}` explicitly selects independently confirmed
 process-label absence; its flags and agent must be empty. This state retains
 the source fields and timestamp, including for directories, while applying the
-native flag adjustment and application size limit. See
+native flag adjustment and application size limit. macOS 27 also removes file
+flag bits `0x218` independently of the process label; a zero result preserves
+the prepared destination. See
 [process capture and absence](appledouble-quarantine-process-capture.md). These
 profile restrictions apply identically on all three Go operating systems.
 
@@ -165,8 +167,7 @@ architectures. `-capture` remains an unqualified native-only recording mode.
 
 ## Remaining work
 
-1. Qualify absent process state on macOS 27, other effective process contexts,
-   production raw-agent capture, additional privilege/entitlement combinations,
+1. Qualify additional effective process contexts and privilege/entitlement combinations,
    other object kinds and destination protection.
 2. Integrate ordered plans with real source capture, destination preparation,
    actual write/readback and `copyfile` callback/error handling in shared transport.

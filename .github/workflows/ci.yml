@@ -591,6 +591,17 @@ jobs:
           name: decmpfs-formats-coverage-${{ matrix.os }}
           path: artifacts/decmpfs-formats-coverage/
           if-no-files-found: error
+      - name: Compression lifecycle and complete hostdata above 95 percent coverage
+        env:
+          CGO_ENABLED: "0"
+        run: go run scripts/verify-compression-lifecycle.go
+      - name: Upload compression lifecycle coverage
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: compression-lifecycle-coverage-${{ matrix.os }}
+          path: artifacts/compression-lifecycle-coverage/
+          if-no-files-found: error
       - name: Read complete native compressed corpus across 1 2 and 4 GiB
         env:
           CGO_ENABLED: "0"
