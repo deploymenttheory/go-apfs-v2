@@ -30,7 +30,7 @@ func TestCompressionLifecycleProvenance(t *testing.T) {
 	if e = json.NewDecoder(z).Decode(&corpus); e != nil {
 		t.Fatal(e)
 	}
-	if corpus.Schema != 1 || len(corpus.Cases) != 384 || corpus.Host == "" || corpus.SDK == "" || !strings.Contains(corpus.Compiler, "clang") || !strings.Contains(corpus.Library, "-uuid:") {
+	if corpus.Schema != 1 || len(corpus.Cases) != 456 || corpus.Host == "" || corpus.SDK == "" || !strings.Contains(corpus.Compiler, "clang") || !strings.Contains(corpus.Library, "-uuid:") {
 		t.Fatal("incomplete native lifecycle provenance")
 	}
 	for _, path := range []string{"scripts/capture-compression-lifecycle.go", "testdata/appledouble/native/compression-lifecycle.c", "testdata/appledouble/native/compression-lifecycle-interpose.c", "testdata/appledouble/native/compression-policy.c", "go.mod", "go.sum"} {

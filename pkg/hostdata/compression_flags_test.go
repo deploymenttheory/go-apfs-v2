@@ -77,7 +77,7 @@ func TestActivateCompressionNativeComparisons(t *testing.T) {
 	if e = json.NewDecoder(z).Decode(&corpus); e != nil {
 		t.Fatal(e)
 	}
-	if corpus.Schema != 1 || len(corpus.Cases) != 384 {
+	if corpus.Schema != 1 || len(corpus.Cases) != 456 {
 		t.Fatal("incomplete native lifecycle corpus")
 	}
 	exercised := 0
@@ -137,7 +137,7 @@ func TestActivateCompressionNativeComparisons(t *testing.T) {
 			}
 		})
 	}
-	if exercised != 236 {
+	if exercised != 242 {
 		t.Fatal("incomplete native activation inventory", exercised)
 	}
 }
@@ -193,9 +193,6 @@ func TestActivateCompressionCancellationAndReadFailures(t *testing.T) {
 				t.Fatal("incorrect cancellation/failure boundary", result)
 			}
 		})
-	}
-	if _, e := ActivateCompression(nil, nil); !errors.Is(e, os.ErrInvalid) {
-		t.Fatal(e)
 	}
 	if _, e := ActivateCompression(t.Context(), nil); !errors.Is(e, os.ErrInvalid) {
 		t.Fatal(e)

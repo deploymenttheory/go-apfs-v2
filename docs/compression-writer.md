@@ -106,12 +106,21 @@ comparisons never fall back to an unconditional flag overwrite. Results retain
 attempt counts and recovered errors. This operation assumes completed compressed
 storage and an already truncated data fork; it is not a complete installer.
 
-The retained lifecycle corpus contains 384 independent host/APFS/HFS+ cases,
-including 236 activation sequences. Eligibility, existing forks, modes, ACLs,
+The retained lifecycle corpus contains 456 independent host/APFS/HFS+ cases,
+including 242 activation sequences. Eligibility, existing forks, modes, ACLs,
 links, all supported codecs, temporary permissions and injected storage,
 truncation, flag, synchronization, close and timestamp errors retain actual native
 outcomes. Test-only interposition is confined to the disposable target inode.
 The production implementation does not load the native framework or interposer.
+
+`hostdata.CommitCompression` installs the attribute and performs truncation,
+activation and restoration after the resource-fork writer has completed. Native
+`EACCES` alone permits mode 0600 and one attribute retry; even `EPERM` does not.
+The result records each mutation and recovered or ignored failure. Exhausted
+successful flag comparisons still restore timestamps, matching the native trace,
+while reporting that activation failed. Cancellation before truncation stops at
+the next boundary. Once truncation succeeds, flag activation and restoration
+finish before a late cancellation is returned. No rollback is promised.
 
 Complete installation, eligibility and foreign carrier publication remain
 integration prerequisites. Queue acceptance alone does not establish successful

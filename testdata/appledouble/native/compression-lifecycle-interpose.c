@@ -14,14 +14,15 @@
 #include <string.h>
 #include <stdint.h>
 
-static _Atomic int armed, fault_count;
+static _Atomic int armed, fault_count, attribute_count, mode_count;
+static _Atomic int fork_descriptor = -1;
 static dev_t target_device;
 static ino_t target_inode;
 void afsc_probe_arm(void) {
     struct stat state;const char *path=getenv("APFS_NATIVE_FAULT_TARGET");
     if(!path||stat(path,&state)){perror("arm target identity");exit(2);}
     target_device=state.st_dev;target_inode=state.st_ino;
-    atomic_store(&fault_count,0);atomic_store(&armed,1);
+    atomic_store(&fork_descriptor,-1);atomic_store(&fault_count,0);atomic_store(&attribute_count,0);atomic_store(&mode_count,0);atomic_store(&armed,1);
 }
 void afsc_probe_disarm(void) { atomic_store(&armed,0); }
 static int target_fd(int fd) {
@@ -30,17 +31,26 @@ static int target_fd(int fd) {
     // the test-owned inode, then use only the fork suffix for classification.
     int saved=errno,result=0;struct stat state;
     if(!fstat(fd,&state)&&state.st_dev==target_device&&state.st_ino==target_inode){
-        result=1;char path[4096];
+        result=fd==atomic_load(&fork_descriptor)?2:1;char path[4096];
         if(!fcntl(fd,F_GETPATH,path)){
             const char *suffix="/..namedfork/rsrc";size_t n=strlen(path),s=strlen(suffix);
-            if(n>=s&&!strcmp(path+n-s,suffix))result=2;
+            if(n>=s&&!strcmp(path+n-s,suffix)){result=2;atomic_store(&fork_descriptor,fd);}
         }
     }
     errno=saved;return result;
 }
 static int fail(const char *operation) {
     const char *stage=getenv("APFS_NATIVE_FAULT_STAGE");
-    if(!stage||strcmp(stage,operation))return 0;
+if(!stage)return 0;
+if(!strcmp(stage,"attribute-mode")||!strcmp(stage,"attribute-restore-mode")){
+    int inject=0;
+    if(!strcmp(operation,"attribute"))inject=atomic_fetch_add(&attribute_count,1)==0;
+    if(!strcmp(operation,"fchmod"))inject=atomic_fetch_add(&mode_count,1)==(!strcmp(stage,"attribute-restore-mode")?1:0);
+    if(inject)errno=EACCES;
+    return inject;
+}
+if(strcmp(stage,operation))return 0;
+
     const char *limit=getenv("APFS_NATIVE_FAULT_COUNT");
     int n=atomic_fetch_add(&fault_count,1)+1, count=limit?atoi(limit):1;
     if(count>=0&&n>count)return 0;
@@ -61,7 +71,13 @@ BASIC(fchmod,(int fd,mode_t mode),fchmod(fd,mode),mode)
 BASIC(fchflags,(int fd,unsigned flags),fchflags(fd,flags),flags)
 BASIC(ftruncate,(int fd,off_t size),ftruncate(fd,size),size)
 BASIC(fsync,(int fd),fsync(fd),0)
-BASIC(close,(int fd),close(fd),0)
+static int probe_close(int fd) {
+    int match=target_fd(fd);if(!match)return close(fd);
+    int fault=fail("close"),result=fault?-1:close(fd),error=errno;
+    if(!result&&fd==atomic_load(&fork_descriptor))atomic_store(&fork_descriptor,-1);
+    observation("close",match,0,result,error,fault);return result;
+}
+
 BASIC(futimes,(int fd,const struct timeval times[2]),futimes(fd,times),times?times[1].tv_sec:-1)
 static int probe_fsetxattr(int fd,const char *name,const void *value,size_t size,uint32_t position,int options) {
     int match=target_fd(fd);if(!match)return fsetxattr(fd,name,value,size,position,options);

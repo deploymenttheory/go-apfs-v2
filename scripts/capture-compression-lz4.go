@@ -23,6 +23,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/diskimage"
 )
 
 type bufferCase struct {
@@ -236,10 +238,30 @@ func run(out string, check bool) (result error) {
 			if _, e := mustCommand("hdiutil", "create", "-size", "128m", "-fs", filesystem, "-volname", "CompressionLZ4", image); e != nil {
 				return e
 			}
-			if _, e := mustCommand("hdiutil", "attach", "-nobrowse", "-owners", "on", "-mountpoint", mount, image); e != nil {
+			attached, e := mustCommand("hdiutil", "attach", "-plist", "-nobrowse", "-owners", "on", "-mountpoint", mount, image)
+			if e != nil {
 				return e
 			}
-			defer func() { _, e := mustCommand("hdiutil", "detach", mount); result = errors.Join(result, e) }()
+			device, e := diskimage.AttachmentDevice(attached)
+			if e != nil {
+				return e
+			}
+			defer func() {
+				var attempts []map[string]any
+				e := diskimage.RetryDetach(context.Background(), func() (int, error) {
+					stdout, stderr, code, e := command("hdiutil", "detach", device)
+					attempts = append(attempts, map[string]any{"device": device, "stdout": string(stdout), "stderr": string(stderr), "exit": code, "error": fmt.Sprint(e)})
+					if code != 0 {
+						e = errors.Join(e, fmt.Errorf("hdiutil detach %s: exit %d: %s", device, code, stderr))
+					}
+					return code, e
+				})
+				data, saveErr := json.MarshalIndent(attempts, "", "  ")
+				if saveErr == nil {
+					saveErr = os.WriteFile(filepath.Join(artifact, "detach-"+strings.ReplaceAll(filesystem, "+", "plus")+".json"), data, 0600)
+				}
+				result = errors.Join(result, e, saveErr)
+			}()
 			observe := func(k kernelCase) error {
 				k.Filesystem = filesystem
 				k.Origin = "constructed storage from native codec or explicit stored marker; kernel readback"

@@ -22,7 +22,10 @@ type CompressionFlagResult struct {
 	Applied            bool
 	Reads, Comparisons int
 	Actual             uint32
-	Failures           []StatCopyFailure
+	// LastComparisonError distinguishes exhausted value mismatches from a
+	// failed final native call; the compressor restores times after the former.
+	LastComparisonError error
+	Failures            []StatCopyFailure
 }
 
 // ActivateCompression follows Apple's compressor's four-attempt BSD flag
@@ -55,6 +58,7 @@ func ActivateCompression(ctx context.Context, backend CompressionFlagsBackend) (
 		}
 		result.Comparisons++
 		actual, e := backend.CompareAndSwapFlags(flags, flags|UFCompressed)
+		result.LastComparisonError = e
 		if e != nil {
 			result.Failures = append(result.Failures, StatCopyFailure{"compare-flags", e})
 			if !errors.Is(e, ErrStatFlagsAgain) {

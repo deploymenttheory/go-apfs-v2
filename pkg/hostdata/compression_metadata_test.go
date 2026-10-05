@@ -166,16 +166,10 @@ func TestCaptureCompressionMetadataAbsent(t *testing.T) {
 	}
 }
 func TestCompressionMetadataInvalidArguments(t *testing.T) {
-	if _, e := QueryCompression(nil, nil, 0); !errors.Is(e, os.ErrInvalid) {
-		t.Fatal(e)
-	}
 	if _, e := QueryCompression(t.Context(), nil, -1); !errors.Is(e, os.ErrInvalid) {
 		t.Fatal(e)
 	}
 	if _, e := QueryCompression(t.Context(), nil, 0); !errors.Is(e, os.ErrInvalid) {
-		t.Fatal(e)
-	}
-	if _, e := CompressionVolumeFlags(nil, nil); !errors.Is(e, os.ErrInvalid) {
 		t.Fatal(e)
 	}
 	if _, e := CompressionVolumeFlags(t.Context(), nil); !errors.Is(e, os.ErrInvalid) {

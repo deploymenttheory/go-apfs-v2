@@ -82,7 +82,7 @@ int main(int argc, char **argv) {
     void (*arm)(void)=dlsym(RTLD_DEFAULT,"afsc_probe_arm"),(*disarm)(void)=dlsym(RTLD_DEFAULT,"afsc_probe_disarm");if(getenv("APFS_NATIVE_FAULT_STAGE")&&(!arm||!disarm))die("interposer unavailable");if(arm)arm(); errno=0;bool accepted=compress(queue,path,NULL);int queue_errno=errno;finish(queue);if(disarm)disarm();CFRelease(options);
     if(lstat(path,&after))die("after");
     if(stat(path,&target_after))die("target after");
-    printf("{\"volume_flags\":%u,\"accepted\":%s,\"errno\":%d,\"before_mode\":%u,\"after_mode\":%u,\"before_flags\":%u,\"after_flags\":%u,\"before_size\":%lld,\"after_size\":%lld,\"links\":%u,\"inode_unchanged\":%s",volume.f_flags,accepted?"true":"false",queue_errno,before.st_mode,after.st_mode,before.st_flags,after.st_flags,(long long)before.st_size,(long long)after.st_size,after.st_nlink,before.st_ino==after.st_ino?"true":"false");
+    printf("{\"filesystem_type\":\"%s\",\"volume_flags\":%u,\"accepted\":%s,\"errno\":%d,\"before_mode\":%u,\"after_mode\":%u,\"before_flags\":%u,\"after_flags\":%u,\"before_size\":%lld,\"after_size\":%lld,\"links\":%u,\"inode_unchanged\":%s",volume.f_fstypename,volume.f_flags,accepted?"true":"false",queue_errno,before.st_mode,after.st_mode,before.st_flags,after.st_flags,(long long)before.st_size,(long long)after.st_size,after.st_nlink,before.st_ino==after.st_ino?"true":"false");
     metadata_changes(&before,&after);
     printf(",\"target_flags\":%u,\"target_size\":%lld,\"target_inode_unchanged\":%s",target_after.st_flags,(long long)target_after.st_size,target_before.st_ino==target_after.st_ino?"true":"false");
     // Capture operation state first; relax only test-owned restrictions to read

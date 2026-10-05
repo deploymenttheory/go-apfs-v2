@@ -80,7 +80,7 @@ func run(out string, check bool) (result error) {
 	if e != nil {
 		return e
 	}
-	artifact := filepath.Dir(out)
+	artifact := "artifacts/compression-lifecycle"
 	if e = os.MkdirAll(artifact, 0755); e != nil {
 		return e
 	}
@@ -201,6 +201,14 @@ func run(out string, check bool) (result error) {
 						cases = append(cases, trial{Scenario: "ordinary", Requested: "default", Inline: inline, Fault: fault, FaultCount: count, FaultErrno: 13})
 					}
 				}
+				for _, fault := range []string{"attribute-mode", "attribute-restore-mode"} {
+					cases = append(cases, trial{Scenario: "mode-755", Requested: "default", Inline: inline, Fault: fault, FaultCount: 1, FaultErrno: 13})
+				}
+				for _, errno := range []int{1, 5, 22, 28, 45} {
+					for _, count := range []int{1, -1} {
+						cases = append(cases, trial{Scenario: "mode-755", Requested: "default", Inline: inline, Fault: "attribute", FaultCount: count, FaultErrno: errno})
+					}
+				}
 				for _, count := range []int{1, 3, 4, 5} {
 					cases = append(cases, trial{Scenario: "hidden", Requested: "default", Inline: inline, Fault: "ffsctl", FaultCount: count, FaultErrno: 35})
 					cases = append(cases, trial{Scenario: "hidden", Requested: "default", Inline: inline, Fault: "cas-mismatch", FaultCount: count})
@@ -254,7 +262,7 @@ func run(out string, check bool) (result error) {
 			return e
 		}
 	}
-	if len(capture.Cases) != 384 {
+	if len(capture.Cases) != 456 {
 		return fmt.Errorf("incomplete lifecycle inventory: %d", len(capture.Cases))
 	}
 	f, e := os.Create(out)
@@ -290,6 +298,33 @@ func run(out string, check bool) (result error) {
 		}
 		for i, fresh := range capture.Cases {
 			old := prior.Cases[i]
+			// Host APFS and attached APFS share storage policy when their observed
+			// MNT_CPROTECT bit agrees. Select this retained native volume context;
+			// keep every outcome and trace comparison after that selection.
+			var before, after struct {
+				Volume     uint32 `json:"volume_flags"`
+				Filesystem string `json:"filesystem_type"`
+			}
+			if e = json.Unmarshal(old.Observation, &before); e != nil {
+				return e
+			}
+			if e = json.Unmarshal(fresh.Observation, &after); e != nil {
+				return e
+			}
+			if before.Volume&0x80 != after.Volume&0x80 && fresh.Filesystem == "host" && after.Filesystem == "apfs" && after.Volume&0x80 == 0 {
+				found := false
+				for _, candidate := range prior.Cases {
+					if candidate.Filesystem == "APFS" && candidate.Scenario == fresh.Scenario && candidate.Requested == fresh.Requested && candidate.Inline == fresh.Inline && candidate.Fault == fresh.Fault && candidate.FaultCount == fresh.FaultCount && candidate.FaultErrno == fresh.FaultErrno {
+						old = candidate
+						old.Filesystem = "host"
+						found = true
+						break
+					}
+				}
+				if !found {
+					return errors.New("unqualified host APFS compression volume context")
+				}
+			}
 			a, e := comparison(old)
 			if e != nil {
 				return e

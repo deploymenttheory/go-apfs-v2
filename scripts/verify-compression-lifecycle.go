@@ -36,7 +36,7 @@ func verify() error {
 	defer log.Close()
 	profile := filepath.Join(dir, "coverage.out")
 	var transcript bytes.Buffer
-	cmd := exec.Command("go", "test", "-count=1", "-json", "-run=^(TestActivateCompression|TestCaptureCompressionMetadata|TestCompressionMetadata|TestCompressionLifecycle|TestQueryCompressionHeldNativeCorpus|TestCompressionNativeMetadata)", "-covermode=atomic", "-coverprofile="+profile, "./pkg/hostdata")
+	cmd := exec.Command("go", "test", "-count=1", "-json", "-run=^(TestCommitCompression|TestActivateCompression|TestCaptureCompressionMetadata|TestCompressionMetadata|TestCompressionLifecycle|TestQueryCompressionHeldNativeCorpus|TestCompressionNativeMetadata)", "-covermode=atomic", "-coverprofile="+profile, "./pkg/hostdata")
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 	cmd.Stdout = io.MultiWriter(os.Stdout, log, &transcript)
 	cmd.Stderr = io.MultiWriter(os.Stderr, log)
@@ -44,7 +44,7 @@ func verify() error {
 		return e
 	}
 	required := map[string]bool{}
-	for _, name := range []string{"TestActivateCompressionNativeComparisons", "TestActivateCompressionCancellationAndReadFailures", "TestCaptureCompressionMetadataBounded", "TestCaptureCompressionMetadataFailures", "TestCaptureCompressionMetadataAbsent", "TestCompressionMetadataInvalidArguments", "TestCompressionLifecycleProvenance"} {
+	for _, name := range []string{"TestCommitCompressionNativeLifecycle", "TestCommitCompressionCancellationAndValidation", "TestActivateCompressionNativeComparisons", "TestActivateCompressionCancellationAndReadFailures", "TestCaptureCompressionMetadataBounded", "TestCaptureCompressionMetadataFailures", "TestCaptureCompressionMetadataAbsent", "TestCompressionMetadataInvalidArguments", "TestCompressionLifecycleProvenance"} {
 		required[name] = true
 	}
 	if runtime.GOOS == "darwin" {
@@ -74,7 +74,7 @@ func verify() error {
 	if len(required) != 0 {
 		return fmt.Errorf("missing compression lifecycle suites: %v", required)
 	}
-	coverageFiles := map[string][2]int{"pkg/hostdata/compression_flags.go": {}, "pkg/hostdata/compression_metadata.go": {}}
+	coverageFiles := map[string][2]int{"pkg/hostdata/compression_commit.go": {}, "pkg/hostdata/compression_flags.go": {}, "pkg/hostdata/compression_metadata.go": {}}
 	if runtime.GOOS == "darwin" {
 		coverageFiles["pkg/hostdata/compression_metadata_darwin.go"] = [2]int{}
 	} else {
