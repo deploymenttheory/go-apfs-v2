@@ -9,8 +9,8 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170025,
-          "Nsec": 424309338
+          "Sec": 1610000000,
+          "Nsec": 0
         },
         "Attributes": {
           "com.apple.provenance": "010200953c7ac2a6fe63b9",
@@ -20,8 +20,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170025,
-      "native_end": 1791170025,
+      "native_begin": 1791197222,
+      "native_end": 1791197222,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197222,
+          "Nsec": 629622267
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -69,8 +91,8 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170025,
-          "Nsec": 466676437
+          "Sec": 1610000000,
+          "Nsec": 0
         },
         "Attributes": {
           "com.apple.provenance": "010200953c7ac2a6fe63b9",
@@ -80,8 +102,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170025,
-      "native_end": 1791170025,
+      "native_begin": 1791197222,
+      "native_end": 1791197222,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197222,
+          "Nsec": 649603695
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -129,8 +173,8 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170025,
-          "Nsec": 476798034
+          "Sec": 1610000000,
+          "Nsec": 0
         },
         "Attributes": {
           "com.apple.provenance": "010200953c7ac2a6fe63b9",
@@ -140,8 +184,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170025,
-      "native_end": 1791170025,
+      "native_begin": 1791197222,
+      "native_end": 1791197222,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197222,
+          "Nsec": 668805912
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -189,8 +255,8 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170025,
-          "Nsec": 493096014
+          "Sec": 1610000000,
+          "Nsec": 0
         },
         "Attributes": {
           "com.apple.provenance": "010200953c7ac2a6fe63b9",
@@ -200,8 +266,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170025,
-      "native_end": 1791170025,
+      "native_begin": 1791197222,
+      "native_end": 1791197222,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197222,
+          "Nsec": 688906423
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -249,8 +337,8 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170025,
-          "Nsec": 502757943
+          "Sec": 1610000000,
+          "Nsec": 0
         },
         "Attributes": {
           "com.apple.provenance": "010200953c7ac2a6fe63b9",
@@ -260,8 +348,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170025,
-      "native_end": 1791170025,
+      "native_begin": 1791197222,
+      "native_end": 1791197222,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197222,
+          "Nsec": 706672137
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -309,8 +419,8 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170025,
-          "Nsec": 512448248
+          "Sec": 1610000000,
+          "Nsec": 0
         },
         "Attributes": {
           "com.apple.provenance": "010200953c7ac2a6fe63b9",
@@ -320,8 +430,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170025,
-      "native_end": 1791170025,
+      "native_begin": 1791197222,
+      "native_end": 1791197222,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197222,
+          "Nsec": 727067774
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -369,8 +501,8 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170025,
-          "Nsec": 522954054
+          "Sec": 1610000000,
+          "Nsec": 0
         },
         "Attributes": {
           "com.apple.provenance": "010200953c7ac2a6fe63b9",
@@ -380,8 +512,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170025,
-      "native_end": 1791170025,
+      "native_begin": 1791197222,
+      "native_end": 1791197222,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197222,
+          "Nsec": 748017913
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -429,8 +583,8 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170025,
-          "Nsec": 536751280
+          "Sec": 1610000000,
+          "Nsec": 0
         },
         "Attributes": {
           "com.apple.provenance": "010200953c7ac2a6fe63b9",
@@ -440,8 +594,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170025,
-      "native_end": 1791170025,
+      "native_begin": 1791197222,
+      "native_end": 1791197222,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197222,
+          "Nsec": 767073421
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -489,8 +665,8 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170025,
-          "Nsec": 546172626
+          "Sec": 1610000000,
+          "Nsec": 0
         },
         "Attributes": {
           "com.apple.provenance": "010200953c7ac2a6fe63b9",
@@ -500,8 +676,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170025,
-      "native_end": 1791170025,
+      "native_begin": 1791197222,
+      "native_end": 1791197222,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197222,
+          "Nsec": 785619095
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -549,8 +747,8 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170025,
-          "Nsec": 560594229
+          "Sec": 1610000000,
+          "Nsec": 0
         },
         "Attributes": {
           "com.apple.provenance": "010200953c7ac2a6fe63b9",
@@ -560,8 +758,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170025,
-      "native_end": 1791170025,
+      "native_begin": 1791197222,
+      "native_end": 1791197222,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197222,
+          "Nsec": 802872807
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -609,8 +829,8 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170025,
-          "Nsec": 574042539
+          "Sec": 1610000000,
+          "Nsec": 0
         },
         "Attributes": {
           "com.apple.provenance": "010200953c7ac2a6fe63b9",
@@ -620,8 +840,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170025,
-      "native_end": 1791170025,
+      "native_begin": 1791197222,
+      "native_end": 1791197222,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197222,
+          "Nsec": 823545486
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -669,8 +911,8 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170025,
-          "Nsec": 584809178
+          "Sec": 1610000000,
+          "Nsec": 0
         },
         "Attributes": {
           "com.apple.provenance": "010200953c7ac2a6fe63b9",
@@ -680,8 +922,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170025,
-      "native_end": 1791170025,
+      "native_begin": 1791197222,
+      "native_end": 1791197222,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197222,
+          "Nsec": 841458617
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -729,8 +993,8 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170025,
-          "Nsec": 594547608
+          "Sec": 1610000000,
+          "Nsec": 0
         },
         "Attributes": {
           "com.apple.provenance": "010200953c7ac2a6fe63b9",
@@ -740,8 +1004,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170025,
-      "native_end": 1791170025,
+      "native_begin": 1791197222,
+      "native_end": 1791197222,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197222,
+          "Nsec": 862432005
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -789,8 +1075,8 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170025,
-          "Nsec": 606552415
+          "Sec": 1610000000,
+          "Nsec": 0
         },
         "Attributes": {
           "com.apple.provenance": "010200953c7ac2a6fe63b9",
@@ -800,8 +1086,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170025,
-      "native_end": 1791170025,
+      "native_begin": 1791197222,
+      "native_end": 1791197222,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197222,
+          "Nsec": 882726601
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -849,8 +1157,8 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170025,
-          "Nsec": 618233598
+          "Sec": 1610000000,
+          "Nsec": 0
         },
         "Attributes": {
           "com.apple.provenance": "010200953c7ac2a6fe63b9",
@@ -860,8 +1168,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170025,
-      "native_end": 1791170025,
+      "native_begin": 1791197222,
+      "native_end": 1791197222,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197222,
+          "Nsec": 902568903
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -909,8 +1239,8 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170025,
-          "Nsec": 628268403
+          "Sec": 1610000000,
+          "Nsec": 0
         },
         "Attributes": {
           "com.apple.provenance": "010200953c7ac2a6fe63b9",
@@ -920,8 +1250,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170025,
-      "native_end": 1791170025,
+      "native_begin": 1791197222,
+      "native_end": 1791197222,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197222,
+          "Nsec": 922636831
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -969,8 +1321,8 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170025,
-          "Nsec": 640848378
+          "Sec": 1610000000,
+          "Nsec": 0
         },
         "Attributes": {
           "com.apple.provenance": "010200953c7ac2a6fe63b9",
@@ -980,8 +1332,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170025,
-      "native_end": 1791170025,
+      "native_begin": 1791197222,
+      "native_end": 1791197222,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197222,
+          "Nsec": 943869679
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -1029,8 +1403,8 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170025,
-          "Nsec": 651142017
+          "Sec": 1610000000,
+          "Nsec": 0
         },
         "Attributes": {
           "com.apple.provenance": "010200953c7ac2a6fe63b9",
@@ -1040,8 +1414,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170025,
-      "native_end": 1791170025,
+      "native_begin": 1791197222,
+      "native_end": 1791197222,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197222,
+          "Nsec": 963706814
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -1089,8 +1485,8 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170025,
-          "Nsec": 665963286
+          "Sec": 1610000000,
+          "Nsec": 0
         },
         "Attributes": {
           "com.apple.provenance": "010200953c7ac2a6fe63b9",
@@ -1100,8 +1496,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170025,
-      "native_end": 1791170025,
+      "native_begin": 1791197222,
+      "native_end": 1791197222,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197222,
+          "Nsec": 983770659
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -1149,8 +1567,8 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170025,
-          "Nsec": 675630883
+          "Sec": 1610000000,
+          "Nsec": 0
         },
         "Attributes": {
           "com.apple.provenance": "010200953c7ac2a6fe63b9",
@@ -1160,8 +1578,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170025,
-      "native_end": 1791170025,
+      "native_begin": 1791197222,
+      "native_end": 1791197223,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197223,
+          "Nsec": 3856629
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -1209,8 +1649,8 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170025,
-          "Nsec": 686640273
+          "Sec": 1610000000,
+          "Nsec": 0
         },
         "Attributes": {
           "com.apple.provenance": "010200953c7ac2a6fe63b9",
@@ -1220,8 +1660,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170025,
-      "native_end": 1791170025,
+      "native_begin": 1791197223,
+      "native_end": 1791197223,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197223,
+          "Nsec": 23919348
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -1269,8 +1731,8 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170025,
-          "Nsec": 696668369
+          "Sec": 1610000000,
+          "Nsec": 0
         },
         "Attributes": {
           "com.apple.provenance": "010200953c7ac2a6fe63b9",
@@ -1280,8 +1742,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170025,
-      "native_end": 1791170025,
+      "native_begin": 1791197223,
+      "native_end": 1791197223,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197223,
+          "Nsec": 45402238
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -1329,8 +1813,8 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170025,
-          "Nsec": 706372007
+          "Sec": 1610000000,
+          "Nsec": 0
         },
         "Attributes": {
           "com.apple.provenance": "010200953c7ac2a6fe63b9",
@@ -1340,8 +1824,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170025,
-      "native_end": 1791170025,
+      "native_begin": 1791197223,
+      "native_end": 1791197223,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197223,
+          "Nsec": 65626792
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -1389,8 +1895,8 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170025,
-          "Nsec": 716800813
+          "Sec": 1610000000,
+          "Nsec": 0
         },
         "Attributes": {
           "com.apple.provenance": "010200953c7ac2a6fe63b9",
@@ -1400,8 +1906,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170025,
-      "native_end": 1791170025,
+      "native_begin": 1791197223,
+      "native_end": 1791197223,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197223,
+          "Nsec": 89600813
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -1449,8 +1977,8 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170025,
-          "Nsec": 754603155
+          "Sec": 1610000000,
+          "Nsec": 0
         },
         "Attributes": {
           "com.apple.provenance": "010200953c7ac2a6fe63b9",
@@ -1460,8 +1988,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170025,
-      "native_end": 1791170025,
+      "native_begin": 1791197223,
+      "native_end": 1791197223,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197223,
+          "Nsec": 123222527
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -1509,8 +2059,8 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170025,
-          "Nsec": 764183543
+          "Sec": 1610000000,
+          "Nsec": 0
         },
         "Attributes": {
           "com.apple.provenance": "010200953c7ac2a6fe63b9",
@@ -1520,8 +2070,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170025,
-      "native_end": 1791170025,
+      "native_begin": 1791197223,
+      "native_end": 1791197223,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197223,
+          "Nsec": 141410575
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -1569,8 +2141,8 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170025,
-          "Nsec": 773567097
+          "Sec": 1610000000,
+          "Nsec": 0
         },
         "Attributes": {
           "com.apple.provenance": "010200953c7ac2a6fe63b9",
@@ -1580,8 +2152,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170025,
-      "native_end": 1791170025,
+      "native_begin": 1791197223,
+      "native_end": 1791197223,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197223,
+          "Nsec": 159487623
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -1629,8 +2223,8 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170025,
-          "Nsec": 783123360
+          "Sec": 1610000000,
+          "Nsec": 0
         },
         "Attributes": {
           "com.apple.provenance": "010200953c7ac2a6fe63b9",
@@ -1640,8 +2234,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170025,
-      "native_end": 1791170025,
+      "native_begin": 1791197223,
+      "native_end": 1791197223,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197223,
+          "Nsec": 179015632
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -1689,8 +2305,8 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170025,
-          "Nsec": 794048333
+          "Sec": 1610000000,
+          "Nsec": 0
         },
         "Attributes": {
           "com.apple.provenance": "010200953c7ac2a6fe63b9",
@@ -1700,8 +2316,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170025,
-      "native_end": 1791170025,
+      "native_begin": 1791197223,
+      "native_end": 1791197223,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197223,
+          "Nsec": 197721307
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -1749,8 +2387,8 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170025,
-          "Nsec": 803580596
+          "Sec": 1610000000,
+          "Nsec": 0
         },
         "Attributes": {
           "com.apple.provenance": "010200953c7ac2a6fe63b9",
@@ -1760,8 +2398,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170025,
-      "native_end": 1791170025,
+      "native_begin": 1791197223,
+      "native_end": 1791197223,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197223,
+          "Nsec": 232907066
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -1809,8 +2469,8 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170025,
-          "Nsec": 814083318
+          "Sec": 1610000000,
+          "Nsec": 0
         },
         "Attributes": {
           "com.apple.provenance": "010200953c7ac2a6fe63b9",
@@ -1820,8 +2480,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170025,
-      "native_end": 1791170025,
+      "native_begin": 1791197223,
+      "native_end": 1791197223,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197223,
+          "Nsec": 266223113
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -1869,8 +2551,8 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170025,
-          "Nsec": 824029206
+          "Sec": 1610000000,
+          "Nsec": 0
         },
         "Attributes": {
           "com.apple.provenance": "010200953c7ac2a6fe63b9",
@@ -1880,8 +2562,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170025,
-      "native_end": 1791170025,
+      "native_begin": 1791197223,
+      "native_end": 1791197223,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197223,
+          "Nsec": 289664966
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -1929,8 +2633,8 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170025,
-          "Nsec": 836007306
+          "Sec": 1610000000,
+          "Nsec": 0
         },
         "Attributes": {
           "com.apple.provenance": "010200953c7ac2a6fe63b9",
@@ -1940,8 +2644,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170025,
-      "native_end": 1791170025,
+      "native_begin": 1791197223,
+      "native_end": 1791197223,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197223,
+          "Nsec": 313467029
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -1989,8 +2715,8 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170025,
-          "Nsec": 845869444
+          "Sec": 1610000000,
+          "Nsec": 0
         },
         "Attributes": {
           "com.apple.provenance": "010200953c7ac2a6fe63b9",
@@ -2000,8 +2726,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170025,
-      "native_end": 1791170025,
+      "native_begin": 1791197223,
+      "native_end": 1791197223,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197223,
+          "Nsec": 337152258
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -2049,7 +2797,7 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170028,
+          "Sec": 1610000000,
           "Nsec": 0
         },
         "Attributes": {
@@ -2061,8 +2809,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170028,
-      "native_end": 1791170028,
+      "native_begin": 1791197226,
+      "native_end": 1791197226,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197226,
+          "Nsec": 0
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -2112,7 +2882,7 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170028,
+          "Sec": 1610000000,
           "Nsec": 0
         },
         "Attributes": {
@@ -2124,8 +2894,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170028,
-      "native_end": 1791170028,
+      "native_begin": 1791197226,
+      "native_end": 1791197226,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197226,
+          "Nsec": 0
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -2175,7 +2967,7 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170028,
+          "Sec": 1610000000,
           "Nsec": 0
         },
         "Attributes": {
@@ -2187,8 +2979,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170028,
-      "native_end": 1791170028,
+      "native_begin": 1791197226,
+      "native_end": 1791197226,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197226,
+          "Nsec": 0
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -2238,7 +3052,7 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170028,
+          "Sec": 1610000000,
           "Nsec": 0
         },
         "Attributes": {
@@ -2250,8 +3064,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170028,
-      "native_end": 1791170028,
+      "native_begin": 1791197226,
+      "native_end": 1791197226,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197226,
+          "Nsec": 0
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -2301,7 +3137,7 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170028,
+          "Sec": 1610000000,
           "Nsec": 0
         },
         "Attributes": {
@@ -2313,8 +3149,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170028,
-      "native_end": 1791170028,
+      "native_begin": 1791197226,
+      "native_end": 1791197226,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197226,
+          "Nsec": 0
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -2364,7 +3222,7 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170028,
+          "Sec": 1610000000,
           "Nsec": 0
         },
         "Attributes": {
@@ -2376,8 +3234,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170028,
-      "native_end": 1791170028,
+      "native_begin": 1791197226,
+      "native_end": 1791197226,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197226,
+          "Nsec": 0
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -2427,7 +3307,7 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170028,
+          "Sec": 1610000000,
           "Nsec": 0
         },
         "Attributes": {
@@ -2439,8 +3319,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170028,
-      "native_end": 1791170028,
+      "native_begin": 1791197226,
+      "native_end": 1791197226,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197226,
+          "Nsec": 0
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -2490,7 +3392,7 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170028,
+          "Sec": 1610000000,
           "Nsec": 0
         },
         "Attributes": {
@@ -2502,8 +3404,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170028,
-      "native_end": 1791170028,
+      "native_begin": 1791197226,
+      "native_end": 1791197226,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197226,
+          "Nsec": 0
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -2553,7 +3477,7 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170028,
+          "Sec": 1610000000,
           "Nsec": 0
         },
         "Attributes": {
@@ -2565,8 +3489,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170028,
-      "native_end": 1791170028,
+      "native_begin": 1791197227,
+      "native_end": 1791197227,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197227,
+          "Nsec": 0
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -2616,7 +3562,7 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170028,
+          "Sec": 1610000000,
           "Nsec": 0
         },
         "Attributes": {
@@ -2628,8 +3574,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170028,
-      "native_end": 1791170028,
+      "native_begin": 1791197227,
+      "native_end": 1791197227,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197227,
+          "Nsec": 0
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -2679,7 +3647,7 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170028,
+          "Sec": 1610000000,
           "Nsec": 0
         },
         "Attributes": {
@@ -2691,8 +3659,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170028,
-      "native_end": 1791170028,
+      "native_begin": 1791197227,
+      "native_end": 1791197227,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197227,
+          "Nsec": 0
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -2742,7 +3732,7 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170028,
+          "Sec": 1610000000,
           "Nsec": 0
         },
         "Attributes": {
@@ -2754,8 +3744,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170028,
-      "native_end": 1791170028,
+      "native_begin": 1791197227,
+      "native_end": 1791197227,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197227,
+          "Nsec": 0
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -2805,7 +3817,7 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170028,
+          "Sec": 1610000000,
           "Nsec": 0
         },
         "Attributes": {
@@ -2817,8 +3829,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170028,
-      "native_end": 1791170028,
+      "native_begin": 1791197227,
+      "native_end": 1791197227,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197227,
+          "Nsec": 0
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -2868,7 +3902,7 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170028,
+          "Sec": 1610000000,
           "Nsec": 0
         },
         "Attributes": {
@@ -2880,8 +3914,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170028,
-      "native_end": 1791170028,
+      "native_begin": 1791197227,
+      "native_end": 1791197227,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197227,
+          "Nsec": 0
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -2931,7 +3987,7 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170028,
+          "Sec": 1610000000,
           "Nsec": 0
         },
         "Attributes": {
@@ -2943,8 +3999,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170028,
-      "native_end": 1791170028,
+      "native_begin": 1791197227,
+      "native_end": 1791197227,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197227,
+          "Nsec": 0
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -2994,7 +4072,7 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170028,
+          "Sec": 1610000000,
           "Nsec": 0
         },
         "Attributes": {
@@ -3006,8 +4084,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170028,
-      "native_end": 1791170028,
+      "native_begin": 1791197227,
+      "native_end": 1791197227,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197227,
+          "Nsec": 0
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -3057,7 +4157,7 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170028,
+          "Sec": 1610000000,
           "Nsec": 0
         },
         "Attributes": {
@@ -3069,8 +4169,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170028,
-      "native_end": 1791170028,
+      "native_begin": 1791197227,
+      "native_end": 1791197227,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197227,
+          "Nsec": 0
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -3120,7 +4242,7 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170028,
+          "Sec": 1610000000,
           "Nsec": 0
         },
         "Attributes": {
@@ -3132,8 +4254,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170028,
-      "native_end": 1791170028,
+      "native_begin": 1791197227,
+      "native_end": 1791197227,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197227,
+          "Nsec": 0
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -3183,7 +4327,7 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170028,
+          "Sec": 1610000000,
           "Nsec": 0
         },
         "Attributes": {
@@ -3195,8 +4339,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170028,
-      "native_end": 1791170028,
+      "native_begin": 1791197227,
+      "native_end": 1791197227,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197227,
+          "Nsec": 0
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -3246,7 +4412,7 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170028,
+          "Sec": 1610000000,
           "Nsec": 0
         },
         "Attributes": {
@@ -3258,8 +4424,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170028,
-      "native_end": 1791170028,
+      "native_begin": 1791197227,
+      "native_end": 1791197227,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197227,
+          "Nsec": 0
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -3309,7 +4497,7 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170028,
+          "Sec": 1610000000,
           "Nsec": 0
         },
         "Attributes": {
@@ -3321,8 +4509,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170028,
-      "native_end": 1791170028,
+      "native_begin": 1791197227,
+      "native_end": 1791197227,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197227,
+          "Nsec": 0
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -3372,7 +4582,7 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170028,
+          "Sec": 1610000000,
           "Nsec": 0
         },
         "Attributes": {
@@ -3384,8 +4594,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170028,
-      "native_end": 1791170028,
+      "native_begin": 1791197227,
+      "native_end": 1791197227,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197227,
+          "Nsec": 0
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -3435,7 +4667,7 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170028,
+          "Sec": 1610000000,
           "Nsec": 0
         },
         "Attributes": {
@@ -3447,8 +4679,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170028,
-      "native_end": 1791170028,
+      "native_begin": 1791197227,
+      "native_end": 1791197227,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197227,
+          "Nsec": 0
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -3498,7 +4752,7 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170028,
+          "Sec": 1610000000,
           "Nsec": 0
         },
         "Attributes": {
@@ -3510,8 +4764,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170028,
-      "native_end": 1791170028,
+      "native_begin": 1791197227,
+      "native_end": 1791197227,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197227,
+          "Nsec": 0
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -3561,7 +4837,7 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170028,
+          "Sec": 1610000000,
           "Nsec": 0
         },
         "Attributes": {
@@ -3573,8 +4849,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170028,
-      "native_end": 1791170028,
+      "native_begin": 1791197227,
+      "native_end": 1791197227,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197227,
+          "Nsec": 0
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -3624,7 +4922,7 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170028,
+          "Sec": 1610000000,
           "Nsec": 0
         },
         "Attributes": {
@@ -3636,8 +4934,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170028,
-      "native_end": 1791170028,
+      "native_begin": 1791197227,
+      "native_end": 1791197227,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197227,
+          "Nsec": 0
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -3687,7 +5007,7 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170028,
+          "Sec": 1610000000,
           "Nsec": 0
         },
         "Attributes": {
@@ -3699,8 +5019,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170028,
-      "native_end": 1791170028,
+      "native_begin": 1791197227,
+      "native_end": 1791197227,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197227,
+          "Nsec": 0
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -3750,7 +5092,7 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170028,
+          "Sec": 1610000000,
           "Nsec": 0
         },
         "Attributes": {
@@ -3762,8 +5104,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170028,
-      "native_end": 1791170028,
+      "native_begin": 1791197227,
+      "native_end": 1791197227,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197227,
+          "Nsec": 0
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -3813,7 +5177,7 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170028,
+          "Sec": 1610000000,
           "Nsec": 0
         },
         "Attributes": {
@@ -3825,8 +5189,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170028,
-      "native_end": 1791170028,
+      "native_begin": 1791197227,
+      "native_end": 1791197227,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197227,
+          "Nsec": 0
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -3876,7 +5262,7 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170028,
+          "Sec": 1610000000,
           "Nsec": 0
         },
         "Attributes": {
@@ -3888,8 +5274,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170028,
-      "native_end": 1791170028,
+      "native_begin": 1791197227,
+      "native_end": 1791197227,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197227,
+          "Nsec": 0
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -3939,7 +5347,7 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170028,
+          "Sec": 1610000000,
           "Nsec": 0
         },
         "Attributes": {
@@ -3951,8 +5359,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170028,
-      "native_end": 1791170028,
+      "native_begin": 1791197227,
+      "native_end": 1791197227,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197227,
+          "Nsec": 0
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -4002,7 +5432,7 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170028,
+          "Sec": 1610000000,
           "Nsec": 0
         },
         "Attributes": {
@@ -4014,8 +5444,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170028,
-      "native_end": 1791170028,
+      "native_begin": 1791197227,
+      "native_end": 1791197227,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197227,
+          "Nsec": 0
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -4065,7 +5517,7 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170028,
+          "Sec": 1610000000,
           "Nsec": 0
         },
         "Attributes": {
@@ -4077,8 +5529,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170028,
-      "native_end": 1791170028,
+      "native_begin": 1791197227,
+      "native_end": 1791197227,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197227,
+          "Nsec": 0
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -4128,7 +5602,7 @@
         "GID": 20,
         "Flags": 32768,
         "Birth": {
-          "Sec": 1791170028,
+          "Sec": 1610000000,
           "Nsec": 0
         },
         "Attributes": {
@@ -4140,8 +5614,30 @@
         "ForkSHA256": "",
         "ACL": null
       },
-      "native_begin": 1791170028,
-      "native_end": 1791170028,
+      "native_begin": 1791197227,
+      "native_end": 1791197227,
+      "native_times": {
+        "source_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "created": {
+          "Sec": 1791197227,
+          "Nsec": 0
+        },
+        "copied_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "copied_modified": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        },
+        "rewritten_birth": {
+          "Sec": 1610000000,
+          "Nsec": 0
+        }
+      },
       "replacement": {
         "Mode": 33152,
         "UID": 501,
@@ -4198,7 +5694,7 @@
         "-a"
       ],
       "stderr": "",
-      "stdout": "Darwin Mac 27.0.0 Darwin Kernel Version 27.0.0: Tue Aug 11 21:02:57 PDT 2026; root:xnu-13432.1.9~1/RELEASE_ARM64_T8132 arm64\n",
+      "stdout": "Darwin MacBook-Air-2.local 27.0.0 Darwin Kernel Version 27.0.0: Tue Aug 11 21:02:57 PDT 2026; root:xnu-13432.1.9~1/RELEASE_ARM64_T8132 arm64\n",
       "success": true
     },
     {
@@ -4238,7 +5734,7 @@
         "-Werror",
         "testdata/appledouble/native/replacement-copy.c",
         "-o",
-        "/var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-3850584452/oracle"
+        "/var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-538379713/oracle"
       ],
       "stderr": "",
       "stdout": "",
@@ -4322,10 +5818,10 @@
         "APFS",
         "-volname",
         "ReplacementOracle",
-        "/var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-3850584452/APFS.dmg"
+        "/var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-538379713/APFS.dmg"
       ],
       "stderr": "hdiutil: WARNING: 'hdiutil create -size -volname ...' is deprecated. Please use 'diskutil image create from/blank -size --volumeName ...' instead.\n",
-      "stdout": "created: /var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-3850584452/APFS.dmg\n",
+      "stdout": "created: /var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-538379713/APFS.dmg\n",
       "success": true
     },
     {
@@ -4336,18 +5832,18 @@
         "-owners",
         "on",
         "-mountpoint",
-        "/var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-3850584452/mount",
-        "/var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-3850584452/APFS.dmg"
+        "/var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-538379713/mount",
+        "/var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-538379713/APFS.dmg"
       ],
       "stderr": "hdiutil: WARNING: 'hdiutil attach -nobrowse -owners -mountpoint ...' is deprecated. Please use 'diskutil image attach --mountOptions nobrowse --mountOptions owners --mountPoint ...' instead.\n",
-      "stdout": "/dev/disk4          \tGUID_partition_scheme          \t\n/dev/disk4s1        \tApple_APFS                     \t\n/dev/disk5          \tEF57347C-0000-11AA-AA11-0030654\t\n/dev/disk5s1        \t41504653-0000-11AA-AA11-0030654\t/private/var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-3850584452/mount\n",
+      "stdout": "/dev/disk4          \tGUID_partition_scheme          \t\n/dev/disk4s1        \tApple_APFS                     \t\n/dev/disk5          \tEF57347C-0000-11AA-AA11-0030654\t\n/dev/disk5s1        \t41504653-0000-11AA-AA11-0030654\t/private/var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-538379713/mount\n",
       "success": true
     },
     {
       "argv": [
         "hdiutil",
         "detach",
-        "/var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-3850584452/mount"
+        "/var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-538379713/mount"
       ],
       "stderr": "hdiutil: WARNING: 'hdiutil detach ...' is deprecated. Please use 'diskutil eject ...' instead.\n",
       "stdout": "\"disk4\" ejected.\n",
@@ -4363,10 +5859,10 @@
         "HFS+",
         "-volname",
         "ReplacementOracle",
-        "/var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-3850584452/HFSplus.dmg"
+        "/var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-538379713/HFSplus.dmg"
       ],
       "stderr": "hdiutil: WARNING: 'hdiutil create -size -volname ...' is deprecated. Please use 'diskutil image create from/blank -size --volumeName ...' instead.\n",
-      "stdout": "created: /var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-3850584452/HFSplus.dmg\n",
+      "stdout": "created: /var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-538379713/HFSplus.dmg\n",
       "success": true
     },
     {
@@ -4377,18 +5873,18 @@
         "-owners",
         "on",
         "-mountpoint",
-        "/var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-3850584452/mount",
-        "/var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-3850584452/HFSplus.dmg"
+        "/var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-538379713/mount",
+        "/var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-538379713/HFSplus.dmg"
       ],
       "stderr": "hdiutil: WARNING: 'hdiutil attach -nobrowse -owners -mountpoint ...' is deprecated. Please use 'diskutil image attach --mountOptions nobrowse --mountOptions owners --mountPoint ...' instead.\n",
-      "stdout": "/dev/disk4          \tGUID_partition_scheme          \t\n/dev/disk4s1        \tApple_HFS                      \t/private/var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-3850584452/mount\n",
+      "stdout": "/dev/disk4          \tGUID_partition_scheme          \t\n/dev/disk4s1        \tApple_HFS                      \t/private/var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-538379713/mount\n",
       "success": true
     },
     {
       "argv": [
         "hdiutil",
         "detach",
-        "/var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-3850584452/mount"
+        "/var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-538379713/mount"
       ],
       "stderr": "hdiutil: WARNING: 'hdiutil detach ...' is deprecated. Please use 'diskutil eject ...' instead.\n",
       "stdout": "\"disk4\" ejected.\n",
@@ -4396,36 +5892,36 @@
     }
   ],
   "purpose": "Compressed source replacement; SDK source birth preservation and native metadata-only copy birth semantics are qualified separately",
-  "schema": 1,
+  "schema": 2,
   "source_sha256": {
     "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/copyfile.h": "56f4a00b83f21ac98c818876eb1b3a3eb246d0a7a31e95fddbd1fd21f7c79ff9",
     "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/sys/acl.h": "9511f84f0abe1e108e10979900d4fea8567534aef78f0984f7050c49f6c29ff7",
     "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/sys/attr.h": "5118b9245bc932bc32dcc60084b1e40d70bb5479a360b31cdbf188ef866deefe",
     "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/sys/clonefile.h": "1efe4ef4241c360905ecc40092245334725a9f1b208be8886ce87e2538b89cbd",
     "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/sys/xattr.h": "60e1518429a9df2501dbec28b09642cc3a67cf1508bef0c6d8e9c1de3e1ef408",
-    "artifacts/replacement-native/compressed-arm64.ast.json": "3f7b48b875ed3f81845005a93b574149d2c16f422a99fa6564d4e01027ed9f48",
-    "artifacts/replacement-native/compressed-x86_64.ast.json": "9ef41f4079337ff4fd742df96fd8dd3a01bf322c285a2f0c197d2aa62ea1f57c",
-    "artifacts/replacement-native/oracle-arm64.ast.json": "21d27f56e7a30521c5cbaf54270ff4ea42b72d0a5dd6d8fc7be5d6533c3b4534",
-    "artifacts/replacement-native/oracle-x86_64.ast.json": "6e696523bd462f8fc9704e5d33caa2d14991a76fb884467c72882d15f916c796",
+    "artifacts/replacement-native/compressed-arm64.ast.json": "b7aa4723d3be7fe04c0d0c2f6d0aebfc59467e14222e804236d55c2aa73dc7b6",
+    "artifacts/replacement-native/compressed-x86_64.ast.json": "47610b18db874589de82775e64f9bc1f0318cae29a303112043f159fcd1116dc",
+    "artifacts/replacement-native/oracle-arm64.ast.json": "0821b6a84321cc68043a884a08275c5e3636b56671c69472fa21d5fc21dff9a4",
+    "artifacts/replacement-native/oracle-x86_64.ast.json": "66776e927351f1aeeb611a6c0c241d215c931a7fea77cb032f72aa6f97e786f9",
     "go.mod": "76795672275ac3d60ba3de19ee78905412c498d1986f1cdf90822fe17f7ef6a7",
     "go.sum": "778f6ac1c0bde003e457fd2ff00399b33d054338c64b3bae6cc65f42ce027c1a",
-    "pkg/hostdata/replacement_compressed_darwin_test.go": "e94f6e654cf8b4bd27ac369d65a8ddbb59464f2208d7e12ad8aba7058418768c",
+    "pkg/hostdata/replacement_compressed_darwin_test.go": "fbf3ead89cc5631c8c5cc3d6193faecc096ff9e917134eabeae7e6642b4ce652",
     "pkg/hostdata/replacement_copy.go": "0c2ac6f407d72fffb7e55c9156ade3fafaa1eaf9b570e130abcf0a17541ddfeb",
     "pkg/hostdata/replacement_copy_darwin.go": "5339cafdbe9d409fe9eabedbca683c09e7aeb6eea130cb3a647c22893cd5c664",
     "pkg/hostdata/replacement_copy_darwin_test.go": "0af924bb5a09e244e9fb417a84c717c8929dbde7fe61887901388ff1a90a6e3f",
     "pkg/hostdata/replacement_darwin.go": "6fef22fcf036192c675bdbc3bd45793deb9c34a0304ffc0c05bc300b61e805cd",
     "pkg/hostdata/replacement_root_darwin.go": "fabdb2629e46fee38124716ad1be0e2c189d60f70df5586d30b75b044c5dab51",
-    "scripts/verify-replacement-native.go": "43a7a6180a77b162b3c5baf9eea6e7644cbf534267276298cfce9e58a8244992",
+    "scripts/verify-replacement-native.go": "9bfdea4a5ac4a633de9b57acf69db1dfaac9cea90f2ec5e1550db82f601d5ff6",
     "testdata/appledouble/native/decmpfs-formats.c": "6e49c855d738664284fc51a064822db1603e7bdd870dfbc3130d2fd99317159c",
     "testdata/appledouble/native/decmpfs-formats.json.gz": "d38a8d622f2b230244b447a0d4a9f7afdd806a55a38e01fe0a6c07f5b30b9079",
     "testdata/appledouble/native/quarantine-process-capture.h": "acaa57a512f800763ae2832e32b641d3038c33cbda8fe88081bd9cae79c5ee3b",
-    "testdata/appledouble/native/replacement-compressed.c": "047bba3b2f10a0919fba448485bf35459249347f4f0ac5fe4b804390a3a9880f",
+    "testdata/appledouble/native/replacement-compressed.c": "a79ceb00141df12ad0d33e470d7f13ceaf53d01d3a9be658d9223b295a3727f9",
     "testdata/appledouble/native/replacement-copy.c": "e56db1ef44dd6d8acd434d22b31132548c82759c56ac230c239cfb1af7114ebc"
   },
   "versions": {
     "go": "go version go1.27.1 darwin/arm64",
     "sw_vers": "ProductName:\t\tmacOS\nProductVersion:\t\t27.0.1\nBuildVersion:\t\t26A434",
-    "uname": "Darwin Mac 27.0.0 Darwin Kernel Version 27.0.0: Tue Aug 11 21:02:57 PDT 2026; root:xnu-13432.1.9~1/RELEASE_ARM64_T8132 arm64",
+    "uname": "Darwin MacBook-Air-2.local 27.0.0 Darwin Kernel Version 27.0.0: Tue Aug 11 21:02:57 PDT 2026; root:xnu-13432.1.9~1/RELEASE_ARM64_T8132 arm64",
     "xcrun": "Apple clang version 21.0.0 (clang-2100.3.34.2)\nTarget: arm64-apple-darwin27.0.0\nThread model: posix\nInstalledDir: /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin"
   }
 }

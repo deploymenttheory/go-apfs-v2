@@ -61,7 +61,7 @@ func verify() error {
 			passedNames[event.Test] = true
 		}
 	}
-	for _, name := range []string{"TestReplacementCompressedMetadata", "TestReplacementCompressedMetadataFailures", "TestReplacementCompressedNativeFixture", "TestReplacementCopyStrategy", "TestReplacementCopyMetadata", "TestReplacementCopyNativeFixture", "TestReplacementCopyLargeFork", "TestReplacementBackupSparseStreams", "TestReplacementBackupMalformed", "TestReplacementBackupWriteFailures"} {
+	for _, name := range []string{"TestReplacementNativeTimestampOracle", "TestReplacementCompressedMetadata", "TestReplacementCompressedMetadataFailures", "TestReplacementCompressedNativeFixture", "TestReplacementCopyStrategy", "TestReplacementCopyMetadata", "TestReplacementCopyNativeFixture", "TestReplacementCopyLargeFork", "TestReplacementBackupSparseStreams", "TestReplacementBackupMalformed", "TestReplacementBackupWriteFailures"} {
 		if !passedNames[name] {
 			return fmt.Errorf("required replacement suite missing: %s", name)
 		}

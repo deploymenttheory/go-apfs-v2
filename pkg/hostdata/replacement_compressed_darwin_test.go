@@ -92,6 +92,11 @@ func TestReplacementCompressedDarwinNative(t *testing.T) {
 				if err := SetCreationTime(source, time.Unix(1600000000, 0)); err != nil {
 					t.Fatal(err)
 				}
+				// Force the source mtime before destination creation so clamping is
+				// exercised deterministically, even across wall-clock second boundaries.
+				if err := os.Chtimes(path, time.Unix(1610000000, 0), time.Unix(1610000000, 0)); err != nil {
+					t.Fatal(err)
+				}
 				before := replacementSnapshotOf(t, source)
 				limits := XattrCaptureLimits{MaxXattrListSize, MaxXattrReadSize, MaxXattrReadSize}
 				storageBefore, err := CaptureXattrs(t.Context(), source, limits)
@@ -123,7 +128,10 @@ func TestReplacementCompressedDarwinNative(t *testing.T) {
 				after := replacementSnapshotOf(t, r.File)
 				native := filepath.Join(dir, "native")
 				nativeBegin := time.Now().Unix()
-				run(oracle, path, native)
+				var nativeTimes replacementNativeTimes
+				if err := json.Unmarshal(run(oracle, path, native), &nativeTimes); err != nil {
+					t.Fatal(err)
+				}
 				nativeEnd := time.Now().Unix()
 				f, err := os.Open(native)
 				if err != nil {
@@ -136,14 +144,17 @@ func TestReplacementCompressedDarwinNative(t *testing.T) {
 				if after.Flags != before.Flags&^UFCompressed || after.Attributes[DecmpfsName] != "" {
 					t.Fatal("stale compression", after)
 				}
-				// COPYFILE_METADATA leaves the new inode's birth time; the SDK
+				// COPYFILE_METADATA copies mtime, which clamps destination birth; the SDK
 				// explicitly preserves source birth time. Qualify both contracts
 				// separately and retain both unmodified snapshots in the record.
 				if after.Birth != before.Birth {
 					t.Fatal("source birth time lost", after.Birth, before.Birth)
 				}
-				if control.Birth.Sec < nativeBegin || control.Birth.Sec > nativeEnd {
-					t.Fatal("native birth outside creation interval", control.Birth)
+				if err := nativeTimes.validate(replacementNativeTime{control.Birth.Sec, control.Birth.Nsec}); err != nil {
+					t.Fatal(err)
+				}
+				if nativeTimes.SourceModified != (replacementNativeTime{1610000000, 0}) {
+					t.Fatal("source modification time not installed", nativeTimes)
 				}
 				equivalent := control
 				equivalent.Birth = before.Birth
@@ -180,7 +191,7 @@ func TestReplacementCompressedDarwinNative(t *testing.T) {
 						t.Fatal("stage leaked", entry.Name())
 					}
 				}
-				record := map[string]any{"case": t.Name(), "type": tc.Type, "filesystem": os.Getenv("APFS_REPLACEMENT_FS"), "source": before, "replacement": after, "native": control, "native_begin": nativeBegin, "native_end": nativeEnd, "source_unchanged": true, "stage_removed": true}
+				record := map[string]any{"case": t.Name(), "type": tc.Type, "filesystem": os.Getenv("APFS_REPLACEMENT_FS"), "source": before, "replacement": after, "native": control, "native_times": nativeTimes, "native_begin": nativeBegin, "native_end": nativeEnd, "source_unchanged": true, "stage_removed": true}
 				b, err := json.Marshal(record)
 				if err != nil {
 					t.Fatal(err)
