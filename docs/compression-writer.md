@@ -83,6 +83,42 @@ A successful query is not proof that the payload is readable. Compression
 readers continue to validate the actual format, indexes and compressed blocks.
 Querying does not install attributes or change filesystem flags.
 
+## Held native metadata and activation
+
+`hostdata.QueryCompression` pins a caller-held Darwin descriptor while capturing
+compression metadata and applying the portable query. It reads only the decmpfs
+attribute within an explicit allocation budget and obtains fork length without
+reading the resource fork. Changed flags or logical size cause an error; callers
+must still exclude same-size concurrent edits. Explicit image/carrier metadata
+supplies `decmpfs.Metadata` directly on every OS.
+
+`hostdata.CompressionVolumeFlags` observes the held file's actual Darwin mount
+context. `MNT_CPROTECT` (`0x80`) prevents inline compression on that volume. A
+newly mounted APFS image and the host APFS volume can differ on the same macOS
+release. Foreign operations must retain the producer's context instead of
+inferring it from the receiving OS or filesystem name.
+
+`hostdata.ActivateCompression` performs the compressor's final flag operation
+against either held native metadata or logical foreign metadata. It reads flags
+afresh before each of at most four comparisons, preserves concurrent unrelated
+flag changes and retries contention. Other errors stop immediately; exhausted
+comparisons never fall back to an unconditional flag overwrite. Results retain
+attempt counts and recovered errors. This operation assumes completed compressed
+storage and an already truncated data fork; it is not a complete installer.
+
+The retained lifecycle corpus contains 384 independent host/APFS/HFS+ cases,
+including 236 activation sequences. Eligibility, existing forks, modes, ACLs,
+links, all supported codecs, temporary permissions and injected storage,
+truncation, flag, synchronization, close and timestamp errors retain actual native
+outcomes. Test-only interposition is confined to the disposable target inode.
+The production implementation does not load the native framework or interposer.
+
+Complete installation, eligibility and foreign carrier publication remain
+integration prerequisites. Queue acceptance alone does not establish successful
+compression, and errors after truncation can leave partial native state. These
+observations must be honored by the eventual high-level operation.
+
+
 ## Native-readable LZ4 storage
 
 The shared APFS/HFS+ decoder also reads types 15/16 using Apple's framed LZ4
@@ -193,6 +229,7 @@ go run scripts/verify-compression-zlib-source.go
 go run scripts/capture-compression-policy.go -check
 go run scripts/capture-compression-lz4.go -check
 go run scripts/capture-compression-query.go -check
+go run scripts/capture-compression-lifecycle.go -check
 ```
 
 These commands preserve fresh artifacts before comparing the retained evidence.
@@ -206,6 +243,7 @@ On every supported host, run:
 
 ```sh
 go run scripts/verify-decmpfs-formats-coverage.go
+go run scripts/verify-compression-lifecycle.go
 ```
 
 The existing gate retains its per-file checks and additionally requires complete
@@ -214,3 +252,8 @@ packages, rejecting skipped tests. Existing large-file, mounted-image, foreign
 producer, race and fuzz jobs remain mandatory. See
 [compression storage](appledouble-compression-storage.md) for the separate
 native and kernel-accepted large-file controls.
+
+The compression lifecycle gate requires every new production file above 95%
+coverage and separately runs the complete hostdata package above 95%. Its focused
+transcript permits no skipped cases. The evidence audit inventory includes this
+gate alongside all 24 pre-existing portable reports.

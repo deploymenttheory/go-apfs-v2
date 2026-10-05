@@ -36,6 +36,12 @@ jobs:
       - name: Recapture guarded native compression queries
         if: ${{ !cancelled() }}
         run: go run scripts/capture-compression-query.go -check
+      - name: Recapture compression installation and partial failures
+        if: ${{ !cancelled() }}
+        run: go run scripts/capture-compression-lifecycle.go -check
+      - name: Replay compression lifecycle and complete hostdata coverage
+        if: ${{ !cancelled() }}
+        run: go run scripts/verify-compression-lifecycle.go
       - name: Replay complete portable compression corpus above 95 percent coverage
         if: ${{ !cancelled() }}
         run: go run scripts/verify-decmpfs-formats-coverage.go
@@ -47,5 +53,7 @@ jobs:
           path: |
             artifacts/compression-lz4/
             artifacts/compression-query/
+            artifacts/compression-lifecycle/
+            artifacts/compression-lifecycle-coverage/
             artifacts/decmpfs-formats-coverage/
           if-no-files-found: error
