@@ -44,6 +44,14 @@ also require their actual external content/provider semantics; this change does
 not manufacture unavailable content. These prerequisites remain distinct from
 lossless transport of the original metadata bytes.
 
+## Creating replacement compressed storage
+
+`pkg/compression/decmpfs.EncodeFork` writes new native resource-fork storage from
+bounded logical reads on every supported host. It handles the codec's actual
+output-capacity decisions, including short final blocks. It does not install
+metadata or choose operation policy. See [the compression writer](compression-writer.md)
+for the ownership contract, exact native corpus and remaining installation boundary.
+
 ## Evidence and gates
 
 ### Large compressed files

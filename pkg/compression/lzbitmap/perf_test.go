@@ -3,6 +3,7 @@ package lzbitmap
 import (
 	"bytes"
 	"crypto/rand"
+	"math"
 	mathrand "math/rand/v2"
 	"testing"
 	"time"
@@ -41,30 +42,32 @@ func TestIncompressibleIsNotQuadratic(t *testing.T) {
 		took.Round(time.Millisecond), float64(len(buf))/took.Seconds()/1e6, len(out))
 }
 
-// This checks the adaptive search budget without relying on runner speed. A
-// regression that keeps scanning the full history on unproductive input must
-// fail even when a race build has a larger elapsed-time allowance.
-func TestIncompressibleSearchBackoff(t *testing.T) {
+// The native matcher retains one fixed-size table across chunk and 16-bit
+// position-wrap boundaries, including incompressible input. The elapsed-time
+// test above independently guards against reintroducing an exhaustive scan.
+func TestEncoderBoundedHistory(t *testing.T) {
 	random := mathrand.New(mathrand.NewPCG(1, 2))
-	input := make([]byte, MaxChunk)
+	input := make([]byte, 8*MaxChunk+257)
 	for i := range input {
 		input[i] = byte(random.Uint32())
 	}
-	e := encoder{src: input, pos: 8, decmpLen: len(input), period: initialPeriod}
-	groups, wide := 0, 0
+	e := encoder{src: input, room: math.MaxInt}
+	var first *uint16
 	for e.pos < len(input) {
-		if !e.cheap || e.probe == 0 {
-			wide++
+		before := e.pos
+		chunk := e.chunk()
+		if e.pos != min(before+MaxChunk, len(input)) || len(chunk) == 0 {
+			t.Fatal("chunk made incorrect progress")
 		}
-		e.eightBytes()
-		groups++
+		if len(e.history) != (1<<18)+8 || cap(e.history) != (1<<18)+8 {
+			t.Fatalf("unbounded history: len=%d cap=%d", len(e.history), cap(e.history))
+		}
+		if first == nil {
+			first = &e.history[0]
+		} else if first != &e.history[0] {
+			t.Fatal("history allocation changed between chunks")
+		}
 	}
-	// At least seven of every eight random groups must avoid the wide
-	// history scan. The margin includes initial sampling and later probes.
-	if wide*8 >= groups {
-		t.Fatalf("unproductive wide searches: %d of %d groups", wide, groups)
-	}
-	t.Logf("wide searches: %d of %d incompressible groups", wide, groups)
 }
 
 func BenchmarkCompress(b *testing.B) {

@@ -42,6 +42,15 @@ func FuzzLZBitmapDecompress(f *testing.F) {
 		if err != nil {
 			t.Fatalf("cannot decode our own encoding: %v", err)
 		}
+		for _, capacity := range []int{len(out), len(enc) + 31, len(enc) + 128} {
+			dst := make([]byte, capacity)
+			if n := EncodeBuffer(dst, out); n != 0 {
+				decoded, err := DecompressLimit(dst[:n], len(out))
+				if err != nil || !bytes.Equal(decoded, out) {
+					t.Fatalf("bounded re-encode changed bytes: %v", err)
+				}
+			}
+		}
 		if !bytes.Equal(back, out) {
 			t.Fatal("re-encoding changed the bytes")
 		}
