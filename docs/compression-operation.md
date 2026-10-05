@@ -11,6 +11,8 @@ it to actual Darwin descriptors using typed `x/sys` wrappers. Explicit foreign
 providers supply Darwin metadata and observed mount policy; a Linux filesystem
 flag or Windows attribute is never substituted for a Darwin compression flag.
 The complete carrier publication integration is still being implemented.
+[OS version profiles](../pkg/osversion/README.md) identify explicit macOS targets
+on every host; observed volume flags remain an independent input.
 
 ## Admission, declines and failures
 
@@ -73,7 +75,7 @@ exercise all permitted interleavings and rejected mutations.
 ## Evidence and qualification
 
 - `testdata/appledouble/native/compression-operation.c` and its confined
-  interposer capture 330 native cases, with both Clang architecture ASTs, SDK
+  interposer capture 330 native cases per OS profile, with both Clang architecture ASTs, SDK
   headers, framework identity/disassembly and source hashes.
 - `scripts/capture-compression-operation.go -check` independently recaptures every
   case, retaining full storage, surviving process-failure state and raw traces.
@@ -89,7 +91,10 @@ exercise all permitted interleavings and rejected mutations.
 - `scripts/verify-compression-installation-native.go` now requires 462 actual
   installation/recompression readbacks on host/APFS/HFS+, including every codec
   and the native read-open observation controls. CI runs the native capture and
-  mounted checks on both macOS runners.
+  mounted checks on both existing macOS runners. The macOS 26 and 27 acquisition
+  traces have separate complete profiles; macOS 15 recapture and installation
+  qualification has been added and remains required before claiming that release
+  is supported. Current source provenance must be recaptured on each release.
 
 ## Remaining integration
 

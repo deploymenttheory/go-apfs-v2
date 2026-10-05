@@ -3,7 +3,10 @@
 package main
 
 import (
+	"bytes"
+	"compress/gzip"
 	"encoding/json"
+	"os"
 	"testing"
 )
 
@@ -78,5 +81,68 @@ func TestNativeCrashCleanupPartialOrder(t *testing.T) {
 		if _, e := normalizeCrashTrace(c, []map[string]any{fault(), syncFork(), closeFork()}); e == nil {
 			t.Fatal("unqualified process failure accepted")
 		}
+	}
+}
+
+func TestNativeOperationProfileSelection(t *testing.T) {
+	for _, c := range []struct{ host, want string }{
+		{"ProductName:\tmacOS\nProductVersion:\t26.6.2\nBuildVersion:\t25G83\n", "compression-operation-macos26.json.gz"},
+		{"ProductVersion: 27.0.1\n", "compression-operation.json.gz"},
+		{"ProductVersion: 26\n", "compression-operation-macos26.json.gz"},
+		{"ProductVersion: 15.7.1\n", "compression-operation-macos15.json.gz"},
+	} {
+		got, e := operationBaseline(c.host)
+		if e != nil || got != "testdata/appledouble/native/"+c.want {
+			t.Fatal(got, e)
+		}
+	}
+	for _, host := range []string{"", "ProductVersion:", "ProductVersion: 260.1", "ProductVersion: 28.0", "BuildVersion: 26A434", "ProductVersion: 27.0 unexpected"} {
+		if got, e := operationBaseline(host); e == nil {
+			t.Fatal("accepted unqualified profile", host, got)
+		}
+	}
+}
+
+func TestNativeOperationCompleteProfiles(t *testing.T) {
+	for _, path := range []string{"testdata/appledouble/native/compression-operation.json.gz", "testdata/appledouble/native/compression-operation-macos26.json.gz", "testdata/appledouble/native/compression-operation-macos15.json.gz"} {
+		t.Run(path, func(t *testing.T) {
+			f, e := os.Open("../" + path)
+			if e != nil {
+				t.Fatal(e)
+			}
+			defer f.Close()
+			z, e := gzip.NewReader(f)
+			if e != nil {
+				t.Fatal(e)
+			}
+			defer z.Close()
+			var corpus capture
+			if e = json.NewDecoder(z).Decode(&corpus); e != nil {
+				t.Fatal(e)
+			}
+			selected, e := operationBaseline(corpus.Host)
+			if e != nil || selected != path || corpus.Schema != 1 || len(corpus.Cases) != 330 {
+				t.Fatal("incomplete/misidentified native profile", selected, e)
+			}
+			for i, c := range corpus.Cases {
+				original, e := comparison(c)
+				if e != nil {
+					t.Fatalf("case %d: %v", i, e)
+				}
+				var state map[string]any
+				if e = json.Unmarshal(c.Observation, &state); e != nil {
+					t.Fatal(e)
+				}
+				state["unqualified_state_change"] = true
+				c.Observation, e = json.Marshal(state)
+				if e != nil {
+					t.Fatal(e)
+				}
+				changed, e := comparison(c)
+				if e != nil || bytes.Equal(original, changed) {
+					t.Fatal("comparison lost native state", i, e)
+				}
+			}
+		})
 	}
 }

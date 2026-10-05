@@ -21,7 +21,7 @@ func TestQuarantineCaptureDarwinABI(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	for _, release := range []string{"", "25.0.0", "28.0.0"} {
+	for _, release := range []string{"", "15.7.1", "25.0.0", "28.0.0", "26.invalid"} {
 		if _, err := nativeQuarantineProfile(release); !errors.Is(err, errors.ErrUnsupported) {
 			t.Fatal(err)
 		}

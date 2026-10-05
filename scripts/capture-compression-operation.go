@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/diskimage"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/osversion"
 )
 
 type trial struct {
@@ -61,18 +62,27 @@ func run(out string, check bool) (result error) {
 	if runtime.GOOS != "darwin" {
 		return errors.New("native compression capture requires macOS")
 	}
-	const baseline = "testdata/appledouble/native/compression-operation.json.gz"
+	host, e := command("sw_vers")
+	if e != nil {
+		return e
+	}
+	baseline, e := operationBaseline(string(host))
+	if e != nil {
+		return e
+	}
 	if check {
 		a, e := filepath.Abs(out)
 		if e != nil {
 			return e
 		}
-		b, e := filepath.Abs(baseline)
-		if e != nil {
-			return e
-		}
-		if a == b {
-			return errors.New("check must retain fresh observations separately")
+		for _, name := range []string{"testdata/appledouble/native/compression-operation.json.gz", "testdata/appledouble/native/compression-operation-macos26.json.gz", "testdata/appledouble/native/compression-operation-macos15.json.gz"} {
+			b, e := filepath.Abs(name)
+			if e != nil {
+				return e
+			}
+			if a == b {
+				return errors.New("check must retain fresh observations separately")
+			}
 		}
 	}
 	dir, e := os.MkdirTemp("", "compression-operation-")
@@ -88,13 +98,13 @@ func run(out string, check bool) (result error) {
 	if e = os.MkdirAll(artifact, 0755); e != nil {
 		return e
 	}
-	capture := capture{Schema: 1, Sources: map[string]string{}}
+	capture := capture{Schema: 1, Host: string(host), Sources: map[string]string{}}
 	for _, item := range []struct {
 		name string
 		args []string
 		dst  *string
 	}{
-		{"sw_vers", nil, &capture.Host}, {"xcrun", []string{"clang", "--version"}, &capture.Compiler}, {"xcrun", []string{"--show-sdk-version"}, &capture.SDK},
+		{"xcrun", []string{"clang", "--version"}, &capture.Compiler}, {"xcrun", []string{"--show-sdk-version"}, &capture.SDK},
 	} {
 		b, e := command(item.name, item.args...)
 		if e != nil {
@@ -105,7 +115,7 @@ func run(out string, check bool) (result error) {
 	digest := func(b []byte) string { return fmt.Sprintf("%x", sha256.Sum256(b)) }
 	const source = "testdata/appledouble/native/compression-operation.c"
 	const interposer = "testdata/appledouble/native/compression-operation-interpose.c"
-	for _, path := range []string{source, interposer, "testdata/appledouble/native/compression-lifecycle-interpose.c", "testdata/appledouble/native/compression-policy.c", "scripts/capture-compression-operation.go", "scripts/capture-compression-operation_test.go", "go.mod", "go.sum"} {
+	for _, path := range []string{source, interposer, "testdata/appledouble/native/compression-lifecycle-interpose.c", "testdata/appledouble/native/compression-policy.c", "scripts/capture-compression-operation.go", "scripts/capture-compression-operation_test.go", "pkg/osversion/version.go", "pkg/osversion/macos.go", "pkg/osversion/host.go", "pkg/osversion/host_darwin.go", "pkg/osversion/host_other.go", "go.mod", "go.sum"} {
 		b, e := os.ReadFile(path)
 		if e != nil {
 			return e
@@ -326,10 +336,15 @@ func run(out string, check bool) (result error) {
 		defer z.Close()
 		var prior struct {
 			Schema int
+			Host   string
 			Cases  []trial
 		}
 		if e = json.NewDecoder(z).Decode(&prior); e != nil {
 			return e
+		}
+		priorBaseline, e := operationBaseline(prior.Host)
+		if e != nil || priorBaseline != baseline {
+			return errors.New("native operation baseline has the wrong macOS profile")
 		}
 		if prior.Schema != capture.Schema || len(prior.Cases) != len(capture.Cases) {
 			return errors.New("native lifecycle inventory changed")
@@ -517,4 +532,29 @@ func normalizeCrashTrace(c trial, events []map[string]any) ([]map[string]any, er
 		return nil, errors.New("incomplete native worker cleanup before crash")
 	}
 	return append(events[:fault+1], map[string]any{"operation": "qualified-signal-11-cleanup", "worker_fork_sync_close": true, "caller_close_may_be_preempted": true}), nil
+}
+
+// The operation trace is an OS framework contract: macOS 26 uses open for the
+// fork, whereas macOS 27 uses openat. Keep separately captured complete profiles
+// instead of deleting either acquisition operation from the comparison. Volume
+// policy remains selected from observed Darwin mount flags within that profile.
+func operationBaseline(host string) (string, error) {
+	version, err := osversion.ParseProductVersion(host)
+	if err != nil {
+		return "", err
+	}
+	profile, err := osversion.ProfileForMacOS(version)
+	if err != nil {
+		return "", err
+	}
+	switch profile {
+	case osversion.MacOS15:
+		return "testdata/appledouble/native/compression-operation-macos15.json.gz", nil
+	case osversion.MacOS26:
+		return "testdata/appledouble/native/compression-operation-macos26.json.gz", nil
+	case osversion.MacOS27:
+		return "testdata/appledouble/native/compression-operation.json.gz", nil
+	default:
+		return "", errors.New("unqualified native operation macOS profile")
+	}
 }
