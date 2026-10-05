@@ -47,6 +47,7 @@ const (
 	MethodLZVN      = 3
 	MethodRawMarked = 4
 	MethodLZBITMAP  = 6
+	MethodLZ4       = 7
 
 	// MethodUnknown5 is retained only because it is reachable through a
 	// deprecated alias in pkg/apfs. Nothing maps to it: see MethodFor.
@@ -96,6 +97,9 @@ func MethodFor(decmpfsType uint32) (int, error) {
 		return MethodRawMarked, nil
 	case 13, 14:
 		return MethodLZBITMAP, nil
+
+	case 15, 16:
+		return MethodLZ4, nil
 
 	case 5:
 		// Not a compression type at all: it marks de-duplication within the

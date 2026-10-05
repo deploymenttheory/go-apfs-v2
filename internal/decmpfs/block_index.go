@@ -13,6 +13,7 @@ type blockIndex struct {
 	start, end, sourceSize uint64
 	count                  uint32
 	zlib                   bool
+	framedLZ4              bool
 }
 
 func readIndex(source Source, p []byte, offset uint64) error {
@@ -38,7 +39,7 @@ func (cdh *Handle) loadLargeIndex(start uint64, count uint32, zlib bool) error {
 	if zlib {
 		width, entries = 8, uint64(count)
 	}
-	index := &blockIndex{start: start, end: start + entries*width, sourceSize: cdh.CompressedDataStream.Size(), count: count, zlib: zlib}
+	index := &blockIndex{start: start, end: start + entries*width, sourceSize: cdh.CompressedDataStream.Size(), count: count, zlib: zlib, framedLZ4: cdh.CompressionMethod == MethodLZ4}
 	if index.end > index.sourceSize {
 		return fmt.Errorf("compression index exceeds source extent")
 	}
@@ -60,7 +61,7 @@ func (cdh *Handle) loadLargeIndex(start uint64, count uint32, zlib bool) error {
 				previous = position + length
 			} else {
 				first := at+offset == start
-				if position > index.sourceSize || position < previous || (!first && (position == previous || position-previous > BlockSize+1)) || (first && position != index.end) {
+				if position > index.sourceSize || position < previous || (!first && (position == previous || !index.framedLZ4 && position-previous > BlockSize+1)) || (first && position != index.end) {
 					return fmt.Errorf("invalid compressed block offset at index offset %d", at+offset)
 				}
 				previous = position
@@ -73,7 +74,7 @@ func (cdh *Handle) loadLargeIndex(start uint64, count uint32, zlib bool) error {
 	return nil
 }
 
-func (index *blockIndex) block(source Source, block uint32) (int64, int, error) {
+func (index *blockIndex) block(source Source, block uint32) (int64, int64, error) {
 	if block >= index.count {
 		return 0, 0, fmt.Errorf("compression block index out of range")
 	}
@@ -91,10 +92,10 @@ func (index *blockIndex) block(source Source, block uint32) (int64, int, error) 
 		start += 260
 		end += start
 	}
-	if start < index.end || end <= start || end-start > BlockSize+1 || end > index.sourceSize {
+	if start < index.end || end <= start || !index.framedLZ4 && end-start > BlockSize+1 || end > index.sourceSize {
 		return 0, 0, fmt.Errorf("compressed block range changed or is invalid")
 	}
-	return int64(start), int(end - start), nil
+	return int64(start), int64(end - start), nil
 }
 
 // Zlib descriptors carry explicit lengths. The final payload ends before the

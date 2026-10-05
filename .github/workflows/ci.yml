@@ -642,6 +642,9 @@ jobs:
           go run scripts/capture-compression-blocks.go -check
           go run scripts/capture-compression-writer.go -check
           go run scripts/verify-compression-zlib-source.go
+          go run scripts/capture-compression-policy.go -check
+          go run scripts/capture-compression-lz4.go -check
+          go run scripts/capture-compression-query.go -check
       - name: Upload native compression encoder evidence
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
@@ -651,6 +654,9 @@ jobs:
             artifacts/compression-blocks/
             artifacts/compression-writer/
             artifacts/compression-zlib-source/
+            artifacts/compression-policy/
+            artifacts/compression-lz4/
+            artifacts/compression-query/
           if-no-files-found: error
       - name: Audit portable AppleDouble qualification evidence
         env:

@@ -64,6 +64,9 @@ jobs:
           - { pkg: ./pkg/compression/lzfse, target: FuzzDecompressLZVN }
           - { pkg: ./pkg/compression/lzfse, target: FuzzRoundTrip }
           - { pkg: ./internal/decmpfs, target: FuzzEncodeFork }
+          - { pkg: ./internal/decmpfs, target: FuzzEncodePolicy }
+          - { pkg: ./pkg/compression/lz4, target: FuzzDecompress }
+          - { pkg: ./pkg/compression/decmpfs, target: FuzzQueryMetadata }
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7

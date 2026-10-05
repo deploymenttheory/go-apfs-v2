@@ -66,7 +66,7 @@ func NewHandle(
 	}
 
 	switch compressionMethod {
-	case MethodNone, MethodRawMarked, MethodLZBITMAP, MethodDeflate, MethodLZVN, MethodLZFSE:
+	case MethodNone, MethodRawMarked, MethodLZBITMAP, MethodDeflate, MethodLZVN, MethodLZFSE, MethodLZ4:
 	default:
 		return nil, fmt.Errorf("unsupported compression method: %d", compressionMethod)
 	}
@@ -143,6 +143,14 @@ func (cdh *Handle) loadCompressedBlockOffsets() error {
 			return fmt.Errorf("invalid segment data size value out of bounds")
 		}
 		cdh.NumberOfCompressedBlocks = 1
+	} else if cdh.CompressionMethod == MethodLZ4 {
+		// Framed LZ4 can exceed the logical block size, even for native raw
+		// blocks. Keep the index and encoded payload on disk; stream decoding.
+		start := binary.LittleEndian.Uint32(cdh.CompressedSegmentData[:4])
+		if start <= 4 || start%4 != 0 {
+			return fmt.Errorf("invalid LZ4 block table extent")
+		}
+		return cdh.loadLargeIndex(0, start/4-1, false)
 	} else if cdh.CompressionMethod == MethodDeflate {
 		// Read compressed descriptors offset (big endian)
 		compressedDescriptorsOffset := binary.BigEndian.Uint32(cdh.CompressedSegmentData[:4])
@@ -325,7 +333,7 @@ func (cdh *Handle) ReadSegmentData(
 		// Decompress the block if it's not the current one
 		if cdh.CurrentCompressedBlockIndex != compressedBlockIndex {
 			var dataStreamOffset int64
-			var readSize int
+			var readSize int64
 			if cdh.largeIndex != nil {
 				var err error
 				dataStreamOffset, readSize, err = cdh.largeIndex.block(cdh.CompressedDataStream, compressedBlockIndex)
@@ -334,31 +342,40 @@ func (cdh *Handle) ReadSegmentData(
 				}
 			} else {
 				dataStreamOffset = int64(cdh.CompressedBlockOffsets[compressedBlockIndex])
-				readSize = int(cdh.CompressedBlockOffsets[compressedBlockIndex+1] - cdh.CompressedBlockOffsets[compressedBlockIndex])
+				readSize = int64(cdh.CompressedBlockOffsets[compressedBlockIndex+1]) - int64(cdh.CompressedBlockOffsets[compressedBlockIndex])
 			}
 
-			readCount, err := cdh.CompressedDataStream.ReadAt(
-				cdh.CompressedSegmentData[:readSize],
-				dataStreamOffset,
-			)
-			if err != nil && err != io.EOF {
-				return totalBytesRead, fmt.Errorf("unable to read buffer at offset %d: %w", dataStreamOffset, err)
-			}
-			if readCount != readSize {
-				return totalBytesRead, fmt.Errorf("unable to read %d bytes at offset %d", readSize, dataStreamOffset)
-			}
+			if cdh.CompressionMethod == MethodLZ4 {
+				var err error
+				cdh.SegmentDataSize, err = decompressLZ4Range(io.NewSectionReader(cdh.CompressedDataStream, dataStreamOffset, readSize), readSize, cdh.SegmentData[:min(uint64(BlockSize), cdh.UncompressedDataSize-uint64(compressedBlockIndex)*BlockSize)])
+				if err != nil {
+					return totalBytesRead, fmt.Errorf("unable to decompress LZ4: %w", err)
+				}
+			} else {
+				readCount, err := cdh.CompressedDataStream.ReadAt(
+					cdh.CompressedSegmentData[:readSize],
+					dataStreamOffset,
+				)
+				if err != nil && err != io.EOF {
+					return totalBytesRead, fmt.Errorf("unable to read buffer at offset %d: %w", dataStreamOffset, err)
+				}
+				if int64(readCount) != readSize {
+					return totalBytesRead, fmt.Errorf("unable to read %d bytes at offset %d", readSize, dataStreamOffset)
+				}
 
-			// Decompress the data
-			cdh.SegmentDataSize = BlockSize
+				// Decompress the data
+				cdh.SegmentDataSize = BlockSize
 
-			// Decompress the compressed segment data
-			if err := Decompress(
-				cdh.CompressedSegmentData[:readCount],
-				cdh.CompressionMethod,
-				cdh.SegmentData,
-				&cdh.SegmentDataSize,
-			); err != nil {
-				return totalBytesRead, fmt.Errorf("unable to decompress data: %w", err)
+				// Decompress the compressed segment data
+				if err := Decompress(
+					cdh.CompressedSegmentData[:readCount],
+					cdh.CompressionMethod,
+					cdh.SegmentData,
+					&cdh.SegmentDataSize,
+				); err != nil {
+					return totalBytesRead, fmt.Errorf("unable to decompress data: %w", err)
+				}
+
 			}
 
 			// Verify segment data size for non-final blocks

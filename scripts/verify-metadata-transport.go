@@ -167,8 +167,39 @@ func tree() *apfswrite.Entry {
 		}
 		root.Children = append(root.Children, &apfswrite.Entry{Name: "compressed-" + c.Name, Mode: 0644, UID: 501, GID: 20, Times: times, Xattrs: attrs})
 	}
+	z, err = gzip.NewReader(bytes.NewReader(read("testdata/appledouble/native/compression-lz4.json.gz")))
+	must(err)
+	var lz4 struct {
+		Kernel []struct {
+			Name, Filesystem string
+			Attribute, Fork  []byte
+			Exit             int
+		}
+	}
+	must(json.NewDecoder(z).Decode(&lz4))
+	must(z.Close())
+	if len(lz4.Kernel) != 1172 {
+		panic("incomplete native LZ4 storage fixture")
+	}
+	accepted := 0
+	for _, c := range lz4.Kernel {
+		if c.Exit != 0 {
+			continue
+		} // Rejected payloads stay in the decoder's negative replay matrix.
+		attrs := map[string][]byte{hostdata.DecmpfsName: c.Attribute}
+		if len(c.Fork) != 0 {
+			attrs[hostdata.ResourceForkName] = c.Fork
+		}
+		name := "lz4-" + strings.ReplaceAll(c.Filesystem, "+", "plus") + "-" + strings.ReplaceAll(c.Name, "/", "-")
+		root.Children = append(root.Children, &apfswrite.Entry{Name: name, Mode: 0644, UID: 501, GID: 20, Times: times, Xattrs: attrs})
+		accepted++
+	}
+	if accepted != 144 {
+		panic("incomplete accepted native LZ4 inventory")
+	}
 	return root
 }
+
 func create(name, kind string, a *apfswrite.Entry, h *hfsplus.Entry) {
 	f, e := os.Create(name)
 	must(e)
@@ -417,7 +448,7 @@ func main() {
 	must(os.MkdirAll(outputRoot, 0755))
 	evidence = report{Revision: strings.TrimSpace(string(run("git", "rev-parse", "HEAD"))), GOOS: runtime.GOOS, GOARCH: runtime.GOARCH, Go: runtime.Version(), SourceSHA256: map[string]string{}}
 	files := []string{"scripts/verify-metadata-transport.go", "testdata/appledouble/native/metadata-transport.c", "testdata/appledouble/native/decmpfs-formats.json.gz", "go.mod", "go.sum"}
-	files = append(files, "internal/evidenceaudit/*.go", "internal/testutil/diskimage/*.go", "internal/tools/extract*.go", "internal/hostwalk/*.go", "internal/decmpfs/*.go", "internal/bsdflags/*.go", "pkg/metatransport/*.go", "pkg/hostdata/*.go", "pkg/hostdata/*/*.go", "internal/hosttime/*.go", "internal/testutil/heldfixture/*.go", "pkg/apfs/*.go", "pkg/apfswrite/*.go", "pkg/hfsplus/*.go")
+	files = append(files, "testdata/appledouble/native/compression-lz4.json.gz", "pkg/compression/lz4/*.go", "internal/evidenceaudit/*.go", "internal/testutil/diskimage/*.go", "internal/tools/extract*.go", "internal/hostwalk/*.go", "internal/decmpfs/*.go", "internal/bsdflags/*.go", "pkg/metatransport/*.go", "pkg/hostdata/*.go", "pkg/hostdata/*/*.go", "internal/hosttime/*.go", "internal/testutil/heldfixture/*.go", "pkg/apfs/*.go", "pkg/apfswrite/*.go", "pkg/hfsplus/*.go")
 	evidence.SourceSHA256, e = evidenceaudit.SourceHashes(os.DirFS("."), files)
 	must(e)
 	defer func() { writeJSON(filepath.Join(outputRoot, "report.json"), evidence) }()

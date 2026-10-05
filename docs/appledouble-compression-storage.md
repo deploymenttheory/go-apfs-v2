@@ -18,6 +18,7 @@ metadata to new data.
 | 9 / 10 | Inline / resource fork | Raw chunks with native `0xcc` marker |
 | 11 / 12 | Inline / resource fork | LZFSE |
 | 13 / 14 | Inline / resource fork | LZBITMAP, or stored chunks with `0xff` marker |
+| 15 / 16 | Inline / resource fork | Apple framed LZ4, or stored chunks with `0xff` marker |
 
 All these decoders and image writers run in pure Go on Linux, Windows and macOS.
 `pkg/compression/lzbitmap` supplies the shared LZBITMAP implementation, with MIT
@@ -43,6 +44,11 @@ zero-filled data would be incorrect. Unknown types and dataless provider markers
 also require their actual external content/provider semantics; this change does
 not manufacture unavailable content. These prerequisites remain distinct from
 lossless transport of the original metadata bytes.
+
+Metadata inspection is available through `pkg/compression/decmpfs.Query`. It
+reports native fields without decoding the payload; missing forks and unknown
+types do not imply successful content decoding. See [compression queries and
+LZ4 qualification](compression-writer.md#inspecting-compression-metadata).
 
 ## Creating replacement compressed storage
 
