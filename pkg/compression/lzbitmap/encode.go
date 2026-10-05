@@ -1,73 +1,31 @@
 package lzbitmap
 
-import (
-	"bytes"
-	"math/bits"
-)
+import "math"
 
-// Encoding, translated from libzbitmap's compressor.
-//
-// Each chunk covers at most MaxChunk bytes of input and is built in one
-// pass over them, eight bytes at a time. For every group the encoder
-// looks back over what it has already emitted for a run of eight bytes
-// that resembles the next eight, and records a bitmap saying which of
-// them differ: those become literals, the rest become back-references at
-// the chosen period. It scores a candidate as the number of differing
-// bytes plus the cost of the period itself (nothing if it repeats the
-// last one, one byte up to 255, two beyond), so a slightly worse match
-// that reuses the current period can win.
-//
-// The bitmaps are then counted, and the twelve most common are written
-// into the chunk's last 17 bytes where a nibble can name them by index.
-// The rest go inline in the second metadata area. Runs of the same
-// bitmap number collapse into a repetition count.
-//
-// A chunk that does not come out smaller than its input is stored
-// verbatim behind a plain header instead.
-
+// Encoding uses the native bounded hash matcher and descriptor ordering. Each
+// chunk covers at most MaxChunk bytes; eight-byte groups refer to earlier input
+// using a bitmap of differing bytes and a one- or two-byte period. The matcher
+// examines at most sixteen history candidates, independent of input length.
+// Twelve selected descriptors use compact nibble codes; other descriptors are
+// inline. Chunks that do not shrink are stored verbatim.
 const (
-	// possibleBitmaps is how many (bitmap, periodBytes) pairs exist: a
-	// byte of bitmap and two bits of period count.
 	possibleBitmaps = 1 << 10
-	// initialPeriod is where each chunk's period starts.
-	initialPeriod = 8
-	// sampleGroups is how far into a chunk the encoder looks before
-	// deciding the chunk is not going to compress. Searching 64 KiB of
-	// history for every eight bytes costs about 8000 comparisons a byte,
-	// and a chunk that ends up stored spent all of it for nothing, so
-	// the sooner such a chunk is abandoned the better. Incompressible
-	// input ran at 0.2 MB/s before this, against 340 MB/s for text.
-	// giveUpAfter is how many unproductive groups in a row turn the wide
-	// search off. Searching 64 KiB of history for every eight bytes costs
-	// about 8000 comparisons a byte, which is worth it while it is paying
-	// and ruinous when it is not: incompressible input ran at 0.2 MB/s
-	// before this against 340 MB/s for text.
-	giveUpAfter = 64
-	// probeEvery is how often the search runs anyway once it is off, so
-	// that data which starts incompressible and then repeats is picked up
-	// again within half a kilobyte.
-	probeEvery = 64
-	// worthwhile is the number of bytes a group must save, after paying
-	// for any new period, to count as productive. Random bytes score about
-	// one: the search does find two or three bytes in eight by chance,
-	// then spends most of that storing the period it needed.
-	worthwhile = 2
+	initialPeriod   = 8
 )
 
 // bmprot indexes the use counter for a descriptor.
 func bmprot(b bmap) int { return int(b.bitmap)<<2 | int(b.periodBytes) }
 
 type encoder struct {
-	src []byte
-	pos int // next byte of src to consume, across all chunks
+	room    int // remaining destination bytes before the native 31-byte safety margin
+	history []uint16
+	src     []byte
+	pos     int // next byte of src to consume, across all chunks
 
 	// Per chunk.
 	decmpLen int
 	start    int // pos at the start of the chunk
 	period   int
-	cheap    bool // the wide search is off
-	dry      int  // consecutive unproductive groups
-	probe    int  // groups until the search runs anyway
 	bitmaps  []bmap
 	periods  []int
 	lit      []byte
@@ -77,7 +35,7 @@ type encoder struct {
 
 // Compress encodes src as an LZBITMAP stream.
 func Compress(src []byte) ([]byte, error) {
-	e := &encoder{src: src}
+	e := &encoder{src: src, room: math.MaxInt}
 	out := make([]byte, 0, len(src)/2+64)
 	out = append(out, Magic...)
 	for {
@@ -113,6 +71,9 @@ func (e *encoder) chunk() []byte {
 // compressed builds the compressed form of the current chunk, or nil if
 // the chunk is too short for one.
 func (e *encoder) compressed() []byte {
+	if e.decmpLen <= 144 || e.room < 15 {
+		return nil
+	}
 	e.bitmaps = e.bitmaps[:0]
 	e.periods = e.periods[:0]
 	e.lit = e.lit[:0]
@@ -123,9 +84,6 @@ func (e *encoder) compressed() []byte {
 	if e.start == 0 {
 		// The first eight bytes of a stream have nothing to refer back
 		// to, so they are literals under a bitmap of all ones.
-		if e.decmpLen < 8 {
-			return nil
-		}
 		e.bitmaps = append(e.bitmaps, bmap{bitmap: 0xff})
 		e.periods = append(e.periods, 0)
 		e.usecnts[bmprot(bmap{bitmap: 0xff})] = 1
@@ -134,151 +92,36 @@ func (e *encoder) compressed() []byte {
 	}
 	e.period = initialPeriod
 
-	e.cheap, e.dry, e.probe = false, 0, 0
+	e.nativeHistory()
+	fastEnd := e.start + max(0, (min(e.start+e.decmpLen, len(e.src)-16)-e.start)/128)*128
+	for group := e.start; group < fastEnd; group += 128 {
+		literals := len(e.lit)
+		if group == 0 {
+			literals -= 8
+		}
+		if 15+literals+128 > e.room {
+			return nil
+		}
+		for e.pos < group+128 {
+			e.nativeEightBytes()
+		}
+	}
+	// The scalar tail reserves literal space through the next 64-byte boundary
+	// before it knows which bytes will match the current period.
+	if 15+len(e.lit)+((e.decmpLen+63)&^63)-(e.pos-e.start) > e.room {
+		return nil
+	}
 
 	for e.pos < e.start+e.decmpLen {
-		e.eightBytes()
+		n := min(8, e.start+e.decmpLen-e.pos)
+		e.nativeEmit(byte(e.nativeBitmap(e.period, n)), e.period, n)
+	}
+	for len(e.bitmaps)%8 != 0 {
+		e.bitmaps = append(e.bitmaps, bmap{})
+		e.periods = append(e.periods, 0)
+		e.usecnts[0]++
 	}
 	return e.assemble()
-}
-
-// eightBytes chooses a pattern for the next group and emits its literals.
-func (e *encoder) eightBytes() {
-	n := e.start + e.decmpLen - e.pos
-	if n > 8 {
-		n = 8
-	}
-	best := e.findPattern(n)
-	var bitmap byte
-	for i := 0; i < n; i++ {
-		if e.src[best+i] != e.src[e.pos+i] {
-			bitmap |= 1 << i
-		}
-	}
-	e.appendBitmap(bitmap, e.pos-best)
-	e.judge(n, bitmap)
-	for i := 0; i < 8 && e.pos < e.start+e.decmpLen; i++ {
-		if bitmap&(1<<i) != 0 {
-			e.lit = append(e.lit, e.src[e.pos])
-		}
-		e.pos++
-	}
-}
-
-// judge scores the group just encoded and decides whether the wide search
-// is earning its keep. The score is the bytes the bitmap saved less the
-// bytes its period costs, because a match needing a new two-byte period to
-// save two bytes has gained nothing.
-func (e *encoder) judge(n int, bitmap byte) {
-	saved := n - bits.OnesCount8(bitmap)
-	net := saved - int(e.bitmaps[len(e.bitmaps)-1].periodBytes)
-	if e.cheap {
-		// Only a probe group got a real search; a good one turns it back on.
-		if net >= n/2 {
-			e.cheap, e.dry = false, 0
-		}
-		return
-	}
-	if net < worthwhile {
-		e.dry++
-		if e.dry >= giveUpAfter {
-			e.cheap, e.probe = true, probeEvery
-		}
-		return
-	}
-	e.dry = 0
-}
-
-// load8 reads eight bytes as a little-endian word, zero beyond the input.
-func (e *encoder) load8(at int) uint64 {
-	var v uint64
-	for i := 0; i < 8; i++ {
-		if at+i < len(e.src) {
-			v |= uint64(e.src[at+i]) << (i * 8)
-		}
-	}
-	return v
-}
-
-// differing counts how many of the eight byte lanes differ.
-func differing(a, b uint64) int {
-	x := a ^ b
-	n := 0
-	for i := 0; i < 8; i++ {
-		if x&(0xff<<(i*8)) != 0 {
-			n++
-		}
-	}
-	return n
-}
-
-// findPattern picks the position to encode the next group against. The
-// cost of a candidate is the bytes that differ plus the bytes needed to
-// store its period, so repeating the current period is free.
-func (e *encoder) findPattern(n int) int {
-	needle := uint64(0)
-	for i := 0; i < n; i++ {
-		needle |= uint64(e.src[e.pos+i]) << (i * 8)
-	}
-
-	best := e.pos - e.period
-	cost := differing(e.load8(best), needle)
-	if cost <= 1 {
-		return best
-	}
-	// The search is off. One group in probeEvery runs it anyway, so data
-	// that starts repeating is noticed.
-	if e.cheap {
-		if e.probe > 0 {
-			e.probe--
-			return best
-		}
-		e.probe = probeEvery
-	}
-	// One-byte periods: anything within the last 255 bytes.
-	back := 0xff
-	if e.pos < back {
-		back = e.pos
-	}
-	split := e.pos - back
-	for at := split; at <= e.pos-8; at++ {
-		if d := differing(e.load8(at), needle) + 1; d < cost {
-			best, cost = at, d
-			if cost == 1 {
-				return best
-			}
-		}
-	}
-	if cost == 2 {
-		return best
-	}
-
-	// Two-byte periods reach 65535 back, which is too much ground to
-	// cover exhaustively, so only positions starting with the same byte
-	// are considered.
-	back = 0xffff
-	if e.pos < back {
-		back = e.pos
-	}
-	for at := e.pos - back; at < split; {
-		// Search the same ascending candidate interval with the standard
-		// library's optimized byte scan. The first match and tie order stay
-		// identical to the scalar loop; unmatching history is scanned in
-		// machine-sized groups instead of one Go iteration per byte.
-		relative := bytes.IndexByte(e.src[at:split], e.src[e.pos])
-		if relative < 0 {
-			break
-		}
-		next := at + relative
-		if d := differing(e.load8(next), needle) + 2; d < cost {
-			best, cost = next, d
-			if cost == 2 {
-				return best
-			}
-		}
-		at = next + 1
-	}
-	return best
 }
 
 // appendBitmap records a descriptor and the period it introduces.
@@ -298,37 +141,63 @@ func (e *encoder) appendBitmap(bitmap byte, period int) {
 	e.period = period
 }
 
-// chooseTop picks the twelve most used descriptors, which a nibble can
-// then name by index, and marks them so they stay out of the inline
-// area. Ties keep the order they were first seen in.
+// chooseTop retains the native histogram order when twelve descriptors suffice.
+// For larger alphabets, partition packed frequency/descriptor words around the
+// twelfth greatest entry; the selected prefix is deliberately not fully sorted.
 func (e *encoder) chooseTop() {
-	type slot struct {
-		b     bmap
-		count int
-		set   bool
-	}
-	var tops [bitmapCount]slot
-	for _, b := range e.bitmaps {
+	var words []uint32
+	for id := 0; id < possibleBitmaps; id++ {
+		b := bmap{bitmap: byte(id), periodBytes: byte(id >> 8)}
 		count := e.usecnts[bmprot(b)]
-		i := 0
-		for ; i < bitmapCount; i++ {
-			if tops[i].set && tops[i].b == b {
-				break // already there
+		if count > 0 {
+			words = append(words, uint32(count)<<16|uint32(id))
+		}
+	}
+	if len(words) > bitmapCount {
+		low, high := 0, len(words)
+		for {
+			last, mid := high-1, (low+high)/2
+			if words[low] > words[last] {
+				words[low], words[last] = words[last], words[low]
 			}
-			if tops[i].count < count {
-				copy(tops[i+1:], tops[i:bitmapCount-1])
-				tops[i] = slot{b: b, count: count, set: true}
+			if words[mid] > words[last] {
+				words[mid], words[last] = words[last], words[mid]
+			}
+			if words[mid] > words[low] {
+				words[mid], words[low] = words[low], words[mid]
+			}
+			pivot := words[low]
+			i, j := low, high-1
+			for {
+				for words[i] > pivot {
+					i++
+				}
+				for words[j] < pivot {
+					j--
+				}
+				if i >= j {
+					break
+				}
+				words[i], words[j] = words[j], words[i]
+				i++
+				j--
+			}
+			split := j + 1
+			if split == bitmapCount {
 				break
 			}
+			if split < bitmapCount {
+				low = split
+			} else {
+				high = split
+			}
 		}
 	}
-	for i, t := range tops {
-		if t.count == 0 {
-			e.top[i] = bmap{}
-			continue
-		}
-		e.top[i] = t.b
-		e.usecnts[bmprot(t.b)] = 0
+	for i := 0; i < min(bitmapCount, len(words)); i++ {
+		id := words[i] & 0xffff
+		b := bmap{bitmap: byte(id), periodBytes: byte(id >> 8)}
+		e.top[i] = b
+		e.usecnts[bmprot(b)] = 0
 	}
 }
 
@@ -369,6 +238,11 @@ func (e *encoder) assemble() []byte {
 		if e.usecnts[bmprot(b)] != 0 {
 			meta2 = append(meta2, b.bitmap)
 		}
+	}
+
+	// The native encoder checks the uncollapsed nibble table before RLE.
+	if 15+len(e.lit)+len(meta1)+len(meta2)+len(e.bitmaps)/2 > e.room {
+		return nil
 	}
 
 	// The bitmap numbers, a nibble each, with runs collapsed.
@@ -449,6 +323,36 @@ func (e *encoder) assemble() []byte {
 	out = append(out, meta1...)
 	out = append(out, meta2...)
 	out = append(out, meta3...)
+	if len(out)+17 > e.room {
+		return nil
+	}
 	out = append(out, trailing...)
 	return out
+}
+
+// EncodeBuffer encodes into a bounded destination using native buffer-capacity
+// decisions. It returns zero when the stream cannot fit, including the native
+// 31-byte safety margin and intermediate literal/nibble reservations. On zero,
+// destination contents are unspecified. Source and destination must not overlap.
+func EncodeBuffer(dst, src []byte) int {
+	if len(dst) < 35 {
+		return 0
+	}
+	e := encoder{src: src}
+	out := make([]byte, 0, min(len(dst), len(src)/2+64))
+	out = append(out, Magic...)
+	for {
+		e.room = len(dst) - 31 - len(out)
+		if e.room < chunkHdrSize {
+			return 0
+		}
+		chunk := e.chunk()
+		if len(chunk) > e.room {
+			return 0
+		}
+		out = append(out, chunk...)
+		if e.decmpLen == 0 {
+			return copy(dst, out)
+		}
+	}
 }

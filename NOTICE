@@ -53,3 +53,11 @@ This product includes software design and code adapted from:
    internal/darwinabi and the test-only quarantine observer follows x/sys.
    Licensed under the BSD 3-Clause License; see
    internal/darwinabi/LICENSE.go-authors.
+
+7. Apple zlib (https://github.com/apple-oss-distributions/zlib)
+   Copyright (C) 1995-2022 Jean-loup Gailly and Mark Adler.
+   internal/decmpfs/encode_zlib.go is an altered Go implementation of the
+   deflate_slow and trees algorithms at revision
+   06673bf7cb4066003fd14a0b87085c05739fc4ac, qualified against the complete
+   pinned C sources and macOS libcompression. Licensed under the zlib
+   License; see internal/decmpfs/ZLIB_LICENSE.

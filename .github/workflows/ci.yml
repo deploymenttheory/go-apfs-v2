@@ -634,6 +634,24 @@ jobs:
           name: large-compression-native
           path: artifacts/large-compression/
           if-no-files-found: error
+      - name: Recapture native codec capacity and whole-fork decisions
+        if: runner.os == 'macOS'
+        env:
+          CGO_ENABLED: "0"
+        run: |
+          go run scripts/capture-compression-blocks.go -check
+          go run scripts/capture-compression-writer.go -check
+          go run scripts/verify-compression-zlib-source.go
+      - name: Upload native compression encoder evidence
+        if: always() && runner.os == 'macOS'
+        uses: actions/upload-artifact@v7
+        with:
+          name: compression-encoder-native
+          path: |
+            artifacts/compression-blocks/
+            artifacts/compression-writer/
+            artifacts/compression-zlib-source/
+          if-no-files-found: error
       - name: Audit portable AppleDouble qualification evidence
         env:
           CGO_ENABLED: "0"

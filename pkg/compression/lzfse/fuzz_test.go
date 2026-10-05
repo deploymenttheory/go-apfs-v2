@@ -76,6 +76,21 @@ func FuzzRoundTrip(f *testing.F) {
 		if !bytes.Equal(dec, data) {
 			t.Fatal("LZFSE round trip changed the data")
 		}
+		for _, capacity := range []int{len(data), len(enc) + 64} {
+			dst := make([]byte, capacity)
+			if n := EncodeBuffer(dst, data); n != 0 {
+				got, err := Decompress(dst[:n])
+				if err != nil || !bytes.Equal(got, data) {
+					t.Fatalf("bounded LZFSE: %v", err)
+				}
+			}
+			if n := EncodeLZVNBuffer(dst, data); n != 0 {
+				got, err := DecompressLZVN(dst[:n], len(data))
+				if err != nil || !bytes.Equal(got, data) {
+					t.Fatalf("bounded LZVN: %v", err)
+				}
+			}
+		}
 		lz := CompressLZVN(data)
 		dec, err = DecompressLZVN(lz, len(data))
 		if err != nil {

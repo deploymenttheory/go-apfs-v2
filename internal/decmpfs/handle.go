@@ -136,7 +136,6 @@ func (cdh *Handle) loadCompressedBlockOffsets() error {
 	isFPMC := bytes.Equal(cdh.CompressedSegmentData[:4], HeaderSignature[:])
 
 	var compressedBlockDescriptorSize int
-	var compressedDescriptorsOffset uint32
 	var segmentDataOffset int
 
 	if isFPMC {
@@ -146,7 +145,7 @@ func (cdh *Handle) loadCompressedBlockOffsets() error {
 		cdh.NumberOfCompressedBlocks = 1
 	} else if cdh.CompressionMethod == MethodDeflate {
 		// Read compressed descriptors offset (big endian)
-		compressedDescriptorsOffset = binary.BigEndian.Uint32(cdh.CompressedSegmentData[:4])
+		compressedDescriptorsOffset := binary.BigEndian.Uint32(cdh.CompressedSegmentData[:4])
 
 		if compressedDescriptorsOffset != 0x00000100 {
 			return fmt.Errorf("invalid compressed descriptors offset: 0x%08x", compressedDescriptorsOffset)
@@ -168,13 +167,7 @@ func (cdh *Handle) loadCompressedBlockOffsets() error {
 		if cdh.NumberOfCompressedBlocks > (0xFFFFFFFF / 8) {
 			return fmt.Errorf("invalid number of compressed blocks value out of bounds")
 		}
-		if uint64(cdh.NumberOfCompressedBlocks)*8+264 > BlockSize {
-			return cdh.loadLargeIndex(264, cdh.NumberOfCompressedBlocks, true)
-		}
-
-		segmentDataOffset = 264
-		compressedDescriptorsOffset += 4
-		compressedBlockDescriptorSize = 8
+		return cdh.loadZlibIndex(cdh.NumberOfCompressedBlocks)
 	} else if cdh.CompressionMethod == MethodLZVN || cdh.CompressionMethod == MethodRawMarked || cdh.CompressionMethod == MethodLZBITMAP ||
 		cdh.CompressionMethod == MethodLZFSE {
 		// LZVN and LZFSE resource forks share one block-table layout, and it
@@ -230,21 +223,11 @@ func (cdh *Handle) loadCompressedBlockOffsets() error {
 			compressedBlockOffset >= uint32(BlockSize+1) {
 			return fmt.Errorf("invalid compressed block offset: 0x%08x", compressedBlockOffset)
 		}
-
-		compressedBlockOffset += compressedDescriptorsOffset
 		cdh.CompressedBlockOffsets[0] = compressedBlockOffset
 		previousCompressedBlockOffset = compressedBlockOffset
 
-		if cdh.CompressionMethod == MethodDeflate {
-			segmentDataOffset += 4 // Skip size field
-		}
-
-		// Read the remaining block descriptors into a buffer sized for the
-		// table, not into the fixed-size segment scratch. The table can be
-		// larger than one uncompressed block: a zlib resource fork needs
-		// 8 bytes per block, so a file over roughly 510 MB has more descriptors
-		// than the 65537-byte scratch holds, and reading them into it faulted
-		// on a slice bound instead of returning an error.
+		// Small flat tables retain the public offset view. Larger flat
+		// tables and all zlib descriptors use the bounded range index.
 		readSize := int(cdh.NumberOfCompressedBlocks-1) * compressedBlockDescriptorSize
 		descriptors := make([]byte, readSize)
 
@@ -263,8 +246,6 @@ func (cdh *Handle) loadCompressedBlockOffsets() error {
 		for compressedBlockIndex = 1; compressedBlockIndex < cdh.NumberOfCompressedBlocks; compressedBlockIndex++ {
 			compressedBlockOffset := binary.LittleEndian.Uint32(descriptors[descriptorOffset:])
 			descriptorOffset += compressedBlockDescriptorSize
-
-			compressedBlockOffset += compressedDescriptorsOffset
 
 			if previousCompressedBlockOffset > compressedBlockOffset ||
 				(compressedBlockOffset-previousCompressedBlockOffset) > uint32(BlockSize+1) {

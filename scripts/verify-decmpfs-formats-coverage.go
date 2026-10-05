@@ -36,7 +36,7 @@ func verify() error {
 	defer log.Close()
 	var transcript bytes.Buffer
 	profile := filepath.Join(dir, "coverage.out")
-	cmd := exec.Command("go", "test", "-count=1", "-json", "-run", "^Test", "-covermode=atomic", "-coverprofile="+profile, "-coverpkg=./internal/decmpfs,./pkg/compression/lzbitmap", "./internal/decmpfs", "./pkg/compression/lzbitmap")
+	cmd := exec.Command("go", "test", "-count=1", "-json", "-run", "^Test", "-covermode=atomic", "-coverprofile="+profile, "-coverpkg=./internal/decmpfs,./pkg/compression/lzbitmap,./pkg/compression/lzfse,./pkg/compression/decmpfs", "./internal/decmpfs", "./pkg/compression/lzbitmap", "./pkg/compression/lzfse", "./pkg/compression/decmpfs")
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 	cmd.Stdout = io.MultiWriter(os.Stdout, log, &transcript)
 	cmd.Stderr = io.MultiWriter(os.Stderr, log)
@@ -45,6 +45,9 @@ func verify() error {
 	}
 	passed := 0
 	required := map[string]bool{"TestLargeCompressionIndexBoundedRanges": true, "TestLargeCompressionIndexRejectsMalformedTables": true, "TestLargeCompressionNativeRanges": true, "TestDecoderInvalidLifecycle": true, "TestDecoderPropagatesHeaderAndBlockFailures": true, "TestDecoderLogicalEndAndPartialFailure": true, "TestDecoderLeafFailures": true}
+	for _, name := range []string{"TestNativeCompressionTypeSelection", "TestZlibIndexExplicitPayloadLengths", "TestZlibIndexInitializationFailures", "TestNativeEncoderProvenance", "TestEncodeForkNativeBytes", "TestEncodeForkIOFailures", "TestEncodeForkValidation", "TestEncodeForkNativeOffsetBounds", "TestEncodeBlockNativeStoredFallback", "TestEncodeZlibNativeBufferCorpus", "TestEncodeNativeBufferCorpus", "TestDecodeScalarOutputVectors", "TestEncoderBoundedHistory", "TestIncompressibleIsNotQuadratic", "TestNativeCompressionBufferCapacities", "TestEncodeForkCallerOwnership"} {
+		required[name] = true
+	}
 	for _, line := range bytes.Split(transcript.Bytes(), []byte{'\n'}) {
 		if len(line) == 0 {
 			continue
@@ -71,6 +74,10 @@ func verify() error {
 	covered, total := 0, 0
 	coverageFiles := map[string][2]int{"internal/decmpfs/decmpfs.go": {}, "internal/decmpfs/storage.go": {}, "internal/decmpfs/block_index.go": {}, "pkg/compression/lzbitmap/lzbitmap.go": {}, "pkg/compression/lzbitmap/encode.go": {}}
 	var decoderCounts [2]int
+	packages := map[string][2]int{"internal/decmpfs/": {}, "pkg/compression/decmpfs/": {}, "pkg/compression/lzbitmap/": {}, "pkg/compression/lzfse/": {}}
+	for _, file := range []string{"internal/decmpfs/encode.go", "internal/decmpfs/encode_zlib.go", "pkg/compression/lzbitmap/encode_native.go", "pkg/compression/decmpfs/encode.go"} {
+		coverageFiles[file] = [2]int{}
+	}
 	blocks := map[string][2]int{}
 	for _, line := range strings.Split(string(b), "\n") {
 		fields := strings.Fields(line)
@@ -79,7 +86,11 @@ func verify() error {
 		}
 		file := strings.TrimPrefix(strings.SplitN(fields[0], ":", 2)[0], "github.com/deploymenttheory/go-apfs-v2/")
 		_, tracked := coverageFiles[file]
-		if !tracked && !strings.HasPrefix(file, "internal/decmpfs/") {
+		included := tracked
+		for prefix := range packages {
+			included = included || strings.HasPrefix(file, prefix)
+		}
+		if !included {
 			continue
 		}
 		n, e := strconv.Atoi(fields[1])
@@ -96,6 +107,15 @@ func verify() error {
 	for block, value := range blocks {
 		file := strings.TrimPrefix(strings.SplitN(block, ":", 2)[0], "github.com/deploymenttheory/go-apfs-v2/")
 		n, hits := value[0], value[1]
+		for prefix, counts := range packages {
+			if strings.HasPrefix(file, prefix) {
+				counts[1] += n
+				if hits > 0 {
+					counts[0] += n
+				}
+				packages[prefix] = counts
+			}
+		}
 		if strings.HasPrefix(file, "internal/decmpfs/") {
 			decoderCounts[1] += n
 			if hits > 0 {
@@ -114,6 +134,11 @@ func verify() error {
 		}
 		coverageFiles[file] = counts
 	}
+	for name, counts := range packages {
+		if counts[1] == 0 || counts[0]*100 <= counts[1]*95 {
+			return fmt.Errorf("%s complete package coverage must exceed 95%%: %d/%d", name, counts[0], counts[1])
+		}
+	}
 	if decoderCounts[1] == 0 || decoderCounts[0]*100 <= decoderCounts[1]*95 {
 		return fmt.Errorf("complete decmpfs package coverage must exceed 95%%: %d/%d", decoderCounts[0], decoderCounts[1])
 	}
@@ -131,6 +156,7 @@ func verify() error {
 	files := []string{"scripts/verify-decmpfs-formats.go", "scripts/verify-decmpfs-formats-coverage.go", "testdata/appledouble/native/decmpfs-formats.c", "testdata/appledouble/native/decmpfs-formats.json.gz", "pkg/compression/lzbitmap/testdata/aa-lzbitmap.aar", "pkg/compression/lzbitmap/testdata/aa-lzbitmap-raw.aar", "go.mod", "go.sum"}
 	files = append(files, "internal/evidenceaudit/*.go", "internal/decmpfs/*.go", "pkg/compression/lzbitmap/*.go")
 	files = append(files, "scripts/verify-large-compression*.go", "testdata/appledouble/native/decmpfs-large.c", "testdata/appledouble/native/decmpfs-expand.c", "testdata/appledouble/native/large-compression/*")
+	files = append(files, "pkg/compression/decmpfs/*.go", "pkg/compression/lzfse/*.go", "pkg/compression/lzbitmap/testdata/scalar/*.zbm", "scripts/capture-compression-*.go", "scripts/verify-compression-zlib-source.go", "testdata/appledouble/native/compression-*")
 	hashes, e := evidenceaudit.SourceHashes(os.DirFS("."), files)
 	if e != nil {
 		return e
@@ -141,6 +167,7 @@ func verify() error {
 	}
 	report := map[string]any{"coverage_files": coverageFiles, "covered": covered, "statements": total, "passed_tests": passed, "source_sha256": hashes, "revision": strings.TrimSpace(string(revision)), "goos": runtime.GOOS, "goarch": runtime.GOARCH, "go": runtime.Version()}
 	report["decoder_package_coverage"] = decoderCounts
+	report["complete_package_coverage"] = packages
 	b, e = json.MarshalIndent(report, "", "  ")
 	if e != nil {
 		return e

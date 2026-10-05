@@ -63,6 +63,7 @@ jobs:
           - { pkg: ./pkg/compression/lzbitmap, target: FuzzLZBitmapDecompress }
           - { pkg: ./pkg/compression/lzfse, target: FuzzDecompressLZVN }
           - { pkg: ./pkg/compression/lzfse, target: FuzzRoundTrip }
+          - { pkg: ./internal/decmpfs, target: FuzzEncodeFork }
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7

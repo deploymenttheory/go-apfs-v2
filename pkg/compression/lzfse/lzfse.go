@@ -173,3 +173,13 @@ func DecompressLZVN(src []byte, size int) ([]byte, error) {
 	}
 	return dst[:v.out], nil
 }
+
+// EncodeLZVNBuffer encodes using the native LZVN buffer contract. Inputs shorter
+// than eight bytes and insufficient destination space return zero. On zero,
+// destination contents are unspecified. Buffers must not overlap.
+func EncodeLZVNBuffer(dst, src []byte) int {
+	if len(src) < 8 {
+		return 0
+	}
+	return lzvnEncodeBuffer(dst, src)
+}

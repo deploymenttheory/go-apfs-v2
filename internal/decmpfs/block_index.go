@@ -96,3 +96,33 @@ func (index *blockIndex) block(source Source, block uint32) (int64, int, error) 
 	}
 	return int64(start), int(end - start), nil
 }
+
+// Zlib descriptors carry explicit lengths. The final payload ends before the
+// Resource Manager map, and gaps between blocks are not compressed bytes.
+// Preserve the legacy small-index offset view while all reads use exact ranges.
+func (cdh *Handle) loadZlibIndex(count uint32) error {
+	if err := cdh.loadLargeIndex(264, count, true); err != nil {
+		return err
+	}
+	if uint64(count)*8+264 > BlockSize {
+		return nil
+	}
+	offsets := make([]uint32, count+1)
+	for block := uint32(0); block < count; block++ {
+		start, length, err := cdh.largeIndex.block(cdh.CompressedDataStream, block)
+		if err != nil {
+			cdh.largeIndex = nil
+			return err
+		}
+		end := uint64(start) + uint64(length)
+		if end > uint64(^uint32(0)) {
+			return nil
+		}
+		offsets[block] = uint32(start)
+		if block == count-1 {
+			offsets[count] = uint32(end)
+		}
+	}
+	cdh.CompressedBlockOffsets = offsets
+	return nil
+}
