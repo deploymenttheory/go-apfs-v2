@@ -12,7 +12,7 @@ import (
 )
 
 func TestCompressionLifecycleProvenance(t *testing.T) {
-	testCompressionProvenance(t, "compression-lifecycle", 591, nil)
+	testCompressionProvenance(t, "compression-lifecycle", 591, []string{"internal/testutil/diskimage/attachment.go", "internal/testutil/diskimage/detach.go"})
 }
 func TestCompressionOperationProvenance(t *testing.T) {
 	for _, name := range []string{"compression-operation", "compression-operation-macos26", "compression-operation-macos15"} {
