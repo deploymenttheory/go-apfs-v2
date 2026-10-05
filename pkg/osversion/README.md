@@ -44,8 +44,9 @@ version parser, while its currently qualified behavior profiles remain 26/27.
 
 Outstanding work:
 
-- Retain and independently replay macOS 15 compression capture, storage and
-  partial-failure controls on host, mounted APFS and mounted HFS+.
+- Complete on-runner qualification of the macOS 15 resource-fork opening route
+  against its retained C controls. Recompression profiles now retain 330 cases
+  per release, and resource-fork opening profiles retain 180 cases per release.
 - Qualify macOS 15 quarantine codecs, process state and file operations before
   implementing its behavior route; do not alias it to a newer release.
 - Audit remaining framework/CLI behavior differences and thread explicit target

@@ -106,3 +106,38 @@ readback. Extend the source-change, large-file eligibility and private-storage
 failure matrix before declaring the high-level integration complete. Codesign's
 `--preserve-afsc`, representation-specific post-commit behavior and full Phase 2
 streaming qualification remain downstream work.
+
+## Older kernel resource-fork acquisition
+
+The shared `osversion` target model distinguishes macOS 15, 26 and 27. Native
+resource-fork bindings detect the actual host version because a requested
+compatibility target cannot add a missing kernel operation. The portable codecs
+and logical foreign state remain available independently of that native binding.
+
+The retained 540-case C opening matrix covers six methods, read/write access,
+live/renamed/replaced/unlinked/empty-fork files, and host/APFS/HFS+ volumes on all
+three releases. macOS 15 rejects descriptor-relative regular-file fork opens
+with `ENOTDIR`; its `F_GETPATH` plus path open succeeds for live and renamed files.
+The Go route uses a finite typed libSystem extension, verifies the stream's device
+and inode, and defers requested truncation until that check succeeds. An injected
+namespace replacement test proves that a different file's existing fork is not
+truncated or overwritten.
+
+This older path lookup cannot reopen an unlinked resource fork and cannot provide
+an atomic namespace snapshot. Its native errors are retained; unrelated namespace
+edits must be excluded during acquisition. The newer descriptor-relative route
+continues to support unlinked held files. These are independently observed native
+constraints, not reasons to remove logical resource-fork support on Linux or
+Windows or to drop the corresponding test cases.
+
+`F_GETPATH` uses x/sys's three-argument runtime calling convention. On ARM64,
+padding that variadic `fcntl` call to six arguments places the wrong value in its
+stack argument slot; native tests cover both the successful path and captured
+`EBADF`. The generated bindings retain both architecture targets and the existing
+strict wrapper coverage gate.
+
+Mounted acceptance now requires **492** checks: all previous 462 remain, plus ten
+native resource-fork opening/readback outcomes on each of the three volume roles.
+Every retained release is independently recaptured in CI; portable source and
+case-inventory checks require all 990 recompression and 540 opening observations.
+The older release's broader quarantine qualification remains outstanding.

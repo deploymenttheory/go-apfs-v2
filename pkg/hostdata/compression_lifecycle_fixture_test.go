@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/osversion"
 	"os"
 	"strings"
 	"testing"
@@ -52,6 +53,17 @@ func testCompressionProvenanceFrom(t *testing.T, fixture, name string, count int
 	}
 	if corpus.Schema != 1 || len(corpus.Cases) != count || corpus.Host == "" || corpus.SDK == "" || !strings.Contains(corpus.Compiler, "clang") || !strings.Contains(corpus.Library, "-uuid:") {
 		t.Fatal("incomplete native lifecycle provenance")
+	}
+	if name == "compression-operation" {
+		version, err := osversion.ParseProductVersion(corpus.Host)
+		if err != nil {
+			t.Fatal(err)
+		}
+		actual, err := osversion.ProfileForMacOS(version)
+		want := map[string]osversion.MacOSProfile{"compression-operation": osversion.MacOS27, "compression-operation-macos26": osversion.MacOS26, "compression-operation-macos15": osversion.MacOS15}[fixture]
+		if err != nil || want == 0 || actual != want {
+			t.Fatal("native operation profile mismatch", fixture, version, err)
+		}
 	}
 	for _, path := range append(additional, "scripts/capture-"+name+".go", "testdata/appledouble/native/"+name+".c", "testdata/appledouble/native/"+name+"-interpose.c", "testdata/appledouble/native/compression-policy.c", "go.mod", "go.sum") {
 		data, e := os.ReadFile("../../" + path)

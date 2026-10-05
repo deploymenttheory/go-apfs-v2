@@ -1,6 +1,7 @@
 // Qualification only. Check public declarations from the selected host SDK;
 // private signatures remain qualified by the independent existing C observers.
 #include <sys/types.h>
+#include <sys/param.h>
 #include <sys/stat.h>
 #include <sys/attr.h>
 #include <sys/xattr.h>
@@ -13,6 +14,8 @@
 #include <stddef.h>
 #define SIGNATURE(name, result, ...) \
  _Static_assert(__builtin_types_compatible_p(__typeof__(&name), result (*)(__VA_ARGS__)), #name " signature")
+SIGNATURE(fcntl, int, int, int, ...);
+_Static_assert(MAXPATHLEN == 1024, "F_GETPATH output capacity");
 SIGNATURE(listxattr, ssize_t, const char *, char *, size_t, int);
 SIGNATURE(flistxattr, ssize_t, int, char *, size_t, int);
 SIGNATURE(getxattr, ssize_t, const char *, const char *, void *, size_t, u_int32_t, int);

@@ -9,6 +9,21 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// FcntlGetPath is the typed fcntl wrapper.
+//
+//go:uintptrescapes
+func FcntlGetPath(fd int32, path *[unix.PathMax]byte) (int32, error) {
+	r, _, e := syscall3(addrFcntlGetPath, uintptr(fd), uintptr(unix.F_GETPATH), uintptr(unsafe.Pointer(path)))
+	if e != 0 {
+		return int32(r), e
+	}
+	return int32(r), nil
+}
+
+var addrFcntlGetPath uintptr
+
+//go:cgo_import_dynamic importedFcntlGetPath fcntl "/usr/lib/libSystem.B.dylib"
+
 // Getattrlistat is the typed getattrlistat wrapper.
 //
 //go:uintptrescapes

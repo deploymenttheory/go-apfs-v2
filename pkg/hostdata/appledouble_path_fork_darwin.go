@@ -9,7 +9,7 @@ import (
 )
 
 func openPathResourceForkNative(file *os.File, writable bool, mode uint32) (io.Closer, error) {
-	return openPathResourceForkUsing(file, writable, mode, unix.Openat, (*os.File).Stat)
+	return openPathResourceForkUsing(file, writable, mode, openResourceForkAt, (*os.File).Stat)
 }
 
 func openPathResourceForkUsing(file *os.File, writable bool, mode uint32,

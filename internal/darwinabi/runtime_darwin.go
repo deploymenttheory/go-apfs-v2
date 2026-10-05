@@ -13,6 +13,12 @@ import (
 // The Go runtime captures errno within the call before returning to Go. These
 // are the same runtime entry points used by golang.org/x/sys/unix v0.48.0.
 //
+// syscall3 preserves the ARM64 varargs stack placement used by x/sys fcntl.
+// Padding fcntl to six arguments puts the wrong argument on that stack slot.
+//
+//go:linkname syscall3 syscall.syscall
+func syscall3(fn, a1, a2, a3 uintptr) (r1, r2 uintptr, err syscall.Errno)
+
 //go:linkname syscall6 syscall.syscall6
 func syscall6(fn, a1, a2, a3, a4, a5, a6 uintptr) (r1, r2 uintptr, err syscall.Errno)
 
