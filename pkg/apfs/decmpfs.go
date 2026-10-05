@@ -18,6 +18,7 @@ const (
 	CompressionMethodLZVN      = decmpfs.MethodLZVN
 	CompressionMethodRawMarked = decmpfs.MethodRawMarked
 	CompressionMethodLZBITMAP  = decmpfs.MethodLZBITMAP
+	CompressionMethodLZ4       = decmpfs.MethodLZ4
 
 	// Deprecated: decmpfs type 5 marks de-duplication within the generation
 	// store rather than a compression method, so nothing maps to this and no

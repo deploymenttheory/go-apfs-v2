@@ -1,4 +1,4 @@
-# Writing native compressed resource forks
+# Writing native compressed storage
 
 `pkg/compression/decmpfs.EncodeFork` converts logical file contents into a native
 compression resource fork and its 16-byte `com.apple.decmpfs` attribute. Use it
@@ -30,12 +30,75 @@ select the default codec; the actual on-disk type, not the requested number,
 establishes which codec was used. The format API intentionally accepts explicit
 codec types rather than reproducing a host queue's option fallback.
 
+## Native content policy
+
+`decmpfs.Encode` shares the same bounded encoder and applies the native default
+content decisions. `EncodeOptions.Type` selects a codec; zero selects LZVN.
+`ResourceForkOnly` disables the default preference for inline storage. These
+decisions and codecs work identically on Linux, macOS and Windows.
+
+The default native size window is greater than 16 KiB and at most 512 MiB. This
+is a decision to leave contents uncompressed, not a reader size limit.
+`EncodeFork` remains available for explicitly requested storage outside that
+window. For compressing codecs, the payload budget is 80% of the logical file's
+4 KiB page count, rounded down to whole pages, less fork framing. Stored blocks
+bypass the savings check. A single block with at most 3,786 payload bytes uses
+inline storage when allowed; the complete attribute is at most 3,802 bytes.
+
+`EncodedFile.Attribute == nil` means the content policy declined compression.
+Otherwise the attribute is complete and `ForkSize` gives the exact resource-fork
+extent, or zero for inline storage. Inline results leave the destination
+untouched. A later block can exceed the savings budget after earlier blocks
+have been written: callers must stage privately and discard partial output on
+decline or error. The API does not close or truncate caller-owned handles.
+
+File eligibility and installation are
+separate lifecycle work. This content API does not check entry types, names,
+permissions, existing resource forks or live file identity, and it does not
+change file flags. It must not be used as a complete live-file recompression
+operation until those checks and installation are integrated.
+
 The shared reader uses each zlib descriptor's explicit length, including for
 small indexes. Resource Manager map bytes and inter-block gaps are not part of
 the compressed stream. Tests read every retained native fork and reject any
 attempt to consume the map as payload; checksum validation is retained.
 
+## Inspecting compression metadata
+
+`decmpfs.Query` reports the native metadata fields from a caller-supplied stable
+`Metadata` snapshot. It accepts sized borrowed attribute readers, reads at most
+24 bytes and does not read or allocate the resource fork. Native held-file
+capture, explicit AppleDouble metadata and image metadata can supply the same
+input on every host. The caller must use observed flags: setting compression
+on invalid metadata can cause the kernel to clear the flag again.
+
+The result preserves native type, overhead, stored and logical sizes, and the
+opaque eight-byte extension on fork-based attributes. Missing required forks
+are reported explicitly while the metadata query succeeds, matching native
+behavior. Type 5 uses native unknown-size sentinels. The 32-bit overhead field
+has native wraparound semantics and must never be used as an allocation bound.
+Unknown types remain visible without assigning them an invented codec.
+
+A successful query is not proof that the payload is readable. Compression
+readers continue to validate the actual format, indexes and compressed blocks.
+Querying does not install attributes or change filesystem flags.
+
+## Native-readable LZ4 storage
+
+The shared APFS/HFS+ decoder also reads types 15/16 using Apple's framed LZ4
+format. `pkg/compression/lz4.DecompressReader` reads at most 32 KiB at a time,
+including expanded encoded blocks larger than 64 KiB. Cross-block history and
+the native output-capacity stopping rule are retained. Only `0xff` selects a
+stored decmpfs LZ4 block; all other first bytes enter the framed decoder.
+
+Native file compression requests for 15/16 currently fall back to LZVN; the
+filesystem queue does not produce these types. Read support is independently
+qualified with native Compression API output installed on both APFS and HFS+,
+including full kernel readback on macOS 27. `Encode` and `EncodeFork` continue to accept
+the explicitly documented writable codec types.
+
 ## Native encoding decisions
+
 
 Buffer capacity affects native output. `lzbitmap.EncodeBuffer`, the existing
 `lzfse.EncodeBuffer`, and `lzfse.EncodeLZVNBuffer` expose bounded buffer operations.
@@ -63,7 +126,34 @@ and remain decoder compatibility fixtures. Independently captured native outputs
 for those same inputs now qualify encoding. The original native `aa` fixtures,
 8 MiB incompressible performance check and fuzz properties remain required.
 
+## Native runtime profiles
+
+macOS 26.6.2 (25G83) does not register decmpfs LZ4 types 15/16: every retained
+kernel control fails at open with `EIO`, and its metadata query treats these
+numbers as unknown storage. macOS 27.0 (26A428) and 27.0.1 (26A434) recognize
+these types. Their complete buffer, kernel and query captures agree. The public
+native LZ4 codec's 140 buffers and 900 capacity/terminator observations agree
+between both runtime families. `Query` describes the current recognized storage
+layouts uniformly on every Go host, including hosts with older native kernels.
+
+The older complete observations are retained in `compression-lz4-macos26.json.gz`
+and `compression-query-macos26.json.gz`. Native recapture checks the complete
+matching profile; an unknown or changed outcome fails the gate. No case is
+removed because a host kernel does not support it.
+
+The four-by-four carrier/image harness includes all 144 current-kernel accepted
+LZ4 cases on every producer OS. Both `macos-latest` and `xcode-27` independently
+mount and inspect the resulting images, including foreign Linux/Windows output.
+The former must reproduce the observed open-time `EIO`; the latter must read
+all logical bytes through the kernel. An additional Clang-built C oracle reads
+compression storage from each mounted image and decodes every byte through
+Apple's public LZ4 API on both runtimes. The report's `LZ4Reads` records the kernel
+outcome and independent native-codec byte count/hash separately. This preserves
+strict assertions for the old kernel and complete positive kernel acceptance
+on the current runtime, while the Go reader supports the storage on every OS.
+
 ## Reproducing qualification
+
 
 The retained observations are in `testdata/appledouble/native/`:
 
@@ -78,13 +168,31 @@ The retained observations are in `testdata/appledouble/native/`:
   retains the separate 33-request type-selection audit.
 - `compression-zlib-source.json`: complete pinned Apple zlib C implementation
   qualification against all 366 native zlib samples.
+- `compression-policy.json.gz`: 4,632 independently captured APFS/HFS+ cases,
+  including exact size, savings and inline transitions, every resulting storage
+  byte, full kernel readback, and guarded path/held metadata queries. Native
+  codec measurements select the transition inputs; Go output never supplies
+  expected observations.
+
+- `compression-lz4.json.gz`: 140 native buffers, 900 capacity and terminator
+  observations and 1,172 kernel storage cases. Every possible first-byte marker
+  is retained, including rejected controls. Truncated bodies, missing/wrong
+  terminators and ignored trailing bytes are distinguished.
+- `compression-query.json.gz`: 676 guarded path/held queries on APFS and HFS+,
+  covering all types 0–32, absent/empty resource forks, invalid headers and
+  partial/complete attribute extensions. Reopen failures remain in the record;
+  initial held queries provide metadata observations for unreadable payloads.
 
 On macOS, run:
+
 
 ```sh
 go run scripts/capture-compression-blocks.go -check
 go run scripts/capture-compression-writer.go -check
 go run scripts/verify-compression-zlib-source.go
+go run scripts/capture-compression-policy.go -check
+go run scripts/capture-compression-lz4.go -check
+go run scripts/capture-compression-query.go -check
 ```
 
 These commands preserve fresh artifacts before comparing the retained evidence.

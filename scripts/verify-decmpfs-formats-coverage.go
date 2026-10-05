@@ -36,7 +36,7 @@ func verify() error {
 	defer log.Close()
 	var transcript bytes.Buffer
 	profile := filepath.Join(dir, "coverage.out")
-	cmd := exec.Command("go", "test", "-count=1", "-json", "-run", "^Test", "-covermode=atomic", "-coverprofile="+profile, "-coverpkg=./internal/decmpfs,./pkg/compression/lzbitmap,./pkg/compression/lzfse,./pkg/compression/decmpfs", "./internal/decmpfs", "./pkg/compression/lzbitmap", "./pkg/compression/lzfse", "./pkg/compression/decmpfs")
+	cmd := exec.Command("go", "test", "-count=1", "-json", "-run", "^Test", "-covermode=atomic", "-coverprofile="+profile, "-coverpkg=./pkg/compression/lz4,./internal/decmpfs,./pkg/compression/lzbitmap,./pkg/compression/lzfse,./pkg/compression/decmpfs", "./internal/decmpfs", "./pkg/compression/lz4", "./pkg/compression/lzbitmap", "./pkg/compression/lzfse", "./pkg/compression/decmpfs")
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 	cmd.Stdout = io.MultiWriter(os.Stdout, log, &transcript)
 	cmd.Stderr = io.MultiWriter(os.Stderr, log)
@@ -45,7 +45,7 @@ func verify() error {
 	}
 	passed := 0
 	required := map[string]bool{"TestLargeCompressionIndexBoundedRanges": true, "TestLargeCompressionIndexRejectsMalformedTables": true, "TestLargeCompressionNativeRanges": true, "TestDecoderInvalidLifecycle": true, "TestDecoderPropagatesHeaderAndBlockFailures": true, "TestDecoderLogicalEndAndPartialFailure": true, "TestDecoderLeafFailures": true}
-	for _, name := range []string{"TestNativeCompressionTypeSelection", "TestZlibIndexExplicitPayloadLengths", "TestZlibIndexInitializationFailures", "TestNativeEncoderProvenance", "TestEncodeForkNativeBytes", "TestEncodeForkIOFailures", "TestEncodeForkValidation", "TestEncodeForkNativeOffsetBounds", "TestEncodeBlockNativeStoredFallback", "TestEncodeZlibNativeBufferCorpus", "TestEncodeNativeBufferCorpus", "TestDecodeScalarOutputVectors", "TestEncoderBoundedHistory", "TestIncompressibleIsNotQuadratic", "TestNativeCompressionBufferCapacities", "TestEncodeForkCallerOwnership"} {
+	for _, name := range []string{"TestQueryNativeMetadata", "TestQueryMetadataFailuresAndBounds", "TestNativeLZ4Buffers", "TestNativeLZ4DecoderCapacities", "TestNativeLZ4Storage", "TestLZ4RangeFailures", "TestLZ4ReadFailures", "TestLZ4CrossBlockHistory", "TestLZ4MalformedAndBounds", "TestEncodeNativeContentPolicy", "TestEncodePolicyValidationAndSizeBoundaries", "TestEncodePolicyInlineAndDeclineOwnership", "TestEncodePolicyIOAndCancellation", "TestEncodePolicyCallerOwnership", "TestNativeCompressionTypeSelection", "TestZlibIndexExplicitPayloadLengths", "TestZlibIndexInitializationFailures", "TestNativeEncoderProvenance", "TestEncodeForkNativeBytes", "TestEncodeForkIOFailures", "TestEncodeForkValidation", "TestEncodeForkNativeOffsetBounds", "TestEncodeBlockNativeStoredFallback", "TestEncodeZlibNativeBufferCorpus", "TestEncodeNativeBufferCorpus", "TestDecodeScalarOutputVectors", "TestEncoderBoundedHistory", "TestIncompressibleIsNotQuadratic", "TestNativeCompressionBufferCapacities", "TestEncodeForkCallerOwnership"} {
 		required[name] = true
 	}
 	for _, line := range bytes.Split(transcript.Bytes(), []byte{'\n'}) {
@@ -74,8 +74,8 @@ func verify() error {
 	covered, total := 0, 0
 	coverageFiles := map[string][2]int{"internal/decmpfs/decmpfs.go": {}, "internal/decmpfs/storage.go": {}, "internal/decmpfs/block_index.go": {}, "pkg/compression/lzbitmap/lzbitmap.go": {}, "pkg/compression/lzbitmap/encode.go": {}}
 	var decoderCounts [2]int
-	packages := map[string][2]int{"internal/decmpfs/": {}, "pkg/compression/decmpfs/": {}, "pkg/compression/lzbitmap/": {}, "pkg/compression/lzfse/": {}}
-	for _, file := range []string{"internal/decmpfs/encode.go", "internal/decmpfs/encode_zlib.go", "pkg/compression/lzbitmap/encode_native.go", "pkg/compression/decmpfs/encode.go"} {
+	packages := map[string][2]int{"pkg/compression/lz4/": {}, "internal/decmpfs/": {}, "pkg/compression/decmpfs/": {}, "pkg/compression/lzbitmap/": {}, "pkg/compression/lzfse/": {}}
+	for _, file := range []string{"pkg/compression/decmpfs/info.go", "pkg/compression/lz4/lz4.go", "internal/decmpfs/lz4.go", "internal/decmpfs/policy.go", "pkg/compression/decmpfs/policy.go", "internal/decmpfs/encode.go", "internal/decmpfs/encode_zlib.go", "pkg/compression/lzbitmap/encode_native.go", "pkg/compression/decmpfs/encode.go"} {
 		coverageFiles[file] = [2]int{}
 	}
 	blocks := map[string][2]int{}
@@ -156,7 +156,7 @@ func verify() error {
 	files := []string{"scripts/verify-decmpfs-formats.go", "scripts/verify-decmpfs-formats-coverage.go", "testdata/appledouble/native/decmpfs-formats.c", "testdata/appledouble/native/decmpfs-formats.json.gz", "pkg/compression/lzbitmap/testdata/aa-lzbitmap.aar", "pkg/compression/lzbitmap/testdata/aa-lzbitmap-raw.aar", "go.mod", "go.sum"}
 	files = append(files, "internal/evidenceaudit/*.go", "internal/decmpfs/*.go", "pkg/compression/lzbitmap/*.go")
 	files = append(files, "scripts/verify-large-compression*.go", "testdata/appledouble/native/decmpfs-large.c", "testdata/appledouble/native/decmpfs-expand.c", "testdata/appledouble/native/large-compression/*")
-	files = append(files, "pkg/compression/decmpfs/*.go", "pkg/compression/lzfse/*.go", "pkg/compression/lzbitmap/testdata/scalar/*.zbm", "scripts/capture-compression-*.go", "scripts/verify-compression-zlib-source.go", "testdata/appledouble/native/compression-*")
+	files = append(files, "pkg/compression/lz4/*.go", "pkg/compression/decmpfs/*.go", "pkg/compression/lzfse/*.go", "pkg/compression/lzbitmap/testdata/scalar/*.zbm", "scripts/capture-compression-*.go", "scripts/verify-compression-zlib-source.go", "testdata/appledouble/native/compression-*")
 	hashes, e := evidenceaudit.SourceHashes(os.DirFS("."), files)
 	if e != nil {
 		return e

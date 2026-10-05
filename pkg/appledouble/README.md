@@ -51,7 +51,9 @@ writers and the CLI bind that carrier to extraction and repacking.
   verify complete decoded hashes. See [compression storage](../../docs/appledouble-compression-storage.md#large-compressed-files)
   for the distinction between retained compression metadata and recompression.
   [`compression/decmpfs.EncodeFork`](../../docs/compression-writer.md) supplies
-  bounded creation of new compressed fork bytes; callers own installation policy.
+  bounded creation of new compressed fork bytes; `Encode` adds native content
+  selection and `Query` provides bounded metadata inspection. LZ4 types 15/16
+  are readable through the shared storage decoder. Callers own installation policy.
 - **Complete metadata operations:** `hostdata.PackAppleDoubleObject` and
   `UnpackAppleDoubleObject` operate on held objects; `CopyAppleDoublePath` adds
   creation/opening, temporary permission handling, retries and owned-descriptor

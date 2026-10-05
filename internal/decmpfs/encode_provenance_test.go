@@ -18,7 +18,10 @@ func TestNativeEncoderProvenance(t *testing.T) {
 		fixture string
 		sources []string
 	}{
+		{"compression-lz4-macos26.json.gz", []string{"testdata/appledouble/native/compression-lz4.c", "testdata/appledouble/native/decmpfs-formats.c", "scripts/capture-compression-lz4.go", "go.mod", "go.sum"}},
+		{"compression-query-macos26.json.gz", []string{"testdata/appledouble/native/compression-query.c", "testdata/appledouble/native/compression-policy.c", "scripts/capture-compression-query.go", "go.mod", "go.sum"}},
 		{"compression-blocks.json.gz", []string{"testdata/appledouble/native/compression-blocks.c", "scripts/capture-compression-blocks.go"}},
+		{"compression-policy.json.gz", []string{"testdata/appledouble/native/compression-policy.c", "scripts/capture-compression-policy.go", "go.mod", "go.sum"}},
 		{"compression-writer.json.gz", []string{"testdata/appledouble/native/decmpfs-large.c", "scripts/capture-compression-writer.go", "go.mod", "go.sum"}},
 		{"compression-zlib-source.json", []string{"testdata/appledouble/native/compression-zlib-source.c", "scripts/verify-compression-zlib-source.go"}},
 	} {

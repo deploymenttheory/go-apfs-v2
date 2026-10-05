@@ -1,0 +1,51 @@
+name: Native compression profiles
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: compression-native-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  CGO_ENABLED: "0"
+  GOTOOLCHAIN: local
+
+jobs:
+  native:
+    name: Native compression (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, xcode-27]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Recapture complete native LZ4 and kernel storage inventory
+        run: go run scripts/capture-compression-lz4.go -check
+      - name: Recapture guarded native compression queries
+        if: ${{ !cancelled() }}
+        run: go run scripts/capture-compression-query.go -check
+      - name: Replay complete portable compression corpus above 95 percent coverage
+        if: ${{ !cancelled() }}
+        run: go run scripts/verify-decmpfs-formats-coverage.go
+      - name: Upload fresh native profiles and replay evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: compression-native-${{ matrix.os }}
+          path: |
+            artifacts/compression-lz4/
+            artifacts/compression-query/
+            artifacts/decmpfs-formats-coverage/
+          if-no-files-found: error

@@ -1,0 +1,6 @@
+# GitHub-hosted preview label, already used by the native compression matrix.
+# actionlint's extensible-label setting also covers newly published hosted labels.
+# https://github.com/actions/runner-images#available-images
+self-hosted-runner:
+  labels:
+    - xcode-27

@@ -41,6 +41,9 @@ func Decompress(
 	case MethodLZVN:
 		return decompressLZVN(compressedData, uncompressedData, uncompressedDataSize)
 
+	case MethodLZ4:
+		return decompressLZ4(compressedData, uncompressedData, uncompressedDataSize)
+
 	case MethodLZFSE:
 		return decompressLZFSE(compressedData, uncompressedData, uncompressedDataSize)
 

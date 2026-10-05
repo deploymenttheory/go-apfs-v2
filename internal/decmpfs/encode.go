@@ -29,6 +29,12 @@ type EncodedFork struct {
 // header names its resource-fork form. This format primitive deliberately does
 // not decide whether a host should compress a file or use inline storage.
 func EncodeFork(ctx context.Context, source io.ReaderAt, size int64, kind uint32, destination io.WriterAt) (EncodedFork, error) {
+	return encodeFork(ctx, source, size, kind, destination, nil)
+}
+
+// accept examines each encoded block before any of that block is written. The
+// policy encoder uses it to select inline storage or decline insufficient savings.
+func encodeFork(ctx context.Context, source io.ReaderAt, size int64, kind uint32, destination io.WriterAt, accept func([]byte) error) (EncodedFork, error) {
 	if err := ctx.Err(); err != nil {
 		return EncodedFork{}, err
 	}
@@ -61,11 +67,6 @@ func EncodeFork(ctx context.Context, source io.ReaderAt, size int64, kind uint32
 		}
 		return errors.Join(err, ctx.Err())
 	}
-	if kind == 4 {
-		if err := write(make([]byte, 264), 0); err != nil {
-			return EncodedFork{}, err
-		}
-	}
 	buffer := make([]byte, BlockSize)
 	for block := uint64(0); block < blocks; block++ {
 		if err := ctx.Err(); err != nil {
@@ -86,6 +87,19 @@ func EncodeFork(ctx context.Context, source io.ReaderAt, size int64, kind uint32
 		encoded, err := encodeBlock(plain, kind)
 		if err != nil {
 			return EncodedFork{}, err
+		}
+		if err := ctx.Err(); err != nil {
+			return EncodedFork{}, err
+		}
+		if accept != nil {
+			if err := accept(encoded); err != nil {
+				return EncodedFork{}, err
+			}
+		}
+		if kind == 4 && block == 0 {
+			if err := write(make([]byte, 264), 0); err != nil {
+				return EncodedFork{}, err
+			}
 		}
 		if err := checkEncodedExtent(offset, int64(len(encoded))); err != nil {
 			return EncodedFork{}, err
@@ -133,11 +147,14 @@ func EncodeFork(ctx context.Context, source io.ReaderAt, size int64, kind uint32
 			return EncodedFork{}, err
 		}
 	}
-	result := EncodedFork{Size: offset}
-	copy(result.Attribute[:4], HeaderSignature[:])
-	binary.LittleEndian.PutUint32(result.Attribute[4:8], kind)
-	binary.LittleEndian.PutUint64(result.Attribute[8:], uint64(size))
-	return result, nil
+	return EncodedFork{Attribute: encodedHeader(kind, size), Size: offset}, nil
+}
+
+func encodedHeader(kind uint32, size int64) (header [HeaderSize]byte) {
+	copy(header[:4], HeaderSignature[:])
+	binary.LittleEndian.PutUint32(header[4:8], kind)
+	binary.LittleEndian.PutUint64(header[8:], uint64(size))
+	return header
 }
 func encodeBlock(plain []byte, kind uint32) ([]byte, error) {
 	var encoded []byte

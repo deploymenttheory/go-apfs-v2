@@ -99,6 +99,7 @@ jobs:
   race:
     name: Race detector
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
@@ -111,7 +112,20 @@ jobs:
       - name: Unit tests with -race
         env:
           CGO_ENABLED: "1"
-        run: go test -race -short ./pkg/... ./internal/...
+        # The complete native codec replay exceeds Go's default ten-minute
+        # package timeout under instrumentation on the Linux runner. Retain
+        # every case and record individual test timings for stall diagnosis.
+        shell: bash
+        run: |
+          mkdir -p artifacts/race
+          go test -race -short -timeout 30m -json ./pkg/... ./internal/... | tee artifacts/race/tests.json
+      - name: Upload race results and timings
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: race-results
+          path: artifacts/race/
+          if-no-files-found: error
 
   test:
     name: Test (${{ matrix.os }})
@@ -642,6 +656,9 @@ jobs:
           go run scripts/capture-compression-blocks.go -check
           go run scripts/capture-compression-writer.go -check
           go run scripts/verify-compression-zlib-source.go
+          go run scripts/capture-compression-policy.go -check
+          go run scripts/capture-compression-lz4.go -check
+          go run scripts/capture-compression-query.go -check
       - name: Upload native compression encoder evidence
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
@@ -651,6 +668,9 @@ jobs:
             artifacts/compression-blocks/
             artifacts/compression-writer/
             artifacts/compression-zlib-source/
+            artifacts/compression-policy/
+            artifacts/compression-lz4/
+            artifacts/compression-query/
           if-no-files-found: error
       - name: Audit portable AppleDouble qualification evidence
         env:
