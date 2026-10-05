@@ -41,7 +41,9 @@ jobs:
         run: go run scripts/capture-compression-lifecycle.go -check
       - name: Recapture native acquisition, read failures and surviving states
         if: ${{ !cancelled() }}
-        run: go run scripts/capture-compression-operation.go -check
+        run: |
+          go test scripts/capture-compression-operation.go scripts/capture-compression-operation_test.go
+          go run scripts/capture-compression-operation.go -check
       - name: Qualify complete quarantine contexts and destination outcomes
         if: ${{ !cancelled() }}
         run: |

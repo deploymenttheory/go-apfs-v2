@@ -1,4 +1,9 @@
 // Additional acquisition/read observations, confined to the armed test inode.
+#include <stdio.h>
+#include <stdarg.h>
+#include <pthread.h>
+static int compression_trace_fprintf(FILE *,const char *,...) __attribute__((format(printf,2,3)));
+#define fprintf compression_trace_fprintf
 #include "compression-lifecycle-interpose.c"
 #include <stdarg.h>
 
@@ -59,3 +64,11 @@ static ssize_t probe_pread(int fd,void *buffer,size_t size,off_t offset) {
     observation("pread",match,offset,result,error,fault||short_fault||zero_fault);return result;
 }
 INTERPOSE(open);INTERPOSE(openat);INTERPOSE(fstat);INTERPOSE(dup);INTERPOSE(pread);
+
+#undef fprintf
+static int compression_trace_fprintf(FILE *stream,const char *format,...) {
+    char line[8192];va_list args;va_start(args,format);int n=vsnprintf(line,sizeof(line),format,args);va_end(args);
+    if(n<0||n>=(int)sizeof(line)){perror("trace bounds");exit(2);}
+    if(stream==stderr&&line[0]=='{')return fprintf(stream,"{\"thread\":\"%s\",%s",pthread_main_np()?"caller":"worker",line+1);
+    return fprintf(stream,"%s",line);
+}

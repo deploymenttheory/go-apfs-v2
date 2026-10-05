@@ -63,6 +63,12 @@ volume-query failure, including the surviving file bytes. The Go protocol
 reports the operation error and cleans up its handles. This is an explicit
 exception to process-level failure parity; it does not deliberately crash a
 calling Go application or label the native process as having accepted the file.
+The interposer records caller/worker identity. After this specific volume-query
+fault, worker fork sync/close is mandatory and ordered; the crash can preempt
+the caller's final data close. The checker validates every recorded cleanup
+event against that partial order, and rejects missing worker cleanup, duplicates,
+wrong threads, wrong errors or other process-failure profiles. Independent tests
+exercise all permitted interleavings and rejected mutations.
 
 ## Evidence and qualification
 

@@ -105,7 +105,7 @@ func run(out string, check bool) (result error) {
 	digest := func(b []byte) string { return fmt.Sprintf("%x", sha256.Sum256(b)) }
 	const source = "testdata/appledouble/native/compression-operation.c"
 	const interposer = "testdata/appledouble/native/compression-operation-interpose.c"
-	for _, path := range []string{source, interposer, "testdata/appledouble/native/compression-lifecycle-interpose.c", "testdata/appledouble/native/compression-policy.c", "scripts/capture-compression-operation.go", "go.mod", "go.sum"} {
+	for _, path := range []string{source, interposer, "testdata/appledouble/native/compression-lifecycle-interpose.c", "testdata/appledouble/native/compression-policy.c", "scripts/capture-compression-operation.go", "scripts/capture-compression-operation_test.go", "go.mod", "go.sum"} {
 		b, e := os.ReadFile(path)
 		if e != nil {
 			return e
@@ -399,6 +399,7 @@ func comparison(c trial) ([]byte, error) {
 	}
 	c.Observation = b
 	var trace strings.Builder
+	var events []map[string]any
 	var initialModify, initialAccess, initialModifySec, initialAccessSec float64
 	var haveInitial bool
 	for _, line := range strings.Split(strings.TrimSpace(c.Trace), "\n") {
@@ -448,9 +449,72 @@ func comparison(c trial) ([]byte, error) {
 		if e != nil {
 			return nil, e
 		}
+		events = append(events, event)
 		trace.Write(b)
 		trace.WriteByte('\n')
 	}
+	if c.ProcessSignal != 0 {
+		normalized, e := normalizeCrashTrace(c, events)
+		if e != nil {
+			return nil, e
+		}
+		trace.Reset()
+		for _, event := range normalized {
+			b, e := json.Marshal(event)
+			if e != nil {
+				return nil, e
+			}
+			trace.Write(b)
+			trace.WriteByte('\n')
+		}
+	}
 	c.Trace = trace.String()
 	return json.Marshal(c)
+}
+
+// A fatal worker fault can interrupt the caller before it closes its data
+// handle. Validate every recorded event and both mandatory worker operations;
+// compare this observed partial order rather than inventing a total order
+// between independent threads. Raw interleavings remain in the artifact.
+func normalizeCrashTrace(c trial, events []map[string]any) ([]map[string]any, error) {
+	if c.ProcessSignal != 11 || c.Fault != "fstatfs" {
+		return nil, errors.New("unqualified native process failure")
+	}
+	fault := -1
+	for i, event := range events {
+		if event["operation"] == "fstatfs" {
+			if fault != -1 || event["thread"] != "caller" || event["result"] != float64(-1) || event["errno"] != float64(5) || event["injected"] != true {
+				return nil, errors.New("invalid native volume-failure trace")
+			}
+			fault = i
+		}
+	}
+	if fault < 0 {
+		return nil, errors.New("native crash without qualified volume fault")
+	}
+	callerClose := false
+	worker := 0
+	for _, event := range events[fault+1:] {
+		if len(event) != 7 || event["argument"] != float64(0) || event["result"] != float64(0) || event["errno"] != float64(0) || event["injected"] != false {
+			return nil, errors.New("unexpected native crash cleanup result")
+		}
+		switch event["thread"] {
+		case "caller":
+			if callerClose || event["operation"] != "close" || event["fork"] != false {
+				return nil, errors.New("unexpected native caller crash cleanup")
+			}
+			callerClose = true
+		case "worker":
+			if worker >= 2 || event["fork"] != true || event["operation"] != []string{"fsync", "close"}[worker] {
+				return nil, errors.New("unexpected native worker crash cleanup")
+			}
+			worker++
+		default:
+			return nil, errors.New("unqualified native cleanup thread")
+		}
+	}
+	if worker != 2 {
+		return nil, errors.New("incomplete native worker cleanup before crash")
+	}
+	return append(events[:fault+1], map[string]any{"operation": "qualified-signal-11-cleanup", "worker_fork_sync_close": true, "caller_close_may_be_preempted": true}), nil
 }

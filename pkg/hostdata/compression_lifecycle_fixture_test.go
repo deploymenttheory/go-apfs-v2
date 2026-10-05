@@ -14,7 +14,13 @@ func TestCompressionLifecycleProvenance(t *testing.T) {
 	testCompressionProvenance(t, "compression-lifecycle", 591, nil)
 }
 func TestCompressionOperationProvenance(t *testing.T) {
-	testCompressionProvenance(t, "compression-operation", 330, []string{"testdata/appledouble/native/compression-lifecycle-interpose.c"})
+	testCompressionProvenance(t, "compression-operation", 330, []string{"testdata/appledouble/native/compression-lifecycle-interpose.c", "scripts/capture-compression-operation_test.go"})
+	for i, c := range compressionOperationTrials(t) {
+		if c.Filesystem == "" || c.Scenario == "" || c.Requested == "" || c.Inline == "" || c.Trace == "" {
+			t.Fatal("incomplete typed native operation observation", i)
+		}
+	}
+
 }
 func testCompressionProvenance(t *testing.T, name string, count int, additional []string) {
 	t.Helper()
