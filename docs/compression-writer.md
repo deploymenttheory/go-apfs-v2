@@ -122,6 +122,15 @@ while reporting that activation failed. Cancellation before truncation stops at
 the next boundary. Once truncation succeeds, flag activation and restoration
 finish before a late cancellation is returned. No rollback is promised.
 
+`hostdata.CommitHeldCompression` binds that transition to the caller-held native
+Darwin file. It uses typed x/sys operations and the existing held metadata
+adapter, including native microsecond timestamp restoration. The resource-fork
+writer must already be complete and closed. Native tests replay 36 independently
+captured storage choices, verify full kernel readback through held and reopened
+files, and ensure a rename plus replacement at the original name cannot redirect
+the transition. The shared `CommitCompression` protocol supplies the same policy
+for explicit foreign metadata on Linux, macOS and Windows.
+
 Complete installation, eligibility and foreign carrier publication remain
 integration prerequisites. Queue acceptance alone does not establish successful
 compression, and errors after truncation can leave partial native state. These

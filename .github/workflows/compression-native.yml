@@ -45,9 +45,9 @@ jobs:
           go run scripts/verify-appledouble-quarantine-runtime.go -contexts
           go run scripts/verify-appledouble-quarantine-runtime.go -existing
           go run scripts/verify-appledouble-quarantine-runtime.go -destinations
-      - name: Capture every effective quarantine process flag independently
+      - name: Qualify every effective quarantine process flag independently
         if: ${{ !cancelled() }}
-        run: go run scripts/verify-appledouble-quarantine-runtime.go -raw-processes -capture
+        run: go run scripts/verify-appledouble-quarantine-runtime.go -raw-processes
       - name: Replay compression lifecycle and complete hostdata coverage
         if: ${{ !cancelled() }}
         run: go run scripts/verify-compression-lifecycle.go
