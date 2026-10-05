@@ -31,6 +31,7 @@ if(argc==4&&!strcmp(argv[1],"observe")) {
 }
     if (argc != 6) return 2;
     const char *scenario=argv[1], *path=argv[2], *prefix=argv[3];
+    int observer=-1;
     char auxiliary[4096];
     if (snprintf(auxiliary,sizeof(auxiliary),"%s-other",path)>=(int)sizeof(auxiliary)) return 2;
     if (!strcmp(scenario,"directory")) {
@@ -41,6 +42,9 @@ if(argc==4&&!strcmp(argv[1],"observe")) {
         int f=open(path,O_CREAT|O_EXCL|O_RDWR,0600); if(f<0)die("create");
         size_t length=!strcmp(scenario,"multi-block")?131076:65536;if(!strncmp(scenario,"size-",5))length=(size_t)strtoul(scenario+5,NULL,10);if(length>131076)return 2;unsigned char content[131076];for(size_t i=0;i<length;i++)content[i]="abcd"[i%4];if(!strcmp(scenario,"incompressible")){uint32_t state=0x12345678;for(size_t i=0;i<length;i++){state^=state<<13;state^=state>>17;state^=state<<5;content[i]=(unsigned char)state;}}
         if(write(f,content,length)!=(ssize_t)length)die("write");
+        // Open before metadata/ACL setup. Inspection after compression must not
+        // reopen compressed data and invoke a read-side validation callback.
+        observer=open(path,O_RDONLY|O_CLOEXEC);if(observer<0)die("retain observer");
         if((!strcmp(scenario,"fork")||!strcmp(scenario,"already-compressed-fork"))&&fsetxattr(f,"com.apple.ResourceFork","independent",11,0,0))die("fork");
         if(!strcmp(scenario,"empty-fork")&&fsetxattr(f,"com.apple.ResourceFork","",0,0,0))die("empty fork");
         if(!strcmp(scenario,"stale-attribute")&&fsetxattr(f,"com.apple.decmpfs","stale",5,0,0))die("stale attr");
@@ -99,16 +103,20 @@ if(lstat(path,&before))die("before");struct statfs volume;if(statfs(path,&volume
     printf("{\"filesystem_type\":\"%s\",\"volume_flags\":%u,\"accepted\":%s,\"errno\":%d,\"before_mode\":%u,\"after_mode\":%u,\"before_flags\":%u,\"after_flags\":%u,\"before_size\":%lld,\"after_size\":%lld,\"links\":%u,\"inode_unchanged\":%s",volume.f_fstypename,volume.f_flags,accepted?"true":"false",queue_errno,before.st_mode,after.st_mode,before.st_flags,after.st_flags,(long long)before.st_size,(long long)after.st_size,after.st_nlink,before.st_ino==after.st_ino?"true":"false");
     metadata_changes(&before,&after);
     printf(",\"target_flags\":%u,\"target_size\":%lld,\"target_inode_unchanged\":%s",target_after.st_flags,(long long)target_after.st_size,target_before.st_ino==target_after.st_ino?"true":"false");
+    if(S_ISREG(after.st_mode)) {
+        struct stat observed;if(observer<0||fstat(observer,&observed))die("held observer");
+        int unchanged=observed.st_dev==target_after.st_dev&&observed.st_ino==target_after.st_ino&&observed.st_nlink==target_after.st_nlink&&observed.st_mode==target_after.st_mode&&observed.st_uid==target_after.st_uid&&observed.st_gid==target_after.st_gid&&observed.st_flags==target_after.st_flags&&observed.st_size==target_after.st_size;
+        const struct timespec *held_times[]={&observed.st_birthtimespec,&observed.st_mtimespec,&observed.st_ctimespec,&observed.st_atimespec};
+        const struct timespec *path_times[]={&target_after.st_birthtimespec,&target_after.st_mtimespec,&target_after.st_ctimespec,&target_after.st_atimespec};
+        for(size_t i=0;i<4;i++)unchanged=unchanged&&held_times[i]->tv_sec==path_times[i]->tv_sec&&held_times[i]->tv_nsec==path_times[i]->tv_nsec;
+        printf(",\"observer_held_metadata_unchanged\":%s",unchanged?"true":"false");
+        if(!unchanged)die("observer changed operation metadata");
+    }
     // Capture operation state first; relax only test-owned restrictions to read
     // remaining bytes and remove the disposable objects after observation.
     if(S_ISREG(after.st_mode)) {
         if(chflags(path,after.st_flags&~(UF_IMMUTABLE|UF_APPEND))||chmod(path,0600))die("cleanup permissions");
         if(!strncmp(scenario,"deny-",5)) { acl_t acl=acl_init(0);if(!acl||acl_set_file(path,ACL_TYPE_EXTENDED,acl)||acl_free(acl))die("cleanup ACL"); }
-if((target_after.st_flags&UF_COMPRESSED)&&target_after.st_atimespec.tv_sec==1550000000) {
-    struct stat observed;int descriptor=open(path,O_RDONLY|O_CLOEXEC);if(descriptor<0||fstat(descriptor,&observed))die("read-open observer");
-    printf(",\"observer_open_access_changed\":%s",observed.st_atimespec.tv_sec!=target_after.st_atimespec.tv_sec||observed.st_atimespec.tv_nsec!=target_after.st_atimespec.tv_nsec?"true":"false");
-    if(close(descriptor))die("observer close");
-}
         printf(",\"storage\":{");inspect(library,path,prefix);printf("}");
         retained_data(path,prefix);
     } else if(S_ISLNK(after.st_mode)) {
@@ -116,5 +124,6 @@ if((target_after.st_flags&UF_COMPRESSED)&&target_after.st_atimespec.tv_sec==1550
         retained_data(auxiliary,prefix);
     }
     printf("}\n");
+    if(observer>=0&&close(observer))die("observer close");
     return dlclose(library)?2:0;
 }

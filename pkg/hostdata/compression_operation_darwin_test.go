@@ -70,6 +70,13 @@ func TestRecompressNativeFiles(t *testing.T) {
 			if _, e = f.Write(c.Data); e != nil {
 				t.Fatal(e)
 			}
+			// Retain a read descriptor while the fixture is still uncompressed.
+			// Later inspection must not reopen it and alter access time.
+			observer, e := os.Open(path)
+			if e != nil {
+				t.Fatal(e)
+			}
+			defer observer.Close()
 			metadata, e := NewHeldMetadata(f)
 			if e != nil {
 				t.Fatal(e)
@@ -103,16 +110,19 @@ func TestRecompressNativeFiles(t *testing.T) {
 			if e != nil || !result.Accepted || !result.Installation.Commit.Activated || !result.Installation.Commit.Completed || len(result.Installation.Commit.Failures) != 0 {
 				t.Fatal(result, e)
 			}
-			var beforeReadOpen unix.Stat_t
-			if e = unix.Stat(path, &beforeReadOpen); e != nil {
+			var pathState unix.Stat_t
+			if e = unix.Stat(path, &pathState); e != nil {
 				t.Fatal(e)
 			}
 
-			f, e = os.Open(path)
-			if e != nil {
+			f = observer
+			var held unix.Stat_t
+			if e = withXattrDescriptor(f, func(fd int) error { return unix.Fstat(fd, &held) }); e != nil {
 				t.Fatal(e)
 			}
-			defer f.Close()
+			if held.Dev != pathState.Dev || held.Ino != pathState.Ino || held.Nlink != pathState.Nlink || held.Size != pathState.Size {
+				t.Fatal("held/path identity, link count or size differs", held, pathState)
+			}
 			after, e := f.Stat()
 			if e != nil || !os.SameFile(before, after) {
 				t.Fatal("inode changed", e)
@@ -121,14 +131,14 @@ func TestRecompressNativeFiles(t *testing.T) {
 			if e != nil {
 				t.Fatal(e)
 			}
-			state := heldStatMetadata(beforeReadOpen)
+			state := heldStatMetadata(pathState)
 			observed, e := metadata.CaptureStat()
 			if e != nil {
 				t.Fatal(e)
 			}
-			expectedObservation := c.Observation.ObserverOpenAccessChanged
-			if expectedObservation == nil || *expectedObservation != !observed.Times.Access.Equal(state.Times.Access) {
-				t.Fatal("native read-open observation differs", expectedObservation, state, observed)
+			expectedObservation := c.Observation.ObserverHeldMetadataUnchanged
+			if expectedObservation == nil || !*expectedObservation || observed != state {
+				t.Fatal("held metadata observation differs", expectedObservation, state, observed)
 			}
 
 			if state.Flags != UFCompressed || state.Mode != source.Mode || !state.Times.Modify.Equal(source.Times.Modify.Truncate(time.Microsecond)) || !state.Times.Access.Equal(source.Times.Access.Truncate(time.Microsecond)) {

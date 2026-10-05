@@ -19,6 +19,9 @@ func TestCompressionOperationProvenance(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			testCompressionProvenanceFrom(t, name, "compression-operation", 330, []string{"testdata/appledouble/native/compression-lifecycle-interpose.c", "scripts/capture-compression-operation_test.go", "pkg/osversion/version.go", "pkg/osversion/macos.go", "pkg/osversion/host.go", "pkg/osversion/host_darwin.go", "pkg/osversion/host_other.go"})
 			for i, c := range compressionTrials(t, name, 330) {
+				if c.Observation.AfterMode&0170000 == 0100000 && (c.Observation.ObserverHeldMetadataUnchanged == nil || !*c.Observation.ObserverHeldMetadataUnchanged) {
+					t.Fatal("missing or changed held metadata snapshot", i)
+				}
 				if c.Filesystem == "" || c.Scenario == "" || c.Requested == "" || c.Inline == "" || c.Trace == "" {
 					t.Fatal("incomplete typed native operation observation", i)
 				}

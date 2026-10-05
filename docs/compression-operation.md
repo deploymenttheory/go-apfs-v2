@@ -54,11 +54,24 @@ pre-open timestamp. Opening an inline-compressed file preserves an independent
 resource fork. The retained native corpus covers these cases on mounted APFS and
 HFS+ as well as the host volume.
 
-Even read-only observation can alter metadata. On the captured HFS+ profiles,
-opening a file whose compression uses the resource fork changes its access time.
-The acceptance tests assert the restored timestamp before that observer open,
-then separately compare the open's effect with the independent C observation.
-They still require exact logical contents, compression storage and inode identity.
+A new read-only open is an invasive observer: HFS invokes compressed-file
+validation, and read-side access-time updates depend on native filesystem and
+process/vnode context. The macOS 15 captures exposed both changed and unchanged
+access times for the same successful compressed output. A single boolean from a
+fresh read-open is therefore not a reproducible compression-restoration contract.
+
+The C probe and Go acceptance tests retain a read descriptor from uncompressed
+fixture setup, before setting timestamps or restrictive permissions. After the
+operation they compare the held and pathname snapshots before cleanup or data
+readback. Both must agree exactly on inode identity, ownership, mode, flags, size
+and all four timestamps. The original before/after restoration, exact compressed
+storage and complete logical readback assertions remain mandatory. Inspection
+never resets timestamps to manufacture agreement.
+
+See Apple's pinned [HFS open and attribute implementation](https://github.com/apple-oss-distributions/hfs/blob/d1bac2f062e6e9c0dfcce302d9aacb10173d0eea/core/hfs_vnops.c)
+and [conditional timestamp updates](https://github.com/apple-oss-distributions/hfs/blob/d1bac2f062e6e9c0dfcce302d9aacb10173d0eea/core/hfs_cnode.c).
+The observed variation does not identify which internal condition applied on a
+particular CI run; the held observer removes that unrelated read-open operation.
 
 The native fault corpus also retains a framework process crash after an injected
 volume-query failure, including the surviving file bytes. The Go protocol
@@ -90,7 +103,7 @@ exercise all permitted interleavings and rejected mutations.
   requires complete-package coverage above 95%.
 - `scripts/verify-compression-installation-native.go` now requires 462 actual
   installation/recompression readbacks on host/APFS/HFS+, including every codec
-  and the native read-open observation controls. CI runs the native capture and
+  and the native held metadata observation controls. CI runs the native capture and
   mounted checks on both existing macOS runners. The macOS 26 and 27 acquisition
   traces have separate complete profiles; macOS 15 recapture and installation
   qualification has been added and remains required before claiming that release

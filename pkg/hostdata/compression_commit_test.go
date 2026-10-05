@@ -28,14 +28,14 @@ type compressionLifecycleTrial struct {
 	FaultCount, FaultErrno, FaultSkip                     int
 	Attribute, Fork, Data                                 []byte
 	Observation                                           struct {
-		FilesystemType            string `json:"filesystem_type"`
-		ObserverOpenAccessChanged *bool  `json:"observer_open_access_changed"`
-		VolumeFlags               uint32 `json:"volume_flags"`
-		BeforeSize                int64  `json:"before_size"`
-		BeforeMode                uint32 `json:"before_mode"`
-		AfterMode                 uint32 `json:"after_mode"`
-		TargetFlags               uint32 `json:"target_flags"`
-		TargetSize                int64  `json:"target_size"`
+		FilesystemType                string `json:"filesystem_type"`
+		ObserverHeldMetadataUnchanged *bool  `json:"observer_held_metadata_unchanged"`
+		VolumeFlags                   uint32 `json:"volume_flags"`
+		BeforeSize                    int64  `json:"before_size"`
+		BeforeMode                    uint32 `json:"before_mode"`
+		AfterMode                     uint32 `json:"after_mode"`
+		TargetFlags                   uint32 `json:"target_flags"`
+		TargetSize                    int64  `json:"target_size"`
 	}
 }
 
