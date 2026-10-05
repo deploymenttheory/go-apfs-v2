@@ -45,8 +45,13 @@ type Handle struct {
 	// The number of compressed blocks
 	NumberOfCompressedBlocks uint32
 
-	// The compressed block offsets
+	// The compressed block offsets for indexes that fit within one block.
+	// Larger indexes stay on disk and this slice remains nil.
 	CompressedBlockOffsets []uint32
+
+	// Large on-disk indexes are validated in bounded chunks, then queried by
+	// range. Retaining their complete offset array would scale with file size.
+	largeIndex *blockIndex
 }
 
 // NewHandle creates a decoder for a compressed stream. compressionMethod is one
@@ -100,6 +105,7 @@ func (cdh *Handle) Close() error {
 	cdh.SegmentData = nil
 	cdh.CompressedSegmentData = nil
 	cdh.CompressedBlockOffsets = nil
+	cdh.largeIndex = nil
 
 	return nil
 }
@@ -110,7 +116,7 @@ func (cdh *Handle) loadCompressedBlockOffsets() error {
 		return fmt.Errorf("invalid compressed data handle")
 	}
 
-	if cdh.CompressedBlockOffsets != nil {
+	if cdh.CompressedBlockOffsets != nil || cdh.largeIndex != nil {
 		return fmt.Errorf("compressed block offsets already set")
 	}
 
@@ -162,6 +168,9 @@ func (cdh *Handle) loadCompressedBlockOffsets() error {
 		if cdh.NumberOfCompressedBlocks > (0xFFFFFFFF / 8) {
 			return fmt.Errorf("invalid number of compressed blocks value out of bounds")
 		}
+		if uint64(cdh.NumberOfCompressedBlocks)*8+264 > BlockSize {
+			return cdh.loadLargeIndex(264, cdh.NumberOfCompressedBlocks, true)
+		}
 
 		segmentDataOffset = 264
 		compressedDescriptorsOffset += 4
@@ -179,6 +188,12 @@ func (cdh *Handle) loadCompressedBlockOffsets() error {
 
 		// Read first compressed block offset (little endian)
 		compressedBlockOffset := binary.LittleEndian.Uint32(cdh.CompressedSegmentData[:4])
+		if compressedBlockOffset > BlockSize {
+			if compressedBlockOffset%4 != 0 {
+				return fmt.Errorf("invalid compressed block table alignment")
+			}
+			return cdh.loadLargeIndex(0, compressedBlockOffset/4-1, false)
+		}
 
 		if compressedBlockOffset <= 0x00000004 ||
 			compressedBlockOffset >= uint32(BlockSize+1) {
@@ -297,7 +312,7 @@ func (cdh *Handle) ReadSegmentData(
 	}
 
 	// Get compressed block offsets if not already loaded
-	if cdh.CompressedBlockOffsets == nil {
+	if cdh.CompressedBlockOffsets == nil && cdh.largeIndex == nil {
 		if err := cdh.loadCompressedBlockOffsets(); err != nil {
 			return 0, fmt.Errorf("unable to determine compressed block offsets: %w", err)
 		}
@@ -307,6 +322,11 @@ func (cdh *Handle) ReadSegmentData(
 	if uint64(cdh.CurrentSegmentOffset) >= cdh.UncompressedDataSize {
 		return 0, io.EOF
 	}
+	// The last codec block may contain padding beyond the logical file. Never
+	// expose it or request a nonexistent following descriptor at the logical end.
+	if remaining := cdh.UncompressedDataSize - uint64(cdh.CurrentSegmentOffset); uint64(len(segmentData)) > remaining {
+		segmentData = segmentData[:remaining]
+	}
 
 	// Calculate which compressed block we need
 	compressedBlockIndex := uint32(cdh.CurrentSegmentOffset / BlockSize)
@@ -314,16 +334,27 @@ func (cdh *Handle) ReadSegmentData(
 	dataOffset := int(cdh.CurrentSegmentOffset % BlockSize)
 
 	totalBytesRead := 0
+	defer func() { cdh.CurrentSegmentOffset += int64(totalBytesRead) }()
 
 	for len(segmentData) > segmentDataOffset {
 		if compressedBlockIndex >= cdh.NumberOfCompressedBlocks {
-			return 0, fmt.Errorf("invalid compressed block index value out of bounds")
+			return totalBytesRead, fmt.Errorf("invalid compressed block index value out of bounds")
 		}
 
 		// Decompress the block if it's not the current one
 		if cdh.CurrentCompressedBlockIndex != compressedBlockIndex {
-			dataStreamOffset := int64(cdh.CompressedBlockOffsets[compressedBlockIndex])
-			readSize := int(cdh.CompressedBlockOffsets[compressedBlockIndex+1] - cdh.CompressedBlockOffsets[compressedBlockIndex])
+			var dataStreamOffset int64
+			var readSize int
+			if cdh.largeIndex != nil {
+				var err error
+				dataStreamOffset, readSize, err = cdh.largeIndex.block(cdh.CompressedDataStream, compressedBlockIndex)
+				if err != nil {
+					return totalBytesRead, err
+				}
+			} else {
+				dataStreamOffset = int64(cdh.CompressedBlockOffsets[compressedBlockIndex])
+				readSize = int(cdh.CompressedBlockOffsets[compressedBlockIndex+1] - cdh.CompressedBlockOffsets[compressedBlockIndex])
+			}
 
 			readCount, err := cdh.CompressedDataStream.ReadAt(
 				cdh.CompressedSegmentData[:readSize],
@@ -378,8 +409,6 @@ func (cdh *Handle) ReadSegmentData(
 		totalBytesRead += readSize
 		compressedBlockIndex++
 	}
-
-	cdh.CurrentSegmentOffset += int64(totalBytesRead)
 
 	return totalBytesRead, nil
 }

@@ -20,11 +20,9 @@ metadata to new data.
 | 13 / 14 | Inline / resource fork | LZBITMAP, or stored chunks with `0xff` marker |
 
 All these decoders and image writers run in pure Go on Linux, Windows and macOS.
-The LZBITMAP implementation moves from the existing macos-pkg package into
-`pkg/compression/lzbitmap`; its MIT provenance and native `aa` fixtures travel
-with it. `DecompressLimit` checks the output bound before allocating each chunk.
-The corresponding macos-pkg compatibility wrappers remain a downstream draft72
-change after APFS qualification and release, avoiding a circular dependency.
+`pkg/compression/lzbitmap` supplies the shared LZBITMAP implementation, with MIT
+provenance and native `aa` fixtures. `DecompressLimit` checks the output bound
+before allocating each chunk. Downstream consumers use this shared codec.
 
 Inline compression does not own a separate resource fork. Such a fork can carry
 independent metadata and must survive both compressed transport and explicit
@@ -47,6 +45,55 @@ not manufacture unavailable content. These prerequisites remain distinct from
 lossless transport of the original metadata bytes.
 
 ## Evidence and gates
+
+### Large compressed files
+
+The shared decoder validates resource-fork indexes larger than 64 KiB through
+bounded reads and retains only their on-disk location. Each subsequent block
+read fetches its descriptor separately. Index memory therefore does not grow
+with the number of compressed blocks. Existing small-index behavior remains;
+the public handle's `CompressedBlockOffsets` slice stays nil for large indexes.
+Native 32-bit resource-fork offsets remain format constraints, distinct from
+the 64-bit logical file size. Logical reads stop at the declared end, and a
+partial read advances the handle by the bytes actually returned even when the
+next source read fails.
+
+`testdata/appledouble/native/large-compression/` retains 43 observations:
+
+- Four 64 KiB files produced by AppleFSCompression: zlib, LZVN, LZFSE and LZBITMAP.
+  The producer explicitly disables inline storage so that OS-specific defaults
+  cannot turn a resource-fork control into an inline attribute.
+- Thirty-six independently constructed resource forks at one byte below, at and
+  above 1, 2 and 4 GiB logical size. The C constructor repeats a native-produced
+  block and uses the documented stored-block form for a short final block.
+  Every logical byte is read through macOS and checked against the recipe.
+  These are kernel-accepted layout controls, not claims that Apple's producer
+  chooses those layouts for those file sizes.
+- Three fully populated zlib producer controls around 512 MiB. On the retained
+  host, the two smaller inputs are compressed; the one-byte-larger input remains
+  uncompressed despite the queue accepting the request. That observation is
+  recorded separately from the kernel's ability to read larger compressed files.
+
+`go run scripts/verify-large-compression.go` recreates all 43 observations on
+macOS and compares the complete case inventory, logical hashes, compression
+attributes and raw fork hashes. Both C drivers have arm64/x86_64 Clang ASTs;
+source, SDK header and compiler provenance accompany the fresh artifacts. Use
+`-capture` only to retain a deliberately reviewed fresh native capture.
+
+`go run scripts/verify-large-compression-portable.go` reads **every logical
+byte of all 42 compressed cases** through Go and requires the native SHA-256
+values. CI runs it unchanged on Linux, macOS and Windows. Its source requests
+cannot exceed 65,537 bytes; the result records maximum request size and elapsed
+time per case. Unit tests additionally cover distant/crossing ranges, malformed
+tables, short reads, source failures, changed descriptors, cleanup and partial
+progress. The compression coverage gate requires the complete decoder package
+and new index implementation to exceed 95%, preserving the existing per-file
+gates and rejecting skipped tests.
+
+This qualification concerns reading existing compressed storage. It does not
+add recompression or claim that arbitrary edited data can reuse an old fork.
+
+### Metadata and transport
 
 `go run scripts/verify-decmpfs-formats.go` runs on macOS. AppleFSCompression
 produces type 10 and14 multi-block forks for compressible and mixed incompressible
