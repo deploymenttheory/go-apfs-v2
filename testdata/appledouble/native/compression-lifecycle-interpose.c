@@ -105,8 +105,8 @@ static ssize_t probe_write(int fd,const void *buffer,size_t size) {
 }
 static ssize_t probe_pwrite(int fd,const void *buffer,size_t size,off_t offset) {
     int match=target_fd(fd);if(!match)return pwrite(fd,buffer,size,offset);
-    int fault=fail("pwrite");ssize_t result=fault?-1:pwrite(fd,buffer,size,offset);int error=errno;
-    observation("pwrite",match,(long long)offset,result,error,fault);return result;
+    int short_fault=fail("pwrite-short"),fault=short_fault?0:fail("pwrite");ssize_t result=short_fault?pwrite(fd,buffer,size/2,offset):fault?-1:pwrite(fd,buffer,size,offset);int error=errno;
+    observation("pwrite",match,(long long)offset,result,error,fault||short_fault);return result;
 }
 static int probe_ffsctl(int fd,unsigned long request,void *data,unsigned options) {
     int match=target_fd(fd);if(!match)return ffsctl(fd,request,data,options);

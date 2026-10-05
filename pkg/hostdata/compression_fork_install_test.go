@@ -98,11 +98,12 @@ func TestInstallCompressionForkNativeLifecycle(t *testing.T) {
 						terminal = true
 						return 0, fmt.Errorf("native errno %d", e.Errno)
 					}
-					if int64(len(p)) != e.Result {
+					if e.Result < 0 || e.Result > int64(len(p)) {
 						t.Fatalf("native frame length %d; Go %d", e.Result, len(p))
 					}
-					installed = append(installed, p...)
-					return len(p), nil
+					terminal = e.Result < int64(len(p))
+					installed = append(installed, p[:e.Result]...)
+					return int(e.Result), nil
 				},
 				sync: func() error {
 					e := call("fsync", 0)
@@ -136,7 +137,7 @@ func TestInstallCompressionForkNativeLifecycle(t *testing.T) {
 			}
 		})
 	}
-	if compared != 456 {
+	if compared != 501 {
 		t.Fatal("incomplete native fork stage inventory", compared)
 	}
 }

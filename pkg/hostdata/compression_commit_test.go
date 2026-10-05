@@ -55,7 +55,7 @@ func compressionLifecycleTrials(t *testing.T) []compressionLifecycleTrial {
 	if e = json.NewDecoder(z).Decode(&corpus); e != nil {
 		t.Fatal(e)
 	}
-	if corpus.Schema != 1 || len(corpus.Cases) != 546 {
+	if corpus.Schema != 1 || len(corpus.Cases) != 591 {
 		t.Fatal("incomplete lifecycle fixture")
 	}
 	return corpus.Cases

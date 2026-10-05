@@ -218,6 +218,9 @@ func run(out string, check bool) (result error) {
 				for _, inline := range []string{"default", "no"} {
 					cases = append(cases, trial{Scenario: "multi-block", Requested: kind, Inline: inline})
 				}
+				for _, skip := range []int{0, 1, 2} {
+					cases = append(cases, trial{Scenario: "multi-block", Requested: kind, Inline: "no", Fault: "pwrite-short", FaultCount: 1, FaultSkip: skip})
+				}
 				for _, skip := range []int{1, 2} {
 					for _, errno := range []int{5, 28} {
 						cases = append(cases, trial{Scenario: "multi-block", Requested: kind, Inline: "no", Fault: "pwrite", FaultCount: 1, FaultSkip: skip, FaultErrno: errno})
@@ -272,7 +275,7 @@ func run(out string, check bool) (result error) {
 			return e
 		}
 	}
-	if len(capture.Cases) != 546 {
+	if len(capture.Cases) != 591 {
 		return fmt.Errorf("incomplete lifecycle inventory: %d", len(capture.Cases))
 	}
 	f, e := os.Create(out)
