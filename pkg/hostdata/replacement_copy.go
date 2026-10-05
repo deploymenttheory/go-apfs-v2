@@ -1,11 +1,13 @@
 package hostdata
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 
+	"github.com/deploymenttheory/go-apfs-v2/internal/decmpfs"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
 )
 
@@ -36,6 +38,7 @@ type replacementFork interface {
 }
 
 type replacementCopyOps struct {
+	compressed  bool
 	list        func() ([]string, error)
 	read        func(string, int) ([]byte, bool, error)
 	write       func(string, []byte) error
@@ -48,12 +51,29 @@ type replacementCopyOps struct {
 // streamed through held descriptors and never squeezed into an xattr buffer.
 // Security is deliberately deferred to RestoreMetadata, after content writes.
 func copyReplacementMetadataUsing(ops replacementCopyOps) error {
+	compressionFork := false
+	if ops.compressed {
+		value, present, err := ops.read(DecmpfsName, decmpfs.MaxAttributeSize)
+		if err != nil {
+			return fmt.Errorf("replacement compression: %w", err)
+		}
+		if !present {
+			return fmt.Errorf("replacement compression: %w", ErrXattrChanged)
+		}
+		compressionFork, err = decmpfs.UsesResourceFork(bytes.NewReader(value))
+		if err != nil {
+			return fmt.Errorf("replacement compression: %w", err)
+		}
+	}
 	names, err := ops.list()
 	if err != nil {
 		return err
 	}
 	remaining := MaxXattrReadSize
 	for _, name := range names {
+		if ops.compressed && (name == DecmpfsName || (compressionFork && name == ResourceForkName)) {
+			continue
+		}
 		if name == "com.apple.ResourceFork" {
 			if err := copyReplacementFork(ops); err != nil {
 				return fmt.Errorf("replacement resource fork: %w", err)

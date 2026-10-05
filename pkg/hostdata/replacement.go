@@ -28,7 +28,11 @@ type Replacement struct {
 //
 // On Darwin this uses cloning when available and otherwise copies metadata. It
 // preserves extended attributes and creation time, and restores the source ACL
-// after content writes. Protected and compressed files are unsupported. On Linux
+// after content writes. Protected files are unsupported. Compressed sources
+// use a fresh uncompressed stage: the old compression attribute and its owned
+// storage fork are excluded; an independent fork on inline-compressed sources
+// is preserved. RestoreMetadata keeps the target's own compression state.
+// Recompression policy belongs to the caller. On Linux
 // ownership, mode and readable extended attributes (including POSIX ACLs) are
 // restored. On Windows CopyFile preserves streams and attributes; the owner,
 // group and DACL are restored explicitly. Linux xattr names and values each have

@@ -1,0 +1,4431 @@
+{
+  "cases": [
+    {
+      "case": "TestReplacementCompressedDarwinNative/path/native-10-dense",
+      "filesystem": "APFS",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170025,
+          "Nsec": 424309338
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170025,
+      "native_end": 1791170025,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 10
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/path/kernel-9-dense",
+      "filesystem": "APFS",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170025,
+          "Nsec": 466676437
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170025,
+      "native_end": 1791170025,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 9
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/path/native-10-mixed",
+      "filesystem": "APFS",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170025,
+          "Nsec": 476798034
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170025,
+      "native_end": 1791170025,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 10
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/path/kernel-9-mixed",
+      "filesystem": "APFS",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170025,
+          "Nsec": 493096014
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170025,
+      "native_end": 1791170025,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 9
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/path/native-14-dense",
+      "filesystem": "APFS",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170025,
+          "Nsec": 502757943
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170025,
+      "native_end": 1791170025,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 14
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/path/kernel-13-dense",
+      "filesystem": "APFS",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170025,
+          "Nsec": 512448248
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170025,
+      "native_end": 1791170025,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 13
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/path/native-14-mixed",
+      "filesystem": "APFS",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170025,
+          "Nsec": 522954054
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170025,
+      "native_end": 1791170025,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 14
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/path/kernel-13-mixed",
+      "filesystem": "APFS",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170025,
+          "Nsec": 536751280
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170025,
+      "native_end": 1791170025,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 13
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/path/kernel-type1",
+      "filesystem": "APFS",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170025,
+          "Nsec": 546172626
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170025,
+      "native_end": 1791170025,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 1
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/path/kernel-type1-empty",
+      "filesystem": "APFS",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170025,
+          "Nsec": 560594229
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170025,
+      "native_end": 1791170025,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 1
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/path/kernel-type1-independent-fork",
+      "filesystem": "APFS",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170025,
+          "Nsec": 574042539
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170025,
+      "native_end": 1791170025,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 1
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/path/kernel-type1-boundary",
+      "filesystem": "APFS",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170025,
+          "Nsec": 584809178
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170025,
+      "native_end": 1791170025,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 1
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/path/kernel-9-independent-fork",
+      "filesystem": "APFS",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170025,
+          "Nsec": 594547608
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170025,
+      "native_end": 1791170025,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 9
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/path/kernel-13-independent-fork",
+      "filesystem": "APFS",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170025,
+          "Nsec": 606552415
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170025,
+      "native_end": 1791170025,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 13
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/path/producer-3",
+      "filesystem": "APFS",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170025,
+          "Nsec": 618233598
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170025,
+      "native_end": 1791170025,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 4
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/path/producer-7",
+      "filesystem": "APFS",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170025,
+          "Nsec": 628268403
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170025,
+      "native_end": 1791170025,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 8
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/path/producer-11",
+      "filesystem": "APFS",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170025,
+          "Nsec": 640848378
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170025,
+      "native_end": 1791170025,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 12
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/root/native-10-dense",
+      "filesystem": "APFS",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170025,
+          "Nsec": 651142017
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170025,
+      "native_end": 1791170025,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 10
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/root/kernel-9-dense",
+      "filesystem": "APFS",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170025,
+          "Nsec": 665963286
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170025,
+      "native_end": 1791170025,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 9
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/root/native-10-mixed",
+      "filesystem": "APFS",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170025,
+          "Nsec": 675630883
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170025,
+      "native_end": 1791170025,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 10
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/root/kernel-9-mixed",
+      "filesystem": "APFS",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170025,
+          "Nsec": 686640273
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170025,
+      "native_end": 1791170025,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 9
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/root/native-14-dense",
+      "filesystem": "APFS",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170025,
+          "Nsec": 696668369
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170025,
+      "native_end": 1791170025,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 14
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/root/kernel-13-dense",
+      "filesystem": "APFS",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170025,
+          "Nsec": 706372007
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170025,
+      "native_end": 1791170025,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 13
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/root/native-14-mixed",
+      "filesystem": "APFS",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170025,
+          "Nsec": 716800813
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170025,
+      "native_end": 1791170025,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 14
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/root/kernel-13-mixed",
+      "filesystem": "APFS",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170025,
+          "Nsec": 754603155
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170025,
+      "native_end": 1791170025,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 13
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/root/kernel-type1",
+      "filesystem": "APFS",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170025,
+          "Nsec": 764183543
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170025,
+      "native_end": 1791170025,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 1
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/root/kernel-type1-empty",
+      "filesystem": "APFS",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170025,
+          "Nsec": 773567097
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170025,
+      "native_end": 1791170025,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 1
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/root/kernel-type1-independent-fork",
+      "filesystem": "APFS",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170025,
+          "Nsec": 783123360
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170025,
+      "native_end": 1791170025,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 1
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/root/kernel-type1-boundary",
+      "filesystem": "APFS",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170025,
+          "Nsec": 794048333
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170025,
+      "native_end": 1791170025,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 1
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/root/kernel-9-independent-fork",
+      "filesystem": "APFS",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170025,
+          "Nsec": 803580596
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170025,
+      "native_end": 1791170025,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 9
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/root/kernel-13-independent-fork",
+      "filesystem": "APFS",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170025,
+          "Nsec": 814083318
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170025,
+      "native_end": 1791170025,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 13
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/root/producer-3",
+      "filesystem": "APFS",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170025,
+          "Nsec": 824029206
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170025,
+      "native_end": 1791170025,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 4
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/root/producer-7",
+      "filesystem": "APFS",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170025,
+          "Nsec": 836007306
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170025,
+      "native_end": 1791170025,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 8
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/root/producer-11",
+      "filesystem": "APFS",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170025,
+          "Nsec": 845869444
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170025,
+      "native_end": 1791170025,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 12
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/path/native-10-dense",
+      "filesystem": "HFS+",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170028,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170028,
+      "native_end": 1791170028,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 10
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/path/kernel-9-dense",
+      "filesystem": "HFS+",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170028,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170028,
+      "native_end": 1791170028,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 9
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/path/native-10-mixed",
+      "filesystem": "HFS+",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170028,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170028,
+      "native_end": 1791170028,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 10
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/path/kernel-9-mixed",
+      "filesystem": "HFS+",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170028,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170028,
+      "native_end": 1791170028,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 9
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/path/native-14-dense",
+      "filesystem": "HFS+",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170028,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170028,
+      "native_end": 1791170028,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 14
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/path/kernel-13-dense",
+      "filesystem": "HFS+",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170028,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170028,
+      "native_end": 1791170028,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 13
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/path/native-14-mixed",
+      "filesystem": "HFS+",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170028,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170028,
+      "native_end": 1791170028,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 14
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/path/kernel-13-mixed",
+      "filesystem": "HFS+",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170028,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170028,
+      "native_end": 1791170028,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 13
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/path/kernel-type1",
+      "filesystem": "HFS+",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170028,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170028,
+      "native_end": 1791170028,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 1
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/path/kernel-type1-empty",
+      "filesystem": "HFS+",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170028,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170028,
+      "native_end": 1791170028,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 1
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/path/kernel-type1-independent-fork",
+      "filesystem": "HFS+",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170028,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170028,
+      "native_end": 1791170028,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 1
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/path/kernel-type1-boundary",
+      "filesystem": "HFS+",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170028,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170028,
+      "native_end": 1791170028,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 1
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/path/kernel-9-independent-fork",
+      "filesystem": "HFS+",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170028,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170028,
+      "native_end": 1791170028,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 9
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/path/kernel-13-independent-fork",
+      "filesystem": "HFS+",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170028,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170028,
+      "native_end": 1791170028,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 13
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/path/producer-3",
+      "filesystem": "HFS+",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170028,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170028,
+      "native_end": 1791170028,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 4
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/path/producer-7",
+      "filesystem": "HFS+",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170028,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170028,
+      "native_end": 1791170028,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 8
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/path/producer-11",
+      "filesystem": "HFS+",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170028,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170028,
+      "native_end": 1791170028,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 12
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/root/native-10-dense",
+      "filesystem": "HFS+",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170028,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170028,
+      "native_end": 1791170028,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 10
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/root/kernel-9-dense",
+      "filesystem": "HFS+",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170028,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170028,
+      "native_end": 1791170028,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 9
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/root/native-10-mixed",
+      "filesystem": "HFS+",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170028,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170028,
+      "native_end": 1791170028,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 10
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/root/kernel-9-mixed",
+      "filesystem": "HFS+",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170028,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170028,
+      "native_end": 1791170028,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 9
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/root/native-14-dense",
+      "filesystem": "HFS+",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170028,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170028,
+      "native_end": 1791170028,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 14
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/root/kernel-13-dense",
+      "filesystem": "HFS+",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170028,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170028,
+      "native_end": 1791170028,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 13
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/root/native-14-mixed",
+      "filesystem": "HFS+",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170028,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170028,
+      "native_end": 1791170028,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 14
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/root/kernel-13-mixed",
+      "filesystem": "HFS+",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170028,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170028,
+      "native_end": 1791170028,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 13
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/root/kernel-type1",
+      "filesystem": "HFS+",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170028,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170028,
+      "native_end": 1791170028,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 1
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/root/kernel-type1-empty",
+      "filesystem": "HFS+",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170028,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170028,
+      "native_end": 1791170028,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 1
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/root/kernel-type1-independent-fork",
+      "filesystem": "HFS+",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170028,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170028,
+      "native_end": 1791170028,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 1
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/root/kernel-type1-boundary",
+      "filesystem": "HFS+",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170028,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170028,
+      "native_end": 1791170028,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 1
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/root/kernel-9-independent-fork",
+      "filesystem": "HFS+",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170028,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170028,
+      "native_end": 1791170028,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 9
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/root/kernel-13-independent-fork",
+      "filesystem": "HFS+",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170028,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170028,
+      "native_end": 1791170028,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 13
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/root/producer-3",
+      "filesystem": "HFS+",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170028,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170028,
+      "native_end": 1791170028,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 4
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/root/producer-7",
+      "filesystem": "HFS+",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170028,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170028,
+      "native_end": 1791170028,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 8
+    },
+    {
+      "case": "TestReplacementCompressedDarwinNative/root/producer-11",
+      "filesystem": "HFS+",
+      "native": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1791170028,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "native_begin": 1791170028,
+      "native_end": 1791170028,
+      "replacement": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32768,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source": {
+        "Mode": 33152,
+        "UID": 501,
+        "GID": 20,
+        "Flags": 32800,
+        "Birth": {
+          "Sec": 1600000000,
+          "Nsec": 0
+        },
+        "Attributes": {
+          "com.apple.FinderInfo": "0000000000000000400000000000000000000000000000000000000000000000",
+          "com.apple.provenance": "010200953c7ac2a6fe63b9",
+          "user.replacement": "696e646570656e64656e74206d65746164617461"
+        },
+        "ForkSize": 0,
+        "ForkSHA256": "",
+        "ACL": null
+      },
+      "source_unchanged": true,
+      "stage_removed": true,
+      "type": 12
+    }
+  ],
+  "commands": [
+    {
+      "argv": [
+        "sw_vers"
+      ],
+      "stderr": "",
+      "stdout": "ProductName:\t\tmacOS\nProductVersion:\t\t27.0.1\nBuildVersion:\t\t26A434\n",
+      "success": true
+    },
+    {
+      "argv": [
+        "uname",
+        "-a"
+      ],
+      "stderr": "",
+      "stdout": "Darwin Mac 27.0.0 Darwin Kernel Version 27.0.0: Tue Aug 11 21:02:57 PDT 2026; root:xnu-13432.1.9~1/RELEASE_ARM64_T8132 arm64\n",
+      "success": true
+    },
+    {
+      "argv": [
+        "xcrun",
+        "clang",
+        "--version"
+      ],
+      "stderr": "",
+      "stdout": "Apple clang version 21.0.0 (clang-2100.3.34.2)\nTarget: arm64-apple-darwin27.0.0\nThread model: posix\nInstalledDir: /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin\n",
+      "success": true
+    },
+    {
+      "argv": [
+        "go",
+        "version"
+      ],
+      "stderr": "",
+      "stdout": "go version go1.27.1 darwin/arm64\n",
+      "success": true
+    },
+    {
+      "argv": [
+        "xcrun",
+        "--show-sdk-path"
+      ],
+      "stderr": "",
+      "stdout": "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk\n",
+      "success": true
+    },
+    {
+      "argv": [
+        "xcrun",
+        "clang",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "testdata/appledouble/native/replacement-copy.c",
+        "-o",
+        "/var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-3850584452/oracle"
+      ],
+      "stderr": "",
+      "stdout": "",
+      "success": true
+    },
+    {
+      "argv": [
+        "xcrun",
+        "clang",
+        "-arch",
+        "arm64",
+        "-fsyntax-only",
+        "-Xclang",
+        "-ast-dump=json",
+        "-Xclang",
+        "-ast-dump-filter=replacement_copy_oracle",
+        "testdata/appledouble/native/replacement-copy.c"
+      ],
+      "stderr": "",
+      "stdout": "retained in oracle-arm64.ast.json",
+      "success": true
+    },
+    {
+      "argv": [
+        "xcrun",
+        "clang",
+        "-arch",
+        "x86_64",
+        "-fsyntax-only",
+        "-Xclang",
+        "-ast-dump=json",
+        "-Xclang",
+        "-ast-dump-filter=replacement_copy_oracle",
+        "testdata/appledouble/native/replacement-copy.c"
+      ],
+      "stderr": "",
+      "stdout": "retained in oracle-x86_64.ast.json",
+      "success": true
+    },
+    {
+      "argv": [
+        "xcrun",
+        "clang",
+        "-arch",
+        "arm64",
+        "-fsyntax-only",
+        "-Xclang",
+        "-ast-dump=json",
+        "-Xclang",
+        "-ast-dump-filter=replacement_compressed_oracle",
+        "testdata/appledouble/native/replacement-compressed.c"
+      ],
+      "stderr": "",
+      "stdout": "retained in artifacts/replacement-native/compressed-arm64.ast.json",
+      "success": true
+    },
+    {
+      "argv": [
+        "xcrun",
+        "clang",
+        "-arch",
+        "x86_64",
+        "-fsyntax-only",
+        "-Xclang",
+        "-ast-dump=json",
+        "-Xclang",
+        "-ast-dump-filter=replacement_compressed_oracle",
+        "testdata/appledouble/native/replacement-compressed.c"
+      ],
+      "stderr": "",
+      "stdout": "retained in artifacts/replacement-native/compressed-x86_64.ast.json",
+      "success": true
+    },
+    {
+      "argv": [
+        "hdiutil",
+        "create",
+        "-size",
+        "128m",
+        "-fs",
+        "APFS",
+        "-volname",
+        "ReplacementOracle",
+        "/var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-3850584452/APFS.dmg"
+      ],
+      "stderr": "hdiutil: WARNING: 'hdiutil create -size -volname ...' is deprecated. Please use 'diskutil image create from/blank -size --volumeName ...' instead.\n",
+      "stdout": "created: /var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-3850584452/APFS.dmg\n",
+      "success": true
+    },
+    {
+      "argv": [
+        "hdiutil",
+        "attach",
+        "-nobrowse",
+        "-owners",
+        "on",
+        "-mountpoint",
+        "/var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-3850584452/mount",
+        "/var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-3850584452/APFS.dmg"
+      ],
+      "stderr": "hdiutil: WARNING: 'hdiutil attach -nobrowse -owners -mountpoint ...' is deprecated. Please use 'diskutil image attach --mountOptions nobrowse --mountOptions owners --mountPoint ...' instead.\n",
+      "stdout": "/dev/disk4          \tGUID_partition_scheme          \t\n/dev/disk4s1        \tApple_APFS                     \t\n/dev/disk5          \tEF57347C-0000-11AA-AA11-0030654\t\n/dev/disk5s1        \t41504653-0000-11AA-AA11-0030654\t/private/var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-3850584452/mount\n",
+      "success": true
+    },
+    {
+      "argv": [
+        "hdiutil",
+        "detach",
+        "/var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-3850584452/mount"
+      ],
+      "stderr": "hdiutil: WARNING: 'hdiutil detach ...' is deprecated. Please use 'diskutil eject ...' instead.\n",
+      "stdout": "\"disk4\" ejected.\n",
+      "success": true
+    },
+    {
+      "argv": [
+        "hdiutil",
+        "create",
+        "-size",
+        "128m",
+        "-fs",
+        "HFS+",
+        "-volname",
+        "ReplacementOracle",
+        "/var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-3850584452/HFSplus.dmg"
+      ],
+      "stderr": "hdiutil: WARNING: 'hdiutil create -size -volname ...' is deprecated. Please use 'diskutil image create from/blank -size --volumeName ...' instead.\n",
+      "stdout": "created: /var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-3850584452/HFSplus.dmg\n",
+      "success": true
+    },
+    {
+      "argv": [
+        "hdiutil",
+        "attach",
+        "-nobrowse",
+        "-owners",
+        "on",
+        "-mountpoint",
+        "/var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-3850584452/mount",
+        "/var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-3850584452/HFSplus.dmg"
+      ],
+      "stderr": "hdiutil: WARNING: 'hdiutil attach -nobrowse -owners -mountpoint ...' is deprecated. Please use 'diskutil image attach --mountOptions nobrowse --mountOptions owners --mountPoint ...' instead.\n",
+      "stdout": "/dev/disk4          \tGUID_partition_scheme          \t\n/dev/disk4s1        \tApple_HFS                      \t/private/var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-3850584452/mount\n",
+      "success": true
+    },
+    {
+      "argv": [
+        "hdiutil",
+        "detach",
+        "/var/folders/f_/mq__q6c979vfsbz2lxnv9q180000gn/T/apfs-replacement-oracle-3850584452/mount"
+      ],
+      "stderr": "hdiutil: WARNING: 'hdiutil detach ...' is deprecated. Please use 'diskutil eject ...' instead.\n",
+      "stdout": "\"disk4\" ejected.\n",
+      "success": true
+    }
+  ],
+  "purpose": "Compressed source replacement; SDK source birth preservation and native metadata-only copy birth semantics are qualified separately",
+  "schema": 1,
+  "source_sha256": {
+    "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/copyfile.h": "56f4a00b83f21ac98c818876eb1b3a3eb246d0a7a31e95fddbd1fd21f7c79ff9",
+    "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/sys/acl.h": "9511f84f0abe1e108e10979900d4fea8567534aef78f0984f7050c49f6c29ff7",
+    "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/sys/attr.h": "5118b9245bc932bc32dcc60084b1e40d70bb5479a360b31cdbf188ef866deefe",
+    "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/sys/clonefile.h": "1efe4ef4241c360905ecc40092245334725a9f1b208be8886ce87e2538b89cbd",
+    "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/sys/xattr.h": "60e1518429a9df2501dbec28b09642cc3a67cf1508bef0c6d8e9c1de3e1ef408",
+    "artifacts/replacement-native/compressed-arm64.ast.json": "3f7b48b875ed3f81845005a93b574149d2c16f422a99fa6564d4e01027ed9f48",
+    "artifacts/replacement-native/compressed-x86_64.ast.json": "9ef41f4079337ff4fd742df96fd8dd3a01bf322c285a2f0c197d2aa62ea1f57c",
+    "artifacts/replacement-native/oracle-arm64.ast.json": "21d27f56e7a30521c5cbaf54270ff4ea42b72d0a5dd6d8fc7be5d6533c3b4534",
+    "artifacts/replacement-native/oracle-x86_64.ast.json": "6e696523bd462f8fc9704e5d33caa2d14991a76fb884467c72882d15f916c796",
+    "go.mod": "76795672275ac3d60ba3de19ee78905412c498d1986f1cdf90822fe17f7ef6a7",
+    "go.sum": "778f6ac1c0bde003e457fd2ff00399b33d054338c64b3bae6cc65f42ce027c1a",
+    "pkg/hostdata/replacement_compressed_darwin_test.go": "e94f6e654cf8b4bd27ac369d65a8ddbb59464f2208d7e12ad8aba7058418768c",
+    "pkg/hostdata/replacement_copy.go": "0c2ac6f407d72fffb7e55c9156ade3fafaa1eaf9b570e130abcf0a17541ddfeb",
+    "pkg/hostdata/replacement_copy_darwin.go": "5339cafdbe9d409fe9eabedbca683c09e7aeb6eea130cb3a647c22893cd5c664",
+    "pkg/hostdata/replacement_copy_darwin_test.go": "0af924bb5a09e244e9fb417a84c717c8929dbde7fe61887901388ff1a90a6e3f",
+    "pkg/hostdata/replacement_darwin.go": "6fef22fcf036192c675bdbc3bd45793deb9c34a0304ffc0c05bc300b61e805cd",
+    "pkg/hostdata/replacement_root_darwin.go": "fabdb2629e46fee38124716ad1be0e2c189d60f70df5586d30b75b044c5dab51",
+    "scripts/verify-replacement-native.go": "43a7a6180a77b162b3c5baf9eea6e7644cbf534267276298cfce9e58a8244992",
+    "testdata/appledouble/native/decmpfs-formats.c": "6e49c855d738664284fc51a064822db1603e7bdd870dfbc3130d2fd99317159c",
+    "testdata/appledouble/native/decmpfs-formats.json.gz": "d38a8d622f2b230244b447a0d4a9f7afdd806a55a38e01fe0a6c07f5b30b9079",
+    "testdata/appledouble/native/quarantine-process-capture.h": "acaa57a512f800763ae2832e32b641d3038c33cbda8fe88081bd9cae79c5ee3b",
+    "testdata/appledouble/native/replacement-compressed.c": "047bba3b2f10a0919fba448485bf35459249347f4f0ac5fe4b804390a3a9880f",
+    "testdata/appledouble/native/replacement-copy.c": "e56db1ef44dd6d8acd434d22b31132548c82759c56ac230c239cfb1af7114ebc"
+  },
+  "versions": {
+    "go": "go version go1.27.1 darwin/arm64",
+    "sw_vers": "ProductName:\t\tmacOS\nProductVersion:\t\t27.0.1\nBuildVersion:\t\t26A434",
+    "uname": "Darwin Mac 27.0.0 Darwin Kernel Version 27.0.0: Tue Aug 11 21:02:57 PDT 2026; root:xnu-13432.1.9~1/RELEASE_ARM64_T8132 arm64",
+    "xcrun": "Apple clang version 21.0.0 (clang-2100.3.34.2)\nTarget: arm64-apple-darwin27.0.0\nThread model: posix\nInstalledDir: /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin"
+  }
+}

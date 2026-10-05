@@ -61,13 +61,13 @@ func verify() error {
 			passedNames[event.Test] = true
 		}
 	}
-	for _, name := range []string{"TestReplacementCopyStrategy", "TestReplacementCopyMetadata", "TestReplacementCopyNativeFixture", "TestReplacementCopyLargeFork", "TestReplacementBackupSparseStreams", "TestReplacementBackupMalformed", "TestReplacementBackupWriteFailures"} {
+	for _, name := range []string{"TestReplacementCompressedMetadata", "TestReplacementCompressedMetadataFailures", "TestReplacementCompressedNativeFixture", "TestReplacementCopyStrategy", "TestReplacementCopyMetadata", "TestReplacementCopyNativeFixture", "TestReplacementCopyLargeFork", "TestReplacementBackupSparseStreams", "TestReplacementBackupMalformed", "TestReplacementBackupWriteFailures"} {
 		if !passedNames[name] {
 			return fmt.Errorf("required replacement suite missing: %s", name)
 		}
 	}
 	if runtime.GOOS == "darwin" {
-		for _, name := range []string{"TestReplacementCopyCloneErrors", "TestReplacementCopyDarwinNative"} {
+		for _, name := range []string{"TestReplacementCompressedDarwinNative", "TestReplacementCompressedTargetState", "TestReplacementCopyCloneErrors", "TestReplacementCopyDarwinNative"} {
 			if !passedNames[name] {
 				return fmt.Errorf("required Darwin suite missing: %s", name)
 			}
@@ -130,7 +130,7 @@ func verify() error {
 	if passed < 23 {
 		return fmt.Errorf("incomplete replacement tests: %d", passed)
 	}
-	files := []string{"pkg/hostdata/replacement*.go", "scripts/verify-replacement.go", "scripts/verify-replacement-native.go", "testdata/appledouble/native/replacement-copy.c", "testdata/appledouble/native/quarantine-process-capture.h", "testdata/appledouble/native/replacement-copy.json", "go.mod", "go.sum"}
+	files := []string{"pkg/hostdata/replacement*.go", "scripts/verify-replacement.go", "scripts/verify-replacement-native.go", "testdata/appledouble/native/replacement-copy.c", "testdata/appledouble/native/quarantine-process-capture.h", "testdata/appledouble/native/replacement-copy.json", "testdata/appledouble/native/replacement-compressed.c", "testdata/appledouble/native/replacement-compressed.json", "testdata/appledouble/native/decmpfs-formats.c", "testdata/appledouble/native/decmpfs-formats.json.gz", "go.mod", "go.sum"}
 	hashes, e := evidenceaudit.SourceHashes(os.DirFS("."), files)
 	if e != nil {
 		return e

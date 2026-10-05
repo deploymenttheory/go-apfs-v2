@@ -13,8 +13,8 @@ import (
 
 func prepareReplacement(source *os.File, path string, info os.FileInfo) (*os.File, error) {
 	flags, _ := hostflags.Flags(info)
-	if flags&(unix.UF_IMMUTABLE|unix.UF_APPEND|unix.SF_IMMUTABLE|unix.SF_APPEND|UFCompressed) != 0 {
-		return nil, fmt.Errorf("%w: protected or compressed source", ErrUnsupportedReplacement)
+	if flags&(unix.UF_IMMUTABLE|unix.UF_APPEND|unix.SF_IMMUTABLE|unix.SF_APPEND) != 0 {
+		return nil, fmt.Errorf("%w: protected source", ErrUnsupportedReplacement)
 	}
 	// clonefile also applies inherited destination ACLs. The directory is ours:
 	// clear its ACL before cloning. Source ACLs are restored after content writes,
@@ -25,7 +25,15 @@ func prepareReplacement(source *os.File, path string, info os.FileInfo) (*os.Fil
 		return nil, err
 	}
 	return prepareReplacementUsing(
-		func() error { return unix.Fclonefileat(int(source.Fd()), unix.AT_FDCWD, path, 0) },
+		func() error {
+			// Rewritten logical contents must not inherit the old compressed
+			// storage. A fresh file also avoids decompression writes against
+			// a clone before the caller has supplied the replacement bytes.
+			if flags&UFCompressed != 0 {
+				return unix.ENOTSUP
+			}
+			return unix.Fclonefileat(int(source.Fd()), unix.AT_FDCWD, path, 0)
+		},
 		replacementCloneUnavailable,
 		func(cloned bool) (*os.File, error) {
 			if !cloned {
@@ -62,7 +70,14 @@ func restoreReplacementMetadata(source *os.File, target *os.File, info os.FileIn
 	if err := restoreReplacementACL(source, target); err != nil {
 		return err
 	}
-	return unix.Fchflags(int(target.Fd()), int(s.Flags))
+	// Compression describes the target's current storage, not source policy.
+	// Never reattach UF_COMPRESSED to the caller's rewritten logical data.
+	current, err := target.Stat()
+	if err != nil {
+		return err
+	}
+	targetFlags, _ := hostflags.Flags(current)
+	return unix.Fchflags(int(target.Fd()), int(s.Flags&^UFCompressed|targetFlags&UFCompressed))
 }
 
 func restoreReplacementACL(source, target *os.File) error {
