@@ -63,6 +63,14 @@ small indexes. Resource Manager map bytes and inter-block gaps are not part of
 the compressed stream. Tests read every retained native fork and reject any
 attempt to consume the map as payload; checksum validation is retained.
 
+## Active and inactive storage
+
+The recorded `UF_COMPRESSED` flag selects compressed or ordinary file data.
+Leftover attributes after a partial installation remain opaque when the flag is
+clear. Image readers, explicit writer flags and metadata carriers preserve that
+distinction; see [compression storage state](compression-state.md) for the API
+contract and complete native/portable qualification matrix.
+
 ## Inspecting compression metadata
 
 `decmpfs.Query` reports the native metadata fields from a caller-supplied stable

@@ -44,7 +44,7 @@ func TestCarrierNativeValueWalk(t *testing.T) {
 				opts.KeepName = func(s string) bool { return s != hostdata.DecmpfsName }
 			}
 			w := &walker[*carrierNode]{opts: opts, report: &fidelity.Report{}}
-			got, compressed, e := w.collectValueXattrs("file")
+			got, compressed, e := w.collectValueXattrs("file", true)
 			if name == "error" || name == "bad-header" {
 				if e == nil {
 					t.Fatal("missing error")

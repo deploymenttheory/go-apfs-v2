@@ -292,8 +292,9 @@ func TestFileEntryInlineDecmpfs(t *testing.T) {
 	// A non-nil ExtendedAttributes makes getExtendedAttributes return early, so
 	// no B-tree is needed to reach the decmpfs branch.
 	fe := &FileEntry{
+		Inode:                         &Inode{BSDFlags: BSDFlagCompressed},
 		ExtendedAttributes:            []*AttributeValues{},
-		CompressedDataAttributeValues: &AttributeValues{ValueData: attr},
+		CompressedDataAttributeValues: &AttributeValues{Flags: ExtendedAttributeFlagEmbedded, ValueData: attr},
 		FileHandle:                    bytes.NewReader(attr),
 	}
 

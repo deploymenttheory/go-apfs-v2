@@ -54,9 +54,9 @@ type WalkOptions struct {
 // Extended attributes are carried, whatever their size: a small value lives
 // inside its record in the attributes file and a larger one gets an allocation
 // extent of its own. A resource fork is carried too, in the catalog record's
-// resource fork where HFS+ actually keeps it. com.apple.decmpfs is the
-// exception -- it declares content this writer does not produce -- and is
-// reported as dropped. Several names for one file are written as hard links to
+// resource fork where HFS+ actually keeps it. Active compression is preserved
+// unless Decompress is selected; inactive compression attributes remain opaque
+// metadata beside ordinary data. Several names for one file are written as hard links to
 // one copy of the content, rather than as copies.
 func EntryTreeFromDir(srcDir string, opts *WalkOptions) (*Entry, *fidelity.Report, error) {
 	o := walkOptions(opts)

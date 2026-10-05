@@ -168,6 +168,9 @@ func (e *Extractor) applyProjection(ctx context.Context, r metatransport.Record,
 	}
 	sort.Strings(names)
 	compression, compressed := attrs[hostdata.DecmpfsName]
+	if r.Darwin.Flags != nil {
+		compressed = compressed && *r.Darwin.Flags&hostdata.UFCompressed != 0
+	}
 	forkBacked := false
 	if compressed {
 		var shapeErr error

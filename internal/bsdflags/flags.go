@@ -9,7 +9,8 @@ import (
 const Compressed uint32 = 0x20
 
 // Select retains legacy compression inference for nil. Explicit values must
-// agree with compression storage; HFS cannot encode bits outside its two flag
+// have storage when UF_COMPRESSED is set. With the flag clear, any decmpfs
+// attribute is inactive opaque metadata. HFS cannot encode bits outside its two flag
 // bytes and Finder invisible bit. Refuse loss rather than silently masking.
 func Select(selected *uint32, compressed, hfs bool) (uint32, error) {
 	var flags uint32
@@ -18,7 +19,7 @@ func Select(selected *uint32, compressed, hfs bool) (uint32, error) {
 	}
 	if selected != nil {
 		flags = *selected
-		if (flags&Compressed != 0) != compressed {
+		if flags&Compressed != 0 && !compressed {
 			return 0, fmt.Errorf("BSD compression flag disagrees with decmpfs storage: %w", fs.ErrInvalid)
 		}
 	}

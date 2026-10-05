@@ -151,11 +151,13 @@ func TestImageTimesNativeReplay(t *testing.T) {
 	}
 }
 
+var errRefuseImageWrite = errors.New("unexpected write")
+
 type refuseWrite struct{ calls int }
 
 func (w *refuseWrite) WriteAt([]byte, int64) (int, error) {
 	w.calls++
-	return 0, errors.New("unexpected write")
+	return 0, errRefuseImageWrite
 }
 func TestImageTimesInvalidBeforeWrite(t *testing.T) {
 	for _, rootTime := range []bool{false, true} {

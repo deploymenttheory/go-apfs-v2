@@ -193,14 +193,22 @@ func (w *walker[E]) readDir(dir, rel string) ([]E, error) {
 			node.UID, node.GID = st.Uid(), st.Gid()
 		}
 
+		flags, _ := hostflags.Flags(info)
+		activeCompression := flags&hostdata.UFCompressed != 0
 		var compressionCarried bool
 		if w.opts.owner != nil && w.opts.nativeValues != nil {
-			node.XattrValues, compressionCarried, err = w.collectValueXattrs(childRel)
+			node.XattrValues, compressionCarried, err = w.collectValueXattrs(childRel, activeCompression)
 			if err != nil {
 				return nil, err
 			}
 		} else {
-			node.Xattrs, compressionCarried = w.collectXattrs(full, childRel)
+			node.Xattrs, compressionCarried = w.collectXattrs(full, childRel, activeCompression)
+		}
+		_, inactiveBytes := node.Xattrs[hostdata.DecmpfsName]
+		_, inactiveValue := node.XattrValues[hostdata.DecmpfsName]
+		if !compressionCarried && (inactiveBytes || inactiveValue) {
+			// Prevent the image writers' legacy nil-flag inference for opaque storage.
+			node.BSDFlags = new(uint32)
 		}
 		node.LinkGroup = w.noteLinks(childRel, info)
 		w.noteCompression(childRel, info, compressionCarried)
@@ -270,7 +278,7 @@ func describeSpecial(mode os.FileMode) string {
 // content is in the attributes, and reading the file would yield a second,
 // decompressed copy of it), and UF_COMPRESSED must not be counted as a lost
 // BSD flag.
-func (w *walker[E]) collectXattrs(full, rel string) (kept map[string][]byte, compressed bool) {
+func (w *walker[E]) collectXattrs(full, rel string, active bool) (kept map[string][]byte, compressed bool) {
 	if !w.opts.Xattrs {
 		return nil, false
 	}
@@ -285,7 +293,7 @@ func (w *walker[E]) collectXattrs(full, rel string) (kept map[string][]byte, com
 	// bytes beside a decompressed data fork, and keeping the header alone would
 	// describe content that is not there.
 	decmpfs, isCompressed := attrs[hostdata.DecmpfsName]
-	if isCompressed {
+	if isCompressed && active {
 		fork, hasFork := attrs[hostdata.ResourceForkName]
 		compressed = w.opts.Compression &&
 			w.opts.Keep != nil &&

@@ -235,6 +235,9 @@ func walkCarrierBound[E any](dir string, opts *Options, mk func(Node, []E) E, ca
 			if _, ok := node.XattrValues[hostdata.DecmpfsName]; ok {
 				compressed = true
 			}
+			if node.BSDFlags != nil {
+				compressed = compressed && *node.BSDFlags&hostdata.UFCompressed != 0
+			}
 			if compressed && opts.Compression {
 				if recorded {
 					if e = store.VerifyPayload(ctx, record); e != nil {
