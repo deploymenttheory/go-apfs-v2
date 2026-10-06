@@ -245,7 +245,9 @@ func validateComparisonProfile(c capture, expected int) error {
 	return nil
 }
 func TestComparisonProfileIdentity(t *testing.T) {
-	c := readComparisonCapture(t, "../testdata/appledouble/native/name-collation-macos27.json.gz")
+	// Named-file Go tests start in scripts; provenance paths use the repo root.
+	t.Chdir("..")
+	c := readComparisonCapture(t, "testdata/appledouble/native/name-collation-macos27.json.gz")
 	for _, wrong := range []int{15, 26} {
 		if validateComparisonProfile(c, wrong) == nil {
 			t.Fatal("accepted mislabeled native profile", wrong)
