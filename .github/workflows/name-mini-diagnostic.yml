@@ -1,0 +1,157 @@
+name: Supplemental minimal native filename layouts
+on:
+  workflow_call:
+permissions:
+  contents: read
+concurrency:
+  group: name-mini-diagnostic-${{ github.ref }}
+  cancel-in-progress: false
+env:
+  CGO_ENABLED: "0"
+  GOTOOLCHAIN: local
+jobs:
+  producer:
+    name: Genuine macOS 26 minimal images
+    runs-on: macos-latest
+    timeout-minutes: 15
+    env:
+      APFS_NAME_MINI_PRODUCER_HOST: "26"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Build source-bound minimal producer
+        timeout-minutes: 5
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/name-mini-producer
+          go test -c -o artifacts/mini.test scripts/capture-name-collation.go scripts/verify-name-comparison_test.go scripts/verify-name-native_readback_test.go scripts/verify-name-native_commands_test.go scripts/verify-name-native_diagnostic_test.go scripts/verify-name-native_boundary_test.go scripts/verify-name-native_syscall_test.go scripts/verify-name-native_raw_test.go scripts/verify-name-native_mini_test.go 2>&1 | tee artifacts/name-mini-producer/build.log
+      - name: Capture exactly four minimal native images
+        timeout-minutes: 8
+        shell: bash
+        working-directory: scripts
+        run: |
+          set -euo pipefail
+          go tool test2json -t -p command-line-arguments "$GITHUB_WORKSPACE/artifacts/mini.test" -test.v=test2json -test.timeout=7m -test.run='^(TestMinimalNativeValidation|TestProduceMinimalNativeImages)$' | tee "$GITHUB_WORKSPACE/artifacts/name-mini-producer/producer-tests.jsonl"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: name-mini-native26
+          path: artifacts/name-mini-producer/
+          compression-level: 9
+          if-no-files-found: error
+  receivers:
+    name: Minimal native receiver (${{ matrix.mode }}, ${{ matrix.filesystem }})
+    needs: producer
+    runs-on: macos-15
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [ascii, ascii-a7ce]
+        filesystem: [APFS, APFSX]
+    env:
+      APFS_NAME_MINI_MODE: ${{ matrix.mode }}
+      APFS_NAME_DIAGNOSTIC_FILESYSTEM: ${{ matrix.filesystem }}
+      APFS_NAME_DIAGNOSTIC_PROFILE: "26"
+      APFS_NAME_DIAGNOSTIC_HOST: "15"
+      APFS_NAME_MINI_PRODUCER_HOST: "26"
+      APFS_NAME_MINI_IMAGES: ${{ github.workspace }}/artifacts/name-mini-images
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - uses: actions/download-artifact@v8
+        with:
+          name: name-mini-native26
+          path: artifacts/name-mini-images
+      - name: Build and validate complete minimal checkpoint
+        timeout-minutes: 5
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/name-native-diagnostic
+          go test -c -o artifacts/mini.test scripts/capture-name-collation.go scripts/verify-name-comparison_test.go scripts/verify-name-native_readback_test.go scripts/verify-name-native_commands_test.go scripts/verify-name-native_diagnostic_test.go scripts/verify-name-native_boundary_test.go scripts/verify-name-native_syscall_test.go scripts/verify-name-native_raw_test.go scripts/verify-name-native_mini_test.go 2>&1 | tee artifacts/name-native-diagnostic/build.log
+          cd scripts
+          go tool test2json -t -p command-line-arguments "$GITHUB_WORKSPACE/artifacts/mini.test" -test.v=test2json -test.timeout=3m -test.run='^(TestMinimalNativeValidation|TestPrepareMinimalNativeReceiver)$' | tee "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/prepare-tests.jsonl"
+      - name: Upload durable checkpoint before attach
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: mini-before-attach-${{ matrix.mode }}-${{ matrix.filesystem }}
+          path: artifacts/name-native-diagnostic/
+          compression-level: 9
+          if-no-files-found: error
+      - name: Attach exact minimal image read-only
+        timeout-minutes: 1
+        shell: bash
+        working-directory: scripts
+        run: |
+          set -euo pipefail
+          go tool test2json -t -p command-line-arguments "$GITHUB_WORKSPACE/artifacts/mini.test" -test.v=test2json -test.timeout=1m -test.run='^TestAttachMinimalNativeReceiver$' | tee "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/attach-tests.jsonl"
+      - name: Upload durable checkpoint before readback
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: mini-before-readback-${{ matrix.mode }}-${{ matrix.filesystem }}
+          path: artifacts/name-native-diagnostic/
+          compression-level: 9
+          if-no-files-found: error
+      - name: Record all minimal native operations
+        timeout-minutes: 2
+        shell: bash
+        working-directory: scripts
+        run: |
+          set -euo pipefail
+          go tool test2json -t -p command-line-arguments "$GITHUB_WORKSPACE/artifacts/mini.test" -test.v=test2json -test.timeout=2m -test.run='^TestReadMinimalNativeReceiver$' | tee "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/readback-tests.jsonl"
+      - name: Preserve bounded native filesystem log
+        if: always()
+        timeout-minutes: 1
+        shell: bash
+        working-directory: scripts
+        run: |
+          set -euo pipefail
+          go tool test2json -t -p command-line-arguments "$GITHUB_WORKSPACE/artifacts/mini.test" -test.v=test2json -test.timeout=1m -test.run='^TestNativeSyscallTraceHostLog$' | tee "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/host-log-tests.jsonl"
+      - name: Stop owned native process and close descriptors
+        if: always()
+        timeout-minutes: 1
+        shell: bash
+        working-directory: scripts
+        run: |
+          set -euo pipefail
+          go tool test2json -t -p command-line-arguments "$GITHUB_WORKSPACE/artifacts/mini.test" -test.v=test2json -test.timeout=1m -test.run='^TestNativeSyscallTraceStop$' | tee "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/stop-tests.jsonl"
+      - name: Upload durable checkpoint before detach
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: mini-before-detach-${{ matrix.mode }}-${{ matrix.filesystem }}
+          path: artifacts/name-native-diagnostic/
+          compression-level: 9
+          if-no-files-found: error
+      - name: Detach owned minimal image
+        if: always()
+        timeout-minutes: 1
+        shell: bash
+        working-directory: scripts
+        run: |
+          set -euo pipefail
+          go tool test2json -t -p command-line-arguments "$GITHUB_WORKSPACE/artifacts/mini.test" -test.v=test2json -test.timeout=1m -test.run='^TestNativeNameBoundaryDetach$' | tee "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/detach-tests.jsonl"
+      - name: Preserve complete minimal observation
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: mini-outcome-${{ matrix.mode }}-${{ matrix.filesystem }}
+          path: artifacts/name-native-diagnostic/
+          compression-level: 9
+          if-no-files-found: error
+      - name: Compare preserved observations after detach
+        if: always()
+        timeout-minutes: 1
+        shell: bash
+        working-directory: scripts
+        run: |
+          set -euo pipefail
+          go tool test2json -t -p command-line-arguments "$GITHUB_WORKSPACE/artifacts/mini.test" -test.v=test2json -test.timeout=1m -test.run='^TestCompareMinimalNativeReceiver$'
