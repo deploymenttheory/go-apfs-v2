@@ -352,7 +352,11 @@ func TestNativeNameMatrixReceiverResults(t *testing.T) {
 		t.Fatal(err)
 	}
 	for name, bad := range map[string][]byte{
-		"missing-case": []byte(`{"count":1,"cases":[]}`), "malformed": []byte("{"), "trailing": append(append([]byte{}, good...), []byte(` {}`)...),
+		"missing-read":  bytes.Replace(good, []byte(`,"read":0`), nil, 1),
+		"missing-size":  bytes.Replace(good, []byte(`,"size":0`), nil, 1),
+		"missing-errno": bytes.Replace(good, []byte(`"errno":0,`), nil, 1),
+		"null-errno":    bytes.Replace(good, []byte(`"errno":0`), []byte(`"errno":null`), 1),
+		"missing-case":  []byte(`{"count":1,"cases":[]}`), "malformed": []byte("{"), "trailing": append(append([]byte{}, good...), []byte(` {}`)...),
 		"unknown":      bytes.Replace(good, []byte(`"count":1`), []byte(`"count":1,"unexpected":true`), 1),
 		"count":        bytes.Replace(good, []byte(`"count":1`), []byte(`"count":2`), 1),
 		"identity":     bytes.Replace(good, []byte(`"inode":42`), []byte(`"inode":43`), 1),
@@ -407,7 +411,7 @@ func TestNativeNameMatrixReceiverLifecycle(t *testing.T) {
 	if err := validateNativeReceiverLifecycle(attached, detached); err != nil {
 		t.Fatal(err)
 	}
-	for _, bad := range []string{"", "null", "[]", `[{"device":"/dev/disk6","exit_code":1}]`, `[{"device":"/dev/disk7","exit_code":0}]`, `[{"device":"/dev/disk6","exit_code":0},{"device":"/dev/disk6","exit_code":0}]`} {
+	for _, bad := range []string{"", "null", "[]", `[{"device":"/dev/disk6"}]`, `[{"device":"/dev/disk6","exit_code":null}]`, `[{"device":"/dev/disk6","exit_code":1}]`, `[{"device":"/dev/disk7","exit_code":0}]`, `[{"device":"/dev/disk6","exit_code":0},{"device":"/dev/disk6","exit_code":0}]`} {
 		if err := validateNativeReceiverLifecycle(attached, []byte(bad)); err == nil {
 			t.Fatal("accepted missing/invalid detach", bad)
 		}

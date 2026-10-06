@@ -373,6 +373,26 @@ type nativeNameResult struct {
 	Size  int64  `json:"size"`
 	Read  int64  `json:"read"`
 }
+
+// Zero is a real native result, so absent/null fields must not silently decode
+// into zero and turn truncated evidence into successful lookup or cleanup.
+func (r *nativeNameResult) UnmarshalJSON(raw []byte) error {
+	var value struct {
+		Errno *int    `json:"errno"`
+		Inode *uint64 `json:"inode"`
+		Size  *int64  `json:"size"`
+		Read  *int64  `json:"read"`
+	}
+	if err := decodeNativeJSON(raw, &value); err != nil {
+		return err
+	}
+	if value.Errno == nil || value.Inode == nil || value.Size == nil || value.Read == nil {
+		return errors.New("missing native result field")
+	}
+	*r = nativeNameResult{*value.Errno, *value.Inode, *value.Size, *value.Read}
+	return nil
+}
+
 type nativeNameObservation struct {
 	ID      string             `json:"id"`
 	Results []nativeNameResult `json:"results"`
@@ -678,17 +698,17 @@ func validateNativeReceiverLifecycle(attached, detached []byte) error {
 	}
 	var attempts []struct {
 		Device   string `json:"device"`
-		ExitCode int    `json:"exit_code"`
+		ExitCode *int   `json:"exit_code"`
 		Output   string `json:"output"`
 	}
 	if err = decodeNativeJSON(detached, &attempts); err != nil {
 		return err
 	}
-	if len(attempts) == 0 || attempts[len(attempts)-1].ExitCode != 0 {
+	if len(attempts) == 0 || attempts[len(attempts)-1].ExitCode == nil || *attempts[len(attempts)-1].ExitCode != 0 {
 		return errors.New("receiver detach incomplete")
 	}
 	for i, a := range attempts {
-		if a.Device != device || (i < len(attempts)-1 && a.ExitCode == 0) {
+		if a.Device != device || a.ExitCode == nil || (i < len(attempts)-1 && *a.ExitCode == 0) {
 			return errors.New("receiver detach ownership/sequence changed")
 		}
 	}
