@@ -37,6 +37,8 @@ sidecar, resolving filename conflicts and applying permissions belong to the
 surrounding metadata layer. Shared filesystem operations live in `pkg/hostdata`;
 `pkg/metatransport` supplies the explicit portable carrier, and APFS/HFS+ readers,
 writers and the CLI bind that carrier to extraction and repacking.
+[`pkg/recompression`](../recompression) owns foreign compression operations; it
+uses the carrier without putting compression policy into the byte codec.
 
 ## What it provides
 
@@ -173,34 +175,32 @@ Use `File.Attrs` instead of the map when duplicate record order matters.
 
 ## Roadmap
 
-The consolidated implementation and qualification completed in merged PR182.
-The remaining sequence is the requested hostdata package refactor, its full CI,
-the maintainer's release and downstream adoption. The
-[completion plan](../../docs/appledouble-completion-plan.md) defines the technical
-work and the [completion matrix](../../docs/appledouble-completion-matrix.md)
-tracks its release gates. Component tests alone do not close an integration gate.
+The byte codec, streamed carrier and composed metadata operations are implemented.
+Their existing native capture, fuzzing, race, cross-host image readback and strict
+coverage gates remain mandatory when shared filesystem behavior changes. The
+[completion plan](../../docs/appledouble-completion-plan.md) and
+[completion matrix](../../docs/appledouble-completion-matrix.md) retain the detailed
+qualification contract; component tests alone do not close an integration gate.
 
-The architecture has separate operations, without a global compatibility mode:
+The remaining work serving codesign is in the surrounding operation packages:
 
-- The byte codec represents and validates metadata. `Value`, `StreamFile`,
-  `DecodeStream` and `EncodeTo` allow bounded-memory access to large values.
-- `hostdata.RestoreAppleDouble` validates a complete snapshot before mutation.
-  `RestoreAppleDoubleSequential` instead reads records during restoration, so
-  late input failures can leave earlier native-style effects in place.
-- `metatransport` stores logical metadata in an explicitly selected directory.
-  Its manifest associates original names, payload names and verified blobs;
-  arbitrary `._` files are never automatically treated as metadata.
-- Host adapters perform actual native operations. Portable storage does not
-  imply that Linux or Windows enforces Darwin ACL or quarantine policy.
+| Area | Remaining work |
+| --- | --- |
+| Foreign recompression | Qualify [the recompression package](../recompression) on every host, including genuine macOS 15/26/27 acquisition and permission captures, partial publication and native readback of foreign-produced images |
+| Operation integration | Consume the qualified shared APIs in codesign, preserving native compression applicability, admission failures and post-commit outcomes |
+| Scale and lifecycle | Complete downstream shared memory/storage/handle accounting, populated large-file acceptance and operation failure/cancellation matrices |
+| Release and adoption | Qualify the maintained APFS batch release and recapture downstream dependency provenance before closing codesign Phase 2 |
 
-| Area | Implemented and qualified in PR182 | Retained constraints and release requirements |
-| --- | --- | --- |
-| Codec and allocation | Streamed codec and APFS/HFS endpoints; native pack limits; explicit value/work budgets; borrowed values | Keep full-byte three-OS/native readback qualification; native-style sequential restoration retains its whole-fork allocation constraints |
-| Restoration | Prevalidated and sequential executors; complete object/path composition; ACL/quarantine/stat, inheritance, temporary permissions and cleanup | Retain production replay, partial-error/close diagnostics and qualification against measured native versions |
-| Host capture | Strict held/no-follow capture on all three OSes; native Darwin source/process/identity/protection observations | Keep real privileged/nonowner and signed-sandbox CI; unknown observations remain explicit errors |
-| Portable transport | Streamed carrier with hashes/generations/conflict detection; extraction/repacking and native projection/readback; roots, names, links, hardlinks and four times | Keep three-OS transport/large-value matrices and independent Mac validation of foreign images |
-| Evidence | Retained C/native corpus, Clang ASTs, image oracles, four vendor DMGs, strict 24-report coverage inventory (including replacement fallback) | Run complete CI again for the refactor, retaining every greater-than-95% file gate and fuzz/race/lint/build check |
-| Consumers | APFS owns the codec and transport; package PR72 remains draft | Qualified APFS release, downstream adoption in PR72, then codesign work |
+Keep these boundaries explicit:
+
+- AppleDouble represents metadata bytes. Its wire limits do not become arbitrary
+  resource-fork limits in the carrier or image formats.
+- Native-style metadata operations retain observed omissions and partial effects.
+  Lossless transport retains explicit source state without a global mode switch.
+- Carrier records associate payloads and verified immutable values. Arbitrary
+  neighboring `._` files are never automatically selected as metadata.
+- Foreign operation policy requires explicit target, identity and volume context.
+  Linux or Windows storage does not itself enforce Darwin ACL or process policy.
 
 Use `apfs extract IMAGE -C PAYLOAD --xattrs --preserve-meta --metadata-root METADATA`
 to select portable storage, and `apfs pack PAYLOAD OUTPUT.dmg --metadata-root METADATA`
@@ -217,7 +217,5 @@ whole-fork allocation; AppleDouble's own unsigned 32-bit fork length remains a
 format limit. See [large resource forks](../../docs/appledouble-large-values.md)
 for the real 4 GiB + 17 byte qualification and foreign-image checks.
 
-The implementation PR is merged. The refactor PR remains draft until its full
-qualification passes. The maintainer merges it and the release PR; package PR72
-then adopts the published qualified version and runs its downstream checks before
-codesign work resumes.
+New implementation PRs remain draft through complete CI qualification. The
+maintainer controls the batch release and downstream phase-closure decision.

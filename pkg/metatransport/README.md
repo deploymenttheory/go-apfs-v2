@@ -121,3 +121,20 @@ Format and layout bounds remain enforced before image publication. The
 real fork beyond the AppleDouble 32-bit length field through the carrier, both
 image formats and native macOS readback. Complete native copy/unpack policy,
 authorization and lifecycle qualification remain separate requirements.
+
+## Held payload publication
+
+`OpenPayload` returns an owned read/write descriptor after rooted regular-file
+identity checks. `CheckPayload` revalidates its pathname association.
+`PayloadReference`, `VerifyHeldPayload` and `CopyPayload` share the carrier's
+bounded hashing and copy implementation without acquiring new pathnames.
+
+`Publish` prepares and validates the next generation before invoking a payload
+transition under the writer lock. The callback can read the store and use held
+payloads; it must not recursively write the store or close it. Store closure waits
+for the callback. The returned publication boolean remains true if rename
+succeeded but lock cleanup failed. Payload effects are not rolled back.
+
+Foreign compression policy belongs to [`recompression`](../recompression), which
+uses these general storage primitives. Merely retaining a compressed attribute
+does not request recompression or activate that storage.
