@@ -89,6 +89,11 @@ close and cleanup failures at every owned checkpoint on every host. Keep clone
 fallback admission precise: a permission/storage failure is not permission to
 silently choose another algorithm.
 
+Linux restoration must bound each attribute allocation without an aggregate
+metadata-size rejection: attributes are transferred individually. Test native
+attribute enumeration/read/write failures, concurrent length changes, unsupported
+attributes, cancellation accompanying harmless absence, and final mode restoration.
+
 ### Windows held identity and full metadata capability
 
 The current nonrooted CopyFileW path uses source.Name and can copy a replacement
@@ -171,6 +176,16 @@ APFS/APFSX name hashing and HFS+/HFSX catalog comparison. Replay independently
 retained native names and raw hashes, produce images on Linux and Windows, and
 read them back natively on every supported macOS version. A foreign operation's
 explicit target profile must not be inferred from the receiving host.
+
+Keep comparison, existing-entry lookup and entry creation as separate operations.
+A name can be rejected during creation yet return ENOENT during existing-file
+O_RDWR acquisition. Retain exhaustive scalar-creation observations for APFS/APFSX
+and independent lookup controls for malformed encodings, source versus normalized
+component lengths, absent entries and denied parent search. Never apply a
+creation-only encoding restriction ahead of an independently qualified lookup.
+Require explicit captured case sensitivity, deep-copy its policy, and reject
+ambiguous equivalent sibling entries deterministically rather than selecting by
+map iteration or preferring an exact spelling in a conflicting carrier.
 
 Search, create, delete and rename require distinct authorization operations.
 Capture per-directory SEARCH before lookup; ADD_FILE/ADD_SUBDIRECTORY for creation;
