@@ -103,8 +103,43 @@ jobs:
           go run scripts/verify-name-comparison.go
       - name: Verify bounded native command diagnostics
         run: go test -count=1 -run '^TestNativeReadback(Command|Mount)' scripts/verify-name-native_commands_test.go scripts/verify-name-native_commands_fault_test.go
+      - name: Verify matrix rejects missing or invalid qualification
+        run: go test -count=1 -run '^TestNativeNameMatrix' scripts/capture-name-collation.go scripts/verify-name-comparison_test.go scripts/verify-name-native_readback_test.go scripts/verify-name-native_commands_test.go scripts/verify-name-native_matrix_test.go
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: name-comparison-${{ matrix.os }}
+          path: artifacts/name-comparison-coverage/
+          compression-level: 9
+          if-no-files-found: error
+  native-readers:
+    name: Native names (producer ${{ matrix.producer }}, receiver ${{ matrix.receiver.version }}, ${{ matrix.filesystem }})
+    needs: native-images
+    runs-on: ${{ matrix.receiver.os }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        producer: [15, 26, 27]
+        receiver:
+          - {version: 15, os: macos-15}
+          - {version: 26, os: macos-latest}
+          - {version: 27, os: xcode-27}
+        filesystem: [APFS, APFSX, HFS+, HFSX]
+    env:
+      APFS_NAME_PRODUCER: ${{ matrix.producer }}
+      APFS_NAME_RECEIVER: ${{ matrix.receiver.version }}
+      APFS_NAME_FILESYSTEM: ${{ matrix.filesystem }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: name-collation-*
+          path: artifacts/native-images
       - name: Build native image readback harness
-        if: runner.os == 'macOS'
         timeout-minutes: 5
         shell: bash
         run: |
@@ -112,15 +147,14 @@ jobs:
           mkdir -p artifacts/name-native-build
           go test -c -o "$GITHUB_WORKSPACE/artifacts/name-native-build/native-readback.test" scripts/capture-name-collation.go scripts/verify-name-comparison_test.go scripts/verify-name-native_readback_test.go scripts/verify-name-native_commands_test.go 2>&1 | tee artifacts/name-native-build/build.log
       - name: Preserve native harness build diagnostics before execution
-        if: always() && runner.os == 'macOS'
+        if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: name-native-build-${{ matrix.os }}
+          name: name-native-build-${{ matrix.producer }}-${{ matrix.receiver.version }}-${{ matrix.filesystem }}
           path: artifacts/name-native-build/
           compression-level: 9
           if-no-files-found: error
-      - name: Independently mount all three producer profiles on this macOS
-        if: runner.os == 'macOS'
+      - name: Read every case in this producer image on the actual receiver
         timeout-minutes: 32
         shell: bash
         run: |
@@ -131,10 +165,44 @@ jobs:
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: name-comparison-${{ matrix.os }}
+          name: name-native-cell-${{ matrix.producer }}-${{ matrix.receiver.version }}-${{ matrix.filesystem }}
           path: |
-            artifacts/name-comparison-coverage/
             artifacts/name-native-readback/
             artifacts/name-native-readback-tests.jsonl
           compression-level: 9
           if-no-files-found: error
+  qualify-matrix:
+    name: Qualify complete producer and receiver matrix
+    if: always() && inputs.diagnostic_only != true
+    needs: [native-images, readers, native-readers]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Require all producer and reader jobs to succeed
+        env:
+          PRODUCERS: ${{ needs.native-images.result }}
+          PORTABLE_READERS: ${{ needs.readers.result }}
+          NATIVE_READERS: ${{ needs.native-readers.result }}
+        run: |
+          test "$PRODUCERS" = success
+          test "$PORTABLE_READERS" = success
+          test "$NATIVE_READERS" = success
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: name-native-cell-*
+          path: artifacts/name-native-matrix
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: name-collation-*
+          path: artifacts/native-images
+      - name: Require all 36 complete same-revision cells and raw evidence
+        env:
+          APFS_NAME_IMAGE_ARTIFACTS: ${{ github.workspace }}/artifacts/native-images
+          APFS_NAME_MATRIX_ARTIFACTS: ${{ github.workspace }}/artifacts/name-native-matrix
+        run: |
+          cd scripts
+          go test -count=1 -run '^TestQualifyNativeNameMatrix$' capture-name-collation.go verify-name-comparison_test.go verify-name-native_readback_test.go verify-name-native_commands_test.go verify-name-native_matrix_test.go

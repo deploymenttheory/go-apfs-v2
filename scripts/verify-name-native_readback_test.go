@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,9 +13,49 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/deploymenttheory/go-apfs-v2/pkg/osversion"
 )
 
+var nativeNameHarnessSources = []string{
+	"testdata/appledouble/native/name-readback.c",
+	"scripts/verify-name-native_readback_test.go",
+	"scripts/verify-name-native_matrix_test.go",
+	"scripts/verify-name-native_commands_test.go",
+	"scripts/verify-name-comparison_test.go",
+	"scripts/capture-name-collation.go",
+	".github/workflows/name-comparison.yml",
+	"go.mod", "go.sum",
+}
+
+type nativeNameCell struct {
+	Producer   int    `json:"producer"`
+	Receiver   int    `json:"receiver"`
+	Filesystem string `json:"filesystem"`
+}
+
+func nativeNameSelection(producer, receiver, filesystem string) (nativeNameCell, error) {
+	if producer == "" && receiver == "" && filesystem == "" {
+		return nativeNameCell{}, nil // The original complete local 12-image run.
+	}
+	versions := map[string]int{"15": 15, "26": 26, "27": 27}
+	p, r := versions[producer], versions[receiver]
+	if p == 0 || r == 0 {
+		return nativeNameCell{}, errors.New("matrix requires explicit producer and receiver 15, 26 or 27")
+	}
+	switch filesystem {
+	case "APFS", "APFSX", "HFS+", "HFSX":
+		return nativeNameCell{p, r, filesystem}, nil
+	default:
+		return nativeNameCell{}, errors.New("matrix requires explicit APFS, APFSX, HFS+ or HFSX")
+	}
+}
+
 func TestNativeCrossVersionNameImages(t *testing.T) {
+	selection, e := nativeNameSelection(os.Getenv("APFS_NAME_PRODUCER"), os.Getenv("APFS_NAME_RECEIVER"), os.Getenv("APFS_NAME_FILESYSTEM"))
+	if e != nil {
+		t.Fatal(e)
+	}
 	if runtime.GOOS != "darwin" {
 		t.Fatal("native cross-version qualification requires Darwin")
 	}
@@ -42,12 +83,24 @@ func TestNativeCrossVersionNameImages(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if e = os.MkdirAll(out, 0755); e != nil {
+	if e = os.MkdirAll(filepath.Dir(out), 0755); e != nil {
+		t.Fatal(e)
+	}
+	// Refuse stale evidence from a prior invocation, including an earlier cell.
+	if e = os.Mkdir(out, 0755); e != nil {
 		t.Fatal(e)
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 25*time.Minute)
 	defer cancel()
 	commands := &nativeCommandRunner{Directory: filepath.Join(out, "commands")}
+	host, e := commands.run(ctx, "sw_vers")
+	if e != nil {
+		t.Fatal(e)
+	}
+	version, e := osversion.ParseProductVersion(string(host))
+	if e != nil || (selection.Receiver != 0 && int(version.Major) != selection.Receiver) {
+		t.Fatalf("receiver version does not match requested matrix cell: %s: %v", host, e)
+	}
 	source := "testdata/appledouble/native/name-readback.c"
 	binary := filepath.Join(out, "probe")
 	if _, e = commands.run(ctx, "xcrun", "clang", "-std=c11", "-Wall", "-Wextra", "-Werror", source, "-o", binary); e != nil {
@@ -58,7 +111,7 @@ func TestNativeCrossVersionNameImages(t *testing.T) {
 		t.Fatal(e)
 	}
 	hashes := map[string]string{}
-	for _, p := range []string{source, "scripts/verify-name-native_readback_test.go", "scripts/verify-name-native_commands_test.go", "scripts/verify-name-comparison_test.go", "scripts/capture-name-collation.go", "go.mod", "go.sum"} {
+	for _, p := range nativeNameHarnessSources {
 		b, e := os.ReadFile(p)
 		if e != nil {
 			t.Fatal(e)
@@ -98,10 +151,16 @@ func TestNativeCrossVersionNameImages(t *testing.T) {
 	hashes["native-binary"] = sum(b)
 	inputs := map[string]string{}
 	checked := 0
+	volumes := 0
+	profiles := 0
 	for _, p := range []struct {
 		major    int
 		artifact string
 	}{{15, "name-collation-macos-15"}, {26, "name-collation-macos-latest"}, {27, "name-collation-xcode-27"}} {
+		if selection.Producer != 0 && selection.Producer != p.major {
+			continue
+		}
+		profiles++
 		dir := filepath.Join(base, p.artifact)
 		capturePath := filepath.Join(dir, "native.json.gz")
 		input, err := os.ReadFile(capturePath)
@@ -109,12 +168,21 @@ func TestNativeCrossVersionNameImages(t *testing.T) {
 			t.Fatal(err)
 		}
 		inputs[p.artifact+"/native.json.gz"] = sum(input)
+		tsv, err := os.ReadFile(filepath.Join(dir, "cases.tsv"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		inputs[p.artifact+"/cases.tsv"] = sum(tsv)
 		fresh := readComparisonCapture(t, capturePath, p.major)
 		prior := readComparisonCapture(t, fmt.Sprintf("testdata/appledouble/native/name-collation-macos%d.json.gz", p.major))
 		if e = compareStable(prior, fresh); e != nil {
 			t.Fatal(e)
 		}
 		for _, v := range fresh.Volumes {
+			if selection.Filesystem != "" && selection.Filesystem != v.Kind {
+				continue
+			}
+			volumes++
 			inputs[p.artifact+"/"+strings.ReplaceAll(v.Kind, "+", "plus")+".dmg"] = v.ImageSHA256
 			t.Run(fmt.Sprintf("%d/%s", p.major, v.Kind), func(t *testing.T) {
 				nativeImageReadback(t, ctx, commands, out, dir, binary, p.major, v)
@@ -122,12 +190,12 @@ func TestNativeCrossVersionNameImages(t *testing.T) {
 			})
 		}
 	}
-	if checked != 90072 {
-		t.Fatalf("native readbacks%d want90072", checked)
+	wantProfiles, wantVolumes, wantChecked := 3, 12, 90072
+	if selection.Producer != 0 {
+		wantProfiles, wantVolumes, wantChecked = 1, 1, 7506
 	}
-	host, e := commands.run(ctx, "sw_vers")
-	if e != nil {
-		t.Fatal(e)
+	if checked != wantChecked || profiles != wantProfiles || volumes != wantVolumes || t.Failed() {
+		t.Fatalf("incomplete native qualification: observations %d/%d profiles %d/%d volumes %d/%d", checked, wantChecked, profiles, wantProfiles, volumes, wantVolumes)
 	}
 	compiler, e := commands.run(ctx, "xcrun", "clang", "--version")
 	if e != nil {
@@ -159,7 +227,7 @@ func TestNativeCrossVersionNameImages(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	report := map[string]any{"schema": 1, "host": string(host), "compiler": string(compiler), "sdk": string(sdk), "revision": strings.TrimSpace(string(revision)), "source_sha256": hashes, "input_sha256": inputs, "evidence_sha256": rawEvidence, "observations": checked, "producer_profiles": 3, "volumes": 12}
+	report := map[string]any{"schema": 2, "selection": selection, "host": string(host), "compiler": string(compiler), "sdk": string(sdk), "revision": strings.TrimSpace(string(revision)), "source_sha256": hashes, "input_sha256": inputs, "evidence_sha256": rawEvidence, "observations": checked, "producer_profiles": profiles, "volumes": volumes}
 	b, e = json.MarshalIndent(report, "", "  ")
 	if e != nil {
 		t.Fatal(e)
@@ -176,8 +244,10 @@ func nativeImageReadback(t *testing.T, ctx context.Context, commands *nativeComm
 	if e != nil || sum(b) != v.ImageSHA256 {
 		t.Fatal("native image hash", e)
 	}
-	mount := filepath.Join(out, stem+"-mount")
-	if e = os.Mkdir(mount, 0700); e != nil {
+	// Never place a live mount under an uploaded artifact directory: an upload
+	// must not traverse an unresponsive mounted filesystem after a failed probe.
+	mount := filepath.Join(filepath.Dir(out), "name-native-mounts", stem)
+	if e = os.MkdirAll(mount, 0700); e != nil {
 		t.Fatal(e)
 	}
 	var raw []byte

@@ -58,6 +58,21 @@ The remaining acceptance work is:
   a context-owned deadline, independent mount cleanup and an outer test timeout
   that leaves cleanup time. Preserve all twelve cross-version images and all
   90,072 reader observations; a timeout remains a failed acceptance result.
+  Native CI isolates each producer (15/26/27), actual receiver (15/26/27) and
+  filesystem (APFS/APFSX/HFS+/HFSX) in its own job: 36 required cells, each with
+  all 7,506 observations. The aggregate gate requires all cells at the same
+  revision, complete successful test transcripts, matching genuine producer
+  inputs and retained source/raw-evidence hashes. Linux and Windows continue
+  reading all twelve genuine images through the portable implementation, as do
+  all three macOS portable readers. A failing cell cannot cancel another cell.
+  Correct the native cross-version expectation model using complete receiver
+  observations: existing-file lookup can differ from the producing OS, and
+  creation admission is not an existing-file lookup oracle. Native macOS 15
+  readback of newer APFS names currently remains unqualified, including stalled
+  native probes. Neither a timeout nor a partial capture supplies an expected
+  errno. Portable raw image readers must continue to expose valid stored names;
+  explicit target-version operational pathname policy needs separate native
+  qualification, including writable opens.
 - Include all fork-context and owned-input suites in the existing compression
   lifecycle and metadata transport coverage filters. Require their presence and
   the unchanged per-file/package thresholds on every host; the new standalone
