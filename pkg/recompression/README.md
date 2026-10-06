@@ -96,9 +96,11 @@ x86_64 Clang ASTs. Existing lifecycle, codec and resource-fork gates remain acti
 Both complete packages and every production file selected by the new harness
 must exceed 95 percent coverage.
 
-The standalone access corpus currently retains macOS 27. Genuine macOS 15/26
-captures and their strict replay must pass before this prerequisite is qualified;
-recognizing those versions is not proof of every observed behavior. A green SDK
+The standalone access corpus retains macOS 15, 26 and 27. Targets 15/26 reject
+active LZ4 write-open with ENOTSUP and preserve the original storage; 27 accepts
+it. The portable decoder still supports LZ4 on every host. Fresh native recapture
+and all producer/readback jobs must pass on the final PR revision before this
+prerequisite is qualified. A green SDK
 harness also does not finish codesign Phase 2: its consumer integration, native
 `--preserve-afsc` behavior, full failure matrix, shared resource budgets and
 large-file measurements remain obligations in that project's implementation plan.

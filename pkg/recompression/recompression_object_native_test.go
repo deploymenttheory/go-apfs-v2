@@ -23,7 +23,11 @@ type nativeObjectSnapshot struct {
 }
 
 func TestRecompressionObjectNativeAcquisition(t *testing.T) {
-	paths := []string{"../../testdata/appledouble/native/recompression-access-macos27.json.gz"}
+	paths := []string{
+		"../../testdata/appledouble/native/recompression-access-macos15.json.gz",
+		"../../testdata/appledouble/native/recompression-access-macos26.json.gz",
+		"../../testdata/appledouble/native/recompression-access-macos27.json.gz",
+	}
 	if fresh := os.Getenv("APFS_RECOMPRESSION_ACCESS_CAPTURE"); fresh != "" {
 		paths = append(paths, fresh)
 	}

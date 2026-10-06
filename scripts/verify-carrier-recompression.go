@@ -53,6 +53,7 @@ func run() error {
 		cmd.Stdout = io.MultiWriter(log, &transcript)
 		cmd.Stderr = os.Stderr
 		if e = cmd.Run(); e != nil {
+			reportCommandFailure(args, transcript.Bytes())
 			return errors.Join(e, log.Close())
 		}
 	}
@@ -189,4 +190,51 @@ func run() error {
 	}
 	fmt.Printf("648 native operation cases; 9 images with 666 entries; per-file and both complete packages %d/%d; combined coverage %d/%d\n", covered, total, allCovered, allStatements)
 	return nil
+}
+
+// Keep full JSON evidence on disk while putting a bounded, useful diagnostic in
+// the job log. In particular, go test -json normally sends assertion messages
+// only to stdout, so returning its exit status alone hides the failing cases.
+func reportCommandFailure(args []string, transcript []byte) {
+	fmt.Fprintf(os.Stderr, "qualification command failed: go %s\ncomplete test transcript: %s/tests.jsonl\n", strings.Join(args, " "), artifact)
+	type event struct{ Action, Package, Test, Output, OutputType string }
+	failed := map[string]bool{}
+	lines := bytes.Split(transcript, []byte{'\n'})
+	for _, line := range lines {
+		var v event
+		if json.Unmarshal(line, &v) == nil && v.Action == "fail" {
+			failed[v.Package+"/"+v.Test] = true
+		}
+	}
+	count, remaining := 0, 32<<10
+	for _, line := range lines {
+		var v event
+		if json.Unmarshal(line, &v) != nil || v.Output == "" || v.OutputType == "frame" {
+			continue
+		}
+		if v.Action != "build-output" && (v.Action != "output" || (!failed[v.Package+"/"+v.Test] && v.Test != "")) {
+			continue
+		}
+		if count == 80 || remaining == 0 {
+			fmt.Fprintln(os.Stderr, "additional diagnostics retained in the complete test transcript")
+			return
+		}
+		message := v.Package
+		if v.Test != "" {
+			message += "/" + v.Test
+		}
+		message += ": " + v.Output
+		if len(message) > remaining {
+			message = message[:remaining]
+		}
+		fmt.Fprint(os.Stderr, message)
+		if !strings.HasSuffix(message, "\n") {
+			fmt.Fprintln(os.Stderr)
+		}
+		remaining -= len(message)
+		count++
+	}
+	if count == 0 {
+		fmt.Fprintln(os.Stderr, "no assertion output was produced; inspect command diagnostics and the complete transcript")
+	}
 }

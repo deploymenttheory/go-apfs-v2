@@ -200,9 +200,7 @@ func TestRecompressionEngineAliasPublication(t *testing.T) {
 				if held == nil {
 					t.Fatal("alias not acquired")
 				}
-				if _, e = held.Stat(); !errors.Is(e, os.ErrClosed) {
-					t.Fatal("alias lease leaked", e)
-				}
+				requireFileClosed(t, held)
 				manifest, e := s.Load(t.Context())
 				if e != nil || !reflect.DeepEqual(recompressionAliasState(manifest.Records[0]), recompressionAliasState(manifest.Records[1])) {
 					t.Fatal("logical inode aliases diverged", manifest, e)
@@ -285,4 +283,25 @@ func TestRecompressionEngineRetainedForks(t *testing.T) {
 		checkRecompressionCleanup(t, o.TemporaryDirectory)
 
 	})
+}
+
+func TestRecompressionEngineClosedPayloadError(t *testing.T) {
+	store, _, _, _, options := carrierRecompressionFixture(t)
+	var statCause error
+	wrapper := faultCarrier{Store: store, openPayload: func(ctx context.Context, name string) (*os.File, error) {
+		file, err := store.OpenPayload(ctx, name)
+		if err != nil {
+			return nil, err
+		}
+		if err = file.Close(); err != nil {
+			t.Fatal(err)
+		}
+		statCause = closedFileStatCause(t, file)
+		return file, nil
+	}}
+	result, err := recompressRecord(t.Context(), wrapper, "file", 1, options, hostdata.Recompress)
+	if statCause == nil || !errors.Is(err, statCause) || !errors.Is(err, os.ErrClosed) || result.Published {
+		t.Fatalf("closed payload must retain both backend Stat and cleanup errors: %+v, %v", result, err)
+	}
+	checkRecompressionCleanup(t, options.TemporaryDirectory)
 }

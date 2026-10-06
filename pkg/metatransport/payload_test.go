@@ -138,8 +138,7 @@ func TestCarrierPayloadOpenFailures(t *testing.T) {
 				t.Fatal(file, err, want)
 			}
 			if acquired != nil {
-				if _, e := acquired.Stat(); !errors.Is(e, os.ErrClosed) {
-					acquired.Close()
+				if e := acquired.Close(); !errors.Is(e, os.ErrClosed) {
 					t.Fatal("rejected acquired handle leaked", e)
 				}
 			}

@@ -24,7 +24,11 @@ import (
 // The archive is a real C capture, not a model-generated authorization result.
 // APFS_RECOMPRESSION_ACCESS_CAPTURE independently replays fresh CI evidence.
 func TestRecompressionAccessNativeEvidence(t *testing.T) {
-	paths := []string{"../../testdata/appledouble/native/recompression-access-macos27.json.gz"}
+	paths := []string{
+		"../../testdata/appledouble/native/recompression-access-macos15.json.gz",
+		"../../testdata/appledouble/native/recompression-access-macos26.json.gz",
+		"../../testdata/appledouble/native/recompression-access-macos27.json.gz",
+	}
 	if fresh := os.Getenv("APFS_RECOMPRESSION_ACCESS_CAPTURE"); fresh != "" {
 		paths = append(paths, fresh)
 	}
@@ -197,6 +201,8 @@ func nativeDarwinError(t *testing.T, errno int) error {
 		return syscall.EINVAL
 	case 30:
 		return syscall.EROFS
+	case 45:
+		return syscall.ENOTSUP
 	default:
 		t.Fatalf("unqualified Darwin errno %d", errno)
 		return nil

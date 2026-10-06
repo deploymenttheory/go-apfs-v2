@@ -290,7 +290,8 @@ func TestCarrierRecompressionObjectClosedLeases(t *testing.T) {
 		if e := o.data.Close(); e != nil {
 			t.Fatal(e)
 		}
-		if _, e := s.Snapshot(); !errors.Is(e, os.ErrClosed) {
+		statCause := closedFileStatCause(t, o.data)
+		if _, e := s.Snapshot(); !errors.Is(e, statCause) {
 			t.Fatal(e)
 		}
 		if e := s.SyncData(); !errors.Is(e, os.ErrClosed) {
@@ -345,9 +346,7 @@ func TestCarrierRecompressionObjectFork(t *testing.T) {
 		if e = o.close(); e != nil {
 			t.Fatal(e)
 		}
-		if _, e = reader.Stat(); !errors.Is(e, os.ErrClosed) {
-			t.Fatal("output reader leaked", e)
-		}
+		requireFileClosed(t, reader)
 	})
 	t.Run("empty export", func(t *testing.T) {
 		o := objectFixture(t, 0, 0, map[string]appledouble.Value{hostdata.ResourceForkName: bytes.NewReader([]byte("old"))})
@@ -383,8 +382,8 @@ func TestCarrierRecompressionObjectFork(t *testing.T) {
 	})
 	t.Run("export failure", func(t *testing.T) {
 		o := objectFixture(t, 0, 0, nil)
-		o.directory = o.data.Name()
-		if _, e := o.outputValues(); e == nil {
+		o.directory += "\x00invalid"
+		if _, e := o.outputValues(); !errors.Is(e, syscall.EINVAL) {
 			t.Fatal("accepted invalid staging directory")
 		}
 	})
@@ -537,12 +536,8 @@ func TestCarrierRecompressionObjectCloseContinuesAfterFailure(t *testing.T) {
 	if err := o.close(); !errors.Is(err, os.ErrClosed) {
 		t.Fatal("lost fork close failure", err)
 	}
-	if _, err := reader.Stat(); !errors.Is(err, os.ErrClosed) {
-		t.Fatal("reader leaked after fork close failure", err)
-	}
-	if _, err := o.data.Stat(); !errors.Is(err, os.ErrClosed) {
-		t.Fatal("payload leaked after fork close failure", err)
-	}
+	requireFileClosed(t, reader)
+	requireFileClosed(t, o.data)
 }
 
 func TestCarrierRecompressionObjectAuthorization(t *testing.T) {
@@ -671,6 +666,101 @@ func TestCarrierRecompressionObjectHeldTruncate(t *testing.T) {
 				if !o.truncated || !o.changeChanged || !o.stat().Times.Modify.Equal(o.now()) {
 					t.Fatal("held write capability lost")
 				}
+			}
+		})
+	}
+}
+
+func TestRecompressionObjectLegacyLZ4Acquisition(t *testing.T) {
+	for _, profile := range []osversion.MacOSProfile{osversion.MacOS15, osversion.MacOS26} {
+		for _, kind := range []uint32{15, 16} {
+			for _, active := range []bool{false, true} {
+				t.Run(fmt.Sprintf("profile-%d/type-%d/active-%t", profile, kind, active), func(t *testing.T) {
+					flags := uint32(0x8000)
+					if active {
+						flags |= hostdata.UFCompressed
+					}
+					values := map[string]appledouble.Value{
+						hostdata.DecmpfsName:      objectHeader(kind),
+						hostdata.ResourceForkName: bytes.NewReader([]byte("retained fork")),
+						"user.kept":               bytes.NewReader([]byte("retained attribute")),
+					}
+					o := objectFixture(t, flags, 0, values)
+					o.access = &recompressionAccess{profile: profile, authority: Authority{UID: 501, Groups: []uint32{20}}}
+					before := o.metadata.Snapshot()
+					input, err := o.open(t.Context())
+					if active {
+						if !errors.Is(err, syscall.ENOTSUP) || input != nil || o.opened {
+							t.Fatalf("legacy target active LZ4 acquisition: input=%v opened=%t err=%v", input, o.opened, err)
+						}
+					} else {
+						if err != nil || input == nil || !o.opened {
+							t.Fatalf("inactive LZ4 acquisition: input=%v opened=%t err=%v", input, o.opened, err)
+						}
+						if err := input.Close(); err != nil {
+							t.Fatal(err)
+						}
+					}
+					if !reflect.DeepEqual(before, o.metadata.Snapshot()) || len(o.values) != len(values) {
+						t.Fatal("acquisition changed retained metadata")
+					}
+					for name, original := range values {
+						if !o.retained[name] || !bytes.Equal(objectValue(t, o.values[name]), objectValue(t, original)) {
+							t.Fatalf("acquisition changed retained %s", name)
+						}
+					}
+					data := make([]byte, len("logical payload"))
+					if n, err := o.data.ReadAt(data, 0); n != len(data) || err != nil || string(data) != "logical payload" {
+						t.Fatalf("acquisition changed logical payload: %q %d %v", data, n, err)
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestRecompressionObjectLegacyTypeRead(t *testing.T) {
+	sentinel := errors.New("compression type read failure")
+	for _, tc := range []struct {
+		name string
+		n    int
+		err  error
+		want error
+	}{
+		{"success", 4, nil, nil},
+		{"full read with EOF", 4, io.EOF, nil},
+		{"short read", 3, nil, io.ErrUnexpectedEOF},
+		{"read failure", 0, sentinel, sentinel},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			base := objectHeader(3)
+			value := &storageObservedValue{Value: base, read: func(p []byte, at int64) (int, error) {
+				if at == 4 {
+					if _, err := base.ReadAt(p[:tc.n], at); err != nil {
+						t.Fatal(err)
+					}
+					return tc.n, tc.err
+				}
+				return base.ReadAt(p, at)
+			}}
+			o := objectFixture(t, hostdata.UFCompressed, 0, map[string]appledouble.Value{hostdata.DecmpfsName: value})
+			o.access = &recompressionAccess{profile: osversion.MacOS15, authority: Authority{UID: 501, Groups: []uint32{20}}}
+			before := o.metadata.Snapshot()
+			input, err := o.open(t.Context())
+			if !errors.Is(err, tc.want) {
+				t.Fatalf("type read error %v, want %v", err, tc.want)
+			}
+			if tc.want != nil {
+				if input != nil || o.opened || !reflect.DeepEqual(before, o.metadata.Snapshot()) || o.values[hostdata.DecmpfsName] != value || !o.retained[hostdata.DecmpfsName] {
+					t.Fatal("failed type read changed acquisition state")
+				}
+				return
+			}
+			if input == nil || !o.opened || o.stat().Flags&hostdata.UFCompressed != 0 || len(o.values) != 0 || len(o.retained) != 0 {
+				t.Fatal("supported compression was not materialized")
+			}
+			if err := input.Close(); err != nil {
+				t.Fatal(err)
 			}
 		})
 	}

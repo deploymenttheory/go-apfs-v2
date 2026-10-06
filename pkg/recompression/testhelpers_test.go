@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -102,3 +103,30 @@ func (s faultCarrier) CheckPayload(ctx context.Context, name string, file interf
 	}
 	return s.Store.CheckPayload(ctx, name, file)
 }
+
+// Close has the same already-closed contract on every supported host. Stat on
+// a closed Windows file instead exposes GetFileType's ERROR_INVALID_HANDLE.
+// Do not confuse that backend difference with a leaked descriptor.
+func requireFileClosed(t *testing.T, file *os.File) {
+	t.Helper()
+	if err := file.Close(); !errors.Is(err, os.ErrClosed) {
+		t.Fatalf("descriptor was not already closed: %v", err)
+	}
+}
+
+// Obtain the real closed descriptor's Stat failure for exact propagation checks,
+// after independently proving closure through the portable Close contract.
+func closedFileStatCause(t *testing.T, file *os.File) error {
+	t.Helper()
+	requireFileClosed(t, file)
+	_, err := file.Stat()
+	var pathError *os.PathError
+	if !errors.As(err, &pathError) || pathError.Err == nil {
+		t.Fatalf("closed descriptor Stat did not report a backend error: %v", err)
+	}
+	return pathError.Err
+}
+
+type failingPayloadStat struct{ err error }
+
+func (f failingPayloadStat) Stat() (os.FileInfo, error) { return nil, f.err }

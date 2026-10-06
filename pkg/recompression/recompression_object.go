@@ -3,6 +3,7 @@ package recompression
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"errors"
 	"io"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/metatransport"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/osversion"
 
 	internal "github.com/deploymenttheory/go-apfs-v2/internal/decmpfs"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
@@ -75,14 +77,27 @@ func (o *recompressionObject) open(ctx context.Context) (hostdata.CompressionInp
 	// fork accompanying inline storage. Inactive opaque metadata remains opaque.
 	flags, _ := o.metadata.ReadFlags()
 	if flags&hostdata.UFCompressed != 0 {
+		fork, e := internal.UsesResourceFork(o.values[hostdata.DecmpfsName])
+		if e != nil {
+			return nil, e
+		}
+		// Genuine macOS 15 and 26 O_RDWR observations reject active LZ4 storage
+		// with ENOTSUP before any inode transition. The portable decoder still
+		// supports those bytes; this is versioned operation policy, not a codec gap.
+		if o.access != nil && (o.access.profile == osversion.MacOS15 || o.access.profile == osversion.MacOS26) {
+			var kind [4]byte
+			n, readErr := o.values[hostdata.DecmpfsName].ReadAt(kind[:], 4)
+			if n != len(kind) || readErr != nil && !errors.Is(readErr, io.EOF) {
+				return nil, errors.Join(io.ErrUnexpectedEOF, readErr)
+			}
+			if value := binary.LittleEndian.Uint32(kind[:]); value == 15 || value == 16 {
+				return nil, syscall.ENOTSUP
+			}
+		}
 		if o.baseline != nil {
 			if e := validateRecompressionStorage(ctx, o.values, *o.baseline); e != nil {
 				return nil, e
 			}
-		}
-		fork, e := internal.UsesResourceFork(o.values[hostdata.DecmpfsName])
-		if e != nil {
-			return nil, e
 		}
 		delete(o.values, hostdata.DecmpfsName)
 		delete(o.retained, hostdata.DecmpfsName)

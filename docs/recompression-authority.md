@@ -81,7 +81,9 @@ Use `-check` once the genuine host-profile baseline is retained; it independentl
 recaptures and compares every operation and complete compressed-open observation.
 Both arm64 and x86_64 AST files and source/SDK hashes remain in the artifact set.
 
-The new standalone corpus currently retains macOS 27 observations. Fresh macOS
-15 and 26 captures are required before declaring this additional corpus qualified
-on all three releases. The earlier mandatory 990 recompression observations and
+The standalone corpus retains genuine macOS 15, 26 and 27 observations. Active
+LZ4 types 15/16 return ENOTSUP during write-open on 15/26 without changing the
+inode or storage; 27 accepts the same inputs. Target-specific acquisition follows
+these observations while portable decoding remains available on every host.
+CI independently recaptures each profile and compares its complete observations. The earlier mandatory 990 recompression observations and
 540 resource-fork opening observations continue to apply without removal.

@@ -121,9 +121,7 @@ func TestCarrierRecompressionAliasesConflicts(t *testing.T) {
 			if held == nil {
 				t.Fatal("prior valid alias not visited")
 			}
-			if _, e = held.Stat(); !errors.Is(e, os.ErrClosed) {
-				t.Fatal("prior alias leaked", e)
-			}
+			requireFileClosed(t, held)
 		})
 	}
 	for _, allow := range []bool{false, true} {
@@ -173,9 +171,7 @@ func TestCarrierRecompressionAliasesConflicts(t *testing.T) {
 		if held == nil {
 			t.Fatal("missing held alias")
 		}
-		if _, e = held.Stat(); !errors.Is(e, os.ErrClosed) {
-			t.Fatal("cancel leaked descriptor", e)
-		}
+		requireFileClosed(t, held)
 	})
 }
 func TestCarrierRecompressionAliasState(t *testing.T) {
@@ -243,7 +239,16 @@ func TestCarrierRecompressionPayloadAssociation(t *testing.T) {
 	if e = file.Close(); e != nil {
 		t.Fatal(e)
 	}
-	if e = s.CheckPayload(t.Context(), r.Materialized, file); !errors.Is(e, os.ErrClosed) {
+	statCause := closedFileStatCause(t, file)
+	if e = s.CheckPayload(t.Context(), r.Materialized, file); !errors.Is(e, statCause) {
 		t.Fatal(e)
+	}
+}
+
+func TestCarrierRecompressionPayloadStatError(t *testing.T) {
+	s, _, _, r := aliasFixture(t)
+	sentinel := errors.New("held payload stat failure")
+	if err := s.CheckPayload(t.Context(), r.Materialized, failingPayloadStat{sentinel}); !errors.Is(err, sentinel) {
+		t.Fatalf("lost held Stat error: %v", err)
 	}
 }
