@@ -497,3 +497,65 @@ func TestSingleNameSyscallTraceValidation(t *testing.T) {
 		t.Fatal(e)
 	}
 }
+
+// The continuous route removes action/upload boundaries between native calls.
+// It validates the image and actor once, then retains every actual result before
+// the separate summary compares it with the producer's existing-entry record.
+func TestNativeSyscallTraceContinuous(t *testing.T) {
+	_, out, plan := loadSyscallTrace(t)
+	control := filepath.Join(out, "syscall-control")
+	b, err := os.ReadFile(filepath.Join(control, "ready.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ready syscallTraceReady
+	if err = json.Unmarshal(b, &ready); err != nil {
+		t.Fatal(err)
+	}
+	if err = validateTraceReady(ready, plan); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
+	defer cancel()
+	for step, operation := range plan.Operations {
+		number := step + 1
+		request := filepath.Join(control, fmt.Sprintf("request-%02d.txt", number))
+		if _, err = os.Stat(request); !errors.Is(err, os.ErrNotExist) {
+			t.Fatal("duplicate or inaccessible request", err)
+		}
+		fmt.Printf("NATIVE START step=%d operation=%s pid=%d\n", number, operation, ready.PID)
+		if err = os.WriteFile(request+".tmp", []byte(fmt.Sprintf("%s %d\n", plan.Nonce, number)), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if err = os.Rename(request+".tmp", request); err != nil {
+			t.Fatal(err)
+		}
+		var result syscallTraceResult
+		if err = waitTraceJSON(ctx, filepath.Join(control, fmt.Sprintf("result-%02d.json", number)), &result); err != nil {
+			t.Fatal(err)
+		}
+		if err = validateTraceResult(result, plan, ready.PID, number); err != nil {
+			t.Fatal(err)
+		}
+		raw, err := json.Marshal(result)
+		if err != nil {
+			t.Fatal(err)
+		}
+		fmt.Printf("NATIVE RESULT %s\n", raw)
+	}
+}
+
+func TestNativeSyscallTraceHostLog(t *testing.T) {
+	root, err := filepath.Abs("..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(root, "artifacts/name-native-diagnostic")
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	commands := &nativeCommandRunner{Directory: filepath.Join(out, "syscall-host-log-commands")}
+	_, err = commands.run(ctx, "/usr/bin/log", "show", "--last", "1m", "--style", "compact", "--predicate", `process == "kernel" AND eventMessage CONTAINS[c] "apfs"`)
+	if err != nil {
+		t.Fatal(err)
+	}
+}

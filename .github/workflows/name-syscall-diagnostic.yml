@@ -2,6 +2,9 @@ name: Supplemental native held syscall boundaries
 on:
   workflow_call:
     inputs:
+      continuous:
+        type: boolean
+        default: false
       producer_run:
         type: string
         required: true
@@ -18,7 +21,7 @@ permissions:
   contents: read
   actions: read
 concurrency:
-  group: name-syscall-diagnostic-${{ github.ref }}-${{ inputs.profile }}-${{ inputs.filesystem }}-${{ inputs.case_id || 'all' }}
+  group: name-syscall-diagnostic-${{ github.ref }}-${{ inputs.profile }}-${{ inputs.filesystem }}-${{ inputs.case_id || 'all' }}-${{ inputs.continuous }}
   cancel-in-progress: false
 env:
   CGO_ENABLED: "0"
@@ -109,8 +112,24 @@ jobs:
         run: |
           set -euo pipefail
           go tool test2json -t -p command-line-arguments "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/boundary.test" -test.v=test2json -test.timeout=1m -test.run='^TestNativeSyscallTraceLaunch$' | tee "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/syscall-launch-tests.jsonl"
+      - name: Upload durable checkpoint before continuous sequence
+        if: inputs.continuous
+        uses: actions/upload-artifact@v7
+        with:
+          name: syscall-before-continuous
+          path: artifacts/name-native-diagnostic/
+          compression-level: 9
+          if-no-files-found: error
+      - name: Native continuous syscall sequence
+        if: inputs.continuous
+        timeout-minutes: 2
+        shell: bash
+        working-directory: scripts
+        run: |
+          set -euo pipefail
+          go tool test2json -t -p command-line-arguments "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/boundary.test" -test.v=test2json -test.timeout=2m -test.run='^TestNativeSyscallTraceContinuous$' | tee "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/syscall-continuous-tests.jsonl"
       - name: Upload durable syscall checkpoint before-01-root-open
-        if: always()
+        if: always() && inputs.continuous != true
         uses: actions/upload-artifact@v7
         with:
           name: syscall-before-01-root-open
@@ -122,6 +141,7 @@ jobs:
           compression-level: 9
           if-no-files-found: error
       - name: Native syscall 01-root-open
+        if: inputs.continuous != true
         timeout-minutes: 1
         shell: bash
         working-directory: scripts
@@ -131,7 +151,7 @@ jobs:
           set -euo pipefail
           go tool test2json -t -p command-line-arguments "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/boundary.test" -test.v=test2json -test.timeout=1m -test.run='^TestNativeSyscallTraceOperation$' | tee "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/syscall-step-01-root-open.jsonl"
       - name: Upload durable syscall checkpoint before-02-corpus-open
-        if: always()
+        if: always() && inputs.continuous != true
         uses: actions/upload-artifact@v7
         with:
           name: syscall-before-02-corpus-open
@@ -143,6 +163,7 @@ jobs:
           compression-level: 9
           if-no-files-found: error
       - name: Native syscall 02-corpus-open
+        if: inputs.continuous != true
         timeout-minutes: 1
         shell: bash
         working-directory: scripts
@@ -152,7 +173,7 @@ jobs:
           set -euo pipefail
           go tool test2json -t -p command-line-arguments "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/boundary.test" -test.v=test2json -test.timeout=1m -test.run='^TestNativeSyscallTraceOperation$' | tee "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/syscall-step-02-corpus-open.jsonl"
       - name: Upload durable syscall checkpoint before-03-case-open
-        if: always()
+        if: always() && inputs.continuous != true
         uses: actions/upload-artifact@v7
         with:
           name: syscall-before-03-case-open
@@ -164,6 +185,7 @@ jobs:
           compression-level: 9
           if-no-files-found: error
       - name: Native syscall 03-case-open
+        if: inputs.continuous != true
         timeout-minutes: 1
         shell: bash
         working-directory: scripts
@@ -173,7 +195,7 @@ jobs:
           set -euo pipefail
           go tool test2json -t -p command-line-arguments "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/boundary.test" -test.v=test2json -test.timeout=1m -test.run='^TestNativeSyscallTraceOperation$' | tee "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/syscall-step-03-case-open.jsonl"
       - name: Upload durable syscall checkpoint before-04-created-open
-        if: always()
+        if: always() && inputs.continuous != true
         uses: actions/upload-artifact@v7
         with:
           name: syscall-before-04-created-open
@@ -185,6 +207,7 @@ jobs:
           compression-level: 9
           if-no-files-found: error
       - name: Native syscall 04-created-open
+        if: inputs.continuous != true
         timeout-minutes: 1
         shell: bash
         working-directory: scripts
@@ -194,7 +217,7 @@ jobs:
           set -euo pipefail
           go tool test2json -t -p command-line-arguments "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/boundary.test" -test.v=test2json -test.timeout=1m -test.run='^TestNativeSyscallTraceOperation$' | tee "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/syscall-step-04-created-open.jsonl"
       - name: Upload durable syscall checkpoint before-05-created-fstat
-        if: always()
+        if: always() && inputs.continuous != true
         uses: actions/upload-artifact@v7
         with:
           name: syscall-before-05-created-fstat
@@ -206,6 +229,7 @@ jobs:
           compression-level: 9
           if-no-files-found: error
       - name: Native syscall 05-created-fstat
+        if: inputs.continuous != true
         timeout-minutes: 1
         shell: bash
         working-directory: scripts
@@ -215,7 +239,7 @@ jobs:
           set -euo pipefail
           go tool test2json -t -p command-line-arguments "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/boundary.test" -test.v=test2json -test.timeout=1m -test.run='^TestNativeSyscallTraceOperation$' | tee "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/syscall-step-05-created-fstat.jsonl"
       - name: Upload durable syscall checkpoint before-06-created-read
-        if: always()
+        if: always() && inputs.continuous != true
         uses: actions/upload-artifact@v7
         with:
           name: syscall-before-06-created-read
@@ -227,6 +251,7 @@ jobs:
           compression-level: 9
           if-no-files-found: error
       - name: Native syscall 06-created-read
+        if: inputs.continuous != true
         timeout-minutes: 1
         shell: bash
         working-directory: scripts
@@ -236,7 +261,7 @@ jobs:
           set -euo pipefail
           go tool test2json -t -p command-line-arguments "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/boundary.test" -test.v=test2json -test.timeout=1m -test.run='^TestNativeSyscallTraceOperation$' | tee "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/syscall-step-06-created-read.jsonl"
       - name: Upload durable syscall checkpoint before-07-created-close
-        if: always()
+        if: always() && inputs.continuous != true
         uses: actions/upload-artifact@v7
         with:
           name: syscall-before-07-created-close
@@ -248,6 +273,7 @@ jobs:
           compression-level: 9
           if-no-files-found: error
       - name: Native syscall 07-created-close
+        if: inputs.continuous != true
         timeout-minutes: 1
         shell: bash
         working-directory: scripts
@@ -257,7 +283,7 @@ jobs:
           set -euo pipefail
           go tool test2json -t -p command-line-arguments "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/boundary.test" -test.v=test2json -test.timeout=1m -test.run='^TestNativeSyscallTraceOperation$' | tee "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/syscall-step-07-created-close.jsonl"
       - name: Upload durable syscall checkpoint before-08-queried-open
-        if: always()
+        if: always() && inputs.continuous != true
         uses: actions/upload-artifact@v7
         with:
           name: syscall-before-08-queried-open
@@ -269,6 +295,7 @@ jobs:
           compression-level: 9
           if-no-files-found: error
       - name: Native syscall 08-queried-open
+        if: inputs.continuous != true
         timeout-minutes: 1
         shell: bash
         working-directory: scripts
@@ -278,7 +305,7 @@ jobs:
           set -euo pipefail
           go tool test2json -t -p command-line-arguments "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/boundary.test" -test.v=test2json -test.timeout=1m -test.run='^TestNativeSyscallTraceOperation$' | tee "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/syscall-step-08-queried-open.jsonl"
       - name: Upload durable syscall checkpoint before-09-queried-fstat
-        if: always()
+        if: always() && inputs.continuous != true
         uses: actions/upload-artifact@v7
         with:
           name: syscall-before-09-queried-fstat
@@ -290,6 +317,7 @@ jobs:
           compression-level: 9
           if-no-files-found: error
       - name: Native syscall 09-queried-fstat
+        if: inputs.continuous != true
         timeout-minutes: 1
         shell: bash
         working-directory: scripts
@@ -299,7 +327,7 @@ jobs:
           set -euo pipefail
           go tool test2json -t -p command-line-arguments "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/boundary.test" -test.v=test2json -test.timeout=1m -test.run='^TestNativeSyscallTraceOperation$' | tee "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/syscall-step-09-queried-fstat.jsonl"
       - name: Upload durable syscall checkpoint before-10-queried-read
-        if: always()
+        if: always() && inputs.continuous != true
         uses: actions/upload-artifact@v7
         with:
           name: syscall-before-10-queried-read
@@ -311,6 +339,7 @@ jobs:
           compression-level: 9
           if-no-files-found: error
       - name: Native syscall 10-queried-read
+        if: inputs.continuous != true
         timeout-minutes: 1
         shell: bash
         working-directory: scripts
@@ -320,7 +349,7 @@ jobs:
           set -euo pipefail
           go tool test2json -t -p command-line-arguments "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/boundary.test" -test.v=test2json -test.timeout=1m -test.run='^TestNativeSyscallTraceOperation$' | tee "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/syscall-step-10-queried-read.jsonl"
       - name: Upload durable syscall checkpoint before-11-queried-close
-        if: always()
+        if: always() && inputs.continuous != true
         uses: actions/upload-artifact@v7
         with:
           name: syscall-before-11-queried-close
@@ -332,6 +361,7 @@ jobs:
           compression-level: 9
           if-no-files-found: error
       - name: Native syscall 11-queried-close
+        if: inputs.continuous != true
         timeout-minutes: 1
         shell: bash
         working-directory: scripts
@@ -341,7 +371,7 @@ jobs:
           set -euo pipefail
           go tool test2json -t -p command-line-arguments "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/boundary.test" -test.v=test2json -test.timeout=1m -test.run='^TestNativeSyscallTraceOperation$' | tee "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/syscall-step-11-queried-close.jsonl"
       - name: Upload durable syscall checkpoint before-12-case-close
-        if: always()
+        if: always() && inputs.continuous != true
         uses: actions/upload-artifact@v7
         with:
           name: syscall-before-12-case-close
@@ -353,6 +383,7 @@ jobs:
           compression-level: 9
           if-no-files-found: error
       - name: Native syscall 12-case-close
+        if: inputs.continuous != true
         timeout-minutes: 1
         shell: bash
         working-directory: scripts
@@ -362,7 +393,7 @@ jobs:
           set -euo pipefail
           go tool test2json -t -p command-line-arguments "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/boundary.test" -test.v=test2json -test.timeout=1m -test.run='^TestNativeSyscallTraceOperation$' | tee "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/syscall-step-12-case-close.jsonl"
       - name: Upload durable syscall checkpoint before-13-corpus-close
-        if: always()
+        if: always() && inputs.continuous != true
         uses: actions/upload-artifact@v7
         with:
           name: syscall-before-13-corpus-close
@@ -374,6 +405,7 @@ jobs:
           compression-level: 9
           if-no-files-found: error
       - name: Native syscall 13-corpus-close
+        if: inputs.continuous != true
         timeout-minutes: 1
         shell: bash
         working-directory: scripts
@@ -383,7 +415,7 @@ jobs:
           set -euo pipefail
           go tool test2json -t -p command-line-arguments "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/boundary.test" -test.v=test2json -test.timeout=1m -test.run='^TestNativeSyscallTraceOperation$' | tee "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/syscall-step-13-corpus-close.jsonl"
       - name: Upload durable syscall checkpoint before-14-root-close
-        if: always()
+        if: always() && inputs.continuous != true
         uses: actions/upload-artifact@v7
         with:
           name: syscall-before-14-root-close
@@ -395,6 +427,7 @@ jobs:
           compression-level: 9
           if-no-files-found: error
       - name: Native syscall 14-root-close
+        if: inputs.continuous != true
         timeout-minutes: 1
         shell: bash
         working-directory: scripts
@@ -410,6 +443,14 @@ jobs:
         run: |
           set -euo pipefail
           go tool test2json -t -p command-line-arguments "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/boundary.test" -test.v=test2json -test.timeout=1m -test.run='^TestNativeSyscallTraceSummary$' | tee "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/syscall-summary-tests.jsonl"
+      - name: Preserve bounded native filesystem log
+        if: always() && inputs.continuous
+        timeout-minutes: 1
+        shell: bash
+        working-directory: scripts
+        run: |
+          set -euo pipefail
+          go tool test2json -t -p command-line-arguments "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/boundary.test" -test.v=test2json -test.timeout=1m -test.run='^TestNativeSyscallTraceHostLog$' | tee "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/syscall-host-log-tests.jsonl"
       - name: Stop owned native process and close descriptors
         if: always()
         timeout-minutes: 1
