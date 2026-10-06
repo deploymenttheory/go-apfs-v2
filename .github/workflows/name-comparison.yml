@@ -7,6 +7,10 @@ on:
         description: Run supplemental per-image macOS 15 diagnostics; cannot qualify the full gate
         type: boolean
         default: false
+      raw_trace:
+        description: Capture every source case as raw receiver observations; supplemental only
+        type: boolean
+        default: false
       continuous_trace:
         description: Run supplemental held syscalls continuously without intermediate actions
         type: boolean
@@ -34,7 +38,7 @@ on:
         type: string
         default: "37433253504"
 concurrency:
-  group: name-comparison-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}${{ inputs.syscall_trace && format('-syscalls-{0}-{1}-{2}-{3}', inputs.diagnostic_profile, inputs.diagnostic_filesystem, inputs.diagnostic_case, inputs.continuous_trace) || inputs.command_boundaries && format('-boundary-{0}-{1}-{2}', inputs.diagnostic_profile, inputs.diagnostic_filesystem, inputs.diagnostic_case || 'all') || (inputs.diagnostic_only && '-diagnostic' || '') }}
+  group: name-comparison-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}${{ inputs.raw_trace && format('-raw-{0}-{1}', inputs.diagnostic_profile, inputs.diagnostic_filesystem) || inputs.syscall_trace && format('-syscalls-{0}-{1}-{2}-{3}', inputs.diagnostic_profile, inputs.diagnostic_filesystem, inputs.diagnostic_case, inputs.continuous_trace) || inputs.command_boundaries && format('-boundary-{0}-{1}-{2}', inputs.diagnostic_profile, inputs.diagnostic_filesystem, inputs.diagnostic_case || 'all') || (inputs.diagnostic_only && '-diagnostic' || '') }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 permissions:
   contents: read
@@ -44,12 +48,12 @@ env:
   GOTOOLCHAIN: local
 jobs:
   supplemental-diagnostic:
-    if: github.event_name == 'workflow_dispatch' && inputs.diagnostic_only && !inputs.command_boundaries && !inputs.syscall_trace
+    if: github.event_name == 'workflow_dispatch' && inputs.diagnostic_only && !inputs.command_boundaries && !inputs.syscall_trace && !inputs.raw_trace
     uses: ./.github/workflows/name-image-diagnostic.yml
     with:
       producer_run: ${{ inputs.producer_run }}
   boundary-diagnostic:
-    if: github.event_name == 'workflow_dispatch' && inputs.diagnostic_only && inputs.command_boundaries && !inputs.syscall_trace
+    if: github.event_name == 'workflow_dispatch' && inputs.diagnostic_only && inputs.command_boundaries && !inputs.syscall_trace && !inputs.raw_trace
     uses: ./.github/workflows/name-image-boundary-diagnostic.yml
     with:
       producer_run: ${{ inputs.producer_run }}
@@ -57,7 +61,7 @@ jobs:
       filesystem: ${{ inputs.diagnostic_filesystem }}
       case_id: ${{ inputs.diagnostic_case }}
   syscall-diagnostic:
-    if: github.event_name == 'workflow_dispatch' && inputs.diagnostic_only && inputs.syscall_trace
+    if: github.event_name == 'workflow_dispatch' && inputs.diagnostic_only && inputs.syscall_trace && !inputs.raw_trace
     uses: ./.github/workflows/name-syscall-diagnostic.yml
     with:
       continuous: ${{ inputs.continuous_trace }}
@@ -65,6 +69,13 @@ jobs:
       profile: ${{ inputs.diagnostic_profile }}
       filesystem: ${{ inputs.diagnostic_filesystem }}
       case_id: ${{ inputs.diagnostic_case }}
+  raw-diagnostic:
+    if: github.event_name == 'workflow_dispatch' && inputs.diagnostic_only && inputs.raw_trace
+    uses: ./.github/workflows/name-raw-diagnostic.yml
+    with:
+      producer_run: ${{ inputs.producer_run }}
+      profile: ${{ inputs.diagnostic_profile }}
+      filesystem: ${{ inputs.diagnostic_filesystem }}
   native-images:
     if: inputs.diagnostic_only != true
     name: Comparison images (${{ matrix.os }})
