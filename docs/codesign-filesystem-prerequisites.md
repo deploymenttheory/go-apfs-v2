@@ -75,8 +75,11 @@ The remaining acceptance work is:
   qualification, including writable opens.
   The native C reader flushes START/END records for each filesystem operation,
   including case ID, spelling candidate, return value and immediate errno. The
-  Go harness reports a bounded stderr tail every ten seconds and reports context
-  expiry before waiting for child exit. Each image probe has a two-minute
+  Go harness streams probe stderr directly to CI and retains the same bytes in
+  its raw artifact. Its ten-second heartbeat and context-expiry messages perform
+  no filesystem reads, and monitoring begins before process startup. Generic
+  commands retain regular-file output to avoid inherited child-pipe waits.
+  Each image probe has a two-minute
   deadline; isolated cells retain independent cleanup and a five-minute outer
   test timeout. These bounds do not guarantee recovery of an unresponsive
   runner or kernel; interrupted operations never qualify as completed evidence.

@@ -262,6 +262,8 @@ func nativeImageReadback(t *testing.T, ctx context.Context, commands *nativeComm
 		var err error
 		probeContext, cancelProbe := context.WithTimeout(ctx, 2*time.Minute)
 		defer cancelProbe()
+		commands.liveStderr = true
+		defer func() { commands.liveStderr = false }()
 		raw, err = commands.run(probeContext, binary, mount, filepath.Join(dir, "cases.tsv"))
 		if err != nil {
 			return err

@@ -11,7 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
+	"sync"
 	"time"
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/diskimage"
@@ -22,56 +22,68 @@ type nativeCommandRunner struct {
 	sequence         int
 	progressInterval time.Duration
 	progressOutput   io.Writer
+	liveStderr       bool
 }
 
-// Read a bounded tail from the existing regular file. Child output remains on
-// regular files, so a descendant inheriting stderr cannot hold a pipe open.
-func nativeCommandTail(file *os.File) string {
-	info, err := file.Stat()
-	if err != nil {
-		return fmt.Sprintf("<stderr stat: %v>", err)
-	}
-	size := min(info.Size(), int64(4096))
-	data := make([]byte, int(size))
-	n, err := file.ReadAt(data, info.Size()-size)
-	if err != nil && err != io.EOF {
-		return fmt.Sprintf("<stderr read: %v>", err)
-	}
-	return strings.TrimSpace(string(data[:n]))
+type nativeProgressWriter struct {
+	mu     sync.Mutex
+	writer io.Writer
+}
+
+func (w *nativeProgressWriter) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.writer.Write(p)
 }
 
 func (r *nativeCommandRunner) wait(ctx context.Context, cmd *exec.Cmd, stderr *os.File, stem string) error {
-	if err := cmd.Start(); err != nil {
-		return err
-	}
 	interval := r.progressInterval
 	if interval <= 0 {
 		interval = 10 * time.Second
 	}
-	output := r.progressOutput
-	if output == nil {
-		output = os.Stderr
+	destination := r.progressOutput
+	if destination == nil {
+		destination = os.Stderr
+	}
+	output := &nativeProgressWriter{writer: destination}
+	if r.liveStderr {
+		// The single-process native C probe emits each call boundary to CI
+		// before retaining it on disk. Generic commands keep regular stderr
+		// files; inherited child handles cannot hold their output pipe open.
+		cmd.Stderr = io.MultiWriter(output, stderr)
 	}
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	started := time.Now()
 	done := make(chan error, 1)
-	go func() { done <- cmd.Wait() }()
+	launched := make(chan int, 1)
+	fmt.Fprintf(output, "LAUNCH native command %s; monitoring process startup\n", stem)
+	go func() {
+		if err := cmd.Start(); err != nil {
+			done <- err
+			return
+		}
+		launched <- cmd.Process.Pid
+		done <- cmd.Wait()
+	}()
+	pid := 0
 	cancelled := ctx.Done()
 	for {
 		select {
+		case pid = <-launched:
+			fmt.Fprintf(output, "LAUNCHED native command %s pid=%d\n", stem, pid)
 		case err := <-done:
 			if err != nil || ctx.Err() != nil {
-				fmt.Fprintf(output, "ERROR native command %s: %v context=%v; last stderr:\n%s\n", stem, err, ctx.Err(), nativeCommandTail(stderr))
+				fmt.Fprintf(output, "ERROR native command %s: %v context=%v\n", stem, err, ctx.Err())
 			}
 			return err
 		case <-cancelled:
 			// Report before waiting for process exit: a blocked kernel call can
 			// prevent even a killed child from being reaped immediately.
-			fmt.Fprintf(output, "ERROR native command %s deadline/cancellation: %v; cancellation requested; awaiting process exit; last stderr:\n%s\n", stem, ctx.Err(), nativeCommandTail(stderr))
+			fmt.Fprintf(output, "ERROR native command %s deadline/cancellation: %v; cancellation requested; awaiting process exit\n", stem, ctx.Err())
 			cancelled = nil
 		case <-ticker.C:
-			fmt.Fprintf(output, "PROGRESS native command %s pid=%d elapsed=%s; last stderr:\n%s\n", stem, cmd.Process.Pid, time.Since(started).Round(time.Second), nativeCommandTail(stderr))
+			fmt.Fprintf(output, "PROGRESS native command %s pid=%d elapsed=%s (pid=0 means startup pending)\n", stem, pid, time.Since(started).Round(time.Second))
 		}
 	}
 }
@@ -89,9 +101,9 @@ type nativeCommandObservation struct {
 	Stderr       string    `json:"stderr"`
 }
 
-// A child daemon retaining stdout cannot keep this runner waiting for pipe EOF:
-// raw native streams go directly to owned regular files, with WaitDelay retained
-// as a further bound if os/exec needs a cancellation wait.
+// Generic command streams use owned regular files: a child daemon retaining
+// stdout/stderr cannot hold a pipe open. The single-process native probe opts
+// into live stderr with an additional retained copy and a five-second WaitDelay.
 func (r *nativeCommandRunner) run(ctx context.Context, name string, args ...string) ([]byte, error) {
 	if err := os.MkdirAll(r.Directory, 0755); err != nil {
 		return nil, err

@@ -196,7 +196,7 @@ func TestNativeReadbackCommandLiveProgress(t *testing.T) {
 		t.Fatal(err)
 	}
 	var output bytes.Buffer
-	runner := &nativeCommandRunner{Directory: t.TempDir(), progressInterval: 20 * time.Millisecond, progressOutput: &output}
+	runner := &nativeCommandRunner{Directory: t.TempDir(), progressInterval: 20 * time.Millisecond, progressOutput: &output, liveStderr: true}
 	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
 	defer cancel()
 	if _, err = runner.run(ctx, exe, "-test.run=^TestNativeReadbackCommandChild$"); !errors.Is(err, context.DeadlineExceeded) {
@@ -209,32 +209,59 @@ func TestNativeReadbackCommandLiveProgress(t *testing.T) {
 	}
 }
 
-func TestNativeReadbackCommandBoundedTail(t *testing.T) {
-	file, err := os.CreateTemp(t.TempDir(), "stderr")
+// The notification must arrive while the child is still alive. Inspecting only
+// the final retained stderr would not exercise the failed live logging path.
+type nativeProgressObserver struct {
+	bytes.Buffer
+	ready chan struct{}
+}
+
+func (w *nativeProgressObserver) Write(p []byte) (int, error) {
+	n, err := w.Buffer.Write(p)
+	if strings.Contains(w.Buffer.String(), "NATIVE START case=blocked candidate=0 operation=openat-file") {
+		select {
+		case w.ready <- struct{}{}:
+		default:
+		}
+	}
+	return n, err
+}
+
+func TestNativeReadbackCommandStreamsBeforeExit(t *testing.T) {
+	t.Setenv("APFS_READBACK_COMMAND_CHILD", "hold")
+	exe, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := nativeCommandTail(file); got != "" {
-		t.Fatal(got)
+	output := &nativeProgressObserver{ready: make(chan struct{}, 1)}
+	runner := &nativeCommandRunner{Directory: t.TempDir(), progressInterval: 20 * time.Millisecond, progressOutput: output, liveStderr: true}
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { _, err := runner.run(ctx, exe, "-test.run=^TestNativeReadbackCommandChild$"); done <- err }()
+	select {
+	case <-output.ready:
+		select {
+		case err := <-done:
+			t.Fatalf("probe exited before live record: %v", err)
+		default:
+		}
+	case err := <-done:
+		t.Fatalf("probe finished without live trace: %v", err)
+	case <-ctx.Done():
+		<-done
+		t.Fatal("native call boundary was not streamed while child was alive")
 	}
-	data := strings.Repeat("x", 8192) + "\nNATIVE START operation=openat-file\n"
-	if _, err = file.WriteString(data); err != nil {
+	cancel()
+	if err = <-done; !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
 	}
-	before, err := file.Seek(0, 1)
-	if err != nil {
-		t.Fatal(err)
+	retained, err := os.ReadFile(filepath.Join(runner.Directory, "command-001.stderr"))
+	if err != nil || !strings.Contains(string(retained), "NATIVE START case=blocked candidate=0 operation=openat-file") {
+		t.Fatal("lost retained trace", string(retained), err)
 	}
-	got := nativeCommandTail(file)
-	after, err := file.Seek(0, 1)
-	if err != nil || before != after || len(got) > 4096 || !strings.HasSuffix(got, "NATIVE START operation=openat-file") {
-		t.Fatal("unbounded tail or changed child write offset", got, err)
-	}
-	if err = file.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(nativeCommandTail(file), "stderr stat:") {
-		t.Fatal("lost tail read error")
+	if !strings.Contains(output.String(), "ERROR native command") {
+		t.Fatal("missing live cancellation error")
 	}
 }
 
