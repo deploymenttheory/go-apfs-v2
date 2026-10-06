@@ -243,21 +243,12 @@ func runReplacementCopy(source, destination *uint16, state *replacementCopyState
 // Windows. A no-delete-share reopen additionally prevents removing the anchor.
 // Keep it until copy and final held identity validation finish; callback-only
 // validation cannot prevent creation through a replaced ancestor pathname.
-func replacementStageAnchor(stage *os.Root) (anchor *os.File, err error) {
-	first, err := stage.OpenFile("anchor", os.O_CREATE|os.O_EXCL|os.O_RDWR, 0600)
-	if err != nil {
-		return nil, err
-	}
-	h, _, native := reopenFile.Call(first.Fd(), windows.GENERIC_READ, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE, 0)
-	closeErr := first.Close()
-	if windows.Handle(h) == windows.InvalidHandle {
-		return nil, errors.Join(native, closeErr)
-	}
-	anchor = os.NewFile(h, first.Name())
-	if closeErr != nil {
-		return nil, errors.Join(closeErr, anchor.Close())
-	}
-	return anchor, nil
+func replacementStageAnchor(stage *os.Root) (*os.File, error) {
+	return replacementWithHandle(context.Background(), func() (*os.File, error) {
+		return stage.OpenFile("anchor", os.O_CREATE|os.O_EXCL|os.O_RDWR, 0600)
+	}, func(first *os.File) (*os.File, error) {
+		return reopenReplacementFileSharing(first, windows.GENERIC_READ, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE)
+	})
 }
 
 type replacementWindowsCopy func(*uint16, *uint16, *replacementCopyState) error
@@ -371,21 +362,12 @@ func copyReplacementWindows(ctx context.Context, source *os.File, stage *os.Root
 	return state.file, nil
 }
 
-func openReplacementStageMetadata(stage *os.Root) (file *os.File, err error) {
-	directory, err := stage.Open(".")
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		if closeErr := directory.Close(); closeErr != nil {
-			err = errors.Join(err, closeErr)
-		}
-		if err != nil && file != nil {
-			err = errors.Join(err, file.Close())
-			file = nil
-		}
-	}()
-	file, err = openWindowsMetadataRights(directory, "replacement", windows.SYNCHRONIZE|windows.FILE_READ_ATTRIBUTES)
+func openReplacementStageMetadata(stage *os.Root) (*os.File, error) {
+	file, err := replacementWithHandle(context.Background(), func() (*os.File, error) {
+		return stage.Open(".")
+	}, func(directory *os.File) (*os.File, error) {
+		return openWindowsMetadataRights(directory, "replacement", windows.SYNCHRONIZE|windows.FILE_READ_ATTRIBUTES)
+	})
 	return file, replacementWindowsError(err)
 }
 

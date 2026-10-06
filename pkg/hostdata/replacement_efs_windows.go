@@ -112,23 +112,9 @@ func replacementEFSKeysEqual(a, b *replacementEFSList) bool {
 // Namespace-based EFS APIs run only while a no-delete-share reopen pins the
 // selected file. Resolve its path after acquiring that handle, never from Name.
 func replacementPinEFS(ctx context.Context, file *os.File) (pin *os.File, err error) {
-	if err = ctx.Err(); err != nil {
-		return nil, err
-	}
-	conn, err := file.SyscallConn()
-	if err != nil {
-		return nil, err
-	}
-	var handle uintptr
-	var native error
-	control := conn.Control(func(fd uintptr) {
-		handle, _, native = reopenFile.Call(fd, windows.FILE_READ_ATTRIBUTES, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE, 0)
+	pin, err = replacementValue(ctx, func() (*os.File, error) {
+		return reopenReplacementFileSharing(file, windows.FILE_READ_ATTRIBUTES, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE)
 	})
-	if windows.Handle(handle) != windows.InvalidHandle && control == nil {
-		pin = os.NewFile(handle, file.Name())
-		native = nil
-	}
-	err = errors.Join(control, native, ctx.Err())
 	if err != nil && pin != nil {
 		err = errors.Join(err, pin.Close())
 		pin = nil

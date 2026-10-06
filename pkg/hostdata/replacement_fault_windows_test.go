@@ -450,7 +450,7 @@ func TestReplacementWindowsFinalPathProvider(t *testing.T) {
 }
 
 func TestReplacementWindowsSecurityValidation(t *testing.T) {
-	if e := replacementFileControl(new(os.File), func(windows.Handle) error { t.Fatal("invalid file reached callback"); return nil }); !errors.Is(e, os.ErrInvalid) {
+	if e := replacementFileControl((*os.File)(nil), func(windows.Handle) error { t.Fatal("invalid file reached callback"); return nil }); !errors.Is(e, os.ErrInvalid) {
 		t.Fatal(e)
 	}
 
@@ -491,6 +491,174 @@ func TestReplacementWindowsSecurityValidation(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err = replacementFileControl(closed, func(windows.Handle) error { t.Fatal("closed file reached native callback"); return nil }); !errors.Is(err, os.ErrClosed) {
+		t.Fatal(err)
+	}
+}
+
+func TestReplacementWindowsEFSEveryCancellationCheckpoint(t *testing.T) {
+	openHeld := func(name string) *os.File {
+		pointer, err := windows.UTF16PtrFromString(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		h, err := windows.CreateFile(pointer, windows.GENERIC_READ, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, nil, windows.OPEN_EXISTING, 0, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return os.NewFile(uintptr(h), name)
+	}
+	names := []string{filepath.Join(t.TempDir(), "source"), filepath.Join(t.TempDir(), "target")}
+	for _, name := range names {
+		if err := os.WriteFile(name, []byte("encrypted native data"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		replacementEncrypt(t, name)
+	}
+	source, target := openHeld(names[0]), openHeld(names[1])
+	defer source.Close()
+	defer target.Close()
+	acquireDelete := func(t *testing.T, name string) windows.Handle {
+		t.Helper()
+		pointer, e := windows.UTF16PtrFromString(name)
+		if e != nil {
+			t.Fatal(e)
+		}
+		h, e := windows.CreateFile(pointer, windows.DELETE, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, nil, windows.OPEN_EXISTING, 0, 0)
+		if e != nil {
+			t.Fatalf("leaked no-delete-share pin: %v", e)
+		}
+		return h
+	}
+	for _, operation := range []string{"pin", "query", "verify"} {
+		t.Run(operation, func(t *testing.T) {
+			checkpoints := 0
+			for stop := 0; stop <= checkpoints; stop++ {
+				ctx, cancel := context.WithCancel(t.Context())
+				observed := &replacementCheckpointContext{Context: ctx, cancel: cancel, stop: stop}
+				var err error
+				switch operation {
+				case "pin":
+					var file *os.File
+					file, err = replacementPinEFS(observed, source)
+					if err != nil && file != nil {
+						t.Fatal("failed acquisition returned owned pin")
+					}
+					if file != nil {
+						err = errors.Join(err, file.Close())
+					}
+				case "query":
+					var list *replacementEFSList
+					list, err = replacementQueryEFS(observed, names[0], replacementQueryUsers)
+					if err != nil && list != nil {
+						t.Fatal("failed query returned owned list")
+					}
+					if list != nil {
+						freeReplacementEFS(list)
+					}
+				case "verify":
+					err = replacementVerifyEFS(observed, source, target)
+				}
+				cancel()
+				if stop == 0 {
+					if err != nil {
+						t.Fatal(err)
+					}
+					checkpoints = observed.calls
+				} else if !errors.Is(err, context.Canceled) {
+					t.Fatalf("checkpoint %d/%d: %v", stop, checkpoints, err)
+				}
+				for _, name := range names {
+					if e := windows.CloseHandle(acquireDelete(t, name)); e != nil {
+						t.Fatal(e)
+					}
+				}
+			}
+			if checkpoints == 0 {
+				t.Fatal("no native cancellation checkpoints")
+			}
+		})
+	}
+	plain, e := os.CreateTemp(t.TempDir(), "plain")
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer plain.Close()
+	if e = replacementVerifyEFS(t.Context(), source, plain); e == nil {
+		t.Fatal("unencrypted replacement accepted")
+	}
+	if e = plain.Close(); e != nil {
+		t.Fatal(e)
+	}
+	if e = replacementVerifyEFS(t.Context(), source, plain); e == nil {
+		t.Fatal("closed encrypted replacement accepted")
+	}
+	for _, name := range names {
+		held := acquireDelete(t, name)
+		e = replacementVerifyEFS(t.Context(), source, target)
+		closeErr := windows.CloseHandle(held)
+		if !errors.Is(e, windows.ERROR_SHARING_VIOLATION) || closeErr != nil {
+			t.Fatalf("required namespace pin not enforced: %v / %v", e, closeErr)
+		}
+	}
+}
+
+func TestReplacementWindowsPrivateFailures(t *testing.T) {
+	directory := t.TempDir()
+	root, err := os.OpenRoot(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	if err = root.Mkdir("exists", 0700); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"exists", "invalid\x00name"} {
+		release, e := makeReplacementDirectoryAt(t.Context(), root, name)
+		if release != nil {
+			t.Error("failed private creation returned a guard")
+			_ = release()
+		}
+		if e == nil {
+			t.Fatalf("accepted %q", name)
+		}
+	}
+	source, err := os.CreateTemp(t.TempDir(), "source")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer source.Close()
+	replacement, err := PrepareReplacementContext(t.Context(), source, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = replacement.Close(); err != nil {
+		t.Fatal(err)
+	}
+	named, err := root.OpenFile("replacement", os.O_CREATE|os.O_RDWR, 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer named.Close()
+	if err = replacementCleanupMetadata(root, source); err == nil {
+		t.Fatal("changed private identity accepted")
+	}
+	closed, err := os.CreateTemp(t.TempDir(), "closed")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = closed.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err = replacementCleanupMetadata(root, closed); err == nil {
+		t.Fatal("closed cleanup capability accepted")
+	}
+	if _, err = replacementCleanupCapability((*os.File)(nil)); !errors.Is(err, os.ErrInvalid) {
+		t.Fatal(err)
+	}
+	if _, err = replacementHeldIdentity((*os.File)(nil)); !errors.Is(err, os.ErrInvalid) {
+		t.Fatal(err)
+	}
+	if _, err = replacementFinalPath(t.Context(), (*os.File)(nil)); !errors.Is(err, os.ErrInvalid) {
 		t.Fatal(err)
 	}
 }
