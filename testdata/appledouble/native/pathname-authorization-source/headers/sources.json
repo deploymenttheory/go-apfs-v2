@@ -1,0 +1,110 @@
+{
+  "release": "xnu-11417.140.69",
+  "sources": [
+    {
+      "file": "namei.h.gz",
+      "sha256": "776b2e92461ffd73c49cc77a4cb0c7ee5ec42713ff1eb712dc09b82a9cf1c175",
+      "url": "https://raw.githubusercontent.com/apple-oss-distributions/xnu/xnu-11417.140.69/bsd/sys/namei.h"
+    },
+    {
+      "file": "vnode_internal.h.gz",
+      "sha256": "f8cc45cabd447e70593d1ed830f6d6d3b967696793f06f4d8d3dd08dd33ec76a",
+      "url": "https://raw.githubusercontent.com/apple-oss-distributions/xnu/xnu-11417.140.69/bsd/sys/vnode_internal.h"
+    },
+    {
+      "file": "kauth.h.gz",
+      "sha256": "9009cb706a24501dff4f47024c63dc730618249d85dd050f2bf97515a3ca6098",
+      "url": "https://raw.githubusercontent.com/apple-oss-distributions/xnu/xnu-11417.140.69/bsd/sys/kauth.h"
+    },
+    {
+      "file": "proc_internal.h.gz",
+      "sha256": "085a0b78dc06b299fe179ce8384bf527b647f5f51cc5006af1a40989e630bf50",
+      "url": "https://raw.githubusercontent.com/apple-oss-distributions/xnu/xnu-11417.140.69/bsd/sys/proc_internal.h"
+    },
+    {
+      "file": "vnode.h.gz",
+      "sha256": "bee8949cc7332194b447e92889724ed25f0b587e40772753d686f153fb5fc9f6",
+      "url": "https://raw.githubusercontent.com/apple-oss-distributions/xnu/xnu-11417.140.69/bsd/sys/vnode.h"
+    },
+    {
+      "file": "filedesc.h.gz",
+      "sha256": "1593e0373a7ce07fb9684aa8f7df5b0f03bf13a5b9c858071503623b4a0d81c7",
+      "url": "https://raw.githubusercontent.com/apple-oss-distributions/xnu/xnu-11417.140.69/bsd/sys/filedesc.h"
+    },
+    {
+      "file": "proc.h.gz",
+      "sha256": "d5124c8beade264cab515c58f2d769d8a8bca47a29934f667c24cad1ded53dad",
+      "url": "https://raw.githubusercontent.com/apple-oss-distributions/xnu/xnu-11417.140.69/bsd/sys/proc.h"
+    },
+    {
+      "file": "mount_internal.h.gz",
+      "sha256": "97e1f94d70a59d9f6605fbec754dbfe87b8a622223968e1ca38b77e0ae98d77d",
+      "url": "https://raw.githubusercontent.com/apple-oss-distributions/xnu/xnu-11417.140.69/bsd/sys/mount_internal.h"
+    },
+    {
+      "file": "vnode_if.h.gz",
+      "sha256": "1ca2ff0c5eb13d10de4eb130be0ec9113a48b966eafbeeddbbe76b1d0045a1ea",
+      "url": "https://raw.githubusercontent.com/apple-oss-distributions/xnu/xnu-11417.140.69/bsd/sys/vnode_if.h"
+    },
+    {
+      "file": "fsctl.h.gz",
+      "sha256": "fcd1ab05b09006949f68cd9212ab27cb7fe531fd843f7b40502099e66a3f75d9",
+      "url": "https://raw.githubusercontent.com/apple-oss-distributions/xnu/xnu-11417.140.69/bsd/sys/fsctl.h"
+    },
+    {
+      "file": "errno.h.gz",
+      "sha256": "5e1e8440ba793e3c1e0024641d0ba3303cb0c4eccd6cf44968d15cf47748c923",
+      "url": "https://raw.githubusercontent.com/apple-oss-distributions/xnu/xnu-11417.140.69/bsd/sys/errno.h"
+    },
+    {
+      "file": "param.h.gz",
+      "sha256": "ee6024c8fee1eb9bcd280203532cba183fb015c5549eebcd8f45f4667529ad4a",
+      "url": "https://raw.githubusercontent.com/apple-oss-distributions/xnu/xnu-11417.140.69/bsd/sys/param.h"
+    },
+    {
+      "file": "resource.h.gz",
+      "sha256": "8580254057aabe88b4754c33cddef9589d691b337ef2e543b81d8a4ca48c5781",
+      "url": "https://raw.githubusercontent.com/apple-oss-distributions/xnu/xnu-11417.140.69/bsd/sys/resource.h"
+    },
+    {
+      "file": "resource_private.h.gz",
+      "sha256": "ac52b28a8fd3da664cddc8110fddea0f911ab9057e9cb20f5628da27e4eef489",
+      "url": "https://raw.githubusercontent.com/apple-oss-distributions/xnu/xnu-11417.140.69/bsd/sys/resource_private.h"
+    },
+    {
+      "file": "syslimits.h.gz",
+      "sha256": "c82fe60eac5d7864220e1468e6b75740b07d2ad6d18fe923b495059e48c2f100",
+      "url": "https://raw.githubusercontent.com/apple-oss-distributions/xnu/xnu-11417.140.69/bsd/sys/syslimits.h"
+    },
+    {
+      "file": "xattr.h.gz",
+      "sha256": "f7a3935c9078324d18688651517a1445eae8e0a0d340a500086a463818d56d29",
+      "url": "https://raw.githubusercontent.com/apple-oss-distributions/xnu/xnu-11417.140.69/bsd/sys/xattr.h"
+    },
+    {
+      "file": "fsevents.h.gz",
+      "sha256": "bd7e2c07aa8b6c9d1be65259ee1ed9e1c610ca5e4fccdaedd157ccaab6c07e10",
+      "url": "https://raw.githubusercontent.com/apple-oss-distributions/xnu/xnu-11417.140.69/bsd/sys/fsevents.h"
+    },
+    {
+      "file": "mac_framework.h.gz",
+      "sha256": "b4171004b6aca10b6c91cae1836c37ea9f78c72181606943c4e06abe6a413e7e",
+      "url": "https://raw.githubusercontent.com/apple-oss-distributions/xnu/xnu-11417.140.69/security/mac_framework.h"
+    },
+    {
+      "file": "audit.h.gz",
+      "sha256": "5442a4bfa987b9cfe7dab50addb05d88f361a87dfd0f6ddcbe7ad4d88cf131d8",
+      "url": "https://raw.githubusercontent.com/apple-oss-distributions/xnu/xnu-11417.140.69/bsd/security/audit/audit.h"
+    },
+    {
+      "file": "audit_private.h.gz",
+      "sha256": "1b755f673ebfad605534351550d84422c58ad1190cf6aee940606fadc6886eff",
+      "url": "https://raw.githubusercontent.com/apple-oss-distributions/xnu/xnu-11417.140.69/bsd/security/audit/audit_private.h"
+    },
+    {
+      "file": "zalloc.h.gz",
+      "sha256": "4df946375dba8281e960aece57578b628096e295497bf918f9fa7ffe9690995d",
+      "url": "https://raw.githubusercontent.com/apple-oss-distributions/xnu/xnu-11417.140.69/osfmk/kern/zalloc.h"
+    }
+  ]
+}

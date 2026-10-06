@@ -11,7 +11,7 @@ import (
 )
 
 func replacementPrivateSecurity() (*windows.SECURITY_DESCRIPTOR, error) {
-	user, err := windows.GetCurrentProcessToken().GetTokenUser()
+	user, err := windows.GetCurrentThreadEffectiveToken().GetTokenUser()
 	if err != nil {
 		return nil, err
 	}

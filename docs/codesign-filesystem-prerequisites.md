@@ -148,6 +148,20 @@ uncaptured-context error; real denial follows the independently observed native
 result. Do not invent 0755 roots, infer source ownership from the receiver, or
 translate unknown membership into known nonmembership.
 
+Persist successful complete source-attribute enumeration separately from receiving-
+host capture, so later consumers can distinguish observed ACL absence from metadata
+that was never read. Older carriers remain uncaptured until explicit observations
+are provided. New readers must retain older manifests; document that older strict
+readers cannot consume manifests containing newly introduced observation fields.
+
+Bind observed filesystem name-comparison policy as well as mount flags. Reuse the
+existing APFS/HFS+ collation implementations for case and normalization behavior;
+never infer case sensitivity from an APFS or HFS label. Qualify case variants,
+Unicode equivalents, empty paths, NUL input, repeated separators, trailing slashes,
+component and total path limits, symlink-expanded lengths and the symlink traversal
+boundary. Native source/SDK constants alone do not establish the filesystem
+name-length unit or the error ordering relative to directory authorization.
+
 Search, create, delete and rename require distinct authorization operations.
 Capture per-directory SEARCH before lookup; ADD_FILE/ADD_SUBDIRECTORY for creation;
 leaf DELETE versus parent DELETE_CHILD, POSIX/sticky fallback and immutable/append

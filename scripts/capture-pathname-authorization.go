@@ -29,29 +29,6 @@ type caseSpec struct {
 	Privileged bool   `json:"privileged_fixture"`
 }
 
-func cases() []caseSpec {
-	var out []caseSpec
-	add := func(family string, profiles, operations []string, privileged bool) {
-		for _, profile := range profiles {
-			for _, operation := range operations {
-				for _, route := range []string{"path", "root", "parent"} {
-					out = append(out, caseSpec{family + "/" + profile + "/" + operation + "/" + route, family, profile, operation, route, privileged})
-				}
-			}
-		}
-	}
-	add("control", []string{"ordinary"}, []string{"open", "create", "unlink", "rename", "rename-absent", "rename-cross", "held-write", "chmod-open"}, false)
-	add("search", []string{"root-no-search", "middle-no-search", "parent-no-search", "parent-search-only", "parent-list-only", "parent-no-write", "parent-deny-search", "parent-allow-search", "parent-allow-deny-search", "parent-deny-allow-search", "parent-generic-execute", "parent-group-deny-search", "parent-group-allow-search"}, []string{"open", "held-write", "chmod-open"}, false)
-	add("search", []string{"group-search-allow", "group-search-deny", "other-search-allow", "other-search-deny"}, []string{"open"}, true)
-	add("create", []string{"parent-no-search", "parent-no-write", "parent-deny-search", "parent-deny-add", "parent-allow-add", "parent-immutable", "parent-append"}, []string{"create"}, false)
-	add("delete", []string{"parent-no-search", "parent-no-write", "parent-deny-delete", "leaf-deny-delete", "leaf-allow-parent-deny", "leaf-deny-parent-allow", "parent-immutable", "parent-append", "leaf-immutable", "leaf-append", "sticky-owner"}, []string{"unlink"}, false)
-	add("delete", []string{"sticky-neither", "sticky-parent-owner"}, []string{"unlink"}, true)
-	add("rename", []string{"parent-no-search", "parent-no-write", "parent-deny-add", "parent-deny-delete", "leaf-deny-delete", "leaf-allow-parent-deny", "leaf-deny-parent-allow", "stage-deny-delete", "stage-immutable", "parent-immutable", "parent-append", "leaf-immutable", "leaf-append", "sticky-owner"}, []string{"rename"}, false)
-	add("rename", []string{"sticky-neither", "sticky-parent-owner"}, []string{"rename"}, true)
-	add("rename-absent", []string{"parent-no-search", "parent-no-write", "parent-deny-add", "parent-deny-delete", "leaf-deny-delete", "stage-deny-delete", "stage-immutable", "parent-immutable", "parent-append"}, []string{"rename-absent"}, false)
-	add("rename-cross", []string{"parent-no-search", "parent-no-write", "parent-deny-delete", "stage-deny-delete", "stage-immutable", "destination-deny-search", "destination-deny-add", "destination-deny-delete", "destination-no-write", "destination-immutable"}, []string{"rename-cross"}, false)
-	return out
-}
 func must(err error) {
 	if err != nil {
 		panic(err)
@@ -105,7 +82,11 @@ func main() {
 		sources[name] = hash(ast)
 	}
 	for _, h := range []string{"sys/stat.h", "sys/mount.h", "sys/acl.h", "sys/kauth.h", "sys/fcntl.h", "sys/resource.h", "membership.h"} {
-		sources["SDK/"+h] = hash(read(filepath.Join(sdk, "usr/include", h)))
+		raw := read(filepath.Join(sdk, "usr/include", h))
+		sources["SDK/"+h] = hash(raw)
+		destination := filepath.Join(*out, "SDK", h)
+		must(os.MkdirAll(filepath.Dir(destination), 0755))
+		must(os.WriteFile(destination, raw, 0644))
 	}
 	appleDir := filepath.Join(*out, "apple-source")
 	must(os.Mkdir(appleDir, 0755))
@@ -135,8 +116,18 @@ func main() {
 		must(os.WriteFile(filepath.Join(appleDir, name), raw, 0644))
 		sources["apple-source/"+name] = hash(raw)
 	}
-	manifest := cases()
-	writeJSON(filepath.Join(*out, "case-manifest.json"), map[string]any{"schema": 1, "qualification": "specified-before-capture", "cases": manifest})
+	specBytes := read("testdata/appledouble/native/pathname-authorization-cases.json")
+	var planned struct {
+		Schema        int
+		Qualification string
+		Cases         []caseSpec
+	}
+	must(json.Unmarshal(specBytes, &planned))
+	if planned.Schema != 1 || planned.Qualification != "specified-before-capture" || len(planned.Cases) != 318 {
+		panic("invalid predeclared case specification")
+	}
+	manifest := planned.Cases
+	must(os.WriteFile(filepath.Join(*out, "case-manifest.json"), specBytes, 0644))
 	sources["case-manifest.json"] = hash(read(filepath.Join(*out, "case-manifest.json")))
 	var sudoAvailable bool
 	var sudoDiagnostic string

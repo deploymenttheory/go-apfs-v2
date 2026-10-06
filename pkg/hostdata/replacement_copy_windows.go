@@ -106,6 +106,7 @@ type replacementCopyState struct {
 	stage       *os.Root
 	path        string
 	file        *os.File
+	security    *os.File
 	destination replacementWindowsID
 	validated   bool
 	err         error
@@ -126,7 +127,7 @@ func (s *replacementCopyState) progress(reason uint32, source, destination windo
 	}
 	id, err = replacementWindowsIdentity(destination)
 	if err != nil {
-		s.err = err
+		s.err = fmt.Errorf("copy callback: query destination identity: %w", err)
 		return 1
 	}
 	if s.validated {
@@ -138,7 +139,7 @@ func (s *replacementCopyState) progress(reason uint32, source, destination windo
 		// Root-relative validation occurs before retaining any destination capability.
 		check, e := openReplacementStageMetadata(s.stage)
 		if e != nil {
-			s.err = e
+			s.err = fmt.Errorf("copy callback: open contained destination metadata: %w", e)
 			return 1
 		}
 		actual, e := replacementHeldIdentity(check)
@@ -149,21 +150,34 @@ func (s *replacementCopyState) progress(reason uint32, source, destination windo
 		}
 		held, e := duplicateReplacementHandle(destination, s.path)
 		if e != nil {
-			s.err = e
+			s.err = fmt.Errorf("copy callback: duplicate destination handle: %w", e)
 			return 1
 		}
-		// Retain the writable capability before a later copy step can install a
-		// restrictive DACL. Final metadata restoration remains explicitly deferred.
-		writable, e := reopenReplacementFile(held, windows.GENERIC_READ|windows.GENERIC_WRITE|windows.WRITE_DAC|windows.WRITE_OWNER)
-		e = errors.Join(e, held.Close())
-		if e != nil {
-			if writable != nil {
-				e = errors.Join(e, writable.Close())
+		// CopyFileEx's destination share mode can prohibit another data handle.
+		// Retain its exact capability and acquire only security/attribute access
+		// during the callback; those rights do not require shared data-write access.
+		security, e := replacementWithHandle(s.ctx, func() (*os.File, error) {
+			f, e := reopenReplacementFile(held, windows.READ_CONTROL|windows.WRITE_DAC)
+			if e != nil {
+				return nil, fmt.Errorf("reopen owner security rights: %w", e)
 			}
-			s.err = e
+			return f, nil
+		}, func(control *os.File) (*os.File, error) {
+			if e := replacementPrivateFileAccess(control); e != nil {
+				return nil, fmt.Errorf("grant private destination permissions: %w", e)
+			}
+			f, e := reopenReplacementFile(control, windows.READ_CONTROL|windows.WRITE_DAC|windows.WRITE_OWNER|windows.FILE_READ_ATTRIBUTES|windows.FILE_WRITE_ATTRIBUTES)
+			if e != nil {
+				return nil, fmt.Errorf("reopen private metadata rights: %w", e)
+			}
+			return f, nil
+		})
+		if e != nil {
+			s.err = fmt.Errorf("copy callback: acquire destination metadata capability: %w", errors.Join(e, held.Close()))
 			return 1
 		}
-		s.file, s.destination, s.validated = writable, id, true
+		s.file, s.security, s.destination, s.validated = held, security, id, true
+
 	}
 	if s.observe != nil {
 		s.err = s.observe(reason)
@@ -287,7 +301,31 @@ func copyReplacementWindows(ctx context.Context, source *os.File, stage *os.Root
 		if state.file != nil {
 			err = errors.Join(err, state.file.Close())
 		}
+		if state.security != nil {
+			err = errors.Join(err, state.security.Close())
+		}
 		return nil, err
+	}
+	// The native copy has closed its original handles. Drop its duplicated data
+	// capability before reopening; retaining it can retain the exclusive share mode.
+	err = state.file.Close()
+	state.file = nil
+	if err == nil {
+		err = replacementStep(ctx, func() error { return replacementPrivateFileAccess(state.security) })
+	}
+	if err == nil {
+		err = replacementClearReadonly(ctx, state.security)
+	}
+	if err == nil {
+		state.file, err = reopenReplacementFile(state.security, windows.GENERIC_READ|windows.GENERIC_WRITE|windows.WRITE_DAC|windows.WRITE_OWNER)
+	}
+	err = errors.Join(err, state.security.Close(), ctx.Err())
+	state.security = nil
+	if err != nil {
+		if state.file != nil {
+			err = errors.Join(err, state.file.Close())
+		}
+		return nil, fmt.Errorf("copy completion: acquire writable destination: %w", err)
 	}
 	// The returned capability must still name the file installed beneath stage.
 	check, err := openReplacementStageMetadata(stage)
@@ -318,4 +356,34 @@ func openReplacementStageMetadata(stage *os.Root) (file *os.File, err error) {
 		}
 	}()
 	return openWindowsMetadataRights(directory, "replacement", windows.SYNCHRONIZE|windows.FILE_READ_ATTRIBUTES)
+}
+
+func replacementPrivateFileAccess(file *os.File) error {
+	sd, err := replacementPrivateSecurity()
+	if err != nil {
+		return err
+	}
+	acl, _, err := sd.DACL()
+	if err != nil {
+		return err
+	}
+	return windows.SetSecurityInfo(windows.Handle(file.Fd()), windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION|windows.PROTECTED_DACL_SECURITY_INFORMATION, nil, nil, acl, nil)
+}
+
+func replacementClearReadonly(ctx context.Context, file *os.File) error {
+	basic, err := replacementValue(ctx, func() (replacementBasicInfo, error) { return replacementBasic(file) })
+	if err != nil {
+		return err
+	}
+	if basic.Attributes&windows.FILE_ATTRIBUTE_READONLY == 0 {
+		return nil
+	}
+	basic.CreationTime, basic.LastAccessTime, basic.LastWriteTime, basic.ChangeTime = 0, 0, 0, 0
+	basic.Attributes &^= windows.FILE_ATTRIBUTE_READONLY
+	if basic.Attributes == 0 {
+		basic.Attributes = windows.FILE_ATTRIBUTE_NORMAL
+	}
+	return replacementStep(ctx, func() error {
+		return windows.SetFileInformationByHandle(windows.Handle(file.Fd()), windows.FileBasicInfo, (*byte)(unsafe.Pointer(&basic)), uint32(unsafe.Sizeof(basic)))
+	})
 }

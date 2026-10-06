@@ -25,16 +25,29 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+      - name: Test full-body source extraction integrity
+        run: go test scripts/capture-pathname-authorization-ast.go scripts/capture-pathname-authorization-ast_test.go
+      - name: Capture complete pinned XNU bodies for both architectures and configurations
+        run: go run scripts/capture-pathname-authorization-ast.go -out artifacts/pathname-authorization-ast
       - name: Capture every specified native case without interactive credentials
         run: |
           mkdir -p artifacts
           go run scripts/capture-pathname-authorization.go -out artifacts/pathname-authorization -sudo -require-complete
+      - name: Test strict native inventory rejection
+        run: go test scripts/verify-pathname-authorization.go scripts/verify-pathname-authorization_test.go
       - name: Replay the complete fresh native corpus through portable authorization
-        run: go run scripts/verify-pathname-authorization.go -capture artifacts/pathname-authorization/capture.json.gz
+        run: go run scripts/verify-pathname-authorization.go -capture artifacts/pathname-authorization/capture.json.gz -report artifacts/pathname-authorization/replay.json
       - name: Retain native output, source and SDK provenance, and complete ASTs
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: pathname-authorization-${{ matrix.os }}
           path: artifacts/pathname-authorization/
+          if-no-files-found: error
+      - name: Retain full-body XNU ASTs and bound source inputs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: pathname-authorization-ast-${{ matrix.os }}
+          path: artifacts/pathname-authorization-ast/
           if-no-files-found: error

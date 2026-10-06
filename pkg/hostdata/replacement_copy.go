@@ -124,6 +124,10 @@ func copyReplacementFork(ops replacementCopyOps) error {
 	return copyReplacementForkContext(context.Background(), ops)
 }
 func copyReplacementForkContext(ctx context.Context, ops replacementCopyOps) (err error) {
+	if err = ctx.Err(); err != nil {
+		return err
+	}
+	ops = ops.withContext(ctx)
 	fork, err := ops.openFork()
 	if err != nil {
 		return err

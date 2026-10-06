@@ -72,7 +72,7 @@ func TestCompressionOwnedNativeEvidence(t *testing.T) {
 			for _, trial := range raw.Cases {
 				get := func(key string, target any) {
 					t.Helper()
-					if e := json.Unmarshal(trial.Observation[key], target); e != nil {
+					if e := decodeOwnedEvidence(trial.Observation[key], target); e != nil {
 						t.Fatal(key, e)
 					}
 				}
@@ -95,7 +95,7 @@ func TestCompressionOwnedNativeEvidence(t *testing.T) {
 				get("after_open", &after)
 				get("after_close", &closed)
 				for _, snapshot := range []map[string]any{before, after, closed} {
-					if snapshot["inode"] != before["inode"] || snapshot["dev"] != before["dev"] || snapshot["size"] != float64(32768) || snapshot["links"] != float64(1) || snapshot["mode"] != float64(0100644) || snapshot["filesystem"] != before["filesystem"] || snapshot["mount_flags"] != before["mount_flags"] {
+					if snapshot["inode"] != before["inode"] || snapshot["dev"] != before["dev"] || snapshot["size"] != json.Number("32768") || snapshot["links"] != json.Number("1") || snapshot["mode"] != json.Number("33188") || snapshot["filesystem"] != before["filesystem"] || snapshot["mount_flags"] != before["mount_flags"] {
 						t.Fatal("held identity/volume changed", key)
 					}
 				}
@@ -116,7 +116,7 @@ func TestCompressionOwnedNativeEvidence(t *testing.T) {
 				if e != nil || !bytes.Equal(decoded, plain) {
 					t.Fatal("full native data differs", key, e)
 				}
-				if after["flags"] != float64(0) || closed["flags"] != float64(0) {
+				if after["flags"] != json.Number("0") || closed["flags"] != json.Number("0") {
 					t.Fatal("write-open state differs", key)
 				}
 				if compressed == 1 && after["attribute"] != nil {
@@ -137,4 +137,25 @@ func TestCompressionOwnedNativeEvidence(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Native inode/device identities are integers, including values above float64's
+// exact range. Distinct held files must never compare equal after decoding.
+func TestCompressionOwnedNativeEvidenceExactIntegers(t *testing.T) {
+	var snapshots []map[string]any
+	if err := decodeOwnedEvidence([]byte(`[{"inode":9007199254740992,"dev":18446744073709551614},{"inode":9007199254740993,"dev":18446744073709551615}]`), &snapshots); err != nil {
+		t.Fatal(err)
+	}
+	if snapshots[0]["inode"] == snapshots[1]["inode"] || snapshots[0]["dev"] == snapshots[1]["dev"] {
+		t.Fatal("distinct native identities collapsed")
+	}
+	if snapshots[1]["inode"] != json.Number("9007199254740993") || snapshots[1]["dev"] != json.Number("18446744073709551615") {
+		t.Fatal("native integer identity lost precision")
+	}
+}
+
+func decodeOwnedEvidence(raw []byte, target any) error {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	return decoder.Decode(target)
 }

@@ -98,7 +98,7 @@ func verify() error {
 		}
 	}
 	if runtime.GOOS == "windows" {
-		for _, name := range []string{"TestRootReplacementWindowsSparse", "TestRootReplacementWindowsLargeStream", "TestReplacementWindowsNativeCapabilities", "TestReplacementWindowsCopyCallbacks", "TestReplacementWindowsEFSKeyComparison"} {
+		for _, name := range []string{"TestRootReplacementWindowsSparse", "TestRootReplacementWindowsLargeStream", "TestReplacementWindowsNativeCapabilities", "TestReplacementWindowsCopyCallbacks", "TestReplacementWindowsEFSKeyComparison", "TestReplacementWindowsHeldRenamedSource"} {
 			if !passedNames[name] {
 				return fmt.Errorf("required Windows replacement suite missing: %s", name)
 			}

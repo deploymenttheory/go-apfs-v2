@@ -26,15 +26,15 @@ const (
 	MembershipFailed
 )
 
-// Authority supplies effective source credentials and actual UUID membership
-// results. It does not transport sandbox entitlements or permission overrides.
-// Groups must contain all applicable numeric groups, never inferred host groups.
 // ProcessPolicy records the observed effective VFS owner-permission override.
 // Nil is uncaptured; a nonnil zero value explicitly records the ordinary policy.
 // The observation comes from native process/thread I/O policy, not entitlements
 // guessed from an executable or inherited receiving-host process state.
 type ProcessPolicy struct{ IgnoreNodePermissions bool }
 
+// Authority supplies effective source credentials, actual UUID membership and
+// observed process policy. Groups contain all applicable numeric groups, never
+// inferred receiving-host groups. It does not transport sandbox entitlements.
 type Authority struct {
 	Process        *ProcessPolicy
 	UID            uint32

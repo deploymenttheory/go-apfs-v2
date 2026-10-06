@@ -305,3 +305,51 @@ func TestCapturedPathObservation(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// The enabled policy is a source-backed control, not a claim that an ordinary
+// native process can enable the private entitlement. It proves path admission
+// and endpoint admission consume the same explicit process observation.
+func TestPathProcessPolicyReachesEndpoint(t *testing.T) {
+	for _, enabled := range []bool{false, true} {
+		name := "ordinary"
+		if enabled {
+			name = "captured-owner-override"
+		}
+		t.Run(name, func(t *testing.T) {
+			s, _, m, capture, options := pathFixture(t)
+			principal := [16]byte{1}
+			options.Authority.UserUUID = &principal
+			options.Authority.Process = &authorization.ProcessPolicy{IgnoreNodePermissions: enabled}
+			security := &appledouble.FileSecurity{ACL: &appledouble.ACL{Entries: []appledouble.ACLEntry{{Principal: principal, Flags: 2, Rights: authorization.WriteData}}}}
+			raw, err := security.MarshalBinary()
+			if err != nil {
+				t.Fatal(err)
+			}
+			m.Records[1].Attributes = append(m.Records[1].Attributes, metatransport.Attribute{Name: "com.apple.system.Security", Value: mustBlob(t, s, raw)})
+			m.Records[0].SourceAttributesCaptured = true
+			m.Records[1].SourceAttributesCaptured = true
+			if err = s.Commit(t.Context(), m, 2); err != nil {
+				t.Fatal(err)
+			}
+			node := capture.Nodes["file"]
+			node.Security = authorization.SecurityPresent
+			capture.Nodes["file"] = node
+			options.Context, err = NewPathContext(t.Context(), s, 3, capture)
+			if err != nil {
+				t.Fatal(err)
+			}
+			result, err := RecompressPath(t.Context(), s, "file", 3, options)
+			if enabled {
+				if err != nil || !result.Published || !result.Operation.Accepted || !result.Record.SourceAttributesCaptured {
+					t.Fatal(result, err)
+				}
+				if err = s.VerifyPayload(t.Context(), result.Record); err != nil {
+					t.Fatal(err)
+				}
+			} else if !errors.Is(err, syscall.EACCES) || result.Published {
+				t.Fatal(result, err)
+			}
+			checkRecompressionCleanup(t, options.TemporaryDirectory)
+		})
+	}
+}

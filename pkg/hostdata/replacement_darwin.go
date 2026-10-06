@@ -40,14 +40,13 @@ func prepareReplacementContext(ctx context.Context, source *os.File, path string
 		},
 		replacementCloneUnavailable,
 		func(cloned bool) (*os.File, error) {
-			if !cloned {
-				return os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0600)
-			}
-			// A readonly source must remain writable until metadata restoration.
-			if err := os.Chmod(path, 0600); err != nil {
-				return nil, err
-			}
-			return os.OpenFile(path, os.O_RDWR, 0)
+			return replacementOpenAfterClone(cloned, func() error { return os.Chmod(path, 0600) }, func(cloned bool) (*os.File, error) {
+				flags := os.O_RDWR
+				if !cloned {
+					flags |= os.O_CREATE | os.O_EXCL
+				}
+				return os.OpenFile(path, flags, 0600)
+			})
 		},
 		func(target *os.File) error { return copyReplacementMetadataContext(ctx, source, target, info) },
 	)

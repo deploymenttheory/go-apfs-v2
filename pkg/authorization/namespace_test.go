@@ -289,3 +289,21 @@ func TestCapturedOwnerOverride(t *testing.T) {
 		t.Fatal("authority alias")
 	}
 }
+
+func TestDirectoryRenameRequiresSourceAddSubdirectory(t *testing.T) {
+	a := fixtureAuthority()
+	e := fixtureEvaluator(t, a)
+	sourceParent := fixtureNode(true)
+	source := aceNode(fixtureNode(true), a, AddSubdirectory, true)
+	source.Identity = 12
+	targetParent := fixtureNode(true)
+	targetParent.Identity = 13
+	if err := e.Rename(t.Context(), sourceParent, source, targetParent, nil); !errors.Is(err, syscall.EACCES) {
+		t.Fatal(err)
+	}
+	source.SecurityState = SecurityAbsent
+	source.Security = nil
+	if err := e.Rename(t.Context(), sourceParent, source, targetParent, nil); err != nil {
+		t.Fatal(err)
+	}
+}

@@ -39,7 +39,7 @@ func replacementCompress(t *testing.T, path string) {
 
 func TestReplacementWindowsNativeCapabilities(t *testing.T) {
 	replacementVariants(t, func(t *testing.T, prepare func(*os.File, string) (*testedReplacement, error)) {
-		for _, kind := range []string{"plain", "empty", "compressed", "compressed-empty", "efs", "efs-empty"} {
+		for _, kind := range []string{"plain", "empty", "compressed", "compressed-empty", "efs", "efs-empty", "deny-write", "deny-write-readonly"} {
 			t.Run(kind, func(t *testing.T) {
 				path := filepath.Join(t.TempDir(), "source")
 				payload := bytes.Repeat([]byte("native copy control"), 8192)
@@ -58,6 +58,19 @@ func TestReplacementWindowsNativeCapabilities(t *testing.T) {
 				}
 				if kind == "efs" || kind == "efs-empty" {
 					replacementEncrypt(t, path)
+				}
+				if kind == "deny-write-readonly" {
+					name, e := windows.UTF16PtrFromString(path)
+					if e != nil {
+						t.Fatal(e)
+					}
+					if e = windows.SetFileAttributes(name, windows.FILE_ATTRIBUTE_READONLY); e != nil {
+						t.Fatal(e)
+					}
+					t.Cleanup(func() { _ = windows.SetFileAttributes(name, windows.FILE_ATTRIBUTE_NORMAL) })
+				}
+				if kind == "deny-write" || kind == "deny-write-readonly" {
+					replacementDenyWrites(t, path)
 				}
 				source, err := os.Open(path)
 				if err != nil {
@@ -260,4 +273,94 @@ func TestReplacementWindowsEFSKeyComparison(t *testing.T) {
 			}
 		})
 	}
+}
+
+func replacementDenyWrites(t *testing.T, path string) {
+	t.Helper()
+	name, e := windows.UTF16PtrFromString(path)
+	if e != nil {
+		t.Fatal(e)
+	}
+	h, e := windows.CreateFile(name, windows.READ_CONTROL|windows.WRITE_DAC|windows.FILE_WRITE_ATTRIBUTES, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, nil, windows.OPEN_EXISTING, 0, 0)
+	if e != nil {
+		t.Fatal(e)
+	}
+	original, e := windows.GetSecurityInfo(h, windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION)
+	if e != nil {
+		t.Fatal(e)
+	}
+	oldACL, _, e := original.DACL()
+	if e != nil {
+		t.Fatal(e)
+	}
+	user, e := windows.GetCurrentProcessToken().GetTokenUser()
+	if e != nil {
+		t.Fatal(e)
+	}
+	sd, e := windows.SecurityDescriptorFromString("D:P(D;;0x102;;;WD)(A;;FA;;;" + user.User.Sid.String() + ")")
+	if e != nil {
+		t.Fatal(e)
+	}
+	acl, _, e := sd.DACL()
+	if e != nil {
+		t.Fatal(e)
+	}
+	if e = windows.SetSecurityInfo(h, windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION|windows.PROTECTED_DACL_SECURITY_INFORMATION, nil, nil, acl, nil); e != nil {
+		t.Fatal(e)
+	}
+	t.Cleanup(func() {
+		if e := windows.SetSecurityInfo(h, windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION|windows.PROTECTED_DACL_SECURITY_INFORMATION, nil, nil, oldACL, nil); e != nil {
+			t.Error(e)
+		}
+		if e := windows.CloseHandle(h); e != nil {
+			t.Error(e)
+		}
+	})
+}
+
+func TestReplacementWindowsHeldRenamedSource(t *testing.T) {
+	replacementVariants(t, func(t *testing.T, prepare func(*os.File, string) (*testedReplacement, error)) {
+		original := filepath.Join(t.TempDir(), "source")
+		if e := os.WriteFile(original, []byte("held bytes"), 0600); e != nil {
+			t.Fatal(e)
+		}
+		if e := os.WriteFile(original+":identity", []byte("held stream"), 0600); e != nil {
+			t.Fatal(e)
+		}
+		name, e := windows.UTF16PtrFromString(original)
+		if e != nil {
+			t.Fatal(e)
+		}
+		handle, e := windows.CreateFile(name, windows.GENERIC_READ, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, nil, windows.OPEN_EXISTING, 0, 0)
+		if e != nil {
+			t.Fatal(e)
+		}
+		source := os.NewFile(uintptr(handle), original)
+		defer source.Close()
+		moved := original + "-moved"
+		if e = os.Rename(original, moved); e != nil {
+			t.Fatal(e)
+		}
+		if e = os.WriteFile(original, []byte("rebound bytes"), 0600); e != nil {
+			t.Fatal(e)
+		}
+		if e = os.WriteFile(original+":identity", []byte("wrong stream"), 0600); e != nil {
+			t.Fatal(e)
+		}
+		r, e := prepare(source, t.TempDir())
+		if e != nil {
+			t.Fatal(e)
+		}
+		defer r.Close()
+		got, e := os.ReadFile(r.File.Name() + ":identity")
+		if e != nil || string(got) != "held stream" {
+			t.Fatalf("copied rebound source: %q %v", got, e)
+		}
+		if got, e = os.ReadFile(moved); e != nil || string(got) != "held bytes" {
+			t.Fatal(string(got), e)
+		}
+		if got, e = os.ReadFile(original); e != nil || string(got) != "rebound bytes" {
+			t.Fatal(string(got), e)
+		}
+	})
 }

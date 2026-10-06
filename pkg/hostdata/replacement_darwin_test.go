@@ -78,3 +78,47 @@ func TestReplacementDarwinRejectsProtectedFile(t *testing.T) {
 		t.Fatalf("replacement created: %v", err)
 	}
 }
+
+func TestReplacementDarwinProtectedStages(t *testing.T) {
+	source := heldfixture.Source(t, 0600)
+	stagePath := t.TempDir()
+	stage, err := os.OpenRoot(stagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stage.Close()
+	if err = unix.Fchflags(int(source.Fd()), unix.UF_IMMUTABLE); err != nil {
+		t.Fatal(err)
+	}
+	info, err := source.Stat()
+	if err != nil {
+		t.Fatal(err)
+	}
+	file, prepareErr := prepareReplacementAtContext(t.Context(), source, stage, info)
+	if err = unix.Fchflags(int(source.Fd()), 0); err != nil {
+		t.Fatal(err)
+	}
+	if file != nil || !errors.Is(prepareErr, ErrUnsupportedReplacement) {
+		t.Fatalf("protected source: %v %v", file, prepareErr)
+	}
+	info, err = source.Stat()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = unix.Chflags(stagePath, unix.UF_IMMUTABLE); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if e := unix.Chflags(stagePath, 0); e != nil {
+			t.Error(e)
+		}
+	})
+	file, prepareErr = prepareReplacementAtContext(t.Context(), source, stage, info)
+	if file != nil || !errors.Is(prepareErr, os.ErrPermission) {
+		t.Fatalf("protected rooted stage: %v %v", file, prepareErr)
+	}
+	file, prepareErr = prepareReplacementContext(t.Context(), source, filepath.Join(stagePath, "replacement"), info)
+	if file != nil || !errors.Is(prepareErr, os.ErrPermission) {
+		t.Fatalf("protected path stage: %v %v", file, prepareErr)
+	}
+}

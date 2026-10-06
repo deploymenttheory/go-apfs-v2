@@ -43,7 +43,7 @@ func prepareReplacementAtContext(ctx context.Context, source *os.File, stage *os
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	basic, err := replacementBasic(source)
+	basic, err := replacementValue(ctx, func() (replacementBasicInfo, error) { return replacementBasic(source) })
 	if err != nil {
 		return nil, err
 	}
@@ -101,19 +101,16 @@ func prepareReplacementStreamsAtContext(ctx context.Context, source *os.File, st
 		return nil, errors.Join(err, closeErr)
 	}
 	if closeErr != nil {
-		target.Close()
-		return nil, closeErr
+		return nil, errors.Join(closeErr, target.Close())
 	}
 	if basic.Attributes&windows.FILE_ATTRIBUTE_SPARSE_FILE != 0 {
 		var returned uint32
 		if err := windows.DeviceIoControl(windows.Handle(target.Fd()), windows.FSCTL_SET_SPARSE, nil, 0, nil, 0, &returned, nil); err != nil {
-			target.Close()
-			return nil, err
+			return nil, errors.Join(err, target.Close())
 		}
 	}
 	if err := copyReplacementStreamsContext(ctx, source, target); err != nil {
-		target.Close()
-		return nil, err
+		return nil, errors.Join(err, target.Close())
 	}
 	if err := copyReplacementCompression(ctx, source, target); err != nil {
 		return nil, errors.Join(err, target.Close())

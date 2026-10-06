@@ -67,7 +67,11 @@ func PrepareReplacementAtContext(ctx context.Context, source *os.File, root *os.
 		return nil, err
 	}
 	stage, err := root.OpenRoot(dir)
+	err = errors.Join(err, ctx.Err())
 	if err != nil {
+		if stage != nil {
+			err = errors.Join(err, stage.Close())
+		}
 		return nil, errors.Join(err, release(), root.Remove(dir))
 	}
 	r := &RootReplacement{source: source, info: info, root: root, staging: stage, dir: dir, Path: filepath.Join(dir, "replacement")}

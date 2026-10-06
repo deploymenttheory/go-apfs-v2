@@ -30,6 +30,8 @@ static char fixture[PATH_MAX], absolute[PATH_MAX];
 static char destination_fixture[PATH_MAX];
 static int destination_root=-1;
 static int cleanup_done;
+static const char *base_directory="/private/tmp";
+static int prepare_only;
 static int regular(int index) {return index==LEAF||index==STAGE||index==DEST_LEAF;}
 static void must(int bad, const char *what) { if (bad) { perror(what); exit(2); } }
 static void hex(const void *data, size_t size) {
@@ -149,7 +151,8 @@ static int mounted(int argc,char **argv) {
     handles[DEST_PARENT]=openat(destination_root,"a/c",O_RDONLY|O_DIRECTORY);must(handles[DEST_PARENT]<0,"mounted destination parent");
     handles[LEAF]=openat(handles[PARENT],"file",O_RDONLY);handles[STAGE]=openat(handles[PARENT],"stage",O_RDONLY);handles[DEST_LEAF]=openat(handles[DEST_PARENT],"file",O_RDONLY);must(handles[LEAF]<0||handles[STAGE]<0||handles[DEST_LEAF]<0,"mounted files");
     int n=snprintf(absolute,sizeof(absolute),"%s/a/b/file",fixture);must(n<0||(size_t)n>=sizeof(absolute),"mounted path");
-    printf("{\"qualification\":\"captured\",\"operation\":\"%s\",\"route\":\"%s\",\"fixture_owned\":false,\"before\":",operation,route);snapshots();printf(",\"namespace_before\":");namespace_state();
+    must(mbr_uid_to_uuid(actor_uid,actor_uuid),"mounted actor identity");must(mbr_gid_to_uuid(actor_gid,group_uuid),"mounted group identity");int group_member=0;int membership_error=mbr_check_membership(actor_uuid,group_uuid,&group_member);
+    printf("{\"qualification\":\"captured\",\"operation\":\"%s\",\"route\":\"%s\",\"fixture_owned\":false,\"user_uuid\":",operation,route);hex(actor_uuid,16);printf(",\"group_uuid\":");hex(group_uuid,16);printf(",\"group_membership_errno\":%d,\"group_member\":%d,\"before\":",membership_error,group_member);snapshots();printf(",\"namespace_before\":");namespace_state();
     struct result r=perform(operation,route);printf(",\"result\":");emit_result(r);printf(",\"after\":");snapshots();printf(",\"namespace_after\":");namespace_state();
     for(int i=0;i<COUNT;i++)must(close(handles[i]),"mounted close");must(close(destination_root),"mounted destination close");printf(",\"handles_closed\":true}\n");return 0;
 }
@@ -198,13 +201,14 @@ static int restrict_fixture(const char *profile) {
 }
 int main(int argc,char **argv) {
     if(argc>1&&!strcmp(argv[1],"--mounted"))return mounted(argc,argv);
-    if(argc!=6){fprintf(stderr,"usage: probe PROFILE OPERATION ROUTE ACTOR_UID ACTOR_GID\n");return 2;}
+    if(argc>1&&(!strcmp(argv[1],"--under")||!strcmp(argv[1],"--prepare"))){if(argc!=8)return 2;prepare_only=!strcmp(argv[1],"--prepare");base_directory=argv[2];argc-=2;argv+=2;}
+    if(argc!=6){fprintf(stderr,"usage: probe [--under|--prepare ROOT] PROFILE OPERATION ROUTE ACTOR_UID ACTOR_GID\n");return 2;}
     const char *profile=argv[1],*operation=argv[2],*route=argv[3];actor_uid=(uid_t)strtoul(argv[4],NULL,10);actor_gid=(gid_t)strtoul(argv[5],NULL,10);privileged=geteuid()==0;
     int needs_root=!strncmp(profile,"group-search-",13)||!strncmp(profile,"other-search-",13)||!strcmp(profile,"sticky-neither")||!strcmp(profile,"sticky-parent-owner");
     if(actor_uid==0){fprintf(stderr,"actor must not be root\n");return 2;}
     if((!privileged&&(actor_uid!=geteuid()||actor_gid!=getegid()))||(needs_root&&!privileged)){printf("{\"profile\":\"%s\",\"operation\":\"%s\",\"route\":\"%s\",\"qualification\":\"unavailable\",\"reason\":\"requires privileged fixture ownership and non-root actor\"}\n",profile,operation,route);return 0;}
     must(mbr_uid_to_uuid(actor_uid,actor_uuid),"actor identity");must(mbr_gid_to_uuid(actor_gid,group_uuid),"group identity");
-    strcpy(fixture,"/private/tmp/apfs-path-auth-XXXXXX");must(!mkdtemp(fixture),"mkdtemp");must(atexit(emergency_cleanup),"atexit");handles[ROOT]=open(fixture,O_RDONLY|O_DIRECTORY);must(handles[ROOT]<0,"root");
+    must(snprintf(fixture,sizeof(fixture),"%s/apfs-path-auth-XXXXXX",base_directory)>=(int)sizeof(fixture),"fixture path");must(!mkdtemp(fixture),"mkdtemp");must(atexit(emergency_cleanup),"atexit");handles[ROOT]=open(fixture,O_RDONLY|O_DIRECTORY);must(handles[ROOT]<0,"root");
     must(mkdirat(handles[ROOT],"a",0700),"mkdir a");handles[MIDDLE]=openat(handles[ROOT],"a",O_RDONLY|O_DIRECTORY);must(handles[MIDDLE]<0,"middle");
     must(mkdirat(handles[MIDDLE],"b",0700),"mkdir b");handles[PARENT]=openat(handles[MIDDLE],"b",O_RDONLY|O_DIRECTORY);must(handles[PARENT]<0,"parent");
     must(mkdirat(handles[MIDDLE],"c",0700),"mkdir c");handles[DEST_PARENT]=openat(handles[MIDDLE],"c",O_RDONLY|O_DIRECTORY);must(handles[DEST_PARENT]<0,"destination parent");
@@ -217,6 +221,7 @@ int main(int argc,char **argv) {
     int group_member=0;int membership_error=mbr_check_membership(actor_uuid,group_uuid,&group_member);
     printf("{\"profile\":\"%s\",\"operation\":\"%s\",\"route\":\"%s\",\"qualification\":\"captured\",\"privileged_setup\":%s,\"user_uuid\":",profile,operation,route,privileged?"true":"false");hex(actor_uuid,16);printf(",\"group_uuid\":");hex(group_uuid,16);printf(",\"group_membership_errno\":%d,\"group_member\":%d,\"positive_open_control\":",membership_error,group_member);emit_result(control);
     errno=0;int restriction=restrict_fixture(profile),restriction_error=restriction?(errno?errno:restriction):0;must(restriction_error,"restrictions");
+    if(prepare_only){printf(",\"fixture\":\"%s\",\"before\":",fixture);snapshots();for(int i=0;i<COUNT;i++){must(close(handles[i]),"prepared close");handles[i]=-1;}cleanup_done=1;printf(",\"prepared\":true,\"handles_closed\":true}\n");return 0;}
     printf(",\"before\":");snapshots();printf(",\"namespace_before\":");namespace_state();struct result result=perform(operation,route);printf(",\"result\":");emit_result(result);printf(",\"after\":");snapshots();printf(",\"namespace_after\":");namespace_state();
     printf(",\"cleanup\":[");for(int i=0;i<COUNT;i++){errno=0;int rc=fchflags(handles[i],0),e=rc?errno:0;printf("%s{\"record\":\"%s\",\"clear_flags_errno\":%d",i?",":"",names[i],e);must(e,"cleanup flags");clear_acl(handles[i]);must(fchmod(handles[i],regular(i)?0600:0700),"cleanup mode");printf(",\"acl_and_mode_restored\":true}");}printf("]");
     const char *files[]={"file","stage","new"};for(int i=0;i<3;i++)if(unlinkat(handles[PARENT],files[i],0)&&errno!=ENOENT)must(1,"cleanup unlink");

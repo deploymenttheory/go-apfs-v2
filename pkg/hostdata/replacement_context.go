@@ -56,3 +56,35 @@ type replacementWriter struct {
 func (w replacementWriter) Write(p []byte) (int, error) {
 	return replacementValue(w.ctx, func() (int, error) { return w.writer.Write(p) })
 }
+
+// Keep an auxiliary held directory until all dependent native work finishes.
+// Failure to close it also invalidates any returned replacement capability.
+func replacementWithHandle(ctx context.Context, open func() (*os.File, error), use func(*os.File) (*os.File, error)) (file *os.File, err error) {
+	if err = ctx.Err(); err != nil {
+		return nil, err
+	}
+	held, err := open()
+	if err != nil {
+		return nil, errors.Join(err, ctx.Err())
+	}
+	defer func() {
+		err = errors.Join(err, held.Close(), ctx.Err())
+		if err != nil && file != nil {
+			err = errors.Join(err, file.Close())
+			file = nil
+		}
+	}()
+	if err = ctx.Err(); err != nil {
+		return nil, err
+	}
+	return use(held)
+}
+
+func replacementOpenAfterClone(cloned bool, chmod func() error, open func(bool) (*os.File, error)) (*os.File, error) {
+	if cloned {
+		if err := chmod(); err != nil {
+			return nil, err
+		}
+	}
+	return open(cloned)
+}

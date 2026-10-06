@@ -12,7 +12,9 @@ func restoreReplacementMetadataContext(ctx context.Context, source, target *os.F
 		return err
 	}
 	flags := windows.SECURITY_INFORMATION(windows.OWNER_SECURITY_INFORMATION | windows.GROUP_SECURITY_INFORMATION | windows.DACL_SECURITY_INFORMATION)
-	sd, err := windows.GetSecurityInfo(windows.Handle(source.Fd()), windows.SE_FILE_OBJECT, flags)
+	sd, err := replacementValue(ctx, func() (*windows.SECURITY_DESCRIPTOR, error) {
+		return windows.GetSecurityInfo(windows.Handle(source.Fd()), windows.SE_FILE_OBJECT, flags)
+	})
 	if err != nil {
 		return err
 	}
@@ -37,7 +39,9 @@ func restoreReplacementMetadataContext(ctx context.Context, source, target *os.F
 	} else {
 		flags |= windows.UNPROTECTED_DACL_SECURITY_INFORMATION
 	}
-	if err := windows.SetSecurityInfo(windows.Handle(target.Fd()), windows.SE_FILE_OBJECT, flags, owner, group, dacl, nil); err != nil {
+	if err := replacementStep(ctx, func() error {
+		return windows.SetSecurityInfo(windows.Handle(target.Fd()), windows.SE_FILE_OBJECT, flags, owner, group, dacl, nil)
+	}); err != nil {
 		return err
 	}
 	return replacementStep(ctx, func() error { return target.Chmod(st.Mode()) })

@@ -1,0 +1,2550 @@
+{
+  "cases": [
+    {
+      "id": "control/ordinary/open/path",
+      "family": "control",
+      "profile": "ordinary",
+      "operation": "open",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "control/ordinary/open/root",
+      "family": "control",
+      "profile": "ordinary",
+      "operation": "open",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "control/ordinary/open/parent",
+      "family": "control",
+      "profile": "ordinary",
+      "operation": "open",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "control/ordinary/create/path",
+      "family": "control",
+      "profile": "ordinary",
+      "operation": "create",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "control/ordinary/create/root",
+      "family": "control",
+      "profile": "ordinary",
+      "operation": "create",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "control/ordinary/create/parent",
+      "family": "control",
+      "profile": "ordinary",
+      "operation": "create",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "control/ordinary/unlink/path",
+      "family": "control",
+      "profile": "ordinary",
+      "operation": "unlink",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "control/ordinary/unlink/root",
+      "family": "control",
+      "profile": "ordinary",
+      "operation": "unlink",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "control/ordinary/unlink/parent",
+      "family": "control",
+      "profile": "ordinary",
+      "operation": "unlink",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "control/ordinary/rename/path",
+      "family": "control",
+      "profile": "ordinary",
+      "operation": "rename",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "control/ordinary/rename/root",
+      "family": "control",
+      "profile": "ordinary",
+      "operation": "rename",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "control/ordinary/rename/parent",
+      "family": "control",
+      "profile": "ordinary",
+      "operation": "rename",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "control/ordinary/rename-absent/path",
+      "family": "control",
+      "profile": "ordinary",
+      "operation": "rename-absent",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "control/ordinary/rename-absent/root",
+      "family": "control",
+      "profile": "ordinary",
+      "operation": "rename-absent",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "control/ordinary/rename-absent/parent",
+      "family": "control",
+      "profile": "ordinary",
+      "operation": "rename-absent",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "control/ordinary/rename-cross/path",
+      "family": "control",
+      "profile": "ordinary",
+      "operation": "rename-cross",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "control/ordinary/rename-cross/root",
+      "family": "control",
+      "profile": "ordinary",
+      "operation": "rename-cross",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "control/ordinary/rename-cross/parent",
+      "family": "control",
+      "profile": "ordinary",
+      "operation": "rename-cross",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "control/ordinary/held-write/path",
+      "family": "control",
+      "profile": "ordinary",
+      "operation": "held-write",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "control/ordinary/held-write/root",
+      "family": "control",
+      "profile": "ordinary",
+      "operation": "held-write",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "control/ordinary/held-write/parent",
+      "family": "control",
+      "profile": "ordinary",
+      "operation": "held-write",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "control/ordinary/chmod-open/path",
+      "family": "control",
+      "profile": "ordinary",
+      "operation": "chmod-open",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "control/ordinary/chmod-open/root",
+      "family": "control",
+      "profile": "ordinary",
+      "operation": "chmod-open",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "control/ordinary/chmod-open/parent",
+      "family": "control",
+      "profile": "ordinary",
+      "operation": "chmod-open",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/root-no-search/open/path",
+      "family": "search",
+      "profile": "root-no-search",
+      "operation": "open",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/root-no-search/open/root",
+      "family": "search",
+      "profile": "root-no-search",
+      "operation": "open",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/root-no-search/open/parent",
+      "family": "search",
+      "profile": "root-no-search",
+      "operation": "open",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/root-no-search/held-write/path",
+      "family": "search",
+      "profile": "root-no-search",
+      "operation": "held-write",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/root-no-search/held-write/root",
+      "family": "search",
+      "profile": "root-no-search",
+      "operation": "held-write",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/root-no-search/held-write/parent",
+      "family": "search",
+      "profile": "root-no-search",
+      "operation": "held-write",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/root-no-search/chmod-open/path",
+      "family": "search",
+      "profile": "root-no-search",
+      "operation": "chmod-open",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/root-no-search/chmod-open/root",
+      "family": "search",
+      "profile": "root-no-search",
+      "operation": "chmod-open",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/root-no-search/chmod-open/parent",
+      "family": "search",
+      "profile": "root-no-search",
+      "operation": "chmod-open",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/middle-no-search/open/path",
+      "family": "search",
+      "profile": "middle-no-search",
+      "operation": "open",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/middle-no-search/open/root",
+      "family": "search",
+      "profile": "middle-no-search",
+      "operation": "open",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/middle-no-search/open/parent",
+      "family": "search",
+      "profile": "middle-no-search",
+      "operation": "open",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/middle-no-search/held-write/path",
+      "family": "search",
+      "profile": "middle-no-search",
+      "operation": "held-write",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/middle-no-search/held-write/root",
+      "family": "search",
+      "profile": "middle-no-search",
+      "operation": "held-write",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/middle-no-search/held-write/parent",
+      "family": "search",
+      "profile": "middle-no-search",
+      "operation": "held-write",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/middle-no-search/chmod-open/path",
+      "family": "search",
+      "profile": "middle-no-search",
+      "operation": "chmod-open",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/middle-no-search/chmod-open/root",
+      "family": "search",
+      "profile": "middle-no-search",
+      "operation": "chmod-open",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/middle-no-search/chmod-open/parent",
+      "family": "search",
+      "profile": "middle-no-search",
+      "operation": "chmod-open",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-no-search/open/path",
+      "family": "search",
+      "profile": "parent-no-search",
+      "operation": "open",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-no-search/open/root",
+      "family": "search",
+      "profile": "parent-no-search",
+      "operation": "open",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-no-search/open/parent",
+      "family": "search",
+      "profile": "parent-no-search",
+      "operation": "open",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-no-search/held-write/path",
+      "family": "search",
+      "profile": "parent-no-search",
+      "operation": "held-write",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-no-search/held-write/root",
+      "family": "search",
+      "profile": "parent-no-search",
+      "operation": "held-write",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-no-search/held-write/parent",
+      "family": "search",
+      "profile": "parent-no-search",
+      "operation": "held-write",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-no-search/chmod-open/path",
+      "family": "search",
+      "profile": "parent-no-search",
+      "operation": "chmod-open",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-no-search/chmod-open/root",
+      "family": "search",
+      "profile": "parent-no-search",
+      "operation": "chmod-open",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-no-search/chmod-open/parent",
+      "family": "search",
+      "profile": "parent-no-search",
+      "operation": "chmod-open",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-search-only/open/path",
+      "family": "search",
+      "profile": "parent-search-only",
+      "operation": "open",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-search-only/open/root",
+      "family": "search",
+      "profile": "parent-search-only",
+      "operation": "open",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-search-only/open/parent",
+      "family": "search",
+      "profile": "parent-search-only",
+      "operation": "open",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-search-only/held-write/path",
+      "family": "search",
+      "profile": "parent-search-only",
+      "operation": "held-write",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-search-only/held-write/root",
+      "family": "search",
+      "profile": "parent-search-only",
+      "operation": "held-write",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-search-only/held-write/parent",
+      "family": "search",
+      "profile": "parent-search-only",
+      "operation": "held-write",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-search-only/chmod-open/path",
+      "family": "search",
+      "profile": "parent-search-only",
+      "operation": "chmod-open",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-search-only/chmod-open/root",
+      "family": "search",
+      "profile": "parent-search-only",
+      "operation": "chmod-open",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-search-only/chmod-open/parent",
+      "family": "search",
+      "profile": "parent-search-only",
+      "operation": "chmod-open",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-list-only/open/path",
+      "family": "search",
+      "profile": "parent-list-only",
+      "operation": "open",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-list-only/open/root",
+      "family": "search",
+      "profile": "parent-list-only",
+      "operation": "open",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-list-only/open/parent",
+      "family": "search",
+      "profile": "parent-list-only",
+      "operation": "open",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-list-only/held-write/path",
+      "family": "search",
+      "profile": "parent-list-only",
+      "operation": "held-write",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-list-only/held-write/root",
+      "family": "search",
+      "profile": "parent-list-only",
+      "operation": "held-write",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-list-only/held-write/parent",
+      "family": "search",
+      "profile": "parent-list-only",
+      "operation": "held-write",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-list-only/chmod-open/path",
+      "family": "search",
+      "profile": "parent-list-only",
+      "operation": "chmod-open",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-list-only/chmod-open/root",
+      "family": "search",
+      "profile": "parent-list-only",
+      "operation": "chmod-open",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-list-only/chmod-open/parent",
+      "family": "search",
+      "profile": "parent-list-only",
+      "operation": "chmod-open",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-no-write/open/path",
+      "family": "search",
+      "profile": "parent-no-write",
+      "operation": "open",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-no-write/open/root",
+      "family": "search",
+      "profile": "parent-no-write",
+      "operation": "open",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-no-write/open/parent",
+      "family": "search",
+      "profile": "parent-no-write",
+      "operation": "open",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-no-write/held-write/path",
+      "family": "search",
+      "profile": "parent-no-write",
+      "operation": "held-write",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-no-write/held-write/root",
+      "family": "search",
+      "profile": "parent-no-write",
+      "operation": "held-write",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-no-write/held-write/parent",
+      "family": "search",
+      "profile": "parent-no-write",
+      "operation": "held-write",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-no-write/chmod-open/path",
+      "family": "search",
+      "profile": "parent-no-write",
+      "operation": "chmod-open",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-no-write/chmod-open/root",
+      "family": "search",
+      "profile": "parent-no-write",
+      "operation": "chmod-open",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-no-write/chmod-open/parent",
+      "family": "search",
+      "profile": "parent-no-write",
+      "operation": "chmod-open",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-deny-search/open/path",
+      "family": "search",
+      "profile": "parent-deny-search",
+      "operation": "open",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-deny-search/open/root",
+      "family": "search",
+      "profile": "parent-deny-search",
+      "operation": "open",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-deny-search/open/parent",
+      "family": "search",
+      "profile": "parent-deny-search",
+      "operation": "open",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-deny-search/held-write/path",
+      "family": "search",
+      "profile": "parent-deny-search",
+      "operation": "held-write",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-deny-search/held-write/root",
+      "family": "search",
+      "profile": "parent-deny-search",
+      "operation": "held-write",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-deny-search/held-write/parent",
+      "family": "search",
+      "profile": "parent-deny-search",
+      "operation": "held-write",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-deny-search/chmod-open/path",
+      "family": "search",
+      "profile": "parent-deny-search",
+      "operation": "chmod-open",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-deny-search/chmod-open/root",
+      "family": "search",
+      "profile": "parent-deny-search",
+      "operation": "chmod-open",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-deny-search/chmod-open/parent",
+      "family": "search",
+      "profile": "parent-deny-search",
+      "operation": "chmod-open",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-allow-search/open/path",
+      "family": "search",
+      "profile": "parent-allow-search",
+      "operation": "open",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-allow-search/open/root",
+      "family": "search",
+      "profile": "parent-allow-search",
+      "operation": "open",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-allow-search/open/parent",
+      "family": "search",
+      "profile": "parent-allow-search",
+      "operation": "open",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-allow-search/held-write/path",
+      "family": "search",
+      "profile": "parent-allow-search",
+      "operation": "held-write",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-allow-search/held-write/root",
+      "family": "search",
+      "profile": "parent-allow-search",
+      "operation": "held-write",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-allow-search/held-write/parent",
+      "family": "search",
+      "profile": "parent-allow-search",
+      "operation": "held-write",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-allow-search/chmod-open/path",
+      "family": "search",
+      "profile": "parent-allow-search",
+      "operation": "chmod-open",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-allow-search/chmod-open/root",
+      "family": "search",
+      "profile": "parent-allow-search",
+      "operation": "chmod-open",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-allow-search/chmod-open/parent",
+      "family": "search",
+      "profile": "parent-allow-search",
+      "operation": "chmod-open",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-allow-deny-search/open/path",
+      "family": "search",
+      "profile": "parent-allow-deny-search",
+      "operation": "open",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-allow-deny-search/open/root",
+      "family": "search",
+      "profile": "parent-allow-deny-search",
+      "operation": "open",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-allow-deny-search/open/parent",
+      "family": "search",
+      "profile": "parent-allow-deny-search",
+      "operation": "open",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-allow-deny-search/held-write/path",
+      "family": "search",
+      "profile": "parent-allow-deny-search",
+      "operation": "held-write",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-allow-deny-search/held-write/root",
+      "family": "search",
+      "profile": "parent-allow-deny-search",
+      "operation": "held-write",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-allow-deny-search/held-write/parent",
+      "family": "search",
+      "profile": "parent-allow-deny-search",
+      "operation": "held-write",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-allow-deny-search/chmod-open/path",
+      "family": "search",
+      "profile": "parent-allow-deny-search",
+      "operation": "chmod-open",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-allow-deny-search/chmod-open/root",
+      "family": "search",
+      "profile": "parent-allow-deny-search",
+      "operation": "chmod-open",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-allow-deny-search/chmod-open/parent",
+      "family": "search",
+      "profile": "parent-allow-deny-search",
+      "operation": "chmod-open",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-deny-allow-search/open/path",
+      "family": "search",
+      "profile": "parent-deny-allow-search",
+      "operation": "open",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-deny-allow-search/open/root",
+      "family": "search",
+      "profile": "parent-deny-allow-search",
+      "operation": "open",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-deny-allow-search/open/parent",
+      "family": "search",
+      "profile": "parent-deny-allow-search",
+      "operation": "open",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-deny-allow-search/held-write/path",
+      "family": "search",
+      "profile": "parent-deny-allow-search",
+      "operation": "held-write",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-deny-allow-search/held-write/root",
+      "family": "search",
+      "profile": "parent-deny-allow-search",
+      "operation": "held-write",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-deny-allow-search/held-write/parent",
+      "family": "search",
+      "profile": "parent-deny-allow-search",
+      "operation": "held-write",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-deny-allow-search/chmod-open/path",
+      "family": "search",
+      "profile": "parent-deny-allow-search",
+      "operation": "chmod-open",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-deny-allow-search/chmod-open/root",
+      "family": "search",
+      "profile": "parent-deny-allow-search",
+      "operation": "chmod-open",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-deny-allow-search/chmod-open/parent",
+      "family": "search",
+      "profile": "parent-deny-allow-search",
+      "operation": "chmod-open",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-generic-execute/open/path",
+      "family": "search",
+      "profile": "parent-generic-execute",
+      "operation": "open",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-generic-execute/open/root",
+      "family": "search",
+      "profile": "parent-generic-execute",
+      "operation": "open",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-generic-execute/open/parent",
+      "family": "search",
+      "profile": "parent-generic-execute",
+      "operation": "open",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-generic-execute/held-write/path",
+      "family": "search",
+      "profile": "parent-generic-execute",
+      "operation": "held-write",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-generic-execute/held-write/root",
+      "family": "search",
+      "profile": "parent-generic-execute",
+      "operation": "held-write",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-generic-execute/held-write/parent",
+      "family": "search",
+      "profile": "parent-generic-execute",
+      "operation": "held-write",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-generic-execute/chmod-open/path",
+      "family": "search",
+      "profile": "parent-generic-execute",
+      "operation": "chmod-open",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-generic-execute/chmod-open/root",
+      "family": "search",
+      "profile": "parent-generic-execute",
+      "operation": "chmod-open",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-generic-execute/chmod-open/parent",
+      "family": "search",
+      "profile": "parent-generic-execute",
+      "operation": "chmod-open",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-group-deny-search/open/path",
+      "family": "search",
+      "profile": "parent-group-deny-search",
+      "operation": "open",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-group-deny-search/open/root",
+      "family": "search",
+      "profile": "parent-group-deny-search",
+      "operation": "open",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-group-deny-search/open/parent",
+      "family": "search",
+      "profile": "parent-group-deny-search",
+      "operation": "open",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-group-deny-search/held-write/path",
+      "family": "search",
+      "profile": "parent-group-deny-search",
+      "operation": "held-write",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-group-deny-search/held-write/root",
+      "family": "search",
+      "profile": "parent-group-deny-search",
+      "operation": "held-write",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-group-deny-search/held-write/parent",
+      "family": "search",
+      "profile": "parent-group-deny-search",
+      "operation": "held-write",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-group-deny-search/chmod-open/path",
+      "family": "search",
+      "profile": "parent-group-deny-search",
+      "operation": "chmod-open",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-group-deny-search/chmod-open/root",
+      "family": "search",
+      "profile": "parent-group-deny-search",
+      "operation": "chmod-open",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-group-deny-search/chmod-open/parent",
+      "family": "search",
+      "profile": "parent-group-deny-search",
+      "operation": "chmod-open",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-group-allow-search/open/path",
+      "family": "search",
+      "profile": "parent-group-allow-search",
+      "operation": "open",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-group-allow-search/open/root",
+      "family": "search",
+      "profile": "parent-group-allow-search",
+      "operation": "open",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-group-allow-search/open/parent",
+      "family": "search",
+      "profile": "parent-group-allow-search",
+      "operation": "open",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-group-allow-search/held-write/path",
+      "family": "search",
+      "profile": "parent-group-allow-search",
+      "operation": "held-write",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-group-allow-search/held-write/root",
+      "family": "search",
+      "profile": "parent-group-allow-search",
+      "operation": "held-write",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-group-allow-search/held-write/parent",
+      "family": "search",
+      "profile": "parent-group-allow-search",
+      "operation": "held-write",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-group-allow-search/chmod-open/path",
+      "family": "search",
+      "profile": "parent-group-allow-search",
+      "operation": "chmod-open",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-group-allow-search/chmod-open/root",
+      "family": "search",
+      "profile": "parent-group-allow-search",
+      "operation": "chmod-open",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/parent-group-allow-search/chmod-open/parent",
+      "family": "search",
+      "profile": "parent-group-allow-search",
+      "operation": "chmod-open",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "search/group-search-allow/open/path",
+      "family": "search",
+      "profile": "group-search-allow",
+      "operation": "open",
+      "route": "path",
+      "privileged_fixture": true
+    },
+    {
+      "id": "search/group-search-allow/open/root",
+      "family": "search",
+      "profile": "group-search-allow",
+      "operation": "open",
+      "route": "root",
+      "privileged_fixture": true
+    },
+    {
+      "id": "search/group-search-allow/open/parent",
+      "family": "search",
+      "profile": "group-search-allow",
+      "operation": "open",
+      "route": "parent",
+      "privileged_fixture": true
+    },
+    {
+      "id": "search/group-search-deny/open/path",
+      "family": "search",
+      "profile": "group-search-deny",
+      "operation": "open",
+      "route": "path",
+      "privileged_fixture": true
+    },
+    {
+      "id": "search/group-search-deny/open/root",
+      "family": "search",
+      "profile": "group-search-deny",
+      "operation": "open",
+      "route": "root",
+      "privileged_fixture": true
+    },
+    {
+      "id": "search/group-search-deny/open/parent",
+      "family": "search",
+      "profile": "group-search-deny",
+      "operation": "open",
+      "route": "parent",
+      "privileged_fixture": true
+    },
+    {
+      "id": "search/other-search-allow/open/path",
+      "family": "search",
+      "profile": "other-search-allow",
+      "operation": "open",
+      "route": "path",
+      "privileged_fixture": true
+    },
+    {
+      "id": "search/other-search-allow/open/root",
+      "family": "search",
+      "profile": "other-search-allow",
+      "operation": "open",
+      "route": "root",
+      "privileged_fixture": true
+    },
+    {
+      "id": "search/other-search-allow/open/parent",
+      "family": "search",
+      "profile": "other-search-allow",
+      "operation": "open",
+      "route": "parent",
+      "privileged_fixture": true
+    },
+    {
+      "id": "search/other-search-deny/open/path",
+      "family": "search",
+      "profile": "other-search-deny",
+      "operation": "open",
+      "route": "path",
+      "privileged_fixture": true
+    },
+    {
+      "id": "search/other-search-deny/open/root",
+      "family": "search",
+      "profile": "other-search-deny",
+      "operation": "open",
+      "route": "root",
+      "privileged_fixture": true
+    },
+    {
+      "id": "search/other-search-deny/open/parent",
+      "family": "search",
+      "profile": "other-search-deny",
+      "operation": "open",
+      "route": "parent",
+      "privileged_fixture": true
+    },
+    {
+      "id": "create/parent-no-search/create/path",
+      "family": "create",
+      "profile": "parent-no-search",
+      "operation": "create",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "create/parent-no-search/create/root",
+      "family": "create",
+      "profile": "parent-no-search",
+      "operation": "create",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "create/parent-no-search/create/parent",
+      "family": "create",
+      "profile": "parent-no-search",
+      "operation": "create",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "create/parent-no-write/create/path",
+      "family": "create",
+      "profile": "parent-no-write",
+      "operation": "create",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "create/parent-no-write/create/root",
+      "family": "create",
+      "profile": "parent-no-write",
+      "operation": "create",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "create/parent-no-write/create/parent",
+      "family": "create",
+      "profile": "parent-no-write",
+      "operation": "create",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "create/parent-deny-search/create/path",
+      "family": "create",
+      "profile": "parent-deny-search",
+      "operation": "create",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "create/parent-deny-search/create/root",
+      "family": "create",
+      "profile": "parent-deny-search",
+      "operation": "create",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "create/parent-deny-search/create/parent",
+      "family": "create",
+      "profile": "parent-deny-search",
+      "operation": "create",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "create/parent-deny-add/create/path",
+      "family": "create",
+      "profile": "parent-deny-add",
+      "operation": "create",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "create/parent-deny-add/create/root",
+      "family": "create",
+      "profile": "parent-deny-add",
+      "operation": "create",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "create/parent-deny-add/create/parent",
+      "family": "create",
+      "profile": "parent-deny-add",
+      "operation": "create",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "create/parent-allow-add/create/path",
+      "family": "create",
+      "profile": "parent-allow-add",
+      "operation": "create",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "create/parent-allow-add/create/root",
+      "family": "create",
+      "profile": "parent-allow-add",
+      "operation": "create",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "create/parent-allow-add/create/parent",
+      "family": "create",
+      "profile": "parent-allow-add",
+      "operation": "create",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "create/parent-immutable/create/path",
+      "family": "create",
+      "profile": "parent-immutable",
+      "operation": "create",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "create/parent-immutable/create/root",
+      "family": "create",
+      "profile": "parent-immutable",
+      "operation": "create",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "create/parent-immutable/create/parent",
+      "family": "create",
+      "profile": "parent-immutable",
+      "operation": "create",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "create/parent-append/create/path",
+      "family": "create",
+      "profile": "parent-append",
+      "operation": "create",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "create/parent-append/create/root",
+      "family": "create",
+      "profile": "parent-append",
+      "operation": "create",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "create/parent-append/create/parent",
+      "family": "create",
+      "profile": "parent-append",
+      "operation": "create",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "delete/parent-no-search/unlink/path",
+      "family": "delete",
+      "profile": "parent-no-search",
+      "operation": "unlink",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "delete/parent-no-search/unlink/root",
+      "family": "delete",
+      "profile": "parent-no-search",
+      "operation": "unlink",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "delete/parent-no-search/unlink/parent",
+      "family": "delete",
+      "profile": "parent-no-search",
+      "operation": "unlink",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "delete/parent-no-write/unlink/path",
+      "family": "delete",
+      "profile": "parent-no-write",
+      "operation": "unlink",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "delete/parent-no-write/unlink/root",
+      "family": "delete",
+      "profile": "parent-no-write",
+      "operation": "unlink",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "delete/parent-no-write/unlink/parent",
+      "family": "delete",
+      "profile": "parent-no-write",
+      "operation": "unlink",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "delete/parent-deny-delete/unlink/path",
+      "family": "delete",
+      "profile": "parent-deny-delete",
+      "operation": "unlink",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "delete/parent-deny-delete/unlink/root",
+      "family": "delete",
+      "profile": "parent-deny-delete",
+      "operation": "unlink",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "delete/parent-deny-delete/unlink/parent",
+      "family": "delete",
+      "profile": "parent-deny-delete",
+      "operation": "unlink",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "delete/leaf-deny-delete/unlink/path",
+      "family": "delete",
+      "profile": "leaf-deny-delete",
+      "operation": "unlink",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "delete/leaf-deny-delete/unlink/root",
+      "family": "delete",
+      "profile": "leaf-deny-delete",
+      "operation": "unlink",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "delete/leaf-deny-delete/unlink/parent",
+      "family": "delete",
+      "profile": "leaf-deny-delete",
+      "operation": "unlink",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "delete/leaf-allow-parent-deny/unlink/path",
+      "family": "delete",
+      "profile": "leaf-allow-parent-deny",
+      "operation": "unlink",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "delete/leaf-allow-parent-deny/unlink/root",
+      "family": "delete",
+      "profile": "leaf-allow-parent-deny",
+      "operation": "unlink",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "delete/leaf-allow-parent-deny/unlink/parent",
+      "family": "delete",
+      "profile": "leaf-allow-parent-deny",
+      "operation": "unlink",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "delete/leaf-deny-parent-allow/unlink/path",
+      "family": "delete",
+      "profile": "leaf-deny-parent-allow",
+      "operation": "unlink",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "delete/leaf-deny-parent-allow/unlink/root",
+      "family": "delete",
+      "profile": "leaf-deny-parent-allow",
+      "operation": "unlink",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "delete/leaf-deny-parent-allow/unlink/parent",
+      "family": "delete",
+      "profile": "leaf-deny-parent-allow",
+      "operation": "unlink",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "delete/parent-immutable/unlink/path",
+      "family": "delete",
+      "profile": "parent-immutable",
+      "operation": "unlink",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "delete/parent-immutable/unlink/root",
+      "family": "delete",
+      "profile": "parent-immutable",
+      "operation": "unlink",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "delete/parent-immutable/unlink/parent",
+      "family": "delete",
+      "profile": "parent-immutable",
+      "operation": "unlink",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "delete/parent-append/unlink/path",
+      "family": "delete",
+      "profile": "parent-append",
+      "operation": "unlink",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "delete/parent-append/unlink/root",
+      "family": "delete",
+      "profile": "parent-append",
+      "operation": "unlink",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "delete/parent-append/unlink/parent",
+      "family": "delete",
+      "profile": "parent-append",
+      "operation": "unlink",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "delete/leaf-immutable/unlink/path",
+      "family": "delete",
+      "profile": "leaf-immutable",
+      "operation": "unlink",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "delete/leaf-immutable/unlink/root",
+      "family": "delete",
+      "profile": "leaf-immutable",
+      "operation": "unlink",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "delete/leaf-immutable/unlink/parent",
+      "family": "delete",
+      "profile": "leaf-immutable",
+      "operation": "unlink",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "delete/leaf-append/unlink/path",
+      "family": "delete",
+      "profile": "leaf-append",
+      "operation": "unlink",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "delete/leaf-append/unlink/root",
+      "family": "delete",
+      "profile": "leaf-append",
+      "operation": "unlink",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "delete/leaf-append/unlink/parent",
+      "family": "delete",
+      "profile": "leaf-append",
+      "operation": "unlink",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "delete/sticky-owner/unlink/path",
+      "family": "delete",
+      "profile": "sticky-owner",
+      "operation": "unlink",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "delete/sticky-owner/unlink/root",
+      "family": "delete",
+      "profile": "sticky-owner",
+      "operation": "unlink",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "delete/sticky-owner/unlink/parent",
+      "family": "delete",
+      "profile": "sticky-owner",
+      "operation": "unlink",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "delete/sticky-neither/unlink/path",
+      "family": "delete",
+      "profile": "sticky-neither",
+      "operation": "unlink",
+      "route": "path",
+      "privileged_fixture": true
+    },
+    {
+      "id": "delete/sticky-neither/unlink/root",
+      "family": "delete",
+      "profile": "sticky-neither",
+      "operation": "unlink",
+      "route": "root",
+      "privileged_fixture": true
+    },
+    {
+      "id": "delete/sticky-neither/unlink/parent",
+      "family": "delete",
+      "profile": "sticky-neither",
+      "operation": "unlink",
+      "route": "parent",
+      "privileged_fixture": true
+    },
+    {
+      "id": "delete/sticky-parent-owner/unlink/path",
+      "family": "delete",
+      "profile": "sticky-parent-owner",
+      "operation": "unlink",
+      "route": "path",
+      "privileged_fixture": true
+    },
+    {
+      "id": "delete/sticky-parent-owner/unlink/root",
+      "family": "delete",
+      "profile": "sticky-parent-owner",
+      "operation": "unlink",
+      "route": "root",
+      "privileged_fixture": true
+    },
+    {
+      "id": "delete/sticky-parent-owner/unlink/parent",
+      "family": "delete",
+      "profile": "sticky-parent-owner",
+      "operation": "unlink",
+      "route": "parent",
+      "privileged_fixture": true
+    },
+    {
+      "id": "rename/parent-no-search/rename/path",
+      "family": "rename",
+      "profile": "parent-no-search",
+      "operation": "rename",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename/parent-no-search/rename/root",
+      "family": "rename",
+      "profile": "parent-no-search",
+      "operation": "rename",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename/parent-no-search/rename/parent",
+      "family": "rename",
+      "profile": "parent-no-search",
+      "operation": "rename",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename/parent-no-write/rename/path",
+      "family": "rename",
+      "profile": "parent-no-write",
+      "operation": "rename",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename/parent-no-write/rename/root",
+      "family": "rename",
+      "profile": "parent-no-write",
+      "operation": "rename",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename/parent-no-write/rename/parent",
+      "family": "rename",
+      "profile": "parent-no-write",
+      "operation": "rename",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename/parent-deny-add/rename/path",
+      "family": "rename",
+      "profile": "parent-deny-add",
+      "operation": "rename",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename/parent-deny-add/rename/root",
+      "family": "rename",
+      "profile": "parent-deny-add",
+      "operation": "rename",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename/parent-deny-add/rename/parent",
+      "family": "rename",
+      "profile": "parent-deny-add",
+      "operation": "rename",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename/parent-deny-delete/rename/path",
+      "family": "rename",
+      "profile": "parent-deny-delete",
+      "operation": "rename",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename/parent-deny-delete/rename/root",
+      "family": "rename",
+      "profile": "parent-deny-delete",
+      "operation": "rename",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename/parent-deny-delete/rename/parent",
+      "family": "rename",
+      "profile": "parent-deny-delete",
+      "operation": "rename",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename/leaf-deny-delete/rename/path",
+      "family": "rename",
+      "profile": "leaf-deny-delete",
+      "operation": "rename",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename/leaf-deny-delete/rename/root",
+      "family": "rename",
+      "profile": "leaf-deny-delete",
+      "operation": "rename",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename/leaf-deny-delete/rename/parent",
+      "family": "rename",
+      "profile": "leaf-deny-delete",
+      "operation": "rename",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename/leaf-allow-parent-deny/rename/path",
+      "family": "rename",
+      "profile": "leaf-allow-parent-deny",
+      "operation": "rename",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename/leaf-allow-parent-deny/rename/root",
+      "family": "rename",
+      "profile": "leaf-allow-parent-deny",
+      "operation": "rename",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename/leaf-allow-parent-deny/rename/parent",
+      "family": "rename",
+      "profile": "leaf-allow-parent-deny",
+      "operation": "rename",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename/leaf-deny-parent-allow/rename/path",
+      "family": "rename",
+      "profile": "leaf-deny-parent-allow",
+      "operation": "rename",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename/leaf-deny-parent-allow/rename/root",
+      "family": "rename",
+      "profile": "leaf-deny-parent-allow",
+      "operation": "rename",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename/leaf-deny-parent-allow/rename/parent",
+      "family": "rename",
+      "profile": "leaf-deny-parent-allow",
+      "operation": "rename",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename/stage-deny-delete/rename/path",
+      "family": "rename",
+      "profile": "stage-deny-delete",
+      "operation": "rename",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename/stage-deny-delete/rename/root",
+      "family": "rename",
+      "profile": "stage-deny-delete",
+      "operation": "rename",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename/stage-deny-delete/rename/parent",
+      "family": "rename",
+      "profile": "stage-deny-delete",
+      "operation": "rename",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename/stage-immutable/rename/path",
+      "family": "rename",
+      "profile": "stage-immutable",
+      "operation": "rename",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename/stage-immutable/rename/root",
+      "family": "rename",
+      "profile": "stage-immutable",
+      "operation": "rename",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename/stage-immutable/rename/parent",
+      "family": "rename",
+      "profile": "stage-immutable",
+      "operation": "rename",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename/parent-immutable/rename/path",
+      "family": "rename",
+      "profile": "parent-immutable",
+      "operation": "rename",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename/parent-immutable/rename/root",
+      "family": "rename",
+      "profile": "parent-immutable",
+      "operation": "rename",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename/parent-immutable/rename/parent",
+      "family": "rename",
+      "profile": "parent-immutable",
+      "operation": "rename",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename/parent-append/rename/path",
+      "family": "rename",
+      "profile": "parent-append",
+      "operation": "rename",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename/parent-append/rename/root",
+      "family": "rename",
+      "profile": "parent-append",
+      "operation": "rename",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename/parent-append/rename/parent",
+      "family": "rename",
+      "profile": "parent-append",
+      "operation": "rename",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename/leaf-immutable/rename/path",
+      "family": "rename",
+      "profile": "leaf-immutable",
+      "operation": "rename",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename/leaf-immutable/rename/root",
+      "family": "rename",
+      "profile": "leaf-immutable",
+      "operation": "rename",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename/leaf-immutable/rename/parent",
+      "family": "rename",
+      "profile": "leaf-immutable",
+      "operation": "rename",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename/leaf-append/rename/path",
+      "family": "rename",
+      "profile": "leaf-append",
+      "operation": "rename",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename/leaf-append/rename/root",
+      "family": "rename",
+      "profile": "leaf-append",
+      "operation": "rename",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename/leaf-append/rename/parent",
+      "family": "rename",
+      "profile": "leaf-append",
+      "operation": "rename",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename/sticky-owner/rename/path",
+      "family": "rename",
+      "profile": "sticky-owner",
+      "operation": "rename",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename/sticky-owner/rename/root",
+      "family": "rename",
+      "profile": "sticky-owner",
+      "operation": "rename",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename/sticky-owner/rename/parent",
+      "family": "rename",
+      "profile": "sticky-owner",
+      "operation": "rename",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename/sticky-neither/rename/path",
+      "family": "rename",
+      "profile": "sticky-neither",
+      "operation": "rename",
+      "route": "path",
+      "privileged_fixture": true
+    },
+    {
+      "id": "rename/sticky-neither/rename/root",
+      "family": "rename",
+      "profile": "sticky-neither",
+      "operation": "rename",
+      "route": "root",
+      "privileged_fixture": true
+    },
+    {
+      "id": "rename/sticky-neither/rename/parent",
+      "family": "rename",
+      "profile": "sticky-neither",
+      "operation": "rename",
+      "route": "parent",
+      "privileged_fixture": true
+    },
+    {
+      "id": "rename/sticky-parent-owner/rename/path",
+      "family": "rename",
+      "profile": "sticky-parent-owner",
+      "operation": "rename",
+      "route": "path",
+      "privileged_fixture": true
+    },
+    {
+      "id": "rename/sticky-parent-owner/rename/root",
+      "family": "rename",
+      "profile": "sticky-parent-owner",
+      "operation": "rename",
+      "route": "root",
+      "privileged_fixture": true
+    },
+    {
+      "id": "rename/sticky-parent-owner/rename/parent",
+      "family": "rename",
+      "profile": "sticky-parent-owner",
+      "operation": "rename",
+      "route": "parent",
+      "privileged_fixture": true
+    },
+    {
+      "id": "rename-absent/parent-no-search/rename-absent/path",
+      "family": "rename-absent",
+      "profile": "parent-no-search",
+      "operation": "rename-absent",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename-absent/parent-no-search/rename-absent/root",
+      "family": "rename-absent",
+      "profile": "parent-no-search",
+      "operation": "rename-absent",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename-absent/parent-no-search/rename-absent/parent",
+      "family": "rename-absent",
+      "profile": "parent-no-search",
+      "operation": "rename-absent",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename-absent/parent-no-write/rename-absent/path",
+      "family": "rename-absent",
+      "profile": "parent-no-write",
+      "operation": "rename-absent",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename-absent/parent-no-write/rename-absent/root",
+      "family": "rename-absent",
+      "profile": "parent-no-write",
+      "operation": "rename-absent",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename-absent/parent-no-write/rename-absent/parent",
+      "family": "rename-absent",
+      "profile": "parent-no-write",
+      "operation": "rename-absent",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename-absent/parent-deny-add/rename-absent/path",
+      "family": "rename-absent",
+      "profile": "parent-deny-add",
+      "operation": "rename-absent",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename-absent/parent-deny-add/rename-absent/root",
+      "family": "rename-absent",
+      "profile": "parent-deny-add",
+      "operation": "rename-absent",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename-absent/parent-deny-add/rename-absent/parent",
+      "family": "rename-absent",
+      "profile": "parent-deny-add",
+      "operation": "rename-absent",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename-absent/parent-deny-delete/rename-absent/path",
+      "family": "rename-absent",
+      "profile": "parent-deny-delete",
+      "operation": "rename-absent",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename-absent/parent-deny-delete/rename-absent/root",
+      "family": "rename-absent",
+      "profile": "parent-deny-delete",
+      "operation": "rename-absent",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename-absent/parent-deny-delete/rename-absent/parent",
+      "family": "rename-absent",
+      "profile": "parent-deny-delete",
+      "operation": "rename-absent",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename-absent/leaf-deny-delete/rename-absent/path",
+      "family": "rename-absent",
+      "profile": "leaf-deny-delete",
+      "operation": "rename-absent",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename-absent/leaf-deny-delete/rename-absent/root",
+      "family": "rename-absent",
+      "profile": "leaf-deny-delete",
+      "operation": "rename-absent",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename-absent/leaf-deny-delete/rename-absent/parent",
+      "family": "rename-absent",
+      "profile": "leaf-deny-delete",
+      "operation": "rename-absent",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename-absent/stage-deny-delete/rename-absent/path",
+      "family": "rename-absent",
+      "profile": "stage-deny-delete",
+      "operation": "rename-absent",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename-absent/stage-deny-delete/rename-absent/root",
+      "family": "rename-absent",
+      "profile": "stage-deny-delete",
+      "operation": "rename-absent",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename-absent/stage-deny-delete/rename-absent/parent",
+      "family": "rename-absent",
+      "profile": "stage-deny-delete",
+      "operation": "rename-absent",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename-absent/stage-immutable/rename-absent/path",
+      "family": "rename-absent",
+      "profile": "stage-immutable",
+      "operation": "rename-absent",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename-absent/stage-immutable/rename-absent/root",
+      "family": "rename-absent",
+      "profile": "stage-immutable",
+      "operation": "rename-absent",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename-absent/stage-immutable/rename-absent/parent",
+      "family": "rename-absent",
+      "profile": "stage-immutable",
+      "operation": "rename-absent",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename-absent/parent-immutable/rename-absent/path",
+      "family": "rename-absent",
+      "profile": "parent-immutable",
+      "operation": "rename-absent",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename-absent/parent-immutable/rename-absent/root",
+      "family": "rename-absent",
+      "profile": "parent-immutable",
+      "operation": "rename-absent",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename-absent/parent-immutable/rename-absent/parent",
+      "family": "rename-absent",
+      "profile": "parent-immutable",
+      "operation": "rename-absent",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename-absent/parent-append/rename-absent/path",
+      "family": "rename-absent",
+      "profile": "parent-append",
+      "operation": "rename-absent",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename-absent/parent-append/rename-absent/root",
+      "family": "rename-absent",
+      "profile": "parent-append",
+      "operation": "rename-absent",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename-absent/parent-append/rename-absent/parent",
+      "family": "rename-absent",
+      "profile": "parent-append",
+      "operation": "rename-absent",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename-cross/parent-no-search/rename-cross/path",
+      "family": "rename-cross",
+      "profile": "parent-no-search",
+      "operation": "rename-cross",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename-cross/parent-no-search/rename-cross/root",
+      "family": "rename-cross",
+      "profile": "parent-no-search",
+      "operation": "rename-cross",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename-cross/parent-no-search/rename-cross/parent",
+      "family": "rename-cross",
+      "profile": "parent-no-search",
+      "operation": "rename-cross",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename-cross/parent-no-write/rename-cross/path",
+      "family": "rename-cross",
+      "profile": "parent-no-write",
+      "operation": "rename-cross",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename-cross/parent-no-write/rename-cross/root",
+      "family": "rename-cross",
+      "profile": "parent-no-write",
+      "operation": "rename-cross",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename-cross/parent-no-write/rename-cross/parent",
+      "family": "rename-cross",
+      "profile": "parent-no-write",
+      "operation": "rename-cross",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename-cross/parent-deny-delete/rename-cross/path",
+      "family": "rename-cross",
+      "profile": "parent-deny-delete",
+      "operation": "rename-cross",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename-cross/parent-deny-delete/rename-cross/root",
+      "family": "rename-cross",
+      "profile": "parent-deny-delete",
+      "operation": "rename-cross",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename-cross/parent-deny-delete/rename-cross/parent",
+      "family": "rename-cross",
+      "profile": "parent-deny-delete",
+      "operation": "rename-cross",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename-cross/stage-deny-delete/rename-cross/path",
+      "family": "rename-cross",
+      "profile": "stage-deny-delete",
+      "operation": "rename-cross",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename-cross/stage-deny-delete/rename-cross/root",
+      "family": "rename-cross",
+      "profile": "stage-deny-delete",
+      "operation": "rename-cross",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename-cross/stage-deny-delete/rename-cross/parent",
+      "family": "rename-cross",
+      "profile": "stage-deny-delete",
+      "operation": "rename-cross",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename-cross/stage-immutable/rename-cross/path",
+      "family": "rename-cross",
+      "profile": "stage-immutable",
+      "operation": "rename-cross",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename-cross/stage-immutable/rename-cross/root",
+      "family": "rename-cross",
+      "profile": "stage-immutable",
+      "operation": "rename-cross",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename-cross/stage-immutable/rename-cross/parent",
+      "family": "rename-cross",
+      "profile": "stage-immutable",
+      "operation": "rename-cross",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename-cross/destination-deny-search/rename-cross/path",
+      "family": "rename-cross",
+      "profile": "destination-deny-search",
+      "operation": "rename-cross",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename-cross/destination-deny-search/rename-cross/root",
+      "family": "rename-cross",
+      "profile": "destination-deny-search",
+      "operation": "rename-cross",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename-cross/destination-deny-search/rename-cross/parent",
+      "family": "rename-cross",
+      "profile": "destination-deny-search",
+      "operation": "rename-cross",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename-cross/destination-deny-add/rename-cross/path",
+      "family": "rename-cross",
+      "profile": "destination-deny-add",
+      "operation": "rename-cross",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename-cross/destination-deny-add/rename-cross/root",
+      "family": "rename-cross",
+      "profile": "destination-deny-add",
+      "operation": "rename-cross",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename-cross/destination-deny-add/rename-cross/parent",
+      "family": "rename-cross",
+      "profile": "destination-deny-add",
+      "operation": "rename-cross",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename-cross/destination-deny-delete/rename-cross/path",
+      "family": "rename-cross",
+      "profile": "destination-deny-delete",
+      "operation": "rename-cross",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename-cross/destination-deny-delete/rename-cross/root",
+      "family": "rename-cross",
+      "profile": "destination-deny-delete",
+      "operation": "rename-cross",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename-cross/destination-deny-delete/rename-cross/parent",
+      "family": "rename-cross",
+      "profile": "destination-deny-delete",
+      "operation": "rename-cross",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename-cross/destination-no-write/rename-cross/path",
+      "family": "rename-cross",
+      "profile": "destination-no-write",
+      "operation": "rename-cross",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename-cross/destination-no-write/rename-cross/root",
+      "family": "rename-cross",
+      "profile": "destination-no-write",
+      "operation": "rename-cross",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename-cross/destination-no-write/rename-cross/parent",
+      "family": "rename-cross",
+      "profile": "destination-no-write",
+      "operation": "rename-cross",
+      "route": "parent",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename-cross/destination-immutable/rename-cross/path",
+      "family": "rename-cross",
+      "profile": "destination-immutable",
+      "operation": "rename-cross",
+      "route": "path",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename-cross/destination-immutable/rename-cross/root",
+      "family": "rename-cross",
+      "profile": "destination-immutable",
+      "operation": "rename-cross",
+      "route": "root",
+      "privileged_fixture": false
+    },
+    {
+      "id": "rename-cross/destination-immutable/rename-cross/parent",
+      "family": "rename-cross",
+      "profile": "destination-immutable",
+      "operation": "rename-cross",
+      "route": "parent",
+      "privileged_fixture": false
+    }
+  ],
+  "qualification": "specified-before-capture",
+  "schema": 1
+}
