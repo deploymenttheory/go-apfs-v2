@@ -98,9 +98,21 @@ func verify() error {
 		}
 	}
 	if runtime.GOOS == "windows" {
-		for _, name := range []string{"TestRootReplacementWindowsSparse", "TestRootReplacementWindowsLargeStream", "TestReplacementWindowsNativeCapabilities", "TestReplacementWindowsCopyCallbacks", "TestReplacementWindowsEFSKeyComparison", "TestReplacementWindowsHeldRenamedSource", "TestReplacementWindowsPrivateCleanupCapability", "TestReplacementWindowsHeldStreams", "TestReplacementWindowsBackupAdapterFailures", "TestReplacementWindowsMissingAndCloseFailure", "TestReplacementWindowsSecurityDescriptorFidelity", "TestReplacementWindowsNativeFailures", "TestReplacementWindowsEFSKeyValidation", "TestReplacementWindowsFinalPathProvider", "TestReplacementWindowsSecurityValidation", "TestReplacementWindowsEFSEveryCancellationCheckpoint", "TestReplacementWindowsPrivateFailures", "TestReplacementWindowsHeldUnlinkedSource", "TestReplacementWindowsReparseAndTransferFailures", "TestReplacementWindowsStreamReadDenial"} {
+		for _, name := range []string{"TestRootReplacementWindowsSparse", "TestRootReplacementWindowsLargeStream", "TestReplacementWindowsNativeCapabilities", "TestReplacementWindowsCopyCallbacks", "TestReplacementWindowsEFSKeyComparison", "TestReplacementWindowsHeldRenamedSource", "TestReplacementWindowsPrivateCleanupCapability", "TestReplacementWindowsHeldStreams", "TestReplacementWindowsBackupAdapterFailures", "TestReplacementWindowsMissingAndCloseFailure", "TestReplacementWindowsSecurityDescriptorFidelity", "TestReplacementWindowsNativeFailures", "TestReplacementWindowsEFSKeyValidation", "TestReplacementWindowsFinalPathProvider", "TestReplacementWindowsSecurityValidation", "TestReplacementWindowsEFSEveryCancellationCheckpoint", "TestReplacementWindowsPrivateFailures", "TestReplacementWindowsHeldUnlinkedSource", "TestReplacementWindowsPreparedUnlinkedSource", "TestReplacementWindowsReparseAndTransferFailures", "TestReplacementWindowsStreamReadDenial"} {
 			if !passedNames[name] {
 				return fmt.Errorf("required Windows replacement suite missing: %s", name)
+			}
+		}
+	}
+	if runtime.GOOS == "windows" {
+		for _, api := range []string{"path", "root"} {
+			for _, kind := range []string{"ordinary", "compressed", "sparse", "encrypted", "deny-write", "readonly"} {
+				for _, outcome := range []string{"publish", "cancel"} {
+					name := "TestReplacementWindowsPreparedUnlinkedSource/" + api + "/" + kind + "/" + outcome
+					if !passedNames[name] {
+						return fmt.Errorf("required prepared/unlinked replacement case missing: %s", name)
+					}
+				}
 			}
 		}
 	}

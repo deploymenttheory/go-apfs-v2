@@ -9,7 +9,7 @@ permissions:
 
 concurrency:
   group: name-writer-${{ github.event_name }}-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   CGO_ENABLED: "0"
