@@ -144,3 +144,17 @@ func TestAuthoritySnapshotValidation(t *testing.T) {
 		t.Fatal(clone, err)
 	}
 }
+
+func TestLongPathObservationSnapshot(t *testing.T) {
+	a := fixtureAuthority()
+	enabled := false
+	a.Process.LongPaths = &enabled
+	cloned, err := CloneAuthority(&a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	enabled = true
+	if cloned.Process.LongPaths == nil || *cloned.Process.LongPaths {
+		t.Fatal("long-path policy aliased caller")
+	}
+}

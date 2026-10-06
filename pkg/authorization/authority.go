@@ -27,10 +27,16 @@ const (
 )
 
 // ProcessPolicy records the observed effective VFS owner-permission override.
-// Nil is uncaptured; a nonnil zero value explicitly records the ordinary policy.
+// Nil is uncaptured. A nonnil zero value records only the ordinary node-permission
+// policy; its nil LongPaths field remains an uncaptured path-length policy.
 // The observation comes from native process/thread I/O policy, not entitlements
 // guessed from an executable or inherited receiving-host process state.
-type ProcessPolicy struct{ IgnoreNodePermissions bool }
+type ProcessPolicy struct {
+	IgnoreNodePermissions bool
+	// LongPaths records the effective process OR thread support-long-paths policy.
+	// Nil is unobserved; pathname operations require an explicit observation.
+	LongPaths *bool
+}
 
 // Authority supplies effective source credentials, actual UUID membership and
 // observed process policy. Groups contain all applicable numeric groups, never
@@ -57,6 +63,10 @@ func CloneAuthority(value *Authority) (Authority, error) {
 	result := *value
 	if value.Process != nil {
 		process := *value.Process
+		if process.LongPaths != nil {
+			observed := *process.LongPaths
+			process.LongPaths = &observed
+		}
 		result.Process = &process
 	}
 	result.Groups = slices.Clone(value.Groups)

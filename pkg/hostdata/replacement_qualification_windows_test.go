@@ -460,7 +460,7 @@ func replacementPOSIXRename(handle windows.Handle, name string) (err error) {
 		Name   [1]uint16
 	}
 	offset := int(unsafe.Offsetof(header.Name))
-	value := make([]byte, offset+2*len(utf16))
+	value := make([]byte, int(unsafe.Sizeof(header))+2*len(utf16))
 	binary.LittleEndian.PutUint32(value, windows.FILE_RENAME_POSIX_SEMANTICS|windows.FILE_RENAME_REPLACE_IF_EXISTS)
 	rootOffset := int(unsafe.Offsetof(header.Root))
 	if unsafe.Sizeof(header.Root) == 8 {
@@ -472,7 +472,10 @@ func replacementPOSIXRename(handle windows.Handle, name string) (err error) {
 	for i, c := range utf16 {
 		binary.LittleEndian.PutUint16(value[offset+2*i:], c)
 	}
-	return windows.SetFileInformationByHandle(handle, windows.FileRenameInfoEx, &value[0], uint32(len(value)))
+	// Use the documented NT extended information class for held-relative rename.
+	// FileRenameInformationEx is FILE_INFORMATION_CLASS 65 on supported runners.
+	var iosb windows.IO_STATUS_BLOCK
+	return replacementWindowsError(windows.NtSetInformationFile(handle, &iosb, &value[0], uint32(len(value)), 65))
 }
 
 func replacementPOSIXControl(t *testing.T) {
@@ -526,7 +529,7 @@ func replacementResetTestFile(t *testing.T, path string) {
 		t.Errorf("reset step 1 %q: %v", path, err)
 		return
 	}
-	h, err := windows.CreateFile(name, windows.WRITE_DAC, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, nil, windows.OPEN_EXISTING, 0, 0)
+	h, err := windows.CreateFile(name, windows.READ_CONTROL|windows.WRITE_DAC, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, nil, windows.OPEN_EXISTING, 0, 0)
 	if err != nil {
 		t.Errorf("reset step 2 %q: %v", path, err)
 		return
@@ -549,7 +552,14 @@ func replacementResetTestFile(t *testing.T, path string) {
 		t.Errorf("reset step 5 %q: %v", path, err)
 		return
 	}
-	err = errors.Join(windows.SetSecurityInfo(h, windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION|windows.PROTECTED_DACL_SECURITY_INFORMATION, nil, nil, acl, nil), windows.CloseHandle(h))
+	err = windows.SetSecurityInfo(h, windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION|windows.PROTECTED_DACL_SECURITY_INFORMATION, nil, nil, acl, nil)
+	if err != nil {
+		t.Errorf("reset security %q: %v", path, err)
+	}
+	if closeErr := windows.CloseHandle(h); closeErr != nil {
+		t.Errorf("reset close %q: %v", path, closeErr)
+		err = errors.Join(err, closeErr)
+	}
 	if err == nil {
 		err = windows.SetFileAttributes(name, windows.FILE_ATTRIBUTE_NORMAL)
 	}

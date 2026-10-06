@@ -2,6 +2,7 @@ package hostdata
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"golang.org/x/sys/windows"
 	"io"
@@ -245,7 +246,138 @@ func TestReplacementWindowsSecurityDescriptorFidelity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = replacementSetFileSecurity(closed, windows.DACL_SECURITY_INFORMATION, sd); !errors.Is(err, windows.ERROR_INVALID_HANDLE) {
+	if err = replacementSetFileSecurity(closed, windows.DACL_SECURITY_INFORMATION, sd); !errors.Is(err, os.ErrClosed) {
 		t.Fatal(err)
 	}
 }
+
+func TestReplacementWindowsNativeFailures(t *testing.T) {
+	closed, err := os.CreateTemp(t.TempDir(), "closed")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = closed.Close(); err != nil {
+		t.Fatal(err)
+	}
+	live, err := os.CreateTemp(t.TempDir(), "live")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer live.Close()
+	info, err := live.Stat()
+	if err != nil {
+		t.Fatal(err)
+	}
+	root, err := os.OpenRoot(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = root.Close(); err != nil {
+		t.Fatal(err)
+	}
+	canceled, cancel := context.WithCancel(t.Context())
+	cancel()
+	for _, tc := range []struct {
+		name   string
+		invoke func() error
+	}{
+		{"identity closed", func() error { _, e := replacementHeldIdentity(closed); return e }},
+		{"final path closed", func() error { _, e := replacementFinalPath(t.Context(), closed); return e }},
+		{"final path canceled", func() error { _, e := replacementFinalPath(canceled, live); return e }},
+		{"duplicate invalid", func() error { _, e := duplicateReplacementHandle(windows.InvalidHandle, "invalid"); return e }},
+		{"reopen closed", func() error { _, e := reopenReplacementFile(closed, windows.GENERIC_READ); return e }},
+		{"private acl closed", func() error { return replacementPrivateFileAccess(closed) }},
+		{"readonly closed", func() error { return replacementClearReadonly(t.Context(), closed) }},
+		{"cleanup capability closed", func() error { _, e := replacementCleanupCapability(closed); return e }},
+		{"metadata closed root", func() error { _, e := openReplacementStageMetadata(root); return e }},
+		{"anchor closed root", func() error { _, e := replacementStageAnchor(root); return e }},
+		{"private parent closed", func() error { _, e := makeReplacementDirectoryAt(t.Context(), root, "private"); return e }},
+		{"private canceled", func() error { _, e := makeReplacementDirectoryAt(canceled, root, "private"); return e }},
+		{"restore source closed", func() error { return restoreReplacementMetadataContext(t.Context(), closed, live, info) }},
+		{"restore target closed", func() error { return restoreReplacementMetadataContext(t.Context(), live, closed, info) }},
+		{"restore canceled", func() error { return restoreReplacementMetadataContext(canceled, live, live, info) }},
+		{"restore rooted canceled", func() error { return restoreReplacementMetadataAtContext(canceled, live, live, info) }},
+		{"restore rooted closed", func() error { return restoreReplacementMetadataAtContext(t.Context(), closed, live, info) }},
+		{"compression closed", func() error { return copyReplacementCompression(t.Context(), closed, live) }},
+		{"streams closed", func() error { return copyReplacementStreamsContext(t.Context(), closed, live) }},
+		{"prepare streams canceled", func() error { _, e := prepareReplacementStreamsAtContext(canceled, live, root, info); return e }},
+		{"prepare streams source closed", func() error { _, e := prepareReplacementStreamsAtContext(t.Context(), closed, root, info); return e }},
+		{"prepare streams root closed", func() error { _, e := prepareReplacementStreamsAtContext(t.Context(), live, root, info); return e }},
+		{"prepare native source closed", func() error { _, e := prepareReplacementAtContext(t.Context(), closed, root, info); return e }},
+		{"efs pin canceled", func() error { _, e := replacementPinEFS(canceled, live); return e }},
+		{"efs pin closed", func() error { _, e := replacementPinEFS(t.Context(), closed); return e }},
+		{"efs verify closed", func() error { return replacementVerifyEFS(t.Context(), closed, live) }},
+		{"efs query canceled", func() error { _, e := replacementQueryEFS(canceled, live.Name(), replacementQueryUsers); return e }},
+		{"efs query invalid name", func() error { _, e := replacementQueryEFS(t.Context(), "bad\x00name", replacementQueryUsers); return e }},
+		{"efs query absent", func() error {
+			_, e := replacementQueryEFS(t.Context(), filepath.Join(t.TempDir(), "absent"), replacementQueryUsers)
+			return e
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if e := tc.invoke(); e == nil {
+				t.Fatal("native failure accepted")
+			}
+		})
+	}
+	if replacementCopyProgress(0, 0, 0, 0) != 1 {
+		t.Fatal("unknown callback capability accepted")
+	}
+	for _, initial := range []error{errors.New("earlier callback failure"), nil} {
+		state := &replacementCopyState{ctx: canceled, err: initial}
+		if state.progress(0, windows.InvalidHandle, windows.InvalidHandle) != 1 || state.err == nil {
+			t.Fatal("canceled or failed callback continued")
+		}
+	}
+	id, err := replacementHeldIdentity(live)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name           string
+		source, target windows.Handle
+		state          replacementCopyState
+	}{
+		{"invalid source", windows.InvalidHandle, windows.Handle(live.Fd()), replacementCopyState{ctx: t.Context()}},
+		{"invalid destination", windows.Handle(live.Fd()), windows.InvalidHandle, replacementCopyState{ctx: t.Context(), source: id}},
+		{"changed destination", windows.Handle(live.Fd()), windows.Handle(live.Fd()), replacementCopyState{ctx: t.Context(), source: id, validated: true}},
+		{"closed stage", windows.Handle(live.Fd()), windows.Handle(live.Fd()), replacementCopyState{ctx: t.Context(), source: id, stage: root}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.state.progress(0, tc.source, tc.target) != 1 || tc.state.err == nil {
+				t.Fatal("invalid callback continued")
+			}
+		})
+	}
+}
+
+func TestReplacementWindowsEFSKeyValidation(t *testing.T) {
+	world, err := windows.StringToSid("S-1-1-0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	system, err := windows.StringToSid("S-1-5-18")
+	if err != nil {
+		t.Fatal(err)
+	}
+	value := byte(1)
+	for _, tc := range []struct {
+		name        string
+		left, right replacementEFSHash
+		equal       bool
+	}{
+		{"one missing SID", replacementEFSHash{SID: world, Hash: &replacementEFSBlob{}}, replacementEFSHash{Hash: &replacementEFSBlob{}}, false},
+		{"different SID", replacementEFSHash{SID: world, Hash: &replacementEFSBlob{}}, replacementEFSHash{SID: system, Hash: &replacementEFSBlob{}}, false},
+		{"same SID", replacementEFSHash{SID: world, Hash: &replacementEFSBlob{}}, replacementEFSHash{SID: world, Hash: &replacementEFSBlob{}}, true},
+		{"different sizes", replacementEFSHash{Hash: &replacementEFSBlob{Size: 1, Data: &value}}, replacementEFSHash{Hash: &replacementEFSBlob{}}, false},
+		{"missing bytes", replacementEFSHash{Hash: &replacementEFSBlob{Size: 1}}, replacementEFSHash{Hash: &replacementEFSBlob{Size: 1, Data: &value}}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := replacementEFSKeyEqual(&tc.left, &tc.right); got != tc.equal {
+				t.Fatal(got)
+			}
+		})
+	}
+}
+
+func setReplacementTestInfo(r *Replacement, info os.FileInfo) { r.rooted.info = info }

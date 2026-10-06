@@ -41,7 +41,12 @@ explicitly establishes a root for absolute link targets. `Complete` declares
 that missing entries really are absent; otherwise missing names remain unknown.
 Mount observations belong to the logical source and may differ along the path.
 A changed manifest requires a new context, even if another store happens to use
-the same generation number.
+the same generation number. Path-aware calls also require an explicitly observed
+`Authority.Process.LongPaths` value; a nonnil `ProcessPolicy{}` alone is
+insufficient. See the [captured process example](../authorization/README.md#path-length-process-observation).
+The original input length is checked before directory search; symlink expansion
+preserves native trailing-slash and error-order distinctions. Enabled long-path
+behavior is source-backed until a successful native entitled context is qualified.
 
 For each source record, `CapturedPathObservation` can derive ACL presence or
 absence through `Store.ObservedSourceAttribute`. It requires complete successful

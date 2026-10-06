@@ -133,6 +133,20 @@ func recompressPath(ctx context.Context, store *metatransport.Store, name string
 	if manifest.Generation != expected || sha256.Sum256(encoded) != bound.digest {
 		return Result{}, metatransport.ErrConflict
 	}
+	// Snapshot once: pathname limits, directory checks and endpoint acquisition
+	// consume the same captured process/credential context.
+	captured, err := authorization.CloneAuthority(options.Authority)
+	if err != nil {
+		return Result{}, err
+	}
+	if captured.Process == nil || captured.Process.LongPaths == nil {
+		return Result{}, ErrAuthority
+	}
+	options.Authority = &captured
+	limit := 1024
+	if *captured.Process.LongPaths {
+		limit = 8192
+	}
 	evaluator, err := authorization.New(options.Target, options.Authority)
 	if err != nil {
 		return Result{}, err
@@ -141,7 +155,7 @@ func recompressPath(ctx context.Context, store *metatransport.Store, name string
 	for _, record := range manifest.Records {
 		records[record.Original] = record
 	}
-	resolved, leaf, err := resolvePath(ctx, store, records, bound.capture, evaluator, name)
+	resolved, leaf, err := resolvePath(ctx, store, records, bound.capture, evaluator, name, limit)
 	if err != nil {
 		return Result{}, err
 	}
@@ -177,9 +191,17 @@ func observedNode(ctx context.Context, store carrier, record metatransport.Recor
 	return node, nil
 }
 
-func resolvePath(ctx context.Context, store carrier, records map[string]metatransport.Record, capture PathCapture, evaluator *authorization.Evaluator, name string) (string, authorization.Node, error) {
-	if name == "" || strings.IndexByte(name, 0) >= 0 {
+func resolvePath(ctx context.Context, store carrier, records map[string]metatransport.Record, capture PathCapture, evaluator *authorization.Evaluator, name string, limit int) (string, authorization.Node, error) {
+	if strings.IndexByte(name, 0) >= 0 {
 		return "", authorization.Node{}, metatransport.ErrInvalid
+	}
+	// namei copies the original C pathname before search; MAXPATHLEN includes
+	// its terminating NUL. Empty pathname lookup reports ENOENT before search.
+	if len(name) >= limit {
+		return "", authorization.Node{}, syscall.ENAMETOOLONG
+	}
+	if name == "" {
+		return "", authorization.Node{}, syscall.ENOENT
 	}
 	if strings.HasPrefix(name, "/") && !capture.FilesystemRoot {
 		return "", authorization.Node{}, ErrAuthority
@@ -189,7 +211,7 @@ func resolvePath(ctx context.Context, store carrier, records map[string]metatran
 	links := 0
 	missing := func() error {
 		if capture.Complete {
-			return fs.ErrNotExist
+			return syscall.ENOENT
 		}
 		return ErrAuthority
 	}
@@ -250,7 +272,17 @@ func resolvePath(ctx context.Context, store carrier, records map[string]metatran
 				return "", authorization.Node{}, metatransport.ErrInvalid
 			}
 			if record.Target == "" {
-				return "", authorization.Node{}, fs.ErrNotExist
+				return "", authorization.Node{}, syscall.ENOENT
+			}
+			// lookup removes only terminal slashes before link expansion. Preserve
+			// internal separators for namei's linklen + ni_pathlen budget.
+			remaining := strings.TrimRight(strings.Join(parts, "/"), "/")
+			expanded := len(record.Target) + 1
+			if remaining != "" {
+				expanded += len(remaining) + 1
+			}
+			if expanded > limit {
+				return "", authorization.Node{}, syscall.ENAMETOOLONG
 			}
 			if strings.HasPrefix(record.Target, "/") {
 				if !capture.FilesystemRoot {

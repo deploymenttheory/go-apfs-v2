@@ -3,9 +3,11 @@ package recompression
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"testing"
 
@@ -32,7 +34,8 @@ func pathFixture(t *testing.T) (*metatransport.Store, string, metatransport.Mani
 	if err != nil {
 		t.Fatal(err)
 	}
-	o.Authority.Process = &authorization.ProcessPolicy{}
+	ordinaryLongPaths := false
+	o.Authority.Process = &authorization.ProcessPolicy{LongPaths: &ordinaryLongPaths}
 	return s, p, m, capture, PathOptions{Options: o, Context: bound}
 }
 func TestRecompressPathPublication(t *testing.T) {
@@ -184,10 +187,10 @@ func TestOriginalPathTraversal(t *testing.T) {
 		want error
 	}{
 		{"file", nil}, {"alias", nil}, {"a/../file", nil}, {"a/./../file", nil},
-		{"", metatransport.ErrInvalid}, {"file\x00tail", metatransport.ErrInvalid}, {"missing", fs.ErrNotExist}, {"loop", syscall.ELOOP}, {"dangling", fs.ErrNotExist}, {"empty", fs.ErrNotExist}, {"nul", metatransport.ErrInvalid}, {"slash", syscall.ENOTDIR}, {"file/", syscall.ENOTDIR}, {"file/child", syscall.ENOTDIR}, {"a", syscall.EISDIR}, {"../file", ErrAuthority}, {"/file", ErrAuthority}, {"absolute", ErrAuthority},
+		{"", syscall.ENOENT}, {"file\x00tail", metatransport.ErrInvalid}, {"missing", fs.ErrNotExist}, {"loop", syscall.ELOOP}, {"dangling", fs.ErrNotExist}, {"empty", fs.ErrNotExist}, {"nul", metatransport.ErrInvalid}, {"slash", syscall.ENOTDIR}, {"file/", syscall.ENOTDIR}, {"file/child", syscall.ENOTDIR}, {"a", syscall.EISDIR}, {"../file", ErrAuthority}, {"/file", ErrAuthority}, {"absolute", ErrAuthority},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			resolved, _, err := resolvePath(t.Context(), s, records, capture, evaluator, tc.name)
+			resolved, _, err := resolvePath(t.Context(), s, records, capture, evaluator, tc.name, 1024)
 			if !errors.Is(err, tc.want) || err == nil && resolved != "file" {
 				t.Fatalf("resolved=%s error=%v want=%v", resolved, err, tc.want)
 			}
@@ -195,24 +198,24 @@ func TestOriginalPathTraversal(t *testing.T) {
 	}
 	capture.FilesystemRoot = true
 	for _, name := range []string{"absolute", "/file", "../file"} {
-		resolved, _, err := resolvePath(t.Context(), s, records, capture, evaluator, name)
+		resolved, _, err := resolvePath(t.Context(), s, records, capture, evaluator, name, 1024)
 		if err != nil || resolved != "file" {
 			t.Fatal(name, resolved, err)
 		}
 	}
 	capture.Complete = false
-	if _, _, err := resolvePath(t.Context(), s, records, capture, evaluator, "missing"); !errors.Is(err, ErrAuthority) {
+	if _, _, err := resolvePath(t.Context(), s, records, capture, evaluator, "missing", 1024); !errors.Is(err, ErrAuthority) {
 		t.Fatal(err)
 	}
 	// Searching a/.. still requires a's search authority; lexical cleaning would incorrectly grant this.
 	denied := uint32(0040600)
 	directory.Darwin.Mode = &denied
 	records["a"] = directory
-	if _, _, err := resolvePath(t.Context(), s, records, capture, evaluator, "a/../file"); !errors.Is(err, syscall.EACCES) {
+	if _, _, err := resolvePath(t.Context(), s, records, capture, evaluator, "a/../file", 1024); !errors.Is(err, syscall.EACCES) {
 		t.Fatal(err)
 	}
 	delete(records, ".")
-	if _, _, err := resolvePath(t.Context(), s, records, capture, evaluator, "file"); !errors.Is(err, ErrAuthority) {
+	if _, _, err := resolvePath(t.Context(), s, records, capture, evaluator, "file", 1024); !errors.Is(err, ErrAuthority) {
 		t.Fatal(err)
 	}
 }
@@ -258,12 +261,12 @@ func TestPathObservedSecurityAndFailures(t *testing.T) {
 	fault.borrow = func(context.Context, metatransport.Record) (map[string]appledouble.Value, error) {
 		return nil, sentinel
 	}
-	if _, _, err := resolvePath(t.Context(), fault, records, capture, evaluator, "file"); !errors.Is(err, sentinel) {
+	if _, _, err := resolvePath(t.Context(), fault, records, capture, evaluator, "file", 1024); !errors.Is(err, sentinel) {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	if _, _, err := resolvePath(ctx, s, records, capture, evaluator, "file"); !errors.Is(err, context.Canceled) {
+	if _, _, err := resolvePath(ctx, s, records, capture, evaluator, "file", 1024); !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
 	}
 	// Leaf admission remains a separately observable native operation failure.
@@ -319,7 +322,7 @@ func TestPathProcessPolicyReachesEndpoint(t *testing.T) {
 			s, _, m, capture, options := pathFixture(t)
 			principal := [16]byte{1}
 			options.Authority.UserUUID = &principal
-			options.Authority.Process = &authorization.ProcessPolicy{IgnoreNodePermissions: enabled}
+			options.Authority.Process.IgnoreNodePermissions = enabled
 			security := &appledouble.FileSecurity{ACL: &appledouble.ACL{Entries: []appledouble.ACLEntry{{Principal: principal, Flags: 2, Rights: authorization.WriteData}}}}
 			raw, err := security.MarshalBinary()
 			if err != nil {
@@ -351,5 +354,97 @@ func TestPathProcessPolicyReachesEndpoint(t *testing.T) {
 			}
 			checkRecompressionCleanup(t, options.TemporaryDirectory)
 		})
+	}
+}
+
+func pathOfLength(length int) string {
+	prefix := length - len("file")
+	return strings.Repeat("./", prefix/2) + strings.Repeat("/", prefix%2) + "file"
+}
+
+func TestPathByteLimitsAndSearchOrdering(t *testing.T) {
+	s, _, m, capture, options := pathFixture(t)
+	evaluator, err := authorization.New(options.Target, options.Authority)
+	if err != nil {
+		t.Fatal(err)
+	}
+	records := map[string]metatransport.Record{".": m.Records[0], "file": m.Records[1]}
+	for _, limit := range []int{1024, 8192} {
+		for _, length := range []int{limit - 2, limit - 1, limit, limit + 1} {
+			_, _, err := resolvePath(t.Context(), s, records, capture, evaluator, pathOfLength(length), limit)
+			if length < limit && err != nil || length >= limit && !errors.Is(err, syscall.ENAMETOOLONG) {
+				t.Fatal(limit, length, err)
+			}
+		}
+	}
+	denied := uint32(0040600)
+	root := records["."]
+	root.Darwin.Mode = &denied
+	records["."] = root
+	for _, tc := range []struct {
+		name string
+		want error
+	}{
+		{"", syscall.ENOENT}, {"file", syscall.EACCES}, {strings.Repeat("x", 256), syscall.EACCES}, {pathOfLength(1023), syscall.EACCES}, {pathOfLength(1024), syscall.ENAMETOOLONG},
+	} {
+		_, _, err := resolvePath(t.Context(), s, records, capture, evaluator, tc.name, 1024)
+		if !errors.Is(err, tc.want) {
+			t.Fatal(len(tc.name), err, tc.want)
+		}
+	}
+}
+
+func TestPathSymlinkExpansionBoundary(t *testing.T) {
+	s, _, m, capture, options := pathFixture(t)
+	evaluator, err := authorization.New(options.Target, options.Authority)
+	if err != nil {
+		t.Fatal(err)
+	}
+	records := map[string]metatransport.Record{".": m.Records[0], "file": m.Records[1]}
+	for _, length := range []int{1022, 1023} {
+		records["link"] = metatransport.Record{Original: "link", Kind: "symlink", Target: pathOfLength(length)}
+		for _, tc := range []struct {
+			name string
+			want error
+		}{{"link", nil}, {"link/", syscall.ENOTDIR}, {"link/x", syscall.ENAMETOOLONG}} {
+			_, _, err := resolvePath(t.Context(), s, records, capture, evaluator, tc.name, 1024)
+			if !errors.Is(err, tc.want) {
+				t.Fatal(length, tc.name, err)
+			}
+		}
+	}
+	for _, count := range []int{31, 32, 33} {
+		for index := 0; index < count; index++ {
+			name := fmt.Sprintf("link%d", index)
+			target := fmt.Sprintf("link%d", index+1)
+			if index+1 == count {
+				target = "file"
+			}
+			records[name] = metatransport.Record{Original: name, Kind: "symlink", Target: target}
+		}
+		_, _, err := resolvePath(t.Context(), s, records, capture, evaluator, "link0", 1024)
+		if count <= 32 && err != nil || count == 33 && !errors.Is(err, syscall.ELOOP) {
+			t.Fatal(count, err)
+		}
+	}
+}
+
+func TestPathRequiresObservedLongPathPolicy(t *testing.T) {
+	s, _, _, _, options := pathFixture(t)
+	options.Authority.Process.LongPaths = nil
+	if _, err := RecompressPath(t.Context(), s, "file", 2, options); !errors.Is(err, ErrAuthority) {
+		t.Fatal(err)
+	}
+	enabled := false
+	options.Authority.Process.LongPaths = &enabled
+	if _, err := RecompressPath(t.Context(), s, pathOfLength(1024), 2, options); !errors.Is(err, syscall.ENAMETOOLONG) {
+		t.Fatal(err)
+	}
+	// Enabled long-path behavior is source-backed until a native entitled positive
+	// context is captured; the unit control does not claim that qualification.
+	enabled = true
+	result, err := RecompressPath(t.Context(), s, pathOfLength(1024), 2, options)
+	if err != nil || !result.Published {
+		t.Fatal(result, err)
 	}
 }

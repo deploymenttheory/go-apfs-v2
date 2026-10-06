@@ -10,6 +10,12 @@ import (
 	"path/filepath"
 )
 
+type replacementPlatformState struct {
+	source *os.File
+	info   os.FileInfo
+	dir    string
+}
+
 func prepareReplacementPrivateContext(ctx context.Context, source *os.File, parent string, info os.FileInfo) (*Replacement, error) {
 	dir, err := os.MkdirTemp(parent, ".apfs-replacement-")
 	if err != nil {
@@ -25,7 +31,7 @@ func prepareReplacementPrivateContext(ctx context.Context, source *os.File, pare
 		return nil, errors.Join(fmt.Errorf("prepare replacement: %w", err), cleanupReplacement(
 			func() error { return os.Chmod(path, 0600) }, func() error { return os.RemoveAll(dir) }))
 	}
-	return &Replacement{File: f, source: source, info: info, dir: dir}, nil
+	return &Replacement{File: f, replacementPlatformState: replacementPlatformState{source: source, info: info, dir: dir}}, nil
 }
 
 func makeReplacementDirectoryAt(ctx context.Context, root *os.Root, name string) (func() error, error) {

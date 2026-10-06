@@ -16,12 +16,8 @@ import (
 // if it cannot preserve the supported metadata; unlike ListXattrs/SetXattrs,
 // missing metadata is not treated as a recoverable fidelity loss.
 type Replacement struct {
-	File      *os.File
-	source    *os.File
-	info      os.FileInfo
-	dir       string
-	rooted    *RootReplacement
-	ownedRoot *os.Root
+	File *os.File
+	replacementPlatformState
 }
 
 // PrepareReplacement creates a private staging directory under parent on the

@@ -1,6 +1,7 @@
 package hostdata
 
 import (
+	"errors"
 	"os"
 	"testing"
 )
@@ -28,12 +29,24 @@ func replacementVariants(t *testing.T, test func(*testing.T, func(*os.File, stri
 				if err != nil {
 					return nil, err
 				}
-				t.Cleanup(func() { root.Close() })
 				r, err := PrepareReplacementAt(source, root, ".")
 				if err != nil {
-					return nil, err
+					return nil, errors.Join(err, root.Close())
 				}
-				return &testedReplacement{r.File, r.RestoreMetadata, r.Close}, nil
+				closed := false
+				closeOwned := func() error {
+					if closed {
+						return nil
+					}
+					closed = true
+					return errors.Join(r.Close(), root.Close())
+				}
+				t.Cleanup(func() {
+					if e := closeOwned(); e != nil {
+						t.Error(e)
+					}
+				})
+				return &testedReplacement{r.File, r.RestoreMetadata, closeOwned}, nil
 			})
 		})
 	}

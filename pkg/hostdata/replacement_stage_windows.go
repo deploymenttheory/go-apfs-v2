@@ -11,6 +11,11 @@ import (
 	"unsafe"
 )
 
+type replacementPlatformState struct {
+	rooted    *RootReplacement
+	ownedRoot *os.Root
+}
+
 func replacementPrivateSecurity() (*windows.SECURITY_DESCRIPTOR, error) {
 	user, err := windows.GetCurrentThreadEffectiveToken().GetTokenUser()
 	if err != nil {
@@ -76,7 +81,7 @@ func prepareReplacementPrivateContext(ctx context.Context, source *os.File, pare
 	if err != nil {
 		return nil, errors.Join(err, root.Close())
 	}
-	return &Replacement{File: staged.File, source: source, info: staged.info, dir: filepath.Join(parent, staged.dir), rooted: staged, ownedRoot: root}, nil
+	return &Replacement{File: staged.File, replacementPlatformState: replacementPlatformState{rooted: staged, ownedRoot: root}}, nil
 }
 
 // Retain the already granted attribute rights until Close, even if the caller

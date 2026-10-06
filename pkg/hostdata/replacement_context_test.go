@@ -404,11 +404,7 @@ func TestReplacementHeldIdentityMismatch(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer r.Close()
-	if r.rooted != nil {
-		r.rooted.info = otherInfo
-	} else {
-		r.info = otherInfo
-	}
+	setReplacementTestInfo(r, otherInfo)
 	if err = r.RestoreMetadataContext(t.Context()); err == nil {
 		t.Fatal("accepted mismatched held identity")
 	}

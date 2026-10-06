@@ -15,8 +15,9 @@ receiving-host filesystem operation remains the caller's responsibility.
 `New` requires an explicit macOS 15, 26 or 27 target and a captured `Authority`.
 The authority includes effective UID, complete numeric groups, UUID membership
 results when consulted, and an observed process permission policy. A nonnil
-`ProcessPolicy{}` means the ordinary policy was observed; nil means it was not
-captured. An entitlement in an executable does not prove that its process enabled
+`ProcessPolicy{}` records only ordinary node-permission policy. Its `LongPaths`
+field remains unknown until set from an observed effective process/thread policy.
+A nil process policy means node-permission policy was not captured. An entitlement in an executable does not prove that its process enabled
 an override.
 
 Each `Node` supplies observed ownership, complete mode and BSD flags, logical
@@ -78,3 +79,25 @@ This evaluator does not emulate external MAC/sandbox decisions, change host
 privileges, or claim that discretionary permission success guarantees an entire
 filesystem operation will succeed. Consumers retain operation order, actual I/O,
 partial failures and publication handling.
+
+## Path-length process observation
+
+Path-aware recompression additionally requires `ProcessPolicy.LongPaths`.
+Capture both native process and thread support-long-paths getters, check their
+success, and combine their enabled values as XNU does. For example, after a
+capture has actually reported both disabled:
+
+```go
+observedLongPaths := false // established by the successful source getters
+policy := authorization.ProcessPolicy{
+    IgnoreNodePermissions: false, // separately observed ordinary node policy
+    LongPaths: &observedLongPaths,
+}
+```
+
+This is source process context, not a setting derived from the receiving host.
+Ordinary policy admits up to 1023 pathname bytes plus the terminating NUL;
+enabled policy selects the 8192-byte allocation limit. The native
+corpus retains unsuccessful private enable attempts as failures. Enabled-policy
+unit controls do not claim a successful native entitled observation. Already-held
+endpoint operations do not require a pathname-length observation.

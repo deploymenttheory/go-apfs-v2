@@ -18,6 +18,9 @@ jobs:
   pathname-authorization:
     uses: ./.github/workflows/pathname-authorization.yml
 
+  pathname-limits:
+    uses: ./.github/workflows/pathname-limits.yml
+
   build:
     name: Build ${{ matrix.goos }}/${{ matrix.goarch }}
     runs-on: ubuntu-latest

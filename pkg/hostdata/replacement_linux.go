@@ -31,11 +31,19 @@ func restoreReplacementMetadataContext(ctx context.Context, source, target *os.F
 	fd, to := int(source.Fd()), int(target.Fd())
 	// A newly created staging file may have inherited a default directory ACL.
 	// Remove it before copying, including when the original file has no ACL.
-	if err := replacementStep(ctx, func() error { return unix.Fremovexattr(to, PosixACLAccessName) }); err != nil && !errors.Is(err, unix.ENODATA) && !isUnsupported(err) || ctx.Err() != nil {
+	if err := replacementStep(ctx, func() error {
+		err := unix.Fremovexattr(to, PosixACLAccessName)
+		// Only the native absence/capability result is harmless. Let the
+		// surrounding checkpoint retain any concurrent cancellation.
+		if errors.Is(err, unix.ENODATA) || isUnsupported(err) {
+			return nil
+		}
+		return err
+	}); err != nil {
 		return err
 	}
 	size, err := replacementValue(ctx, func() (int, error) { return unix.Flistxattr(fd, nil) })
-	if isUnsupported(err) && ctx.Err() == nil {
+	if isUnsupported(err) {
 		return replacementStep(ctx, func() error { return target.Chmod(info.Mode()) })
 	}
 	if err != nil {
