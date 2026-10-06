@@ -116,7 +116,7 @@ jobs:
     name: Native names (producer ${{ matrix.producer }}, receiver ${{ matrix.receiver.version }}, ${{ matrix.filesystem }})
     needs: native-images
     runs-on: ${{ matrix.receiver.os }}
-    timeout-minutes: 40
+    timeout-minutes: 12
     strategy:
       fail-fast: false
       matrix:
@@ -155,13 +155,13 @@ jobs:
           compression-level: 9
           if-no-files-found: error
       - name: Read every case in this producer image on the actual receiver
-        timeout-minutes: 32
+        timeout-minutes: 7
         shell: bash
         run: |
           set -euo pipefail
           export APFS_NAME_IMAGE_ARTIFACTS="$GITHUB_WORKSPACE/artifacts/native-images"
           cd scripts
-          go tool test2json -t -p command-line-arguments "$GITHUB_WORKSPACE/artifacts/name-native-build/native-readback.test" -test.v=test2json -test.count=1 -test.timeout=30m -test.run='^TestNativeCrossVersionNameImages$' | tee "$GITHUB_WORKSPACE/artifacts/name-native-readback-tests.jsonl"
+          go tool test2json -t -p command-line-arguments "$GITHUB_WORKSPACE/artifacts/name-native-build/native-readback.test" -test.v=test2json -test.count=1 -test.timeout=5m -test.run='^TestNativeCrossVersionNameImages$' | tee "$GITHUB_WORKSPACE/artifacts/name-native-readback-tests.jsonl"
       - uses: actions/upload-artifact@v7
         if: always()
         with:

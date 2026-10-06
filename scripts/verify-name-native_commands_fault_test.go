@@ -3,6 +3,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -28,6 +29,7 @@ func TestNativeReadbackCommandChild(t *testing.T) {
 		fmt.Fprint(os.Stderr, "native failure")
 		os.Exit(7)
 	case "hold":
+		fmt.Fprintln(os.Stderr, "NATIVE START case=blocked candidate=0 operation=openat-file")
 		time.Sleep(30 * time.Second)
 		os.Exit(0)
 	case "inherit":
@@ -185,6 +187,55 @@ func TestNativeReadbackCommandFaults(t *testing.T) {
 			t.Fatal("ignored diagnostic directory failure")
 		}
 	})
+}
+
+func TestNativeReadbackCommandLiveProgress(t *testing.T) {
+	t.Setenv("APFS_READBACK_COMMAND_CHILD", "hold")
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	runner := &nativeCommandRunner{Directory: t.TempDir(), progressInterval: 20 * time.Millisecond, progressOutput: &output}
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+	defer cancel()
+	if _, err = runner.run(ctx, exe, "-test.run=^TestNativeReadbackCommandChild$"); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatal(err)
+	}
+	for _, text := range []string{"PROGRESS native command", "ERROR native command", "context deadline exceeded", "case=blocked candidate=0 operation=openat-file"} {
+		if !strings.Contains(output.String(), text) {
+			t.Fatalf("missing %q in live progress: %s", text, output.String())
+		}
+	}
+}
+
+func TestNativeReadbackCommandBoundedTail(t *testing.T) {
+	file, err := os.CreateTemp(t.TempDir(), "stderr")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := nativeCommandTail(file); got != "" {
+		t.Fatal(got)
+	}
+	data := strings.Repeat("x", 8192) + "\nNATIVE START operation=openat-file\n"
+	if _, err = file.WriteString(data); err != nil {
+		t.Fatal(err)
+	}
+	before, err := file.Seek(0, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := nativeCommandTail(file)
+	after, err := file.Seek(0, 1)
+	if err != nil || before != after || len(got) > 4096 || !strings.HasSuffix(got, "NATIVE START operation=openat-file") {
+		t.Fatal("unbounded tail or changed child write offset", got, err)
+	}
+	if err = file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(nativeCommandTail(file), "stderr stat:") {
+		t.Fatal("lost tail read error")
+	}
 }
 
 const nativeReadbackAttachment = `<?xml version="1.0" encoding="UTF-8"?><plist version="1.0"><dict><key>system-entities</key><array><dict><key>dev-entry</key><string>/dev/disk99</string></dict></array></dict></plist>`

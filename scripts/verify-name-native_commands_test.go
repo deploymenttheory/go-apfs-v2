@@ -7,18 +7,75 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/diskimage"
 )
 
 type nativeCommandRunner struct {
-	Directory string
-	sequence  int
+	Directory        string
+	sequence         int
+	progressInterval time.Duration
+	progressOutput   io.Writer
 }
+
+// Read a bounded tail from the existing regular file. Child output remains on
+// regular files, so a descendant inheriting stderr cannot hold a pipe open.
+func nativeCommandTail(file *os.File) string {
+	info, err := file.Stat()
+	if err != nil {
+		return fmt.Sprintf("<stderr stat: %v>", err)
+	}
+	size := min(info.Size(), int64(4096))
+	data := make([]byte, int(size))
+	n, err := file.ReadAt(data, info.Size()-size)
+	if err != nil && err != io.EOF {
+		return fmt.Sprintf("<stderr read: %v>", err)
+	}
+	return strings.TrimSpace(string(data[:n]))
+}
+
+func (r *nativeCommandRunner) wait(ctx context.Context, cmd *exec.Cmd, stderr *os.File, stem string) error {
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	interval := r.progressInterval
+	if interval <= 0 {
+		interval = 10 * time.Second
+	}
+	output := r.progressOutput
+	if output == nil {
+		output = os.Stderr
+	}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	started := time.Now()
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	cancelled := ctx.Done()
+	for {
+		select {
+		case err := <-done:
+			if err != nil || ctx.Err() != nil {
+				fmt.Fprintf(output, "ERROR native command %s: %v context=%v; last stderr:\n%s\n", stem, err, ctx.Err(), nativeCommandTail(stderr))
+			}
+			return err
+		case <-cancelled:
+			// Report before waiting for process exit: a blocked kernel call can
+			// prevent even a killed child from being reaped immediately.
+			fmt.Fprintf(output, "ERROR native command %s deadline/cancellation: %v; cancellation requested; awaiting process exit; last stderr:\n%s\n", stem, ctx.Err(), nativeCommandTail(stderr))
+			cancelled = nil
+		case <-ticker.C:
+			fmt.Fprintf(output, "PROGRESS native command %s pid=%d elapsed=%s; last stderr:\n%s\n", stem, cmd.Process.Pid, time.Since(started).Round(time.Second), nativeCommandTail(stderr))
+		}
+	}
+}
+
 type nativeCommandObservation struct {
 	Command      string    `json:"command"`
 	Args         []string  `json:"args"`
@@ -67,7 +124,7 @@ func (r *nativeCommandRunner) run(ctx context.Context, name string, args ...stri
 	cmd.WaitDelay = 5 * time.Second
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
-	runErr := cmd.Run()
+	runErr := r.wait(ctx, cmd, stderr, stem)
 	observation.Finished = time.Now().UTC()
 	if cmd.ProcessState != nil {
 		observation.ExitCode = cmd.ProcessState.ExitCode()

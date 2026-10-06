@@ -73,6 +73,13 @@ The remaining acceptance work is:
   errno. Portable raw image readers must continue to expose valid stored names;
   explicit target-version operational pathname policy needs separate native
   qualification, including writable opens.
+  The native C reader flushes START/END records for each filesystem operation,
+  including case ID, spelling candidate, return value and immediate errno. The
+  Go harness reports a bounded stderr tail every ten seconds and reports context
+  expiry before waiting for child exit. Each image probe has a two-minute
+  deadline; isolated cells retain independent cleanup and a five-minute outer
+  test timeout. These bounds do not guarantee recovery of an unresponsive
+  runner or kernel; interrupted operations never qualify as completed evidence.
 - Include all fork-context and owned-input suites in the existing compression
   lifecycle and metadata transport coverage filters. Require their presence and
   the unchanged per-file/package thresholds on every host; the new standalone

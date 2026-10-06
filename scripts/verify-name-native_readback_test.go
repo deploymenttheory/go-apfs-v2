@@ -90,7 +90,11 @@ func TestNativeCrossVersionNameImages(t *testing.T) {
 	if e = os.Mkdir(out, 0755); e != nil {
 		t.Fatal(e)
 	}
-	ctx, cancel := context.WithTimeout(t.Context(), 25*time.Minute)
+	limit := 25 * time.Minute
+	if selection.Producer != 0 {
+		limit = 4 * time.Minute
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), limit)
 	defer cancel()
 	commands := &nativeCommandRunner{Directory: filepath.Join(out, "commands")}
 	host, e := commands.run(ctx, "sw_vers")
@@ -256,7 +260,9 @@ func nativeImageReadback(t *testing.T, ctx context.Context, commands *nativeComm
 			return err
 		}
 		var err error
-		raw, err = commands.run(ctx, binary, mount, filepath.Join(dir, "cases.tsv"))
+		probeContext, cancelProbe := context.WithTimeout(ctx, 2*time.Minute)
+		defer cancelProbe()
+		raw, err = commands.run(probeContext, binary, mount, filepath.Join(dir, "cases.tsv"))
 		if err != nil {
 			return err
 		}
