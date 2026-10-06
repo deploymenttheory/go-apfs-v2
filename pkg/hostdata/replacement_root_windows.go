@@ -1,6 +1,7 @@
 package hostdata
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -38,13 +39,57 @@ func replacementBasic(f *os.File) (replacementBasicInfo, error) {
 	return basic, err
 }
 
-func prepareReplacementAt(source *os.File, stage *os.Root, _ os.FileInfo) (*os.File, error) {
+func prepareReplacementAtContext(ctx context.Context, source *os.File, stage *os.Root, info os.FileInfo) (*os.File, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	basic, err := replacementBasic(source)
 	if err != nil {
 		return nil, err
 	}
-	if basic.Attributes&(windows.FILE_ATTRIBUTE_COMPRESSED|windows.FILE_ATTRIBUTE_ENCRYPTED|windows.FILE_ATTRIBUTE_REPARSE_POINT) != 0 {
-		return nil, fmt.Errorf("%w: compressed, encrypted or reparse source", ErrUnsupportedReplacement)
+	if basic.Attributes&windows.FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+		return nil, fmt.Errorf("%w: reparse source", ErrUnsupportedReplacement)
+	}
+	file, err := copyReplacementWindows(ctx, source, stage, runReplacementCopy)
+	if err == nil {
+		if basic.Attributes&windows.FILE_ATTRIBUTE_SPARSE_FILE != 0 {
+			var n uint32
+			err = replacementStep(ctx, func() error {
+				return windows.DeviceIoControl(windows.Handle(file.Fd()), windows.FSCTL_SET_SPARSE, nil, 0, nil, 0, &n, nil)
+			})
+		}
+		if err == nil {
+			err = replacementStep(ctx, func() error { return file.Truncate(0) })
+		}
+		if err == nil {
+			err = copyReplacementCompression(ctx, source, file)
+		}
+		if err != nil {
+			return nil, errors.Join(err, file.Close())
+		}
+		return file, nil
+	}
+	if !errors.Is(err, errReplacementSourcePathMissing) || basic.Attributes&windows.FILE_ATTRIBUTE_ENCRYPTED != 0 {
+		return file, err
+	}
+	// BackupRead is only a held fallback for an unencrypted source whose name is
+	// no longer available. Permission/storage/identity errors never enable it.
+	if cleanup := cleanupReplacement(func() error { return stage.Chmod("replacement", 0600) }, func() error { return stage.Remove("replacement") }); cleanup != nil {
+		return nil, errors.Join(err, cleanup)
+	}
+	return prepareReplacementStreamsAtContext(ctx, source, stage, info)
+}
+
+func prepareReplacementStreamsAtContext(ctx context.Context, source *os.File, stage *os.Root, _ os.FileInfo) (*os.File, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	basic, err := replacementValue(ctx, func() (replacementBasicInfo, error) { return replacementBasic(source) })
+	if err != nil {
+		return nil, err
+	}
+	if basic.Attributes&(windows.FILE_ATTRIBUTE_ENCRYPTED|windows.FILE_ATTRIBUTE_REPARSE_POINT) != 0 {
+		return nil, fmt.Errorf("%w: encrypted or reparse backup source", ErrUnsupportedReplacement)
 	}
 	f, err := stage.OpenFile("replacement", os.O_CREATE|os.O_EXCL|os.O_RDWR, 0600)
 	if err != nil {
@@ -66,15 +111,21 @@ func prepareReplacementAt(source *os.File, stage *os.Root, _ os.FileInfo) (*os.F
 			return nil, err
 		}
 	}
-	if err := copyReplacementStreams(source, target); err != nil {
+	if err := copyReplacementStreamsContext(ctx, source, target); err != nil {
 		target.Close()
 		return nil, err
+	}
+	if err := copyReplacementCompression(ctx, source, target); err != nil {
+		return nil, errors.Join(err, target.Close())
 	}
 	return target, nil
 }
 
-func restoreReplacementMetadataAt(source, target *os.File, info os.FileInfo) error {
-	if err := restoreReplacementMetadata(source, target, info); err != nil {
+func restoreReplacementMetadataAtContext(ctx context.Context, source, target *os.File, info os.FileInfo) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if err := restoreReplacementMetadataContext(ctx, source, target, info); err != nil {
 		return err
 	}
 	basic, err := replacementBasic(source)
@@ -84,7 +135,9 @@ func restoreReplacementMetadataAt(source, target *os.File, info os.FileInfo) err
 	// Zero leaves the destination's write/access/change times unchanged. Copy
 	// creation time and attributes, including hidden/system/archive/readonly.
 	basic.LastAccessTime, basic.LastWriteTime, basic.ChangeTime = 0, 0, 0
-	return windows.SetFileInformationByHandle(windows.Handle(target.Fd()), windows.FileBasicInfo, (*byte)(unsafe.Pointer(&basic)), uint32(unsafe.Sizeof(basic)))
+	return replacementStep(ctx, func() error {
+		return windows.SetFileInformationByHandle(windows.Handle(target.Fd()), windows.FileBasicInfo, (*byte)(unsafe.Pointer(&basic)), uint32(unsafe.Sizeof(basic)))
+	})
 }
 
 type replacementBackup struct {
@@ -139,7 +192,7 @@ func (b *replacementBackup) close() error {
 // and Size bytes. Copy only EAs and named data streams. In particular, never
 // feed BACKUP_LINK or OBJECT_ID to BackupWrite: replacement must detach links
 // and must not recreate an identity or resolve a pathname from metadata.
-func copyReplacementStreams(source, target *os.File) (err error) {
+func copyReplacementStreamsContext(ctx context.Context, source, target *os.File) (err error) {
 	input, err := reopenReplacementFile(source, windows.GENERIC_READ)
 	if err != nil {
 		return err
@@ -148,5 +201,28 @@ func copyReplacementStreams(source, target *os.File) (err error) {
 	r := &replacementBackup{file: input, proc: backupRead}
 	w := &replacementBackup{file: target, proc: backupWrite}
 	defer func() { err = errors.Join(err, r.close(), w.close()) }()
-	return filterReplacementStreams(r, w)
+	return filterReplacementStreamsContext(ctx, r, w)
+}
+
+func copyReplacementCompression(ctx context.Context, source, target *os.File) error {
+	basic, err := replacementValue(ctx, func() (replacementBasicInfo, error) { return replacementBasic(source) })
+	if err != nil {
+		return err
+	}
+	if basic.Attributes&windows.FILE_ATTRIBUTE_COMPRESSED == 0 {
+		return nil
+	}
+	var state uint16
+	var returned uint32
+	if err := replacementStep(ctx, func() error {
+		return windows.DeviceIoControl(windows.Handle(source.Fd()), windows.FSCTL_GET_COMPRESSION, nil, 0, (*byte)(unsafe.Pointer(&state)), 2, &returned, nil)
+	}); err != nil {
+		return err
+	}
+	if returned != 2 {
+		return fmt.Errorf("invalid native compression state length")
+	}
+	return replacementStep(ctx, func() error {
+		return windows.DeviceIoControl(windows.Handle(target.Fd()), windows.FSCTL_SET_COMPRESSION, (*byte)(unsafe.Pointer(&state)), 2, nil, 0, &returned, nil)
+	})
 }

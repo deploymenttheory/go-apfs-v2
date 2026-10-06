@@ -192,7 +192,7 @@ func TestReplacementCopyDarwinNative(t *testing.T) {
 				if err := copyReplacementMetadata(source, manual, info); err != nil {
 					t.Fatal(err)
 				}
-				if err := restoreReplacementMetadata(source, manual, info); err != nil {
+				if err := restoreReplacementMetadataContext(t.Context(), source, manual, info); err != nil {
 					t.Fatal(err)
 				}
 				if got := replacementSnapshotOf(t, manual); !reflect.DeepEqual(got, before) {

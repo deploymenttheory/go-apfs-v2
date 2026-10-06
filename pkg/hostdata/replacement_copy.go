@@ -2,6 +2,7 @@ package hostdata
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -14,19 +15,33 @@ import (
 // Clone failure is not generally permission to copy: authorization, storage and
 // source errors must survive. The platform supplies its precise capability errors.
 func prepareReplacementUsing(clone func() error, unavailable func(error) bool, open func(bool) (*os.File, error), metadata func(*os.File) error) (*os.File, error) {
+	return prepareReplacementUsingContext(context.Background(), clone, unavailable, open, metadata)
+}
+func prepareReplacementUsingContext(ctx context.Context, clone func() error, unavailable func(error) bool, open func(bool) (*os.File, error), metadata func(*os.File) error) (*os.File, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	err := clone()
+	if canceled := ctx.Err(); canceled != nil {
+		return nil, errors.Join(err, canceled)
+	}
 	cloned := err == nil
 	if err != nil && !unavailable(err) {
 		return nil, err
 	}
 	target, err := open(cloned)
 	if err != nil {
-		return nil, err
+		return nil, errors.Join(err, ctx.Err())
+	}
+	if err = ctx.Err(); err != nil {
+		return nil, errors.Join(err, target.Close())
 	}
 	if !cloned {
-		if err = metadata(target); err != nil {
-			return nil, errors.Join(err, target.Close())
-		}
+		err = metadata(target)
+	}
+	err = errors.Join(err, ctx.Err())
+	if err != nil {
+		return nil, errors.Join(err, target.Close())
 	}
 	return target, nil
 }
@@ -51,6 +66,13 @@ type replacementCopyOps struct {
 // streamed through held descriptors and never squeezed into an xattr buffer.
 // Security is deliberately deferred to RestoreMetadata, after content writes.
 func copyReplacementMetadataUsing(ops replacementCopyOps) error {
+	return copyReplacementMetadataUsingContext(context.Background(), ops)
+}
+func copyReplacementMetadataUsingContext(ctx context.Context, ops replacementCopyOps) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	ops = ops.withContext(ctx)
 	compressionFork := false
 	if ops.compressed {
 		value, present, err := ops.read(DecmpfsName, decmpfs.MaxAttributeSize)
@@ -71,11 +93,14 @@ func copyReplacementMetadataUsing(ops replacementCopyOps) error {
 	}
 	remaining := MaxXattrReadSize
 	for _, name := range names {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if ops.compressed && (name == DecmpfsName || (compressionFork && name == ResourceForkName)) {
 			continue
 		}
 		if name == "com.apple.ResourceFork" {
-			if err := copyReplacementFork(ops); err != nil {
+			if err := copyReplacementForkContext(ctx, ops); err != nil {
 				return fmt.Errorf("replacement resource fork: %w", err)
 			}
 			continue
@@ -92,18 +117,54 @@ func copyReplacementMetadataUsing(ops replacementCopyOps) error {
 			return fmt.Errorf("replacement attribute %q: %w", name, err)
 		}
 	}
-	return ops.birth()
+	return replacementStep(ctx, ops.birth)
 }
 
-func copyReplacementFork(ops replacementCopyOps) (err error) {
+func copyReplacementFork(ops replacementCopyOps) error {
+	return copyReplacementForkContext(context.Background(), ops)
+}
+func copyReplacementForkContext(ctx context.Context, ops replacementCopyOps) (err error) {
 	fork, err := ops.openFork()
 	if err != nil {
 		return err
 	}
 	defer func() { err = errors.Join(err, fork.Close()) }()
-	info, err := fork.Stat()
+	info, err := replacementValue(ctx, fork.Stat)
 	if err != nil {
 		return err
 	}
 	return ops.replaceFork(io.NewSectionReader(fork, 0, info.Size()))
+}
+
+func (ops replacementCopyOps) withContext(ctx context.Context) replacementCopyOps {
+	return replacementCopyOps{
+		compressed: ops.compressed,
+		list:       func() ([]string, error) { return replacementValue(ctx, ops.list) },
+		read: func(name string, limit int) ([]byte, bool, error) {
+			if err := ctx.Err(); err != nil {
+				return nil, false, err
+			}
+			value, present, err := ops.read(name, limit)
+			return value, present, errors.Join(err, ctx.Err())
+		},
+		write: func(name string, value []byte) error {
+			return replacementStep(ctx, func() error { return ops.write(name, value) })
+		},
+		openFork: func() (replacementFork, error) {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			fork, err := ops.openFork()
+			err = errors.Join(err, ctx.Err())
+			if err != nil && fork != nil {
+				err = errors.Join(err, fork.Close())
+				fork = nil
+			}
+			return fork, err
+		},
+		replaceFork: func(value appledouble.Value) error {
+			return replacementStep(ctx, func() error { return ops.replaceFork(value) })
+		},
+		birth: func() error { return replacementStep(ctx, ops.birth) },
+	}
 }

@@ -239,6 +239,7 @@ func (e *Extractor) extractCarrierUsing(root, destBase string, ops carrierExtrac
 			if err != nil {
 				return err
 			}
+			r.SourceAttributesCaptured = true
 			carriedCount += len(attrs)
 		}
 		if e.PreserveMeta {

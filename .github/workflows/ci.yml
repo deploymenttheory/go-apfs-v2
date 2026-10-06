@@ -15,6 +15,9 @@ permissions:
   contents: read
 
 jobs:
+  pathname-authorization:
+    uses: ./.github/workflows/pathname-authorization.yml
+
   build:
     name: Build ${{ matrix.goos }}/${{ matrix.goarch }}
     runs-on: ubuntu-latest
@@ -612,6 +615,17 @@ jobs:
         with:
           name: compression-lifecycle-coverage-${{ matrix.os }}
           path: artifacts/compression-lifecycle-coverage/
+          if-no-files-found: error
+      - name: Owned native bindings and complete hostdata above 95 percent coverage
+        env:
+          CGO_ENABLED: "0"
+        run: go run scripts/verify-compression-owned.go
+      - name: Upload owned compression coverage and exact evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: compression-owned-coverage-${{ matrix.os }}
+          path: artifacts/compression-owned-coverage/
           if-no-files-found: error
       - name: Active and inactive compression storage above 95 percent coverage
         env:

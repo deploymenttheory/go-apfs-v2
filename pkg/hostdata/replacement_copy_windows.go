@@ -1,0 +1,321 @@
+package hostdata
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"sync"
+	"unsafe"
+
+	"golang.org/x/sys/windows"
+)
+
+var errReplacementSourcePathMissing = errors.New("held replacement source has no usable path")
+
+var copyFileExW = windows.NewLazySystemDLL("kernel32.dll").NewProc("CopyFileExW")
+var replacementCopyCallbacks = struct {
+	sync.Mutex
+	next   uintptr
+	states map[uintptr]*replacementCopyState
+}{states: map[uintptr]*replacementCopyState{}}
+
+type replacementWindowsID struct {
+	Volume uint64
+	ID     [16]byte
+}
+
+func replacementWindowsIdentity(handle windows.Handle) (replacementWindowsID, error) {
+	var id replacementWindowsID
+	err := windows.GetFileInformationByHandleEx(handle, windows.FileIdInfo, (*byte)(unsafe.Pointer(&id)), uint32(unsafe.Sizeof(id)))
+	return id, err
+}
+func replacementHeldIdentity(file *os.File) (id replacementWindowsID, err error) {
+	conn, err := file.SyscallConn()
+	if err != nil {
+		return id, err
+	}
+	var native error
+	err = conn.Control(func(fd uintptr) { id, native = replacementWindowsIdentity(windows.Handle(fd)) })
+	return id, errors.Join(err, native)
+}
+
+// GetFinalPathNameByHandle supplies a lookup hint, never identity authority.
+// Volume GUID names avoid mutable drive-letter mappings on local filesystems.
+func replacementFinalPath(ctx context.Context, file *os.File) (string, error) {
+	conn, err := file.SyscallConn()
+	if err != nil {
+		return "", err
+	}
+	var path string
+	var native error
+	err = conn.Control(func(fd uintptr) {
+		for _, flags := range []uint32{1, 0} {
+			buffer := make([]uint16, 256)
+			for {
+				if native = ctx.Err(); native != nil {
+					return
+				}
+				var n uint32
+				n, native = windows.GetFinalPathNameByHandle(windows.Handle(fd), &buffer[0], uint32(len(buffer)), flags)
+				if native != nil {
+					break
+				}
+				if n < uint32(len(buffer)) {
+					path = windows.UTF16ToString(buffer[:n])
+					if flags == 0 && !strings.HasPrefix(strings.ToUpper(path), `\\?\UNC\`) {
+						native = fmt.Errorf("replacement requires a stable volume or UNC path")
+					}
+					return
+				}
+				if n > 32768 {
+					native = fmt.Errorf("replacement path exceeds Windows namespace bounds")
+					return
+				}
+				buffer = make([]uint16, n+1)
+			}
+			// GUID paths do not exist on network shares. Use their fully resolved UNC
+			// form, but do not turn a permission or unrelated provider error into retry.
+			if !errors.Is(native, windows.ERROR_PATH_NOT_FOUND) && !errors.Is(native, windows.ERROR_INVALID_PARAMETER) {
+				return
+			}
+		}
+	})
+	if err = errors.Join(err, native, ctx.Err()); err != nil {
+		return "", err
+	}
+	return path, nil
+}
+
+// A native CopyFileEx source/destination handle is borrowed for the callback.
+// Never os.NewFile it directly: its finalizer could close a native-owned handle.
+func duplicateReplacementHandle(handle windows.Handle, name string) (*os.File, error) {
+	var owned windows.Handle
+	if err := windows.DuplicateHandle(windows.CurrentProcess(), handle, windows.CurrentProcess(), &owned, 0, false, windows.DUPLICATE_SAME_ACCESS); err != nil {
+		return nil, err
+	}
+	return os.NewFile(uintptr(owned), name), nil
+}
+
+type replacementCopyState struct {
+	ctx         context.Context
+	source      replacementWindowsID
+	stage       *os.Root
+	path        string
+	file        *os.File
+	destination replacementWindowsID
+	validated   bool
+	err         error
+	observe     func(uint32) error // per-call qualification seam; production leaves nil
+}
+
+func (s *replacementCopyState) progress(reason uint32, source, destination windows.Handle) uintptr {
+	if s.err != nil {
+		return 1
+	}
+	if s.err = s.ctx.Err(); s.err != nil {
+		return 1
+	}
+	id, err := replacementWindowsIdentity(source)
+	if err != nil || id != s.source {
+		s.err = errors.Join(err, fmt.Errorf("replacement copy source identity changed"))
+		return 1
+	}
+	id, err = replacementWindowsIdentity(destination)
+	if err != nil {
+		s.err = err
+		return 1
+	}
+	if s.validated {
+		if id != s.destination {
+			s.err = fmt.Errorf("replacement copy destination identity changed")
+			return 1
+		}
+	} else {
+		// Root-relative validation occurs before retaining any destination capability.
+		check, e := openReplacementStageMetadata(s.stage)
+		if e != nil {
+			s.err = e
+			return 1
+		}
+		actual, e := replacementHeldIdentity(check)
+		e = errors.Join(e, check.Close())
+		if e != nil || actual != id {
+			s.err = errors.Join(e, fmt.Errorf("replacement copy escaped private stage"))
+			return 1
+		}
+		held, e := duplicateReplacementHandle(destination, s.path)
+		if e != nil {
+			s.err = e
+			return 1
+		}
+		// Retain the writable capability before a later copy step can install a
+		// restrictive DACL. Final metadata restoration remains explicitly deferred.
+		writable, e := reopenReplacementFile(held, windows.GENERIC_READ|windows.GENERIC_WRITE|windows.WRITE_DAC|windows.WRITE_OWNER)
+		e = errors.Join(e, held.Close())
+		if e != nil {
+			if writable != nil {
+				e = errors.Join(e, writable.Close())
+			}
+			s.err = e
+			return 1
+		}
+		s.file, s.destination, s.validated = writable, id, true
+	}
+	if s.observe != nil {
+		s.err = s.observe(reason)
+	}
+	s.err = errors.Join(s.err, s.ctx.Err())
+	if s.err != nil {
+		return 1
+	}
+	return 0
+}
+func replacementCopyProgress(reason uint32, source, destination, data uintptr) uintptr {
+	replacementCopyCallbacks.Lock()
+	state := replacementCopyCallbacks.states[data]
+	replacementCopyCallbacks.Unlock()
+	if state == nil {
+		return 1
+	}
+	return state.progress(reason, windows.Handle(source), windows.Handle(destination))
+}
+func runReplacementCopy(source, destination *uint16, state *replacementCopyState) error {
+	replacementCopyCallbacks.Lock()
+	for {
+		replacementCopyCallbacks.next++
+		if replacementCopyCallbacks.next != 0 && replacementCopyCallbacks.states[replacementCopyCallbacks.next] == nil {
+			break
+		}
+	}
+	id := replacementCopyCallbacks.next
+	replacementCopyCallbacks.states[id] = state
+	replacementCopyCallbacks.Unlock()
+	defer func() {
+		replacementCopyCallbacks.Lock()
+		delete(replacementCopyCallbacks.states, id)
+		replacementCopyCallbacks.Unlock()
+	}()
+	// FAIL_IF_EXISTS alone can follow an existing dangling destination symlink.
+	// COPY_SYMLINK makes every existing destination link a collision instead.
+	const flags = uint32(0x1 | 0x800)
+	ok, _, err := copyFileExW.Call(uintptr(unsafe.Pointer(source)), uintptr(unsafe.Pointer(destination)), replacementCopyCallback, id, 0, uintptr(flags))
+	runtime.KeepAlive(source)
+	runtime.KeepAlive(destination)
+	if ok == 0 {
+		return errors.Join(err, state.err, state.ctx.Err())
+	}
+	return errors.Join(state.err, state.ctx.Err())
+}
+
+// An open regular anchor prevents renaming its containing directory chain on
+// Windows. A no-delete-share reopen additionally prevents removing the anchor.
+// Keep it until copy and final held identity validation finish; callback-only
+// validation cannot prevent creation through a replaced ancestor pathname.
+func replacementStageAnchor(stage *os.Root) (anchor *os.File, err error) {
+	first, err := stage.OpenFile("anchor", os.O_CREATE|os.O_EXCL|os.O_RDWR, 0600)
+	if err != nil {
+		return nil, err
+	}
+	h, _, native := reopenFile.Call(first.Fd(), windows.GENERIC_READ, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE, 0)
+	closeErr := first.Close()
+	if windows.Handle(h) == windows.InvalidHandle {
+		return nil, errors.Join(native, closeErr)
+	}
+	anchor = os.NewFile(h, first.Name())
+	if closeErr != nil {
+		return nil, errors.Join(closeErr, anchor.Close())
+	}
+	return anchor, nil
+}
+
+type replacementWindowsCopy func(*uint16, *uint16, *replacementCopyState) error
+
+func copyReplacementWindows(ctx context.Context, source *os.File, stage *os.Root, copyNative replacementWindowsCopy) (file *os.File, err error) {
+	anchor, err := replacementStageAnchor(stage)
+	if err != nil {
+		return nil, errors.Join(err, cleanupReplacement(func() error { return stage.Remove("anchor") }))
+	}
+	defer func() {
+		err = errors.Join(err, anchor.Close(), cleanupReplacement(func() error { return stage.Remove("anchor") }))
+		if err != nil && file != nil {
+			err = errors.Join(err, file.Close())
+			file = nil
+		}
+	}()
+	sourceID, err := replacementHeldIdentity(source)
+	if err != nil {
+		return nil, err
+	}
+	from, err := replacementFinalPath(ctx, source)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, errors.Join(errReplacementSourcePathMissing, err)
+		}
+		return nil, err
+	}
+	anchored, err := replacementFinalPath(ctx, anchor)
+	if err != nil {
+		return nil, err
+	}
+	if !strings.EqualFold(filepath.Base(anchored), "anchor") {
+		return nil, fmt.Errorf("replacement anchor name changed")
+	}
+	to := filepath.Join(filepath.Dir(anchored), "replacement")
+	src, err := windows.UTF16PtrFromString(from)
+	if err != nil {
+		return nil, err
+	}
+	dst, err := windows.UTF16PtrFromString(to)
+	if err != nil {
+		return nil, err
+	}
+	state := &replacementCopyState{ctx: ctx, source: sourceID, stage: stage, path: to}
+	err = copyNative(src, dst, state)
+	if err != nil && errors.Is(err, os.ErrNotExist) && !state.validated {
+		if _, missing := os.Stat(from); errors.Is(missing, os.ErrNotExist) {
+			err = errors.Join(errReplacementSourcePathMissing, err)
+		}
+	}
+	if err == nil && !state.validated {
+		err = fmt.Errorf("replacement copy omitted identity validation")
+	}
+	if err != nil {
+		if state.file != nil {
+			err = errors.Join(err, state.file.Close())
+		}
+		return nil, err
+	}
+	// The returned capability must still name the file installed beneath stage.
+	check, err := openReplacementStageMetadata(stage)
+	if err != nil {
+		return nil, errors.Join(err, state.file.Close())
+	}
+	id, err := replacementHeldIdentity(check)
+	err = errors.Join(err, check.Close(), ctx.Err())
+	if err != nil || id != state.destination {
+		return nil, errors.Join(err, fmt.Errorf("replacement stage identity changed"), state.file.Close())
+	}
+	if err = replacementVerifyEFS(ctx, source, state.file); err != nil {
+		return nil, errors.Join(err, state.file.Close())
+	}
+	return state.file, nil
+}
+
+func openReplacementStageMetadata(stage *os.Root) (file *os.File, err error) {
+	directory, err := stage.Open(".")
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		err = errors.Join(err, directory.Close())
+		if err != nil && file != nil {
+			err = errors.Join(err, file.Close())
+			file = nil
+		}
+	}()
+	return openWindowsMetadataRights(directory, "replacement", windows.SYNCHRONIZE|windows.FILE_READ_ATTRIBUTES)
+}

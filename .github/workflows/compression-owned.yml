@@ -1,0 +1,73 @@
+name: Owned native compression bindings
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: compression-owned-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  CGO_ENABLED: "0"
+  GOTOOLCHAIN: local
+
+jobs:
+  portable:
+    name: Owned compression coverage (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Require complete hostdata and every changed binding file above 95 percent
+        run: go run scripts/verify-compression-owned.go
+      - name: Retain full tests and coverage
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: compression-owned-coverage-${{ matrix.os }}
+          path: artifacts/compression-owned-coverage/
+          if-no-files-found: error
+  native:
+    name: Native owned compression (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, macos-latest, xcode-27]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Capture both Clang targets and replay all 72 native cases on host APFS and HFS+
+        run: go run scripts/capture-compression-owned.go -out artifacts/compression-owned/native.json.gz -check
+      - name: Validate complete fresh native evidence independently
+        if: always()
+        shell: bash
+        env:
+          APFS_COMPRESSION_OWNED_EVIDENCE: ${{ github.workspace }}/artifacts/compression-owned/native.json.gz
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/compression-owned
+          go test -count=1 -json ./pkg/hostdata -run '^TestCompressionOwnedNativeEvidence$' > artifacts/compression-owned/evidence-replay.jsonl
+      - name: Retain native bytes source provenance both ASTs and mount cleanup
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: compression-owned-native-${{ matrix.os }}
+          path: artifacts/compression-owned/
+          if-no-files-found: error

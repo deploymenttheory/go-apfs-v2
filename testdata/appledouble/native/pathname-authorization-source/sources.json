@@ -1,0 +1,45 @@
+{
+  "release": "xnu-11417.140.69",
+  "sources": [
+    {
+      "url": "https://raw.githubusercontent.com/apple-oss-distributions/xnu/xnu-11417.140.69/bsd/vfs/vfs_subr.c",
+      "file": "vfs_subr.c.gz",
+      "sha256": "d7654f6fbab9bd015bedbe5760ff9ad9b17cdc4933eb7f444f16c5e7dfc5e71f"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/apple-oss-distributions/xnu/xnu-11417.140.69/bsd/kern/kern_authorization.c",
+      "file": "kern_authorization.c.gz",
+      "sha256": "e6d0398ba6bcfd92a410a084502ad79de8a5e10be71f61d138689cbb584bbcae"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/apple-oss-distributions/xnu/xnu-11417.140.69/bsd/kern/kern_credential.c",
+      "file": "kern_credential.c.gz",
+      "sha256": "4008e0d1bd7635b2230a4a126150831da4382026bb62b477d154f656971e25b9"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/apple-oss-distributions/xnu/xnu-11417.140.69/bsd/vfs/vfs_syscalls.c",
+      "file": "vfs_syscalls.c.gz",
+      "sha256": "2219b3d51cc21cf018e09af2ed4bfc66f4ff1082a81b3d1b1a5aa7010abcb35b"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/apple-oss-distributions/xnu/xnu-11417.140.69/bsd/vfs/vfs_lookup.c",
+      "file": "vfs_lookup.c.gz",
+      "sha256": "734acc762d3615e543882ed5287c144caedd7b46d7dd47dba51416e6e89da911"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/apple-oss-distributions/xnu/xnu-11417.140.69/bsd/vfs/vfs_vnops.c",
+      "file": "vfs_vnops.c.gz",
+      "sha256": "31a9a8ab1d2a5b6fc4578f27ab712e065e07f94079c688844c5cc0a8c0202b13"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/apple-oss-distributions/xnu/xnu-11417.140.69/bsd/kern/kern_resource.c",
+      "file": "kern_resource.c.gz",
+      "sha256": "104b4205bcff8032ce34dcc7b171ee3051f4949522e92ced1f30dcbae8fe65b2"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/apple-oss-distributions/xnu/xnu-11417.140.69/bsd/kern/kern_proc.c",
+      "file": "kern_proc.c.gz",
+      "sha256": "d0b6903e785e90822796963d00ec0434ad73e7758e60f375924986fcd7d7e4c9"
+    }
+  ]
+}

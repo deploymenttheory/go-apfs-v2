@@ -2,6 +2,8 @@ package hostdata
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"fmt"
 	"os"
 	"syscall"
@@ -9,13 +11,19 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-func prepareReplacement(_ *os.File, path string, _ os.FileInfo) (*os.File, error) {
+func prepareReplacementContext(ctx context.Context, _ *os.File, path string, _ os.FileInfo) (*os.File, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	return os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0600)
 }
 
-func restoreReplacementMetadata(source, target *os.File, info os.FileInfo) error {
+func restoreReplacementMetadataContext(ctx context.Context, source, target *os.File, info os.FileInfo) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	s := info.Sys().(*syscall.Stat_t)
-	if err := target.Chown(int(s.Uid), int(s.Gid)); err != nil {
+	if err := replacementStep(ctx, func() error { return target.Chown(int(s.Uid), int(s.Gid)) }); err != nil {
 		return err
 	}
 	// ListXattrs is intentionally best effort for image extraction. Replacing a
@@ -23,12 +31,12 @@ func restoreReplacementMetadata(source, target *os.File, info os.FileInfo) error
 	fd, to := int(source.Fd()), int(target.Fd())
 	// A newly created staging file may have inherited a default directory ACL.
 	// Remove it before copying, including when the original file has no ACL.
-	if err := unix.Fremovexattr(to, PosixACLAccessName); err != nil && err != unix.ENODATA && !isUnsupported(err) {
+	if err := replacementStep(ctx, func() error { return unix.Fremovexattr(to, PosixACLAccessName) }); err != nil && !errors.Is(err, unix.ENODATA) && !isUnsupported(err) || ctx.Err() != nil {
 		return err
 	}
-	size, err := unix.Flistxattr(fd, nil)
-	if isUnsupported(err) {
-		return target.Chmod(info.Mode())
+	size, err := replacementValue(ctx, func() (int, error) { return unix.Flistxattr(fd, nil) })
+	if isUnsupported(err) && ctx.Err() == nil {
+		return replacementStep(ctx, func() error { return target.Chmod(info.Mode()) })
 	}
 	if err != nil {
 		return err
@@ -38,7 +46,7 @@ func restoreReplacementMetadata(source, target *os.File, info os.FileInfo) error
 		return fmt.Errorf("%w: extended attribute names exceed limit", ErrUnsupportedReplacement)
 	}
 	names := make([]byte, size)
-	size, err = unix.Flistxattr(fd, names)
+	size, err = replacementValue(ctx, func() (int, error) { return unix.Flistxattr(fd, names) })
 	if err != nil {
 		return err
 	}
@@ -50,7 +58,7 @@ func restoreReplacementMetadata(source, target *os.File, info os.FileInfo) error
 		if len(name) == 0 {
 			continue
 		}
-		size, err := unix.Fgetxattr(fd, string(name), nil)
+		size, err := replacementValue(ctx, func() (int, error) { return unix.Fgetxattr(fd, string(name), nil) })
 		if err != nil {
 			return err
 		}
@@ -59,16 +67,16 @@ func restoreReplacementMetadata(source, target *os.File, info os.FileInfo) error
 		}
 		budget -= size
 		value := make([]byte, size)
-		size, err = unix.Fgetxattr(fd, string(name), value)
+		size, err = replacementValue(ctx, func() (int, error) { return unix.Fgetxattr(fd, string(name), value) })
 		if err != nil {
 			return err
 		}
 		if size > len(value) {
 			return fmt.Errorf("extended attribute value changed")
 		}
-		if err := unix.Fsetxattr(to, string(name), value[:size], 0); err != nil {
+		if err := replacementStep(ctx, func() error { return unix.Fsetxattr(to, string(name), value[:size], 0) }); err != nil {
 			return err
 		}
 	}
-	return target.Chmod(info.Mode())
+	return replacementStep(ctx, func() error { return target.Chmod(info.Mode()) })
 }

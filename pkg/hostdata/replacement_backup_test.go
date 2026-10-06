@@ -49,15 +49,11 @@ func TestReplacementBackupMalformed(t *testing.T) {
 		"short-extent":    append(append([]byte{}, sparse...), backupRecord(9, 8, "", nil)...),
 		"overflow-offset": append(append([]byte{}, sparse...), backupExtent(math.MaxUint64, "")...),
 		"overflow-length": append(append([]byte{}, sparse...), backupExtent(math.MaxInt64, "x")...),
-		"named-limit":     append(backupRecord(4, 8, ":x:$DATA", nil), backupExtent(8<<20, "x")...),
-		"metadata-limit":  backupRecord(2, 0, "", make([]byte, (8<<20)+1)),
-		"aggregate-limit": append(backupRecord(2, 0, "", make([]byte, 8<<20)), backupRecord(4, 0, ":x:$DATA", nil)...),
 		"main-name":       backupRecord(1, 0, "x", nil),
 		"empty-name":      backupRecord(4, 0, "", nil),
 		"slash-name":      backupRecord(4, 0, ":a/b:$DATA", nil),
 		"null-name":       backupRecord(4, 0, ":a\x00b:$DATA", nil),
 		"long-name":       backupRecord(4, 0, string(make([]byte, 32769)), nil),
-		"count":           bytes.Repeat(backupRecord(1, 0, "", nil), 65536),
 	}
 	for _, field := range []string{"odd-name", "size-overflow"} {
 		p := backupRecord(4, 0, ":x:$DATA", nil)

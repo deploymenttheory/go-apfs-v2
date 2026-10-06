@@ -70,19 +70,24 @@ type DarwinState struct {
 // Root directories use ".". A link represented as a regular file has Kind
 // "symlink" and MaterializedKind "file".
 type Record struct {
-	Original          string      `json:"original"`
-	Materialized      string      `json:"materialized"`
-	Kind              string      `json:"kind"`
-	MaterializedKind  string      `json:"materializedKind"`
-	Target            string      `json:"target,omitempty"`
-	LinkGroup         string      `json:"linkGroup,omitempty"`
-	Payload           *BlobRef    `json:"payload,omitempty"`
-	AppleDouble       *BlobRef    `json:"appleDouble,omitempty"`
-	Attributes        []Attribute `json:"attributes,omitempty"`
-	NativeAttributes  []Attribute `json:"nativeAttributes,omitempty"`
-	NativeCaptured    bool        `json:"nativeCaptured,omitempty"`
-	NativeUnsupported bool        `json:"nativeUnsupported,omitempty"`
-	Darwin            DarwinState `json:"darwin"`
+	// SourceAttributesCaptured records a complete successful source attribute
+	// enumeration, independently of receiving-host NativeCaptured. Older manifests
+	// omit this field and remain uncaptured. Older strict readers cannot read
+	// manifests containing this field and require an updated reader.
+	SourceAttributesCaptured bool        `json:"sourceAttributesCaptured,omitempty"`
+	Original                 string      `json:"original"`
+	Materialized             string      `json:"materialized"`
+	Kind                     string      `json:"kind"`
+	MaterializedKind         string      `json:"materializedKind"`
+	Target                   string      `json:"target,omitempty"`
+	LinkGroup                string      `json:"linkGroup,omitempty"`
+	Payload                  *BlobRef    `json:"payload,omitempty"`
+	AppleDouble              *BlobRef    `json:"appleDouble,omitempty"`
+	Attributes               []Attribute `json:"attributes,omitempty"`
+	NativeAttributes         []Attribute `json:"nativeAttributes,omitempty"`
+	NativeCaptured           bool        `json:"nativeCaptured,omitempty"`
+	NativeUnsupported        bool        `json:"nativeUnsupported,omitempty"`
+	Darwin                   DarwinState `json:"darwin"`
 }
 
 // Manifest is versioned independently of AppleDouble. Generation is advanced

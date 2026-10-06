@@ -660,3 +660,47 @@ func TestCarrierInitialBaselineStreamsValues(t *testing.T) {
 		t.Fatal("native baseline missing")
 	}
 }
+
+func TestCarrierSourceAttributeObservation(t *testing.T) {
+	for _, capture := range []bool{false, true} {
+		t.Run(fmt.Sprint(capture), func(t *testing.T) {
+			v := sampleCarrierVolume()
+			v.attrs = nil
+			e := newCarrierExtractor(t, v)
+			e.Xattrs = capture
+			e.SymlinkMode = SymlinkFile
+			if err := e.ExtractAll(); err != nil {
+				t.Fatal(err)
+			}
+			store, err := metatransport.Open(e.Destination, e.MetadataRoot, metatransport.DefaultLimits())
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer store.Close()
+			manifest, err := store.Load(t.Context())
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, record := range manifest.Records {
+				if record.SourceAttributesCaptured != capture {
+					t.Fatalf("source observation %s=%t want %t", record.Original, record.SourceAttributesCaptured, capture)
+				}
+				value, observed, err := store.ObservedSourceAttribute(t.Context(), record, "com.apple.system.Security")
+				if err != nil || observed != capture || value != nil {
+					t.Fatal(record.Original, value, observed, err)
+				}
+			}
+		})
+	}
+	// A failed enumeration cannot publish even an apparently empty captured set.
+	v := sampleCarrierVolume()
+	v.failure = errors.New("incomplete source enumeration")
+	e := newCarrierExtractor(t, v)
+	e.Xattrs = true
+	if err := e.ExtractAll(); !errors.Is(err, v.failure) {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(e.MetadataRoot, "manifest.json")); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatal("failed extraction published source observations", err)
+	}
+}

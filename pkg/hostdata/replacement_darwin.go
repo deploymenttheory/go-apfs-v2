@@ -1,6 +1,7 @@
 package hostdata
 
 import (
+	"context"
 	"encoding/binary"
 	"fmt"
 	"os"
@@ -11,7 +12,10 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-func prepareReplacement(source *os.File, path string, info os.FileInfo) (*os.File, error) {
+func prepareReplacementContext(ctx context.Context, source *os.File, path string, info os.FileInfo) (*os.File, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	flags, _ := hostflags.Flags(info)
 	if flags&(unix.UF_IMMUTABLE|unix.UF_APPEND|unix.SF_IMMUTABLE|unix.SF_APPEND) != 0 {
 		return nil, fmt.Errorf("%w: protected source", ErrUnsupportedReplacement)
@@ -24,7 +28,7 @@ func prepareReplacement(source *os.File, path string, info os.FileInfo) (*os.Fil
 	if err := clearReplacementACL(filepath.Dir(path)); err != nil {
 		return nil, err
 	}
-	return prepareReplacementUsing(
+	return prepareReplacementUsingContext(ctx,
 		func() error {
 			// Rewritten logical contents must not inherit the old compressed
 			// storage. A fresh file also avoids decompression writes against
@@ -45,7 +49,7 @@ func prepareReplacement(source *os.File, path string, info os.FileInfo) (*os.Fil
 			}
 			return os.OpenFile(path, os.O_RDWR, 0)
 		},
-		func(target *os.File) error { return copyReplacementMetadata(source, target, info) },
+		func(target *os.File) error { return copyReplacementMetadataContext(ctx, source, target, info) },
 	)
 }
 
@@ -59,25 +63,30 @@ func clearReplacementACL(path string) error {
 	return unix.Setattrlist(path, &list, acl, unix.FSOPT_NOFOLLOW)
 }
 
-func restoreReplacementMetadata(source *os.File, target *os.File, info os.FileInfo) error {
+func restoreReplacementMetadataContext(ctx context.Context, source *os.File, target *os.File, info os.FileInfo) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	s := info.Sys().(*syscall.Stat_t)
-	if err := target.Chown(int(s.Uid), int(s.Gid)); err != nil {
+	if err := replacementStep(ctx, func() error { return target.Chown(int(s.Uid), int(s.Gid)) }); err != nil {
 		return err
 	}
-	if err := target.Chmod(info.Mode()); err != nil {
+	if err := replacementStep(ctx, func() error { return target.Chmod(info.Mode()) }); err != nil {
 		return err
 	}
-	if err := restoreReplacementACL(source, target); err != nil {
+	if err := replacementStep(ctx, func() error { return restoreReplacementACL(source, target) }); err != nil {
 		return err
 	}
 	// Compression describes the target's current storage, not source policy.
 	// Never reattach UF_COMPRESSED to the caller's rewritten logical data.
-	current, err := target.Stat()
+	current, err := replacementValue(ctx, target.Stat)
 	if err != nil {
 		return err
 	}
 	targetFlags, _ := hostflags.Flags(current)
-	return unix.Fchflags(int(target.Fd()), int(s.Flags&^UFCompressed|targetFlags&UFCompressed))
+	return replacementStep(ctx, func() error {
+		return unix.Fchflags(int(target.Fd()), int(s.Flags&^UFCompressed|targetFlags&UFCompressed))
+	})
 }
 
 func restoreReplacementACL(source, target *os.File) error {

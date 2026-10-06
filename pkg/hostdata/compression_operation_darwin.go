@@ -14,10 +14,21 @@ type nativeCompressionInput struct {
 }
 
 func openNativeCompressionInput(ctx context.Context, name string) (CompressionInput, error) {
-	file, err := os.OpenFile(name, os.O_RDWR, 0)
+	return openNativeCompressionInputUsing(ctx, name, os.OpenFile)
+}
+func openNativeCompressionInputUsing(ctx context.Context, name string, open func(string, int, os.FileMode) (*os.File, error)) (CompressionInput, error) {
+	file, err := open(name, os.O_RDWR, 0)
 	if err != nil {
 		return nil, err
 	}
+	input, err := NewNativeCompressionInput(ctx, file)
+	if err != nil {
+		return nil, errors.Join(err, file.Close())
+	}
+	return input, nil
+}
+
+func newNativeCompressionInput(ctx context.Context, file *os.File) (CompressionInput, error) {
 	return &nativeCompressionInput{file: file, ctx: ctx}, nil
 }
 func (b *nativeCompressionInput) Snapshot() (result CompressionFileState, err error) {
@@ -70,7 +81,7 @@ func (b *nativeCompressionStream) OpenCompressionFork() (CompressionForkWriter, 
 	// held descriptor; an extra path/stat lookup would introduce a different
 	// failure point from the native acquisition sequence.
 	var fork *os.File
-	err := withXattrDescriptor(b.file, func(fd int) error { var e error; fork, e = openNativeResourceFork(fd, true); return e })
+	err := withXattrDescriptor(b.file, func(fd int) error { var e error; fork, e = openNativeResourceForkContext(b.ctx, fd, true); return e })
 	if err != nil {
 		return nil, err
 	}

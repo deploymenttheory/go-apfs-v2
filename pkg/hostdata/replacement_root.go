@@ -1,6 +1,7 @@
 package hostdata
 
 import (
+	"context"
 	"crypto/rand"
 	"errors"
 	"fmt"
@@ -40,7 +41,17 @@ type RootReplacement struct {
 // Concurrent modification of the source or staging tree is unsupported. The
 // caller must validate destination identity before committing its own rename.
 func PrepareReplacementAt(source *os.File, root *os.Root, parent string) (*RootReplacement, error) {
-	info, err := source.Stat()
+	return PrepareReplacementAtContext(context.Background(), source, root, parent)
+}
+
+// PrepareReplacementAtContext is the cancellable rooted preparation operation.
+// Root containment and caller ownership match PrepareReplacementAt. Cleanup is
+// never canceled; individual native calls need not be interruptible.
+func PrepareReplacementAtContext(ctx context.Context, source *os.File, root *os.Root, parent string) (*RootReplacement, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	info, err := replacementValue(ctx, source.Stat)
 	if err != nil {
 		return nil, err
 	}
@@ -48,15 +59,20 @@ func PrepareReplacementAt(source *os.File, root *os.Root, parent string) (*RootR
 		return nil, fmt.Errorf("prepare replacement: %w: non-regular source", ErrUnsupportedReplacement)
 	}
 	dir := filepath.Join(parent, ".apfs-replacement-"+rand.Text())
-	if err := root.Mkdir(dir, 0700); err != nil {
+	release, err := makeReplacementDirectoryAt(ctx, root, dir)
+	if err != nil {
+		if release != nil {
+			err = errors.Join(err, release(), root.Remove(dir))
+		}
 		return nil, err
 	}
 	stage, err := root.OpenRoot(dir)
 	if err != nil {
-		return nil, errors.Join(err, root.Remove(dir))
+		return nil, errors.Join(err, release(), root.Remove(dir))
 	}
 	r := &RootReplacement{source: source, info: info, root: root, staging: stage, dir: dir, Path: filepath.Join(dir, "replacement")}
-	r.File, err = prepareReplacementAt(source, stage, info)
+	r.File, err = prepareReplacementAtContext(ctx, source, stage, info)
+	err = errors.Join(err, ctx.Err(), release())
 	if err != nil {
 		return nil, errors.Join(fmt.Errorf("prepare replacement: %w", err), r.Close())
 	}
@@ -66,17 +82,26 @@ func PrepareReplacementAt(source *os.File, root *os.Root, parent string) (*RootR
 // RestoreMetadata restores supported metadata after content writes, without
 // syncing or closing either file. A failure requires discarding the replacement.
 func (r *RootReplacement) RestoreMetadata() error {
+	return r.RestoreMetadataContext(context.Background())
+}
+
+// RestoreMetadataContext restores rooted replacement metadata with cancellation
+// checkpoints. Close remains required on every outcome and is never canceled.
+func (r *RootReplacement) RestoreMetadataContext(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if r.closed {
 		return os.ErrClosed
 	}
-	current, err := r.source.Stat()
+	current, err := replacementValue(ctx, r.source.Stat)
 	if err != nil {
 		return err
 	}
 	if !os.SameFile(r.info, current) {
 		return fmt.Errorf("replacement source changed")
 	}
-	return restoreReplacementMetadataAt(r.source, r.File, r.info)
+	return restoreReplacementMetadataAtContext(ctx, r.source, r.File, r.info)
 }
 
 // Close closes the staged file and removes its private directory. It is

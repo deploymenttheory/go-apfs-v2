@@ -25,8 +25,31 @@ import (
 // logical resource forks are preserved through image/AppleDouble/carrier Values.
 // Native authorization still applies. Empty Darwin forks normalize to absence.
 func OpenResourceFork(file *os.File, writable bool) (*os.File, error) {
-	return openResourceForkUsing(file, writable, openNativeResourceFork)
+	return OpenResourceForkContext(context.TODO(), file, writable)
 }
+
+// OpenResourceForkContext is OpenResourceFork with cancellation at acquisition
+// checkpoints. A completed native open may create an empty fork; cancellation
+// closes its descriptor but does not claim to undo that native side effect.
+func OpenResourceForkContext(ctx context.Context, file *os.File, writable bool) (*os.File, error) {
+	return openResourceForkContextUsing(ctx, file, writable, openNativeResourceForkContext)
+}
+func openResourceForkContextUsing(ctx context.Context, file *os.File, writable bool, open func(context.Context, int, bool) (*os.File, error)) (*os.File, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	fork, err := openResourceForkUsing(file, writable, func(fd int, write bool) (*os.File, error) {
+		return open(ctx, fd, write)
+	})
+	if err != nil {
+		return nil, err
+	}
+	if err = ctx.Err(); err != nil {
+		return nil, errors.Join(err, fork.Close())
+	}
+	return fork, nil
+}
+
 func openResourceForkUsing(file *os.File, writable bool, open func(int, bool) (*os.File, error)) (*os.File, error) {
 	if file == nil {
 		return nil, fs.ErrInvalid
@@ -66,7 +89,7 @@ type resourceForkSink interface {
 // The caller retains the complete logical value independently when projecting
 // onto a native host whose fork operations are unavailable.
 func ReplaceResourceFork(ctx context.Context, file *os.File, value appledouble.Value) (int64, error) {
-	return replaceResourceForkUsing(ctx, value, func() (resourceForkSink, error) { return OpenResourceFork(file, true) })
+	return replaceResourceForkUsing(ctx, value, func() (resourceForkSink, error) { return OpenResourceForkContext(ctx, file, true) })
 }
 func replaceResourceForkUsing(ctx context.Context, value appledouble.Value, open func() (resourceForkSink, error)) (written int64, err error) {
 	if ctx == nil || value == nil || value.Size() < 0 {

@@ -1,6 +1,7 @@
 package hostdata
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -8,7 +9,10 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-func prepareReplacementAt(source *os.File, stage *os.Root, info os.FileInfo) (*os.File, error) {
+func prepareReplacementAtContext(ctx context.Context, source *os.File, stage *os.Root, info os.FileInfo) (*os.File, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	flags, _ := hostflags.Flags(info)
 	if flags&(unix.UF_IMMUTABLE|unix.UF_APPEND|unix.SF_IMMUTABLE|unix.SF_APPEND) != 0 {
 		return nil, fmt.Errorf("%w: protected source", ErrUnsupportedReplacement)
@@ -23,7 +27,7 @@ func prepareReplacementAt(source *os.File, stage *os.Root, info os.FileInfo) (*o
 	if err := clearReplacementACL(fmt.Sprintf("/dev/fd/%d", dir.Fd())); err != nil {
 		return nil, err
 	}
-	return prepareReplacementUsing(
+	return prepareReplacementUsingContext(ctx,
 		func() error {
 			// Rewritten logical contents must not inherit the old compressed
 			// storage. A fresh file also avoids decompression writes against
@@ -43,10 +47,13 @@ func prepareReplacementAt(source *os.File, stage *os.Root, info os.FileInfo) (*o
 			}
 			return stage.OpenFile("replacement", os.O_RDWR, 0)
 		},
-		func(target *os.File) error { return copyReplacementMetadata(source, target, info) },
+		func(target *os.File) error { return copyReplacementMetadataContext(ctx, source, target, info) },
 	)
 }
 
-func restoreReplacementMetadataAt(source, target *os.File, info os.FileInfo) error {
-	return restoreReplacementMetadata(source, target, info)
+func restoreReplacementMetadataAtContext(ctx context.Context, source, target *os.File, info os.FileInfo) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return restoreReplacementMetadataContext(ctx, source, target, info)
 }

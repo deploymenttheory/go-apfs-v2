@@ -20,9 +20,13 @@ func compressionStatUsing(fd int, stat func(int, *unix.Stat_t) error) (uint32, u
 	return state.Flags, uint64(state.Size), nil
 }
 func nativeCompressionVolumeFlags(fd int) (uint32, error) {
+	v, err := nativeCompressionVolume(fd)
+	return v.Flags, err
+}
+func nativeCompressionVolume(fd int) (CompressionVolume, error) {
 	var state unix.Statfs_t
 	if err := unix.Fstatfs(fd, &state); err != nil {
-		return 0, err
+		return CompressionVolume{}, err
 	}
-	return state.Flags, nil
+	return CompressionVolume{Filesystem: unix.ByteSliceToString(state.Fstypename[:]), Flags: state.Flags}, nil
 }

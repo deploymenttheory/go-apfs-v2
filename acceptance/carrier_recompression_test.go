@@ -49,6 +49,8 @@ type carrierRecompressionCorpus struct {
 }
 type carrierRecompressionExpected struct {
 	Name, Scenario, Requested, Inline string
+	IdentityGroup                     string
+	Links                             uint32
 	Attribute, Fork, Data             []byte
 	Mode, Flags                       uint32
 	Birth, Modify, Change, Access     time.Time
@@ -322,6 +324,10 @@ func TestCarrierRecompressionNativeProfiles(t *testing.T) {
 						}
 						total++
 					})
+				}
+				carrierReplacementCases(t, store, payload, version, trials[0].Observation.Filesystem, &image)
+				if len(image.Cases) != 94 {
+					t.Fatal("complete image inventory", len(image.Cases))
 				}
 				if t.Failed() {
 					return
