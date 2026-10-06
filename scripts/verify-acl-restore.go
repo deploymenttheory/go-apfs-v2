@@ -11,11 +11,13 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 func main() {
@@ -36,7 +38,7 @@ func verify() error {
 	defer log.Close()
 	var transcript bytes.Buffer
 	profile := filepath.Join(dir, "coverage.out")
-	cmd := exec.Command("go", "test", "-count=1", "-json", "-run", "^(Test.*RestoreACL|Test.*ACLAttributes|FuzzRestoreACL|FuzzACLAttributes|Test.*Chmod|FuzzDarwinChmod|TestWriteSecurityFlags|Test.*SecurityCopy|FuzzSecurityCopy)", "-covermode=atomic", "-coverprofile="+profile, "./pkg/hostdata", "./pkg/hostdata/acl", "./pkg/hfsplus")
+	cmd := cirunner.Command("go", "test", "-count=1", "-json", "-run", "^(Test.*RestoreACL|Test.*ACLAttributes|FuzzRestoreACL|FuzzACLAttributes|Test.*Chmod|FuzzDarwinChmod|TestWriteSecurityFlags|Test.*SecurityCopy|FuzzSecurityCopy)", "-covermode=atomic", "-coverprofile="+profile, "./pkg/hostdata", "./pkg/hostdata/acl", "./pkg/hfsplus")
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 	cmd.Stdout = io.MultiWriter(os.Stdout, log, &transcript)
 	cmd.Stderr = io.MultiWriter(os.Stderr, log)
@@ -109,7 +111,7 @@ func verify() error {
 		h := sha256.Sum256(b)
 		hashes[path] = hex.EncodeToString(h[:])
 	}
-	revision, e := exec.Command("git", "rev-parse", "HEAD").Output()
+	revision, e := cirunner.Command("git", "rev-parse", "HEAD").Output()
 	if e != nil {
 		return e
 	}

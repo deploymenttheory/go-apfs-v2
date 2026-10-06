@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 func TestWriterSpecialGuards(t *testing.T) {
@@ -26,7 +28,7 @@ func TestWriterSpecialGuards(t *testing.T) {
 	}
 	for _, mutation := range []string{"positive", "missing-extra", "duplicate-extra", "unknown-id", "created-name", "queried-name", "stored-name", "payload", "fixture-hash", "create-errno", "lookup-errno", "parent", "inode", "lookup-inode", "utf16", "raw-key", "raw-value", "missing-extra-check", "extra-check-input"} {
 		t.Run(mutation, func(t *testing.T) {
-			cmd := exec.CommandContext(t.Context(), binary, "-test.run=^TestWriterSpecialGuardChild$", "-test.v")
+			cmd := cirunner.CommandContext(t.Context(), binary, "-test.run=^TestWriterSpecialGuardChild$", "-test.v")
 			cmd.Env = append(os.Environ(), "APFS_WRITER_SPECIAL_GUARD="+mutation, "APFS_WRITER_SPECIAL_MANIFEST="+manifest)
 			output, err := cmd.CombinedOutput()
 			if mutation == "positive" {

@@ -15,6 +15,8 @@ import (
 	"time"
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/diskimage"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 type nativeCommandRunner struct {
@@ -36,56 +38,30 @@ func (w *nativeProgressWriter) Write(p []byte) (int, error) {
 	return w.writer.Write(p)
 }
 
-func (r *nativeCommandRunner) wait(ctx context.Context, cmd *exec.Cmd, stderr *os.File, stem string) error {
-	interval := r.progressInterval
-	if interval <= 0 {
-		interval = 10 * time.Second
-	}
+// The image-specific manifest remains here; command lifecycle reporting is shared
+// with every other CI capture and verification command.
+func (r *nativeCommandRunner) wait(ctx context.Context, cmd *cirunner.Cmd, stderr *os.File, stem string) (result error) {
 	destination := r.progressOutput
 	if destination == nil {
 		destination = os.Stderr
 	}
 	output := &nativeProgressWriter{writer: destination}
+	reporter := cirunner.DefaultReporter()
+	if r.progressOutput != nil {
+		reporter = cirunner.NewReporter(output, 256)
+		defer func() {
+			cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Second)
+			defer cancel()
+			result = errors.Join(result, reporter.Close(cleanup))
+		}()
+	}
+	cmd.Options.Reporter = reporter
+	cmd.Options.Label = stem
+	cmd.Options.Heartbeat = r.progressInterval
 	if r.liveStderr {
-		// The single-process native C probe emits each call boundary to CI
-		// before retaining it on disk. Generic commands keep regular stderr
-		// files; inherited child handles cannot hold their output pipe open.
 		cmd.Stderr = io.MultiWriter(output, stderr)
 	}
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-	started := time.Now()
-	done := make(chan error, 1)
-	launched := make(chan int, 1)
-	fmt.Fprintf(output, "LAUNCH native command %s; monitoring process startup\n", stem)
-	go func() {
-		if err := cmd.Start(); err != nil {
-			done <- err
-			return
-		}
-		launched <- cmd.Process.Pid
-		done <- cmd.Wait()
-	}()
-	pid := 0
-	cancelled := ctx.Done()
-	for {
-		select {
-		case pid = <-launched:
-			fmt.Fprintf(output, "LAUNCHED native command %s pid=%d\n", stem, pid)
-		case err := <-done:
-			if err != nil || ctx.Err() != nil {
-				fmt.Fprintf(output, "ERROR native command %s: %v context=%v\n", stem, err, ctx.Err())
-			}
-			return err
-		case <-cancelled:
-			// Report before waiting for process exit: a blocked kernel call can
-			// prevent even a killed child from being reaped immediately.
-			fmt.Fprintf(output, "ERROR native command %s deadline/cancellation: %v; cancellation requested; awaiting process exit\n", stem, ctx.Err())
-			cancelled = nil
-		case <-ticker.C:
-			fmt.Fprintf(output, "PROGRESS native command %s pid=%d elapsed=%s (pid=0 means startup pending)\n", stem, pid, time.Since(started).Round(time.Second))
-		}
-	}
+	return cmd.Run()
 }
 
 type nativeCommandObservation struct {
@@ -132,7 +108,7 @@ func (r *nativeCommandRunner) run(ctx context.Context, name string, args ...stri
 		return nil, errors.Join(err, stdout.Close(), stderr.Close())
 	}
 	fmt.Fprintf(os.Stderr, "START native command %s %v (%s)\n", name, args, stem)
-	cmd := exec.CommandContext(ctx, name, args...)
+	cmd := cirunner.CommandContext(ctx, name, args...)
 	cmd.WaitDelay = 5 * time.Second
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr

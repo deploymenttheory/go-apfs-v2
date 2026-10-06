@@ -21,6 +21,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/captureprovenance"
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/diskimage"
 )
 
@@ -53,7 +55,7 @@ type corpus struct {
 func command(name string, args ...string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
-	b, e := exec.CommandContext(ctx, name, args...).CombinedOutput()
+	b, e := cirunner.CommandContext(ctx, name, args...).CombinedOutput()
 	if e != nil {
 		return b, fmt.Errorf("%s %v: %w: %s", name, args, e, b)
 	}
@@ -122,6 +124,9 @@ func run(out string, check bool, foreign string) (result error) {
 		return e
 	}
 	c := corpus{Schema: 1, Sources: map[string]string{}, Images: map[string]string{}}
+	if err := captureprovenance.Bind(os.DirFS("."), artifact, c.Sources); err != nil {
+		return err
+	}
 	for _, item := range []struct {
 		name string
 		args []string
@@ -283,6 +288,9 @@ func run(out string, check bool, foreign string) (result error) {
 		var retained corpus
 		if e = load(fixture, &retained); e != nil {
 			return e
+		}
+		if err := captureprovenance.Verify(os.DirFS("."), retained.Sources); err != nil {
+			return err
 		}
 		if !reflect.DeepEqual(c.Cases, retained.Cases) {
 			return errors.New("native state differs from retained 160 cases")

@@ -2,11 +2,13 @@ package apfs_test
 
 import (
 	"os"
-	"os/exec"
+
 	"sync"
 	"testing"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 // Run in a fresh process: earlier filesystem tests may already have calculated
@@ -14,7 +16,7 @@ import (
 func TestNameHashConcurrentFirstUse(t *testing.T) {
 	const child = "APFS_TEST_NAME_HASH_CHILD"
 	if os.Getenv(child) != "1" {
-		cmd := exec.Command(os.Args[0], "-test.run=^TestNameHashConcurrentFirstUse$")
+		cmd := cirunner.Command(os.Args[0], "-test.run=^TestNameHashConcurrentFirstUse$")
 		cmd.Env = append(os.Environ(), child+"=1")
 		if output, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("concurrent first use: %v\n%s", err, output)

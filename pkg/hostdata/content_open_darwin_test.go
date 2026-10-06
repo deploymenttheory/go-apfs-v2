@@ -6,13 +6,15 @@ import (
 	"errors"
 	"io"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"reflect"
 	"syscall"
 	"testing"
 
 	"golang.org/x/sys/unix"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 func TestContentOpenNative(t *testing.T) {
@@ -64,7 +66,7 @@ func TestContentOpenNative(t *testing.T) {
 					t.Cleanup(func() { metadataStatCommand(t, "/bin/chmod", "-N", path) })
 				}
 			}
-			b, err := exec.Command(oracle, dir, "file").Output()
+			b, err := cirunner.Command(oracle, dir, "file").Output()
 			if err != nil {
 				t.Fatal(err)
 			}

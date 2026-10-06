@@ -12,16 +12,18 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/disk"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/hfsplus"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/osversion"
 	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/captureprovenance"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/disk"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hfsplus"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/osversion"
 )
 
 func decodeComparisonCapture(raw []byte) (capture, error) {
@@ -46,6 +48,9 @@ func readComparisonCapture(t *testing.T, path string, expected ...int) capture {
 	}
 	c, err := decodeComparisonCapture(raw)
 	if err != nil {
+		t.Fatal(err)
+	}
+	if err := captureprovenance.Verify(os.DirFS("."), c.Sources); err != nil {
 		t.Fatal(err)
 	}
 	major := 0

@@ -17,6 +17,8 @@ import (
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfswrite"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 // groupedImageSize is comfortably above the minimum the macOS raw-disk driver
@@ -75,7 +77,7 @@ func TestGroupedVolumeFsckClean(t *testing.T) {
 	dev := attachRaw(t, imgPath)
 	defer detach(t, dev)
 
-	out, err := exec.Command("fsck_apfs", "-n", dev).CombinedOutput()
+	out, err := cirunner.Command("fsck_apfs", "-n", dev).CombinedOutput()
 	text := string(out)
 	t.Logf("fsck_apfs output:\n%s", text)
 	if err != nil {
@@ -109,7 +111,7 @@ func TestGroupedVolumeApfsckClean(t *testing.T) {
 	imgPath := filepath.Join(t.TempDir(), "group-apfsck.img")
 	writeGroupedImage(t, imgPath)
 
-	out, err := exec.Command("apfsck", "-cw", imgPath).CombinedOutput()
+	out, err := cirunner.Command("apfsck", "-cw", imgPath).CombinedOutput()
 	t.Logf("apfsck output:\n%s", out)
 	if err != nil {
 		t.Fatalf("apfsck reported problems (exit %v)", err)
@@ -129,7 +131,7 @@ func TestGroupedVolumeMountsWithShiftedInodes(t *testing.T) {
 	imgPath := filepath.Join(t.TempDir(), "group-mount.img")
 	writeGroupedImage(t, imgPath)
 
-	out, err := exec.Command("hdiutil", "attach",
+	out, err := cirunner.Command("hdiutil", "attach",
 		"-imagekey", "diskimage-class=CRawDiskImage", "-readonly", imgPath).CombinedOutput()
 	if err != nil {
 		t.Fatalf("hdiutil attach: %v\n%s", err, out)

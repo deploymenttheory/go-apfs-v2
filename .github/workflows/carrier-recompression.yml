@@ -34,8 +34,11 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
       - name: Qualify every native profile and complete carrier coverage above 95 percent
-        run: go run scripts/verify-carrier-recompression.go
+        run: |
+          apfs-ci-runner --suite carrier-recompression/portable/step3 --timeout 24m -- go run scripts/verify-carrier-recompression.go
       - name: Retain images, exact expected bytes and complete coverage evidence
         if: always()
         uses: actions/upload-artifact@v7
@@ -44,6 +47,14 @@ jobs:
           path: artifacts/carrier-recompression-portable/
           if-no-files-found: error
 
+      - name: Retain complete CI command diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-observability-carrier-recompression-portable-${{ strategy.job-index || 0 }}-${{ github.run_attempt }}
+          path: artifacts/ci-observability/
+          compression-level: 9
+          if-no-files-found: error
   native:
     name: Native carrier readback (${{ matrix.os }})
     needs: portable
@@ -58,6 +69,8 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
       - uses: actions/download-artifact@v8.0.1
         with:
           pattern: carrier-recompression-*
@@ -67,7 +80,7 @@ jobs:
         run: |
           set -euo pipefail
           for producer in linux windows darwin; do
-            go run scripts/verify-carrier-recompression-native.go -foreign "artifacts/carrier-recompression-foreign/carrier-recompression-${producer}"
+            apfs-ci-runner --suite carrier-recompression/native/step4 --timeout 44m -- go run scripts/verify-carrier-recompression-native.go -foreign "artifacts/carrier-recompression-foreign/carrier-recompression-${producer}"
           done
       - name: Retain both ASTs, full native bytes, metadata and disk-image cleanup evidence
         if: always()
@@ -77,6 +90,14 @@ jobs:
           path: artifacts/carrier-recompression-foreign/**/native-readback/
           if-no-files-found: error
 
+      - name: Retain complete CI command diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-observability-carrier-recompression-native-${{ strategy.job-index || 0 }}-${{ github.run_attempt }}
+          path: artifacts/ci-observability/
+          compression-level: 9
+          if-no-files-found: error
   access:
     name: Native recompression authority (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
@@ -90,8 +111,11 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
       - name: Rebuild both architecture ASTs and recapture all 168 access and two compressed-open cases
-        run: go run scripts/capture-recompression-access.go -out artifacts/recompression-access/native.json.gz -check
+        run: |
+          apfs-ci-runner --suite carrier-recompression/access/step3 --timeout 19m -- go run scripts/capture-recompression-access.go -out artifacts/recompression-access/native.json.gz -check
       - name: Independently replay fresh native authority evidence against the portable implementation
         if: always()
         shell: bash
@@ -100,11 +124,20 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p artifacts/recompression-access
-          go test -count=1 -json ./pkg/recompression -run '^(TestRecompressionAccess(NativeEvidence|SourceEvidence)|TestRecompressionObjectNativeAcquisition)$' > artifacts/recompression-access/replay.jsonl
+          apfs-ci-runner --suite carrier-recompression/access/step4 --timeout 19m -- go test -count=1 -json ./pkg/recompression -run '^(TestRecompressionAccess(NativeEvidence|SourceEvidence)|TestRecompressionObjectNativeAcquisition)$' > artifacts/recompression-access/replay.jsonl
       - name: Retain every native case, Clang AST and portable replay result
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: recompression-access-${{ matrix.os }}
           path: artifacts/recompression-access/
+          if-no-files-found: error
+
+      - name: Retain complete CI command diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-observability-carrier-recompression-access-${{ strategy.job-index || 0 }}-${{ github.run_attempt }}
+          path: artifacts/ci-observability/
+          compression-level: 9
           if-no-files-found: error

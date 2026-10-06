@@ -26,6 +26,8 @@ import (
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/evidenceaudit"
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/diskimage"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 type expectedCase struct {
@@ -68,7 +70,7 @@ func main() {
 	}
 }
 func command(ctx context.Context, name string, args ...string) ([]byte, error) {
-	b, e := exec.CommandContext(ctx, name, args...).CombinedOutput()
+	b, e := cirunner.CommandContext(ctx, name, args...).CombinedOutput()
 	if e != nil {
 		return b, fmt.Errorf("%s %v: %w: %s", name, args, e, b)
 	}
@@ -103,7 +105,7 @@ func run(foreign string) (err error) {
 	if e = json.Unmarshal(producerReport, &producer); e != nil {
 		return e
 	}
-	revision, e := exec.CommandContext(ctx, "git", "rev-parse", "HEAD").Output()
+	revision, e := cirunner.CommandContext(ctx, "git", "rev-parse", "HEAD").Output()
 	if e != nil {
 		return e
 	}
@@ -124,7 +126,7 @@ func run(foreign string) (err error) {
 	if _, e = command(ctx, "xcrun", "clang", "-Wall", "-Wextra", "-Werror", source, "-o", helper); e != nil {
 		return e
 	}
-	sources, e := evidenceaudit.SourceHashes(os.DirFS("."), []string{source, "scripts/verify-carrier-recompression-native.go", "scripts/verify-carrier-recompression.go", "acceptance/carrier_recompression_test.go", "acceptance/carrier_replacement_test.go", "pkg/metatransport/*.go", "pkg/hostdata/*.go", "pkg/recompression/*.go", "pkg/authorization/*.go", "pkg/compression/decmpfs/*.go", "internal/decmpfs/*.go", "testdata/appledouble/native/compression-operation*.json.gz", "scripts/capture-recompression-access.go", "testdata/appledouble/native/recompression-access*.json.gz", "testdata/appledouble/native/recompression-access.c", "testdata/appledouble/native/recompression-open.c", "testdata/appledouble/native/recompression-access-source/*", ".github/workflows/carrier-recompression.yml", "go.mod", "go.sum"})
+	sources, e := evidenceaudit.HarnessSourceHashes(os.DirFS("."), []string{source, "scripts/verify-carrier-recompression-native.go", "scripts/verify-carrier-recompression.go", "acceptance/carrier_recompression_test.go", "acceptance/carrier_replacement_test.go", "pkg/metatransport/*.go", "pkg/hostdata/*.go", "pkg/recompression/*.go", "pkg/authorization/*.go", "pkg/compression/decmpfs/*.go", "internal/decmpfs/*.go", "testdata/appledouble/native/compression-operation*.json.gz", "scripts/capture-recompression-access.go", "testdata/appledouble/native/recompression-access*.json.gz", "testdata/appledouble/native/recompression-access.c", "testdata/appledouble/native/recompression-open.c", "testdata/appledouble/native/recompression-access-source/*", ".github/workflows/carrier-recompression.yml", "go.mod", "go.sum"})
 	if e != nil {
 		return e
 	}
@@ -239,7 +241,7 @@ func verifyImage(ctx context.Context, root, helper, artifact, path string, expec
 		defer cancel()
 		var attempts []map[string]any
 		detachErr := diskimage.RetryDetach(detachCtx, func() (int, error) {
-			b, e := exec.CommandContext(detachCtx, "hdiutil", "detach", device).CombinedOutput()
+			b, e := cirunner.CommandContext(detachCtx, "hdiutil", "detach", device).CombinedOutput()
 			code := 0
 			if e != nil {
 				code = -1
@@ -270,7 +272,7 @@ func verifyImage(ctx context.Context, root, helper, artifact, path string, expec
 		names[c.Name] = true
 		input.WriteString(c.Name + "\n")
 	}
-	cmd := exec.CommandContext(ctx, "sudo", "-n", helper, mount, output)
+	cmd := cirunner.CommandContext(ctx, "sudo", "-n", helper, mount, output)
 	cmd.Stdin = strings.NewReader(input.String())
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout

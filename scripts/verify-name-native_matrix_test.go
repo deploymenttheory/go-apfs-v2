@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/captureprovenance"
 	"io"
 	"io/fs"
 	"os"
@@ -199,7 +200,10 @@ func TestQualifyNativeNameMatrix(t *testing.T) {
 			if err := verifyNativeNameEvidence(out, report.Evidence); err != nil {
 				t.Fatal(err)
 			}
-			sources := map[string]string{}
+			sources, err := captureprovenance.Inventory(os.DirFS(".."))
+			if err != nil {
+				t.Fatal(err)
+			}
 			for _, path := range nativeNameHarnessSources {
 				sources[path] = sum(read(filepath.Join("..", filepath.FromSlash(path))))
 			}

@@ -21,6 +21,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/captureprovenance"
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/diskimage"
 )
 
@@ -30,7 +32,7 @@ type mountedImage struct {
 }
 
 func runCommand(ctx context.Context, name string, args ...string) ([]byte, error) {
-	b, e := exec.CommandContext(ctx, name, args...).CombinedOutput()
+	b, e := cirunner.CommandContext(ctx, name, args...).CombinedOutput()
 	if e != nil {
 		return b, fmt.Errorf("%s %v: %w: %s", name, args, e, b)
 	}
@@ -71,7 +73,7 @@ func (i *mountedImage) detach() error {
 	defer cancel()
 	var attempts []map[string]any
 	e := diskimage.RetryDetach(ctx, func() (int, error) {
-		b, e := exec.CommandContext(ctx, "hdiutil", "detach", i.device).CombinedOutput()
+		b, e := cirunner.CommandContext(ctx, "hdiutil", "detach", i.device).CombinedOutput()
 		code := 0
 		if e != nil {
 			code = -1
@@ -166,6 +168,9 @@ func captureNameLookup(out string) (result error) {
 		return err
 	}
 	sources := map[string]string{"probe.c": hash(source), "capture.go": hash(script), "probe": hash(binaryBytes)}
+	if err := captureprovenance.Bind(os.DirFS("."), out, sources); err != nil {
+		return err
+	}
 	for _, target := range []string{"arm64-apple-macos15", "x86_64-apple-macos15"} {
 		ast, err := runCommand(ctx, "xcrun", "clang", "-target", target, "-isysroot", sdk, "-std=c11", "-Xclang", "-ast-dump=json", "-fsyntax-only", oracle)
 		if err != nil {

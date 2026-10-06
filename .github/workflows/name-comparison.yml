@@ -62,13 +62,24 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
       - name: Capture all native names and validate exact retained profile
-        run: go run scripts/capture-name-collation.go -out artifacts/name-collation -check
+        run: |
+          apfs-ci-runner --suite name-comparison/native-images/step3 --timeout 39m -- go run scripts/capture-name-collation.go -out artifacts/name-collation -check
       - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: name-collation-${{ matrix.os }}
           path: artifacts/name-collation/
+          compression-level: 9
+          if-no-files-found: error
+      - name: Retain complete CI command diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-observability-name-comparison-native-images-${{ strategy.job-index || 0 }}-${{ github.run_attempt }}
+          path: artifacts/ci-observability/
           compression-level: 9
           if-no-files-found: error
   readers:
@@ -85,31 +96,44 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
       - uses: actions/download-artifact@v8
         with:
           pattern: name-collation-*
           path: artifacts/native-images
       - name: Verify reproducible native-qualified tables
         run: |
-          go run scripts/generate-name-tables.go -check
-          go run scripts/generate-name-admission.go -check
-          go test scripts/generate-name-admission.go scripts/generate-name-admission_test.go
+          apfs-ci-runner --suite name-comparison/readers/step4 --timeout 39m -- go run scripts/generate-name-tables.go -check
+          apfs-ci-runner --suite name-comparison/readers/step4 --timeout 39m -- go run scripts/generate-name-admission.go -check
+          apfs-ci-runner --suite name-comparison/readers/step4 --timeout 39m -- go test -json scripts/generate-name-admission.go scripts/generate-name-admission_test.go
       - name: Verify strict harness rejection tests
-        run: go test scripts/verify-name-comparison.go scripts/verify-name-comparison_gate_test.go
+        run: |
+          apfs-ci-runner --suite name-comparison/readers/step5 --timeout 39m -- go test -json scripts/verify-name-comparison.go scripts/verify-name-comparison_gate_test.go
       - name: Verify all native image lookups and production coverage
         shell: bash
         run: |
           export APFS_NAME_IMAGE_ARTIFACTS="$GITHUB_WORKSPACE/artifacts/native-images"
-          go run scripts/verify-name-comparison.go
+          apfs-ci-runner --suite name-comparison/readers/step6 --timeout 39m -- go run scripts/verify-name-comparison.go
       - name: Verify bounded native command diagnostics
-        run: go test -count=1 -run '^TestNativeReadback(Command|Mount)' scripts/verify-name-native_commands_test.go scripts/verify-name-native_commands_fault_test.go
+        run: |
+          apfs-ci-runner --suite name-comparison/readers/step7 --timeout 39m -- go test -json -count=1 -run '^TestNativeReadback(Command|Mount)' scripts/verify-name-native_commands_test.go scripts/verify-name-native_commands_fault_test.go
       - name: Verify matrix rejects missing or invalid qualification
-        run: go test -count=1 -run '^TestNativeNameMatrix' scripts/capture-name-collation.go scripts/verify-name-comparison_test.go scripts/verify-name-native_readback_test.go scripts/verify-name-native_commands_test.go scripts/verify-name-native_matrix_test.go
+        run: |
+          apfs-ci-runner --suite name-comparison/readers/step8 --timeout 39m -- go test -json -count=1 -run '^TestNativeNameMatrix' scripts/capture-name-collation.go scripts/verify-name-comparison_test.go scripts/verify-name-native_readback_test.go scripts/verify-name-native_commands_test.go scripts/verify-name-native_matrix_test.go
       - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: name-comparison-${{ matrix.os }}
           path: artifacts/name-comparison-coverage/
+          compression-level: 9
+          if-no-files-found: error
+      - name: Retain complete CI command diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-observability-name-comparison-readers-${{ strategy.job-index || 0 }}-${{ github.run_attempt }}
+          path: artifacts/ci-observability/
           compression-level: 9
           if-no-files-found: error
   native-readers:
@@ -135,6 +159,8 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
       - uses: actions/download-artifact@v8
         with:
           pattern: name-collation-*
@@ -145,7 +171,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p artifacts/name-native-build
-          go test -c -o "$GITHUB_WORKSPACE/artifacts/name-native-build/native-readback.test" scripts/capture-name-collation.go scripts/verify-name-comparison_test.go scripts/verify-name-native_readback_test.go scripts/verify-name-native_commands_test.go 2>&1 | tee artifacts/name-native-build/build.log
+          apfs-ci-runner --suite name-comparison/native-readers/step4 --timeout 4m -- go test -c -o "$GITHUB_WORKSPACE/artifacts/name-native-build/native-readback.test" scripts/capture-name-collation.go scripts/verify-name-comparison_test.go scripts/verify-name-native_readback_test.go scripts/verify-name-native_commands_test.go 2>&1 | tee artifacts/name-native-build/build.log
       - name: Preserve native harness build diagnostics before execution
         if: always()
         uses: actions/upload-artifact@v7
@@ -161,7 +187,7 @@ jobs:
           set -euo pipefail
           export APFS_NAME_IMAGE_ARTIFACTS="$GITHUB_WORKSPACE/artifacts/native-images"
           cd scripts
-          go tool test2json -t -p command-line-arguments "$GITHUB_WORKSPACE/artifacts/name-native-build/native-readback.test" -test.v=test2json -test.count=1 -test.timeout=5m -test.run='^TestNativeCrossVersionNameImages$' | tee "$GITHUB_WORKSPACE/artifacts/name-native-readback-tests.jsonl"
+          apfs-ci-runner --suite name-comparison/native-readers/step6 --timeout 6m -- go tool test2json -t -p command-line-arguments "$GITHUB_WORKSPACE/artifacts/name-native-build/native-readback.test" -test.v=test2json -test.count=1 -test.timeout=5m -test.run='^TestNativeCrossVersionNameImages$' | tee "$GITHUB_WORKSPACE/artifacts/name-native-readback-tests.jsonl"
       - uses: actions/upload-artifact@v7
         if: always()
         with:
@@ -169,6 +195,14 @@ jobs:
           path: |
             artifacts/name-native-readback/
             artifacts/name-native-readback-tests.jsonl
+          compression-level: 9
+          if-no-files-found: error
+      - name: Retain complete CI command diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-observability-name-comparison-native-readers-${{ strategy.job-index || 0 }}-${{ github.run_attempt }}
+          path: artifacts/ci-observability/
           compression-level: 9
           if-no-files-found: error
   qualify-matrix:
@@ -191,6 +225,8 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
       - uses: actions/download-artifact@v8
         with:
           pattern: name-native-cell-*
@@ -205,4 +241,12 @@ jobs:
           APFS_NAME_MATRIX_ARTIFACTS: ${{ github.workspace }}/artifacts/name-native-matrix
         run: |
           cd scripts
-          go test -count=1 -run '^TestQualifyNativeNameMatrix$' capture-name-collation.go verify-name-comparison_test.go verify-name-native_readback_test.go verify-name-native_commands_test.go verify-name-native_matrix_test.go
+          apfs-ci-runner --suite name-comparison/qualify-matrix/step6 --timeout 9m -- go test -json -count=1 -run '^TestQualifyNativeNameMatrix$' capture-name-collation.go verify-name-comparison_test.go verify-name-native_readback_test.go verify-name-native_commands_test.go verify-name-native_matrix_test.go
+      - name: Retain complete CI command diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-observability-name-comparison-qualify-matrix-${{ strategy.job-index || 0 }}-${{ github.run_attempt }}
+          path: artifacts/ci-observability/
+          compression-level: 9
+          if-no-files-found: error

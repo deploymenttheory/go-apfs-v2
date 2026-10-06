@@ -41,6 +41,8 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
       - name: Record completed producer identity
         shell: bash
         env:
@@ -61,9 +63,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          go test -c -o "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/boundary.test" scripts/capture-name-collation.go scripts/verify-name-comparison_test.go scripts/verify-name-native_readback_test.go scripts/verify-name-native_commands_test.go scripts/verify-name-native_diagnostic_test.go scripts/verify-name-native_boundary_test.go 2>&1 | tee artifacts/name-native-diagnostic/build.log
+          apfs-ci-runner --suite name-image-boundary-diagnostic/boundary/step5 --timeout 5m -- go test -c -o "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/boundary.test" scripts/capture-name-collation.go scripts/verify-name-comparison_test.go scripts/verify-name-native_readback_test.go scripts/verify-name-native_commands_test.go scripts/verify-name-native_diagnostic_test.go scripts/verify-name-native_boundary_test.go 2>&1 | tee artifacts/name-native-diagnostic/build.log
           cd scripts
-          go tool test2json -t -p command-line-arguments "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/boundary.test" -test.v=test2json -test.timeout=3m -test.run='^(TestSingleNameDiagnostic.*|TestPrepareNativeSingleNameImageDiagnostic)$' | tee "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/prepare-tests.jsonl"
+          apfs-ci-runner --suite name-image-boundary-diagnostic/boundary/step5 --timeout 5m -- go tool test2json -t -p command-line-arguments "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/boundary.test" -test.v=test2json -test.timeout=3m -test.run='^(TestSingleNameDiagnostic.*|TestPrepareNativeSingleNameImageDiagnostic)$' | tee "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/prepare-tests.jsonl"
       - name: Upload durable checkpoint before identity
         if: always()
         uses: actions/upload-artifact@v7
@@ -78,7 +80,7 @@ jobs:
         working-directory: scripts
         run: |
           set -euo pipefail
-          go tool test2json -t -p command-line-arguments "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/boundary.test" -test.v=test2json -test.timeout=1m -test.run='^TestNativeNameBoundaryIdentity$' | tee "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/boundary-identity-tests.jsonl"
+          apfs-ci-runner --suite name-image-boundary-diagnostic/boundary/step7 --timeout 1m -- go tool test2json -t -p command-line-arguments "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/boundary.test" -test.v=test2json -test.timeout=1m -test.run='^TestNativeNameBoundaryIdentity$' | tee "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/boundary-identity-tests.jsonl"
       - name: Upload durable checkpoint before attach
         if: always()
         uses: actions/upload-artifact@v7
@@ -93,7 +95,7 @@ jobs:
         working-directory: scripts
         run: |
           set -euo pipefail
-          go tool test2json -t -p command-line-arguments "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/boundary.test" -test.v=test2json -test.timeout=1m -test.run='^TestNativeNameBoundaryAttach$' | tee "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/boundary-attach-tests.jsonl"
+          apfs-ci-runner --suite name-image-boundary-diagnostic/boundary/step9 --timeout 1m -- go tool test2json -t -p command-line-arguments "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/boundary.test" -test.v=test2json -test.timeout=1m -test.run='^TestNativeNameBoundaryAttach$' | tee "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/boundary-attach-tests.jsonl"
       - name: Upload durable checkpoint before readback
         if: always()
         uses: actions/upload-artifact@v7
@@ -108,7 +110,7 @@ jobs:
         working-directory: scripts
         run: |
           set -euo pipefail
-          go tool test2json -t -p command-line-arguments "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/boundary.test" -test.v=test2json -test.timeout=3m -test.run='^TestNativeNameBoundaryReadback$' | tee "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/boundary-readback-tests.jsonl"
+          apfs-ci-runner --suite name-image-boundary-diagnostic/boundary/step11 --timeout 3m -- go tool test2json -t -p command-line-arguments "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/boundary.test" -test.v=test2json -test.timeout=3m -test.run='^TestNativeNameBoundaryReadback$' | tee "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/boundary-readback-tests.jsonl"
       - name: Upload durable checkpoint before detach
         if: always()
         uses: actions/upload-artifact@v7
@@ -124,12 +126,21 @@ jobs:
         working-directory: scripts
         run: |
           set -euo pipefail
-          go tool test2json -t -p command-line-arguments "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/boundary.test" -test.v=test2json -test.timeout=1m -test.run='^TestNativeNameBoundaryDetach$' | tee "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/boundary-detach-tests.jsonl"
+          apfs-ci-runner --suite name-image-boundary-diagnostic/boundary/step13 --timeout 1m -- go tool test2json -t -p command-line-arguments "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/boundary.test" -test.v=test2json -test.timeout=1m -test.run='^TestNativeNameBoundaryDetach$' | tee "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/boundary-detach-tests.jsonl"
       - name: Preserve final boundary outcome
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: boundary-outcome
           path: artifacts/name-native-diagnostic/
+          compression-level: 9
+          if-no-files-found: error
+
+      - name: Retain complete CI command diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-observability-name-image-boundary-diagnostic-boundary-${{ strategy.job-index || 0 }}-${{ github.run_attempt }}
+          path: artifacts/ci-observability/
           compression-level: 9
           if-no-files-found: error

@@ -11,7 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"reflect"
 	"strconv"
@@ -22,6 +22,8 @@ import (
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
 	sandbox "github.com/deploymenttheory/go-apfs-v2/pkg/hostdata/sandbox"
 	"golang.org/x/sys/unix"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 func TestAppleDoublePathNativeReplay(t *testing.T) {
@@ -30,7 +32,7 @@ func TestAppleDoublePathNativeReplay(t *testing.T) {
 		t.Fatal(err)
 	}
 	helper := filepath.Join(t.TempDir(), "path-copyfile")
-	if out, err := exec.Command("xcrun", "clang", "-Wall", "-Wextra", "-Werror", "../../testdata/appledouble/native/path-copyfile.c", "-o", helper).CombinedOutput(); err != nil {
+	if out, err := cirunner.Command("xcrun", "clang", "-Wall", "-Wextra", "-Werror", "../../testdata/appledouble/native/path-copyfile.c", "-o", helper).CombinedOutput(); err != nil {
 		t.Fatalf("compile independent installed-copyfile oracle: %v: %s", err, out)
 	}
 	f, err := os.Open("../../testdata/appledouble/native/path-copyfile.json.gz")
@@ -68,7 +70,7 @@ func TestAppleDoublePathNativeReplay(t *testing.T) {
 			if c.SetUmask {
 				mask = c.Umask
 			}
-			out, err := exec.Command(helper, nativeSource, nativeDestination, nativeTarget, strconv.Itoa(c.Route), strconv.Itoa(c.Selected), strconv.Itoa(c.Quit), strconv.Itoa(c.SourceMode), strconv.Itoa(mask)).CombinedOutput()
+			out, err := cirunner.Command(helper, nativeSource, nativeDestination, nativeTarget, strconv.Itoa(c.Route), strconv.Itoa(c.Selected), strconv.Itoa(c.Quit), strconv.Itoa(c.SourceMode), strconv.Itoa(mask)).CombinedOutput()
 			if err != nil {
 				t.Fatalf("installed-copyfile oracle: %v: %s", err, out)
 			}
@@ -85,7 +87,7 @@ func TestAppleDoublePathNativeReplay(t *testing.T) {
 				}
 				c.Native.DestinationSHA256 = fmt.Sprintf("%x", sha256.Sum256(data))
 			}
-			out, err = exec.Command(helper, "--inspect", src, dst, target).CombinedOutput()
+			out, err = cirunner.Command(helper, "--inspect", src, dst, target).CombinedOutput()
 			if err != nil {
 				t.Fatalf("independent input inspection: %v: %s", err, out)
 			}
@@ -132,7 +134,7 @@ func TestAppleDoublePathNativeReplay(t *testing.T) {
 				defer unix.Umask(prior)
 			}
 			result, operationErr := CopyAppleDoublePath(context.Background(), src, dst, options)
-			out, err = exec.Command(helper, "--inspect", src, dst, target).CombinedOutput()
+			out, err = cirunner.Command(helper, "--inspect", src, dst, target).CombinedOutput()
 			if err != nil {
 				t.Fatalf("independent output inspection: %v: %s", err, out)
 			}

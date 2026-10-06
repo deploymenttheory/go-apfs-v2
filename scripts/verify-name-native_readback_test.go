@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/captureprovenance"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/osversion"
 )
 
@@ -121,6 +122,9 @@ func TestNativeCrossVersionNameImages(t *testing.T) {
 			t.Fatal(e)
 		}
 		hashes[p] = sum(b)
+	}
+	if e = captureprovenance.Bind(os.DirFS(root), out, hashes); e != nil {
+		t.Fatal(e)
 	}
 	for _, arch := range []string{"arm64", "x86_64"} {
 		ast, e := commands.run(ctx, "xcrun", "clang", "-std=c11", "-Wall", "-Wextra", "-Werror", "-target", arch+"-apple-macos15.0", "-isysroot", strings.TrimSpace(string(sdk)), "-Xclang", "-ast-dump=json", "-fsyntax-only", source)

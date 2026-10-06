@@ -26,21 +26,34 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
       - name: Verify native evidence rejection tests
-        run: go test scripts/capture-hfs-special-names.go scripts/capture-hfs-special-names_test.go
+        run: |
+          apfs-ci-runner --suite hfs-special-names/native/step3 --timeout 19m -- go test -json scripts/capture-hfs-special-names.go scripts/capture-hfs-special-names_test.go
       - name: Capture mounted HFS special names and raw catalog bytes
-        run: go run scripts/capture-hfs-special-names.go -out artifacts/hfs-special-names
+        run: |
+          apfs-ci-runner --suite hfs-special-names/native/step4 --timeout 19m -- go run scripts/capture-hfs-special-names.go -out artifacts/hfs-special-names
       - name: Require every retained profile and replay fresh native evidence
         if: always()
         shell: bash
         run: |
           mkdir -p artifacts/hfs-special-names
           export APFS_HFS_SPECIAL_CAPTURE="$GITHUB_WORKSPACE/artifacts/hfs-special-names/native.json.gz"
-          go test -count=1 -json ./pkg/hfsplus -run '^TestHFSSpecialNativeEvidence$' > artifacts/hfs-special-names/replay.jsonl
+          apfs-ci-runner --suite hfs-special-names/native/step5 --timeout 19m -- go test -count=1 -json ./pkg/hfsplus -run '^TestHFSSpecialNativeEvidence$' > artifacts/hfs-special-names/replay.jsonl
       - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: hfs-special-names-${{ matrix.os }}
           path: artifacts/hfs-special-names/
+          compression-level: 9
+          if-no-files-found: error
+
+      - name: Retain complete CI command diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-observability-hfs-special-names-native-${{ strategy.job-index || 0 }}-${{ github.run_attempt }}
+          path: artifacts/ci-observability/
           compression-level: 9
           if-no-files-found: error

@@ -5,6 +5,12 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      capture_phase:
+        description: Supplemental genuine fixture regeneration only; full runs the complete qualification
+        type: choice
+        options: [full, base, dependent]
+        default: full
 
 concurrency:
   group: compression-native-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
@@ -18,7 +24,13 @@ env:
   GOTOOLCHAIN: local
 
 jobs:
+  recapture:
+    if: github.event_name == 'workflow_dispatch' && inputs.capture_phase != '' && inputs.capture_phase != 'full'
+    uses: ./.github/workflows/native-harness-recapture.yml
+    with:
+      phase: ${{ inputs.capture_phase }}
   native:
+    if: inputs.capture_phase == '' || inputs.capture_phase == 'full'
     name: Native compression (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
@@ -31,42 +43,51 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
       - name: Recapture complete native LZ4 and kernel storage inventory
-        run: go run scripts/capture-compression-lz4.go -check
+        run: |
+          apfs-ci-runner --suite compression-native/native/step3 --timeout 44m -- go run scripts/capture-compression-lz4.go -check
       - name: Recapture guarded native compression queries
         if: ${{ !cancelled() }}
         run: |
-          go test scripts/capture-compression-query.go scripts/capture-compression-query_test.go
-          go run scripts/capture-compression-query.go -check
+          apfs-ci-runner --suite compression-native/native/step4 --timeout 44m -- go test -json scripts/capture-compression-query.go scripts/capture-compression-query_test.go
+          apfs-ci-runner --suite compression-native/native/step4 --timeout 44m -- go run scripts/capture-compression-query.go -check
       - name: Recapture compression installation and partial failures
         if: ${{ !cancelled() }}
-        run: go run scripts/capture-compression-lifecycle.go -check
+        run: |
+          apfs-ci-runner --suite compression-native/native/step5 --timeout 44m -- go run scripts/capture-compression-lifecycle.go -check
       - name: Recapture native acquisition, read failures and surviving states
         if: ${{ !cancelled() }}
         run: |
-          go run scripts/capture-compression-operation.go -check
-          go test scripts/capture-compression-operation.go scripts/capture-compression-operation_test.go
+          apfs-ci-runner --suite compression-native/native/step6 --timeout 44m -- go run scripts/capture-compression-operation.go -check
+          apfs-ci-runner --suite compression-native/native/step6 --timeout 44m -- go test -json scripts/capture-compression-operation.go scripts/capture-compression-operation_test.go
       - name: Qualify complete quarantine contexts and destination outcomes
         if: ${{ !cancelled() }}
         run: |
-          go run scripts/verify-appledouble-quarantine-runtime.go -contexts
-          go run scripts/verify-appledouble-quarantine-runtime.go -existing
-          go run scripts/verify-appledouble-quarantine-runtime.go -destinations
+          apfs-ci-runner --suite compression-native/native/step7 --timeout 44m -- go run scripts/verify-appledouble-quarantine-runtime.go -contexts
+          apfs-ci-runner --suite compression-native/native/step7 --timeout 44m -- go run scripts/verify-appledouble-quarantine-runtime.go -existing
+          apfs-ci-runner --suite compression-native/native/step7 --timeout 44m -- go run scripts/verify-appledouble-quarantine-runtime.go -destinations
       - name: Qualify every effective quarantine process flag independently
         if: ${{ !cancelled() }}
-        run: go run scripts/verify-appledouble-quarantine-runtime.go -raw-processes
+        run: |
+          apfs-ci-runner --suite compression-native/native/step8 --timeout 44m -- go run scripts/verify-appledouble-quarantine-runtime.go -raw-processes
       - name: Recapture resource-fork opening and inode association
         if: ${{ !cancelled() }}
-        run: go run scripts/capture-resource-fork-open.go -check
+        run: |
+          apfs-ci-runner --suite compression-native/native/step9 --timeout 44m -- go run scripts/capture-resource-fork-open.go -check
       - name: Verify held Go installation on host, APFS and HFS+
         if: ${{ !cancelled() }}
-        run: go run scripts/verify-compression-installation-native.go
+        run: |
+          apfs-ci-runner --suite compression-native/native/step10 --timeout 44m -- go run scripts/verify-compression-installation-native.go
       - name: Replay compression lifecycle and complete hostdata coverage
         if: ${{ !cancelled() }}
-        run: go run scripts/verify-compression-lifecycle.go
+        run: |
+          apfs-ci-runner --suite compression-native/native/step11 --timeout 44m -- go run scripts/verify-compression-lifecycle.go
       - name: Replay complete portable compression corpus above 95 percent coverage
         if: ${{ !cancelled() }}
-        run: go run scripts/verify-decmpfs-formats-coverage.go
+        run: |
+          apfs-ci-runner --suite compression-native/native/step12 --timeout 44m -- go run scripts/verify-decmpfs-formats-coverage.go
       - name: Upload fresh native profiles and replay evidence
         if: always()
         uses: actions/upload-artifact@v7
@@ -87,7 +108,16 @@ jobs:
             artifacts/decmpfs-formats-coverage/
           if-no-files-found: error
 
+      - name: Retain complete CI command diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-observability-compression-native-native-${{ strategy.job-index || 0 }}-${{ github.run_attempt }}
+          path: artifacts/ci-observability/
+          compression-level: 9
+          if-no-files-found: error
   macos15:
+    if: inputs.capture_phase == '' || inputs.capture_phase == 'full'
     name: Native compression compatibility (macos-15)
     runs-on: macos-15
     timeout-minutes: 45
@@ -96,19 +126,24 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
       - name: Qualify native version detection and explicit targets above 95%
-        run: go run scripts/verify-osversion.go
+        run: |
+          apfs-ci-runner --suite compression-native/macos15/step3 --timeout 44m -- go run scripts/verify-osversion.go
       - name: Recapture complete acquisition, read failures and surviving states
         if: ${{ !cancelled() }}
         run: |
-          go run scripts/capture-compression-operation.go -check
-          go test scripts/capture-compression-operation.go scripts/capture-compression-operation_test.go
+          apfs-ci-runner --suite compression-native/macos15/step4 --timeout 44m -- go run scripts/capture-compression-operation.go -check
+          apfs-ci-runner --suite compression-native/macos15/step4 --timeout 44m -- go test -json scripts/capture-compression-operation.go scripts/capture-compression-operation_test.go
       - name: Recapture resource-fork opening and inode association
         if: ${{ !cancelled() }}
-        run: go run scripts/capture-resource-fork-open.go -check
+        run: |
+          apfs-ci-runner --suite compression-native/macos15/step5 --timeout 44m -- go run scripts/capture-resource-fork-open.go -check
       - name: Verify held Go installation on host, APFS and HFS+
         if: ${{ !cancelled() }}
-        run: go run scripts/verify-compression-installation-native.go
+        run: |
+          apfs-ci-runner --suite compression-native/macos15/step6 --timeout 44m -- go run scripts/verify-compression-installation-native.go
       - name: Retain macOS 15 version and compression evidence
         if: always()
         uses: actions/upload-artifact@v7
@@ -119,4 +154,13 @@ jobs:
             artifacts/compression-operation/
             artifacts/resource-fork-open/
             artifacts/compression-installation-native/
+          if-no-files-found: error
+
+      - name: Retain complete CI command diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-observability-compression-native-macos15-${{ strategy.job-index || 0 }}-${{ github.run_attempt }}
+          path: artifacts/ci-observability/
+          compression-level: 9
           if-no-files-found: error

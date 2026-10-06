@@ -13,6 +13,8 @@ import (
 	"io"
 	"os"
 	"testing"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/captureprovenance"
 )
 
 func TestQueryNativeMetadata(t *testing.T) {
@@ -52,6 +54,9 @@ func TestQueryNativeMetadata(t *testing.T) {
 	}
 	if corpus.Schema != 1 || len(corpus.Cases) != 676 {
 		t.Fatal("incomplete native query corpus")
+	}
+	if err := captureprovenance.Verify(os.DirFS("../../.."), corpus.Sources); err != nil {
+		t.Fatal(err)
 	}
 	for _, path := range []string{"scripts/capture-compression-query.go", "internal/testutil/diskimage/attachment.go", "internal/testutil/diskimage/detach.go", "testdata/appledouble/native/compression-query.c", "testdata/appledouble/native/compression-policy.c", "go.mod", "go.sum"} {
 		b, err := os.ReadFile("../../../" + path)

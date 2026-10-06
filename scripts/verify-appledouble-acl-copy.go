@@ -14,7 +14,7 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -22,6 +22,8 @@ import (
 	"time"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 type profile struct {
@@ -72,7 +74,7 @@ func read(p string) []byte     { b, e := os.ReadFile(p); must(e); return b }
 func write(p string, b []byte) { must(os.WriteFile(p, b, 0600)) }
 func sum(b []byte) string      { return fmt.Sprintf("%x", sha256.Sum256(b)) }
 func run(args ...string) []byte {
-	b, e := exec.Command(args[0], args[1:]...).CombinedOutput()
+	b, e := cirunner.Command(args[0], args[1:]...).CombinedOutput()
 	c := command{Args: args, Output: string(b)}
 	if e != nil {
 		c.Error = e.Error()

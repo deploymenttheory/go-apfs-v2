@@ -13,8 +13,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/diskimage"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/osversion"
 	"io"
 	"os"
 	"os/exec"
@@ -22,6 +20,11 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/captureprovenance"
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/diskimage"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/osversion"
 )
 
 type control struct {
@@ -60,7 +63,7 @@ var bound = []string{source, "scripts/capture-name-admission.go", "scripts/captu
 
 func sum(b []byte) string { h := sha256.Sum256(b); return hex.EncodeToString(h[:]) }
 func command(ctx context.Context, name string, args ...string) ([]byte, error) {
-	b, e := exec.CommandContext(ctx, name, args...).CombinedOutput()
+	b, e := cirunner.CommandContext(ctx, name, args...).CombinedOutput()
 	if e != nil {
 		return b, fmt.Errorf("%s %v: %w\n%s", name, args, e, b)
 	}
@@ -89,6 +92,9 @@ func run(out string, check bool) error {
 		return e
 	}
 	c := capture{Schema: 1, Sources: map[string]string{}}
+	if err := captureprovenance.Bind(os.DirFS("."), out, c.Sources); err != nil {
+		return err
+	}
 	for _, q := range []struct {
 		dest *string
 		name string
@@ -222,7 +228,7 @@ func captureVolume(ctx context.Context, out, kind, binary string) (v volume, err
 		defer cancel()
 		var attempts []map[string]any
 		e := diskimage.RetryDetach(cleanupCtx, func() (int, error) {
-			b, e := exec.CommandContext(cleanupCtx, "hdiutil", "detach", device).CombinedOutput()
+			b, e := cirunner.CommandContext(cleanupCtx, "hdiutil", "detach", device).CombinedOutput()
 			code := 0
 			if e != nil {
 				code = -1
@@ -349,6 +355,11 @@ func validate(c capture) error {
 	return nil
 }
 func compare(a, b capture) error {
+	for _, sources := range []map[string]string{a.Sources, b.Sources} {
+		if err := captureprovenance.Verify(os.DirFS("."), sources); err != nil {
+			return err
+		}
+	}
 	if e := validate(a); e != nil {
 		return e
 	}

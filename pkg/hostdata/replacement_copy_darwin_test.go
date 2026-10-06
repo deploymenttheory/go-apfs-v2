@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"reflect"
 	"syscall"
@@ -18,6 +18,8 @@ import (
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
 	"golang.org/x/sys/unix"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 func TestReplacementCopyCloneErrors(t *testing.T) {
@@ -95,7 +97,7 @@ func TestReplacementCopyDarwinNative(t *testing.T) {
 	oracle := os.Getenv("APFS_REPLACEMENT_ORACLE")
 	if oracle == "" {
 		oracle = filepath.Join(t.TempDir(), "oracle")
-		output, err := exec.Command("xcrun", "clang", "-Wall", "-Wextra", "-Werror", "../../testdata/appledouble/native/replacement-copy.c", "-o", oracle).CombinedOutput()
+		output, err := cirunner.Command("xcrun", "clang", "-Wall", "-Wextra", "-Werror", "../../testdata/appledouble/native/replacement-copy.c", "-o", oracle).CombinedOutput()
 		if err != nil {
 			t.Fatalf("compile oracle: %v\n%s", err, output)
 		}
@@ -140,7 +142,7 @@ func TestReplacementCopyDarwinNative(t *testing.T) {
 					t.Fatal(err)
 				}
 				if deny {
-					output, err := exec.Command("/bin/chmod", "+a", "everyone deny write", source.Name()).CombinedOutput()
+					output, err := cirunner.Command("/bin/chmod", "+a", "everyone deny write", source.Name()).CombinedOutput()
 					if err != nil {
 						t.Fatalf("ACL: %v %s", err, output)
 					}
@@ -149,13 +151,13 @@ func TestReplacementCopyDarwinNative(t *testing.T) {
 				if err := os.Mkdir(parent, 0700); err != nil {
 					t.Fatal(err)
 				}
-				output, err := exec.Command("/bin/chmod", "+a", "everyone allow read,file_inherit,directory_inherit", parent).CombinedOutput()
+				output, err := cirunner.Command("/bin/chmod", "+a", "everyone allow read,file_inherit,directory_inherit", parent).CombinedOutput()
 				if err != nil {
 					t.Fatalf("inheritance: %v %s", err, output)
 				}
 				before := replacementSnapshotOf(t, source)
 				nativePath := filepath.Join(parent, "native")
-				output, err = exec.Command(oracle, source.Name(), nativePath, filepath.Join(parent, "clone")).CombinedOutput()
+				output, err = cirunner.Command(oracle, source.Name(), nativePath, filepath.Join(parent, "clone")).CombinedOutput()
 				if err != nil {
 					t.Fatalf("native oracle: %v %s", err, output)
 				}

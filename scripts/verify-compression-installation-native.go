@@ -21,6 +21,8 @@ import (
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/diskimage"
 	"golang.org/x/sys/unix"
 	"howett.net/plist"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 const artifact = "artifacts/compression-installation-native"
@@ -34,7 +36,7 @@ func main() {
 func command(name string, args ...string) ([]byte, int, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
-	data, e := exec.CommandContext(ctx, name, args...).CombinedOutput()
+	data, e := cirunner.CommandContext(ctx, name, args...).CombinedOutput()
 	code := 0
 	if e != nil {
 		code = -1
@@ -69,7 +71,7 @@ func run() (result error) {
 		}
 		report[filesystem] = counts
 	}
-	hashes, e := evidenceaudit.SourceHashes(os.DirFS("."), []string{"pkg/hostdata/compression_*.go", "pkg/osversion/*.go", "pkg/hostdata/resource_fork*.go", "internal/darwinabi/*.go", "internal/darwinabi/*.s", "testdata/appledouble/native/resource-fork-open*", "scripts/capture-resource-fork-open.go", "testdata/appledouble/native/compression-operation*.json.gz", "scripts/verify-compression-installation-native.go", "testdata/appledouble/native/compression-lifecycle.json.gz", "go.mod", "go.sum"})
+	hashes, e := evidenceaudit.HarnessSourceHashes(os.DirFS("."), []string{"pkg/hostdata/compression_*.go", "pkg/osversion/*.go", "pkg/hostdata/resource_fork*.go", "internal/darwinabi/*.go", "internal/darwinabi/*.s", "testdata/appledouble/native/resource-fork-open*", "scripts/capture-resource-fork-open.go", "testdata/appledouble/native/compression-operation*.json.gz", "scripts/verify-compression-installation-native.go", "testdata/appledouble/native/compression-lifecycle.json.gz", "go.mod", "go.sum"})
 	if e != nil {
 		return e
 	}
@@ -155,7 +157,7 @@ func qualify(root, filesystem string) (counts map[string]int, result error) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "go", "test", "-count=1", "-json", "-run=^Test((Install|Commit)HeldCompressionNativeReadback|RecompressNativeFiles|CompressionResourceForkOpeningNative)$", "./pkg/hostdata")
+	cmd := cirunner.CommandContext(ctx, "go", "test", "-count=1", "-json", "-run=^Test((Install|Commit)HeldCompressionNativeReadback|RecompressNativeFiles|CompressionResourceForkOpeningNative)$", "./pkg/hostdata")
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0", "APFS_COMPRESSION_MOUNT="+mount, "APFS_COMPRESSION_FILESYSTEM="+filesystem)
 	var transcript bytes.Buffer
 	cmd.Stdout = io.MultiWriter(log, &transcript)

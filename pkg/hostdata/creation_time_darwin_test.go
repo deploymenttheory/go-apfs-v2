@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"syscall"
 	"testing"
@@ -12,12 +12,14 @@ import (
 
 	heldfixture "github.com/deploymenttheory/go-apfs-v2/internal/testutil/heldfixture"
 	"golang.org/x/sys/unix"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 func TestSetCreationTimeDarwinHeldFile(t *testing.T) {
 	file := heldfixture.Source(t, 0640)
 	original, moved := file.Name(), file.Name()+".moved"
-	if out, err := exec.Command("/bin/chmod", "+a", "everyone allow read", original).CombinedOutput(); err != nil {
+	if out, err := cirunner.Command("/bin/chmod", "+a", "everyone allow read", original).CombinedOutput(); err != nil {
 		t.Fatalf("ACL: %v: %s", err, out)
 	}
 	if err := unix.Fsetxattr(int(file.Fd()), "org.example.creation", []byte("retained"), 0); err != nil {
@@ -41,7 +43,7 @@ func TestSetCreationTimeDarwinHeldFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	acl := func() []byte {
-		out, err := exec.Command("/bin/ls", "-lde", moved).CombinedOutput()
+		out, err := cirunner.Command("/bin/ls", "-lde", moved).CombinedOutput()
 		if err != nil {
 			t.Fatal(err)
 		}

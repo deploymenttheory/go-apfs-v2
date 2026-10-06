@@ -11,11 +11,13 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 func main() {
@@ -36,7 +38,7 @@ func verify() error {
 	defer log.Close()
 	var transcript bytes.Buffer
 	profile := filepath.Join(dir, "coverage.out")
-	cmd := exec.Command("go", "test", "-count=1", "-json", "-covermode=atomic", "-coverprofile="+profile, "./pkg/appledouble")
+	cmd := cirunner.Command("go", "test", "-count=1", "-json", "-covermode=atomic", "-coverprofile="+profile, "./pkg/appledouble")
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 	cmd.Stdout = io.MultiWriter(os.Stdout, log, &transcript)
 	cmd.Stderr = io.MultiWriter(os.Stderr, log)
@@ -124,7 +126,7 @@ func verify() error {
 	if sources["testdata/cli/component-links.probe.json"] != "450b5a23661072a6de625c55e37de0af2602253f1ab71b063e889fbb71985865" {
 		return fmt.Errorf("native pkgbuild fixture provenance mismatch")
 	}
-	revision, err := exec.Command("git", "rev-parse", "HEAD").Output()
+	revision, err := cirunner.Command("git", "rev-parse", "HEAD").Output()
 	if err != nil {
 		return err
 	}

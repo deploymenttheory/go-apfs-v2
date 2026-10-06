@@ -13,11 +13,13 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 func main() {
@@ -107,7 +109,7 @@ func verify(cache string) error {
 	}
 	const helper = "testdata/appledouble/native/path-lifecycle-ast.c"
 	for _, arch := range []string{"arm64", "x86_64"} {
-		cmd := exec.Command("xcrun", "clang", "-arch", arch, "-I", dir, "-fsyntax-only", "-Xclang", "-ast-dump=json", helper)
+		cmd := cirunner.Command("xcrun", "clang", "-arch", arch, "-I", dir, "-fsyntax-only", "-Xclang", "-ast-dump=json", helper)
 		var stderr bytes.Buffer
 		cmd.Stderr = &stderr
 		ast, err := cmd.Output()
@@ -118,7 +120,7 @@ func verify(cache string) error {
 			return err
 		}
 	}
-	revision, err := exec.Command("git", "rev-parse", "HEAD").Output()
+	revision, err := cirunner.Command("git", "rev-parse", "HEAD").Output()
 	if err != nil {
 		return err
 	}

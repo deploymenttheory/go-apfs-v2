@@ -26,15 +26,28 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
       - name: Reject incomplete or changed scalar admission evidence
-        run: go test scripts/capture-name-admission.go scripts/capture-name-admission_test.go
+        run: |
+          apfs-ci-runner --suite name-admission/native/step3 --timeout 39m -- go test -json scripts/capture-name-admission.go scripts/capture-name-admission_test.go
       - name: Capture every scalar through actual APFS and APFSX creation
-        run: go run scripts/capture-name-admission.go -out artifacts/name-admission -check
+        run: |
+          apfs-ci-runner --suite name-admission/native/step4 --timeout 39m -- go run scripts/capture-name-admission.go -out artifacts/name-admission -check
       - name: Retain source provenance ASTs actual errno arrays and native images
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: name-admission-${{ matrix.os }}
           path: artifacts/name-admission/
+          compression-level: 9
+          if-no-files-found: error
+
+      - name: Retain complete CI command diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-observability-name-admission-native-${{ strategy.job-index || 0 }}-${{ github.run_attempt }}
+          path: artifacts/ci-observability/
           compression-level: 9
           if-no-files-found: error

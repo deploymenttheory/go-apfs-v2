@@ -16,7 +16,7 @@ import (
 	"io/fs"
 	"net/http"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -32,6 +32,8 @@ import (
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfswrite"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/hfsplus"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 type command struct {
@@ -61,7 +63,7 @@ func fileSum(p string) string {
 	return fmt.Sprintf("%x", h.Sum(nil))
 }
 func run(args ...string) []byte {
-	b, e := exec.Command(args[0], args[1:]...).CombinedOutput()
+	b, e := cirunner.Command(args[0], args[1:]...).CombinedOutput()
 	c := command{Args: args, Output: string(b)}
 	if e != nil {
 		c.Error = e.Error()
@@ -79,7 +81,7 @@ func run(args ...string) []byte {
 func detach(target string) error {
 	return diskimage.RetryDetach(context.Background(), func() (int, error) {
 		args := []string{"hdiutil", "detach", target}
-		cmd := exec.Command(args[0], args[1:]...)
+		cmd := cirunner.Command(args[0], args[1:]...)
 		var stdout, stderr bytes.Buffer
 		cmd.Stdout, cmd.Stderr = &stdout, &stderr
 		err := cmd.Run()
@@ -372,7 +374,7 @@ func main() {
 					must(err)
 					defer func() { must(detach(device)) }()
 					args := []string{"/sbin/fsck_hfs", "-n", device}
-					output, err := exec.Command(args[0], args[1:]...).CombinedOutput()
+					output, err := cirunner.Command(args[0], args[1:]...).CombinedOutput()
 					c := command{Args: args, Output: string(output)}
 					if err != nil {
 						c.Error = err.Error()

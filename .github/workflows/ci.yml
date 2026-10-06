@@ -15,6 +15,9 @@ permissions:
   contents: read
 
 jobs:
+  ci-reporting:
+    uses: ./.github/workflows/ci-reporting.yml
+
   name-comparison:
     permissions:
       contents: read
@@ -46,13 +49,24 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
       - name: Build (MIT)
         env:
           CGO_ENABLED: "0"
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
-        run: go build ./...
+        run: |
+          apfs-ci-runner --suite ci/build/step3 --timeout 60m -- go build ./...
 
+      - name: Retain complete CI command diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-observability-ci-build-${{ strategy.job-index || 0 }}-${{ github.run_attempt }}
+          path: artifacts/ci-observability/
+          compression-level: 9
+          if-no-files-found: error
   lint:
     name: Lint (${{ matrix.goos }})
     runs-on: ubuntu-latest
@@ -92,10 +106,14 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
       - name: Verify generated typed wrappers
-        run: go run scripts/generate-darwin-wrappers.go -check
+        run: |
+          apfs-ci-runner --suite ci/native-boundary/step3 --timeout 60m -- go run scripts/generate-darwin-wrappers.go -check
       - name: Audit all six CGO-disabled dependency graphs
-        run: go run scripts/audit-native-bindings.go -check
+        run: |
+          apfs-ci-runner --suite ci/native-boundary/step4 --timeout 60m -- go run scripts/audit-native-bindings.go -check
       - name: Upload native boundary evidence
         if: always()
         uses: actions/upload-artifact@v7
@@ -104,6 +122,14 @@ jobs:
           path: artifacts/native-bindings/
           if-no-files-found: error
 
+      - name: Retain complete CI command diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-observability-ci-native-boundary-${{ strategy.job-index || 0 }}-${{ github.run_attempt }}
+          path: artifacts/ci-observability/
+          compression-level: 9
+          if-no-files-found: error
   govulncheck:
     name: govulncheck
     runs-on: ubuntu-latest
@@ -127,6 +153,8 @@ jobs:
       # scale tests (tens of thousands of files, gigabyte images): they
       # exercise single-threaded code, and under the race detector's memory
       # overhead they exceed the runner.
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
       - name: Unit tests with -race
         env:
           CGO_ENABLED: "1"
@@ -136,7 +164,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p artifacts/race
-          go test -race -short -timeout 30m -json ./pkg/... ./internal/... | tee artifacts/race/tests.json
+          apfs-ci-runner --suite ci/race/step3 --timeout 44m -- go test -race -short -timeout 30m -json ./pkg/... ./internal/... | tee artifacts/race/tests.json
       - name: Upload race results and timings
         if: always()
         uses: actions/upload-artifact@v7
@@ -145,6 +173,14 @@ jobs:
           path: artifacts/race/
           if-no-files-found: error
 
+      - name: Retain complete CI command diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-observability-ci-race-${{ strategy.job-index || 0 }}-${{ github.run_attempt }}
+          path: artifacts/ci-observability/
+          compression-level: 9
+          if-no-files-found: error
   test:
     name: Test (${{ matrix.os }})
     needs: name-comparison
@@ -161,16 +197,30 @@ jobs:
       # go-fuse mounts via /bin/fusermount, which is the FUSE 2 binary in the
       # `fuse` package -- not fusermount3. Without it the end-to-end mount tests
       # skip, and mount would go untested where it can actually be tested.
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
       - name: Install FUSE (Linux)
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y fuse
 
       - name: Vet
-        run: go vet ./...
+        run: |
+          apfs-ci-runner --suite ci/test/step4 --timeout 60m -- go vet ./...
+      - name: Qualify shared reporting evidence for this host
+        run: |
+          apfs-ci-runner --suite ci/test/reporting --timeout 8m -- go run scripts/verify-ci-reporting.go
+      - name: Upload shared reporting coverage
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-reporting-coverage-${{ matrix.os }}
+          path: artifacts/ci-reporting-coverage/
+          if-no-files-found: error
       - name: Explicit OS version profiles above 95% coverage
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-osversion.go
+        run: |
+          apfs-ci-runner --suite ci/test/step5 --timeout 60m -- go run scripts/verify-osversion.go
       - name: Upload OS version profile coverage
         if: always()
         uses: actions/upload-artifact@v7
@@ -181,7 +231,8 @@ jobs:
       - name: Replacement fallback coverage above 95%
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-replacement.go
+        run: |
+          apfs-ci-runner --suite ci/test/step7 --timeout 60m -- go run scripts/verify-replacement.go
       - name: Upload replacement fallback coverage
         if: always()
         uses: actions/upload-artifact@v7
@@ -193,7 +244,8 @@ jobs:
         if: runner.os == 'macOS'
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-replacement-native.go
+        run: |
+          apfs-ci-runner --suite ci/test/step9 --timeout 60m -- go run scripts/verify-replacement-native.go
       - name: Upload native replacement qualification
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
@@ -204,7 +256,8 @@ jobs:
       - name: Held metadata providers above 95% coverage
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-held-metadata.go
+        run: |
+          apfs-ci-runner --suite ci/test/step11 --timeout 60m -- go run scripts/verify-held-metadata.go
       - name: Upload held metadata coverage
         if: always()
         uses: actions/upload-artifact@v7
@@ -215,7 +268,8 @@ jobs:
       - name: Strict xattr API tests and coverage above 95%
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-xattrs.go
+        run: |
+          apfs-ci-runner --suite ci/test/step13 --timeout 60m -- go run scripts/verify-xattrs.go
       - name: Upload strict xattr API evidence
         if: always()
         uses: actions/upload-artifact@v7
@@ -225,7 +279,8 @@ jobs:
           if-no-files-found: error
       - name: Native held xattr writes and Clang comparisons
         if: runner.os == 'macOS'
-        run: go run scripts/verify-xattr-write-native.go
+        run: |
+          apfs-ci-runner --suite ci/test/step15 --timeout 60m -- go run scripts/verify-xattr-write-native.go
       - name: Upload native held xattr write evidence
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
@@ -235,7 +290,8 @@ jobs:
           if-no-files-found: error
       - name: Native held xattr listing and Clang comparisons
         if: runner.os == 'macOS'
-        run: go run scripts/verify-xattr-list-native.go
+        run: |
+          apfs-ci-runner --suite ci/test/step17 --timeout 60m -- go run scripts/verify-xattr-list-native.go
       - name: Upload native held xattr listing evidence
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7.0.1
@@ -247,11 +303,13 @@ jobs:
       - name: AppleDouble unit tests and coverage above 95%
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-appledouble.go
+        run: |
+          apfs-ci-runner --suite ci/test/step19 --timeout 60m -- go run scripts/verify-appledouble.go
       - name: Portable ACL restoration/HFS security flags and coverage above 95%
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-acl-restore.go
+        run: |
+          apfs-ci-runner --suite ci/test/step20 --timeout 60m -- go run scripts/verify-acl-restore.go
       - name: Upload ACL restoration evidence
         if: always()
         uses: actions/upload-artifact@v7
@@ -262,7 +320,8 @@ jobs:
       - name: Portable APFS/HFS image security capture and coverage above 95%
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-image-security-coverage.go
+        run: |
+          apfs-ci-runner --suite ci/test/step22 --timeout 60m -- go run scripts/verify-image-security-coverage.go
       - name: Upload image security capture coverage
         if: always()
         uses: actions/upload-artifact@v7
@@ -273,11 +332,13 @@ jobs:
       - name: Portable APFS root metadata and coverage above 95%
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-root-security-coverage.go
+        run: |
+          apfs-ci-runner --suite ci/test/step24 --timeout 60m -- go run scripts/verify-root-security-coverage.go
       - name: Root writer legacy layout hashes
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-root-layout.go
+        run: |
+          apfs-ci-runner --suite ci/test/step25 --timeout 60m -- go run scripts/verify-root-layout.go
       - name: Upload root layout hashes
         if: always()
         uses: actions/upload-artifact@v7
@@ -295,7 +356,8 @@ jobs:
       - name: Portable image permissions and coverage above 95%
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-mode-security-coverage.go
+        run: |
+          apfs-ci-runner --suite ci/test/step28 --timeout 60m -- go run scripts/verify-mode-security-coverage.go
       - name: Upload image permissions coverage
         if: always()
         uses: actions/upload-artifact@v7
@@ -306,7 +368,8 @@ jobs:
       - name: Portable image ACL restoration and coverage above 95%
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-image-acl-coverage.go
+        run: |
+          apfs-ci-runner --suite ci/test/step30 --timeout 60m -- go run scripts/verify-image-acl-coverage.go
       - name: Upload image ACL restoration coverage
         if: always()
         uses: actions/upload-artifact@v7
@@ -317,7 +380,8 @@ jobs:
       - name: Portable image security copy and coverage above 95%
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-image-copy-coverage.go
+        run: |
+          apfs-ci-runner --suite ci/test/step32 --timeout 60m -- go run scripts/verify-image-copy-coverage.go
       - name: Upload image security copy coverage
         if: always()
         uses: actions/upload-artifact@v7
@@ -328,7 +392,8 @@ jobs:
       - name: Portable security volume policy and coverage above 95%
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-security-volume-coverage.go
+        run: |
+          apfs-ci-runner --suite ci/test/step34 --timeout 60m -- go run scripts/verify-security-volume-coverage.go
       - name: Upload security volume policy coverage
         if: always()
         uses: actions/upload-artifact@v7
@@ -339,7 +404,8 @@ jobs:
       - name: Portable source acquisition and coverage above 95%
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-security-source-coverage.go
+        run: |
+          apfs-ci-runner --suite ci/test/step36 --timeout 60m -- go run scripts/verify-security-source-coverage.go
       - name: Upload source acquisition coverage
         if: always()
         uses: actions/upload-artifact@v7
@@ -350,7 +416,8 @@ jobs:
       - name: Independent image timestamps and coverage above 95%
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-image-times-coverage.go
+        run: |
+          apfs-ci-runner --suite ci/test/step38 --timeout 60m -- go run scripts/verify-image-times-coverage.go
       - name: Upload image timestamp coverage
         if: always()
         uses: actions/upload-artifact@v7
@@ -361,7 +428,8 @@ jobs:
       - name: Image BSD flags and coverage above 95%
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-image-flags-coverage.go
+        run: |
+          apfs-ci-runner --suite ci/test/step40 --timeout 60m -- go run scripts/verify-image-flags-coverage.go
       - name: Upload image BSD flags coverage
         if: always()
         uses: actions/upload-artifact@v7
@@ -372,7 +440,8 @@ jobs:
       - name: Image stat restoration and coverage above 95%
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-image-stat-coverage.go
+        run: |
+          apfs-ci-runner --suite ci/test/step42 --timeout 60m -- go run scripts/verify-image-stat-coverage.go
       - name: Upload image stat restoration coverage
         if: always()
         uses: actions/upload-artifact@v7
@@ -383,7 +452,8 @@ jobs:
       - name: Portable xattr restoration and image bindings above 95% coverage
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-xattr-restore-coverage.go
+        run: |
+          apfs-ci-runner --suite ci/test/step44 --timeout 60m -- go run scripts/verify-xattr-restore-coverage.go
       - name: Upload xattr restoration coverage
         if: always()
         uses: actions/upload-artifact@v7
@@ -394,7 +464,8 @@ jobs:
       - name: Portable AppleDouble unpack lifecycle above 95% coverage
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-unpack-restore-coverage.go
+        run: |
+          apfs-ci-runner --suite ci/test/step46 --timeout 60m -- go run scripts/verify-unpack-restore-coverage.go
       - name: Upload AppleDouble unpack coverage
         if: always()
         uses: actions/upload-artifact@v7
@@ -405,7 +476,8 @@ jobs:
       - name: Portable copy pipeline ordering and coverage above 95%
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-copy-pipeline-coverage.go
+        run: |
+          apfs-ci-runner --suite ci/test/step48 --timeout 60m -- go run scripts/verify-copy-pipeline-coverage.go
       - name: Upload copy pipeline coverage
         if: always()
         uses: actions/upload-artifact@v7
@@ -416,7 +488,8 @@ jobs:
       - name: Portable ordered stat restoration and coverage above 95%
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-stat-copy-coverage.go
+        run: |
+          apfs-ci-runner --suite ci/test/step50 --timeout 60m -- go run scripts/verify-stat-copy-coverage.go
       - name: Upload ordered stat restoration coverage
         if: always()
         uses: actions/upload-artifact@v7
@@ -427,7 +500,8 @@ jobs:
       - name: Streaming AppleDouble and sequential restoration above 95% coverage
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-appledouble-stream.go
+        run: |
+          apfs-ci-runner --suite ci/test/step52 --timeout 60m -- go run scripts/verify-appledouble-stream.go
       - name: Upload streaming and sequential coverage
         if: always()
         uses: actions/upload-artifact@v7
@@ -439,7 +513,8 @@ jobs:
         if: runner.os == 'macOS'
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-unpack-sequential.go
+        run: |
+          apfs-ci-runner --suite ci/test/step54 --timeout 60m -- go run scripts/verify-unpack-sequential.go
       - name: Upload native sequential unpack evidence
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
@@ -450,7 +525,8 @@ jobs:
       - name: Production metadata carrier and host integration above 95% coverage
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-metadata-transport-coverage.go
+        run: |
+          apfs-ci-runner --suite ci/test/step56 --timeout 60m -- go run scripts/verify-metadata-transport-coverage.go
       - name: Upload production metadata transport coverage
         if: always()
         uses: actions/upload-artifact@v7
@@ -461,7 +537,8 @@ jobs:
       - name: Complete path lifecycle above 95% per-file coverage
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-path-lifecycle-coverage.go
+        run: |
+          apfs-ci-runner --suite ci/test/step58 --timeout 60m -- go run scripts/verify-path-lifecycle-coverage.go
       - name: Upload complete path lifecycle coverage
         if: always()
         uses: actions/upload-artifact@v7
@@ -473,7 +550,8 @@ jobs:
         if: "!cancelled() && runner.os == 'macOS'"
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-path-lifecycle-source.go
+        run: |
+          apfs-ci-runner --suite ci/test/step60 --timeout 60m -- go run scripts/verify-path-lifecycle-source.go
       - name: Upload path-lifecycle-source evidence
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
@@ -485,7 +563,8 @@ jobs:
         if: "!cancelled() && runner.os == 'macOS'"
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-path-copyfile-native.go
+        run: |
+          apfs-ci-runner --suite ci/test/step62 --timeout 60m -- go run scripts/verify-path-copyfile-native.go
       - name: Upload path-copyfile-native evidence
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
@@ -497,7 +576,8 @@ jobs:
         if: "!cancelled() && runner.os == 'macOS'"
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-path-security-native.go
+        run: |
+          apfs-ci-runner --suite ci/test/step64 --timeout 60m -- go run scripts/verify-path-security-native.go
       - name: Upload path-security-native evidence
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
@@ -509,7 +589,8 @@ jobs:
         if: "!cancelled() && runner.os == 'macOS'"
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-xattr-remove-effects-native.go
+        run: |
+          apfs-ci-runner --suite ci/test/step66 --timeout 60m -- go run scripts/verify-xattr-remove-effects-native.go
       - name: Upload xattr-remove-effects-native evidence
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
@@ -521,7 +602,8 @@ jobs:
         if: "!cancelled() && runner.os == 'macOS'"
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-appledouble-object-native.go
+        run: |
+          apfs-ci-runner --suite ci/test/step68 --timeout 60m -- go run scripts/verify-appledouble-object-native.go
       - name: Upload appledouble-object-native evidence
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
@@ -533,7 +615,8 @@ jobs:
         if: "!cancelled() && runner.os == 'macOS'"
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-appledouble-object-authorization.go
+        run: |
+          apfs-ci-runner --suite ci/test/step70 --timeout 60m -- go run scripts/verify-appledouble-object-authorization.go
       - name: Upload appledouble-object-authorization evidence
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
@@ -545,7 +628,8 @@ jobs:
         if: "!cancelled() && runner.os == 'macOS'"
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-xattr-intent.go -ephemeral-runner
+        run: |
+          apfs-ci-runner --suite ci/test/step72 --timeout 60m -- go run scripts/verify-xattr-intent.go -ephemeral-runner
       - name: Upload xattr-intent evidence
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
@@ -557,7 +641,8 @@ jobs:
         if: "!cancelled() && runner.os == 'macOS'"
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-path-fork-native.go
+        run: |
+          apfs-ci-runner --suite ci/test/step74 --timeout 60m -- go run scripts/verify-path-fork-native.go
       - name: Upload path-fork-native evidence
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
@@ -569,7 +654,8 @@ jobs:
         if: "!cancelled() && runner.os == 'macOS'"
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-appledouble-object-sandbox.go -ephemeral-runner
+        run: |
+          apfs-ci-runner --suite ci/test/step76 --timeout 60m -- go run scripts/verify-appledouble-object-sandbox.go -ephemeral-runner
       - name: Upload appledouble-object-sandbox evidence
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
@@ -580,7 +666,8 @@ jobs:
       - name: Native-compatible AppleDouble packing above 95% coverage
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-appledouble-pack-coverage.go
+        run: |
+          apfs-ci-runner --suite ci/test/step78 --timeout 60m -- go run scripts/verify-appledouble-pack-coverage.go
       - name: Upload native-compatible packing coverage
         if: always()
         uses: actions/upload-artifact@v7
@@ -592,7 +679,8 @@ jobs:
         if: runner.os == 'macOS'
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-appledouble-pack.go
+        run: |
+          apfs-ci-runner --suite ci/test/step80 --timeout 60m -- go run scripts/verify-appledouble-pack.go
       - name: Upload native AppleDouble packing evidence
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
@@ -602,7 +690,8 @@ jobs:
           if-no-files-found: error
       - name: Typed Darwin wrappers above 95% coverage
         if: runner.os == 'macOS'
-        run: go run scripts/verify-darwin-wrappers.go
+        run: |
+          apfs-ci-runner --suite ci/test/step82 --timeout 60m -- go run scripts/verify-darwin-wrappers.go
       - name: Upload typed Darwin wrapper evidence
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
@@ -613,7 +702,8 @@ jobs:
       - name: Compression storage above 95% coverage
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-decmpfs-formats-coverage.go
+        run: |
+          apfs-ci-runner --suite ci/test/step84 --timeout 60m -- go run scripts/verify-decmpfs-formats-coverage.go
       - name: Upload compression storage coverage
         if: always()
         uses: actions/upload-artifact@v7
@@ -624,7 +714,8 @@ jobs:
       - name: Compression lifecycle and complete hostdata above 95 percent coverage
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-compression-lifecycle.go
+        run: |
+          apfs-ci-runner --suite ci/test/step86 --timeout 60m -- go run scripts/verify-compression-lifecycle.go
       - name: Upload compression lifecycle coverage
         if: always()
         uses: actions/upload-artifact@v7
@@ -650,9 +741,9 @@ jobs:
         run: |
           set -euo pipefail
           if [ "$RUNNER_OS" = Linux ]; then
-            TMPDIR="$RUNNER_TEMP/owned-compression" go run scripts/verify-compression-owned.go
+            TMPDIR="$RUNNER_TEMP/owned-compression" apfs-ci-runner --suite ci/test/step89 --timeout 60m -- go run scripts/verify-compression-owned.go
           else
-            go run scripts/verify-compression-owned.go
+            apfs-ci-runner --suite ci/test/step89 --timeout 60m -- go run scripts/verify-compression-owned.go
           fi
       - name: Release Linux owned-binding qualification filesystem
         if: always() && runner.os == 'Linux'
@@ -672,7 +763,8 @@ jobs:
       - name: Active and inactive compression storage above 95 percent coverage
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-compression-state.go
+        run: |
+          apfs-ci-runner --suite ci/test/step92 --timeout 60m -- go run scripts/verify-compression-state.go
       - name: Upload compression state coverage and images
         if: always()
         uses: actions/upload-artifact@v7
@@ -683,7 +775,8 @@ jobs:
       - name: Read complete native compressed corpus across 1 2 and 4 GiB
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-large-compression-portable.go
+        run: |
+          apfs-ci-runner --suite ci/test/step94 --timeout 60m -- go run scripts/verify-large-compression-portable.go
       - name: Upload portable large compression evidence
         if: always()
         uses: actions/upload-artifact@v7
@@ -696,11 +789,11 @@ jobs:
         env:
           CGO_ENABLED: "0"
         run: |
-          go run scripts/verify-held-metadata-native.go
-          go run scripts/verify-held-lifecycle.go
-          go run scripts/verify-native-projection.go
-          go run scripts/verify-quarantine-capture-native.go
-          go run scripts/verify-acl-identity-capture-native.go
+          apfs-ci-runner --suite ci/test/step96 --timeout 60m -- go run scripts/verify-held-metadata-native.go
+          apfs-ci-runner --suite ci/test/step96 --timeout 60m -- go run scripts/verify-held-lifecycle.go
+          apfs-ci-runner --suite ci/test/step96 --timeout 60m -- go run scripts/verify-native-projection.go
+          apfs-ci-runner --suite ci/test/step96 --timeout 60m -- go run scripts/verify-quarantine-capture-native.go
+          apfs-ci-runner --suite ci/test/step96 --timeout 60m -- go run scripts/verify-acl-identity-capture-native.go
       - name: Upload native held metadata and projection evidence
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
@@ -717,7 +810,8 @@ jobs:
         if: runner.os == 'macOS'
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-decmpfs-formats.go
+        run: |
+          apfs-ci-runner --suite ci/test/step98 --timeout 60m -- go run scripts/verify-decmpfs-formats.go
       - name: Upload native compression storage evidence
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
@@ -729,7 +823,8 @@ jobs:
         if: runner.os == 'macOS'
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-large-compression.go
+        run: |
+          apfs-ci-runner --suite ci/test/step100 --timeout 60m -- go run scripts/verify-large-compression.go
       - name: Upload native large compression evidence
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
@@ -742,12 +837,12 @@ jobs:
         env:
           CGO_ENABLED: "0"
         run: |
-          go run scripts/capture-compression-blocks.go -check
-          go run scripts/capture-compression-writer.go -check
-          go run scripts/verify-compression-zlib-source.go
-          go run scripts/capture-compression-policy.go -check
-          go run scripts/capture-compression-lz4.go -check
-          go run scripts/capture-compression-query.go -check
+          apfs-ci-runner --suite ci/test/step102 --timeout 60m -- go run scripts/capture-compression-blocks.go -check
+          apfs-ci-runner --suite ci/test/step102 --timeout 60m -- go run scripts/capture-compression-writer.go -check
+          apfs-ci-runner --suite ci/test/step102 --timeout 60m -- go run scripts/verify-compression-zlib-source.go
+          apfs-ci-runner --suite ci/test/step102 --timeout 60m -- go run scripts/capture-compression-policy.go -check
+          apfs-ci-runner --suite ci/test/step102 --timeout 60m -- go run scripts/capture-compression-lz4.go -check
+          apfs-ci-runner --suite ci/test/step102 --timeout 60m -- go run scripts/capture-compression-query.go -check
       - name: Upload native compression encoder evidence
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
@@ -762,7 +857,8 @@ jobs:
             artifacts/compression-query/
           if-no-files-found: error
       - name: Complete foreign recompression and carrier publication above 95 percent coverage
-        run: go run scripts/verify-carrier-recompression.go
+        run: |
+          apfs-ci-runner --suite ci/test/step104 --timeout 60m -- go run scripts/verify-carrier-recompression.go
       - name: Upload complete foreign recompression evidence
         if: always()
         uses: actions/upload-artifact@v7
@@ -781,7 +877,8 @@ jobs:
       - name: Audit portable AppleDouble qualification evidence
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/audit-appledouble-evidence.go
+        run: |
+          apfs-ci-runner --suite ci/test/step107 --timeout 60m -- go run scripts/audit-appledouble-evidence.go
       - name: Upload evidence auditor tests and coverage
         if: always()
         uses: actions/upload-artifact@v7
@@ -794,7 +891,8 @@ jobs:
         env:
           CGO_ENABLED: "0"
           GOARCH: "386"
-        run: go test -count=1 ./pkg/appledouble
+        run: |
+          apfs-ci-runner --suite ci/test/step109 --timeout 60m -- go test -json -count=1 ./pkg/appledouble
       - name: Upload AppleDouble evidence
         if: always()
         uses: actions/upload-artifact@v7
@@ -806,7 +904,8 @@ jobs:
         if: runner.os == 'macOS'
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-appledouble-native.go
+        run: |
+          apfs-ci-runner --suite ci/test/step111 --timeout 60m -- go run scripts/verify-appledouble-native.go
       - name: Upload AppleDouble native evidence
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
@@ -818,7 +917,8 @@ jobs:
         if: runner.os == 'macOS'
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-appledouble-acl.go
+        run: |
+          apfs-ci-runner --suite ci/test/step113 --timeout 60m -- go run scripts/verify-appledouble-acl.go
       - name: Upload AppleDouble ACL evidence
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
@@ -830,7 +930,8 @@ jobs:
         if: runner.os == 'macOS'
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-appledouble-acl-inherit.go
+        run: |
+          apfs-ci-runner --suite ci/test/step115 --timeout 60m -- go run scripts/verify-appledouble-acl-inherit.go
       - name: Upload AppleDouble ACL inheritance evidence
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
@@ -842,7 +943,8 @@ jobs:
         if: runner.os == 'macOS'
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-appledouble-acl-copy.go
+        run: |
+          apfs-ci-runner --suite ci/test/step117 --timeout 60m -- go run scripts/verify-appledouble-acl-copy.go
       - name: Upload AppleDouble ACL copy evidence
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
@@ -854,7 +956,8 @@ jobs:
         if: runner.os == 'macOS'
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-security-copy.go
+        run: |
+          apfs-ci-runner --suite ci/test/step119 --timeout 60m -- go run scripts/verify-security-copy.go
       - name: Upload security copy execution evidence
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
@@ -866,7 +969,8 @@ jobs:
         if: runner.os == 'macOS'
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-security-copy-volume.go
+        run: |
+          apfs-ci-runner --suite ci/test/step121 --timeout 60m -- go run scripts/verify-security-copy-volume.go
       - name: Upload security volume policy native evidence
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
@@ -878,7 +982,8 @@ jobs:
         if: runner.os == 'macOS'
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-security-source.go
+        run: |
+          apfs-ci-runner --suite ci/test/step123 --timeout 60m -- go run scripts/verify-security-source.go
       - name: Upload native source acquisition evidence
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
@@ -890,7 +995,8 @@ jobs:
         if: runner.os == 'macOS'
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-xattr-restore.go
+        run: |
+          apfs-ci-runner --suite ci/test/step125 --timeout 60m -- go run scripts/verify-xattr-restore.go
       - name: Upload native xattr restoration evidence
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
@@ -902,7 +1008,8 @@ jobs:
         if: runner.os == 'macOS'
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-unpack-restore.go
+        run: |
+          apfs-ci-runner --suite ci/test/step127 --timeout 60m -- go run scripts/verify-unpack-restore.go
       - name: Upload native AppleDouble unpack evidence
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
@@ -914,7 +1021,8 @@ jobs:
         if: runner.os == 'macOS'
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-copy-pipeline.go
+        run: |
+          apfs-ci-runner --suite ci/test/step129 --timeout 60m -- go run scripts/verify-copy-pipeline.go
       - name: Upload native copy pipeline evidence
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
@@ -926,7 +1034,8 @@ jobs:
         if: runner.os == 'macOS'
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-stat-copy.go
+        run: |
+          apfs-ci-runner --suite ci/test/step131 --timeout 60m -- go run scripts/verify-stat-copy.go
       - name: Upload native stat restoration evidence
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
@@ -938,7 +1047,8 @@ jobs:
         if: runner.os == 'macOS'
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-image-security.go
+        run: |
+          apfs-ci-runner --suite ci/test/step133 --timeout 60m -- go run scripts/verify-image-security.go
       - name: Upload native image security capture evidence
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
@@ -950,7 +1060,8 @@ jobs:
         if: runner.os == 'macOS'
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-image-security.go -roots
+        run: |
+          apfs-ci-runner --suite ci/test/step135 --timeout 60m -- go run scripts/verify-image-security.go -roots
       - name: Upload native root metadata evidence
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
@@ -962,7 +1073,8 @@ jobs:
         if: runner.os == 'macOS'
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-image-security.go -modes
+        run: |
+          apfs-ci-runner --suite ci/test/step137 --timeout 60m -- go run scripts/verify-image-security.go -modes
       - name: Upload native image permissions evidence
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
@@ -974,7 +1086,8 @@ jobs:
         if: runner.os == 'macOS'
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-image-security.go -times
+        run: |
+          apfs-ci-runner --suite ci/test/step139 --timeout 60m -- go run scripts/verify-image-security.go -times
       - name: Upload native image timestamp evidence
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
@@ -986,7 +1099,8 @@ jobs:
         if: runner.os == 'macOS'
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-image-security.go -flags
+        run: |
+          apfs-ci-runner --suite ci/test/step141 --timeout 60m -- go run scripts/verify-image-security.go -flags
       - name: Upload native image BSD flags evidence
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
@@ -998,7 +1112,8 @@ jobs:
         if: runner.os == 'macOS'
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-image-security.go -stat
+        run: |
+          apfs-ci-runner --suite ci/test/step143 --timeout 60m -- go run scripts/verify-image-security.go -stat
       - name: Upload native image stat restoration evidence
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
@@ -1010,7 +1125,8 @@ jobs:
         if: runner.os == 'macOS'
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-image-acl-restore.go
+        run: |
+          apfs-ci-runner --suite ci/test/step145 --timeout 60m -- go run scripts/verify-image-acl-restore.go
       - name: Upload native image ACL restoration evidence
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
@@ -1022,7 +1138,8 @@ jobs:
         if: runner.os == 'macOS'
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-image-security-copy.go
+        run: |
+          apfs-ci-runner --suite ci/test/step147 --timeout 60m -- go run scripts/verify-image-security-copy.go
       - name: Upload native image security copy evidence
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
@@ -1034,7 +1151,8 @@ jobs:
         if: runner.os == 'macOS'
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-appledouble-filesec.go
+        run: |
+          apfs-ci-runner --suite ci/test/step149 --timeout 60m -- go run scripts/verify-appledouble-filesec.go
       - name: Upload AppleDouble security record evidence
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
@@ -1046,7 +1164,8 @@ jobs:
         if: runner.os == 'macOS'
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-appledouble-quarantine.go
+        run: |
+          apfs-ci-runner --suite ci/test/step151 --timeout 60m -- go run scripts/verify-appledouble-quarantine.go
       - name: Upload AppleDouble quarantine evidence
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
@@ -1058,7 +1177,8 @@ jobs:
         if: runner.os == 'macOS'
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-appledouble-quarantine-runtime.go
+        run: |
+          apfs-ci-runner --suite ci/test/step153 --timeout 60m -- go run scripts/verify-appledouble-quarantine-runtime.go
       - name: Upload AppleDouble quarantine runtime evidence
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
@@ -1070,7 +1190,8 @@ jobs:
         if: runner.os == 'macOS'
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-appledouble-quarantine-runtime.go -normalization
+        run: |
+          apfs-ci-runner --suite ci/test/step155 --timeout 60m -- go run scripts/verify-appledouble-quarantine-runtime.go -normalization
       - name: Upload AppleDouble quarantine normalization evidence
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
@@ -1082,7 +1203,8 @@ jobs:
         if: runner.os == 'macOS'
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-appledouble-quarantine-runtime.go -processes
+        run: |
+          apfs-ci-runner --suite ci/test/step157 --timeout 60m -- go run scripts/verify-appledouble-quarantine-runtime.go -processes
       - name: Upload AppleDouble quarantine process evidence
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
@@ -1094,7 +1216,8 @@ jobs:
         if: runner.os == 'macOS'
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-appledouble-quarantine-runtime.go -existing
+        run: |
+          apfs-ci-runner --suite ci/test/step159 --timeout 60m -- go run scripts/verify-appledouble-quarantine-runtime.go -existing
       - name: Upload AppleDouble existing quarantine evidence
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
@@ -1106,7 +1229,8 @@ jobs:
         if: runner.os == 'macOS'
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-appledouble-quarantine-runtime.go -contexts
+        run: |
+          apfs-ci-runner --suite ci/test/step161 --timeout 60m -- go run scripts/verify-appledouble-quarantine-runtime.go -contexts
       - name: Upload AppleDouble raw context evidence
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
@@ -1118,7 +1242,8 @@ jobs:
         if: runner.os == 'macOS'
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-appledouble-quarantine-runtime.go -destinations
+        run: |
+          apfs-ci-runner --suite ci/test/step163 --timeout 60m -- go run scripts/verify-appledouble-quarantine-runtime.go -destinations
       - name: Upload AppleDouble quarantine destination evidence
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
@@ -1141,14 +1266,17 @@ jobs:
         env:
           CGO_ENABLED: "0"
         # Everything except the acceptance suite, which runs separately below.
-        run: go test ./pkg/... ./internal/...
+        run: |
+          apfs-ci-runner --suite ci/test/step166 --timeout 60m -- go test -json ./pkg/... ./internal/...
       - name: Name hash first-use race regression (Linux)
         if: runner.os == 'Linux'
-        run: go test -race -count=1 ./pkg/apfs -run '^TestNameHashConcurrentFirstUse$'
+        run: |
+          apfs-ci-runner --suite ci/test/step167 --timeout 60m -- go test -json -race -count=1 ./pkg/apfs -run '^TestNameHashConcurrentFirstUse$'
       - name: Acceptance tests (committed fixtures)
         env:
           CGO_ENABLED: "0"
-        run: go test -v ./acceptance/
+        run: |
+          apfs-ci-runner --suite ci/test/step168 --timeout 60m -- go test -json -v ./acceptance/
       - name: Cache acceptance images
         id: dmg-cache
         uses: actions/cache@v6
@@ -1175,7 +1303,8 @@ jobs:
           APFS_ACCEPTANCE_DMG: ${{ github.workspace }}/.acceptance-cache/Firefox.dmg
           APFS_ACCEPTANCE_FILESYSTEM: hfs+
         shell: bash
-        run: go test -v -run TestAcceptance ./acceptance/
+        run: |
+          apfs-ci-runner --suite ci/test/step172 --timeout 60m -- go test -json -v -run TestAcceptance ./acceptance/
       - name: Acceptance tests (Zed 0.196.5 image, APFS)
         env:
           CGO_ENABLED: "0"
@@ -1186,7 +1315,8 @@ jobs:
           APFS_ACCEPTANCE_BINARY: zed
           APFS_ACCEPTANCE_FILESYSTEM: apfs
         shell: bash
-        run: go test -v -run TestAcceptance ./acceptance/
+        run: |
+          apfs-ci-runner --suite ci/test/step173 --timeout 60m -- go test -json -v -run TestAcceptance ./acceptance/
       - name: Download Charles 5.2.1 and BBEdit 16.0.3 acceptance images
         if: steps.dmg-cache.outputs.cache-hit != 'true'
         shell: bash
@@ -1208,7 +1338,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p artifacts/vendor-dmg
-          go test -json -count=1 -run TestAcceptance ./acceptance/ | tee artifacts/vendor-dmg/charles.jsonl
+          apfs-ci-runner --suite ci/test/step175 --timeout 60m -- go test -json -count=1 -run TestAcceptance ./acceptance/ | tee artifacts/vendor-dmg/charles.jsonl
       - name: Acceptance tests (BBEdit 16.0.3 image, APFS)
         env:
           CGO_ENABLED: "0"
@@ -1222,11 +1352,20 @@ jobs:
         shell: bash
         run: |
           mkdir -p artifacts/vendor-dmg
-          go test -json -count=1 -run TestAcceptance ./acceptance/ | tee artifacts/vendor-dmg/bbedit.jsonl
+          apfs-ci-runner --suite ci/test/step176 --timeout 60m -- go test -json -count=1 -run TestAcceptance ./acceptance/ | tee artifacts/vendor-dmg/bbedit.jsonl
       - name: Upload commercial DMG acceptance evidence
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: vendor-dmg-${{ matrix.os }}
           path: artifacts/vendor-dmg/
+          if-no-files-found: error
+
+      - name: Retain complete CI command diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-observability-ci-test-${{ strategy.job-index || 0 }}-${{ github.run_attempt }}
+          path: artifacts/ci-observability/
+          compression-level: 9
           if-no-files-found: error

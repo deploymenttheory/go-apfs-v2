@@ -16,6 +16,7 @@ import (
 	"testing"
 	"unicode/utf16"
 
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/captureprovenance"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/osversion"
 )
 
@@ -74,7 +75,14 @@ func TestHFSSpecialNativeEvidence(t *testing.T) {
 			if err = json.Unmarshal(plain, &capture); err != nil {
 				t.Fatal(err)
 			}
-			if capture.Schema != 1 || len(capture.Volumes) != 2 || len(capture.Sources) != 16 {
+			harness, err := captureprovenance.Inventory(os.DirFS("../.."))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err = captureprovenance.Verify(os.DirFS("../.."), capture.Sources); err != nil {
+				t.Fatal(err)
+			}
+			if capture.Schema != 1 || len(capture.Volumes) != 2 || len(capture.Sources) != 16+len(harness) {
 				t.Fatal("native inventory", len(capture.Sources))
 			}
 			for _, source := range []string{"testdata/appledouble/native/hfs-special-names.c", "scripts/capture-hfs-special-names.go", "testdata/appledouble/native/name-comparison-source/vfs_utfconv.c.gz", "testdata/appledouble/native/name-comparison-source/sources.json", "go.mod", "go.sum"} {

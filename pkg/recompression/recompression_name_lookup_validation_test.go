@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 // Corrupted copies are validation inputs, never additional native evidence.
@@ -71,7 +73,7 @@ func TestNativeNameLookupRejectsTampering(t *testing.T) {
 			if err = os.WriteFile(file, raw, 0600); err != nil {
 				t.Fatal(err)
 			}
-			command := exec.CommandContext(t.Context(), binary, "-test.run=^TestNativeNameLookupRejectsTampering$", "-test.count=1")
+			command := cirunner.CommandContext(t.Context(), binary, "-test.run=^TestNativeNameLookupRejectsTampering$", "-test.count=1")
 			command.Env = append(os.Environ(), childEnv+"="+file)
 			output, err := command.CombinedOutput()
 			var exited *exec.ExitError

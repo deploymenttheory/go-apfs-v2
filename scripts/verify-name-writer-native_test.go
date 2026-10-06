@@ -23,6 +23,8 @@ import (
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/diskimage"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/osversion"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 func TestNativeNameWriterReadback(t *testing.T) {
@@ -533,7 +535,7 @@ func mountedWriterVolume(t *testing.T, ctx context.Context, out, stem, image str
 		defer cancel()
 		var attempts []map[string]any
 		err := diskimage.RetryDetach(cleanup, func() (int, error) {
-			raw, err := exec.CommandContext(cleanup, "hdiutil", "detach", device).CombinedOutput()
+			raw, err := cirunner.CommandContext(cleanup, "hdiutil", "detach", device).CombinedOutput()
 			code := 0
 			if err != nil {
 				code = -1
@@ -583,7 +585,7 @@ func decodeWriterNative(t *testing.T, raw []byte, destination any) {
 func runWriterNative(t *testing.T, ctx context.Context, path, binary string, args ...string) []byte {
 	t.Helper()
 	var stdout, stderr bytes.Buffer
-	command := exec.CommandContext(ctx, binary, args...)
+	command := cirunner.CommandContext(ctx, binary, args...)
 	command.Stdout = &stdout
 	command.Stderr = &stderr
 	runErr := command.Run()

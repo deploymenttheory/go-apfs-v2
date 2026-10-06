@@ -4,13 +4,15 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"syscall"
 	"testing"
 	"unsafe"
 
 	"golang.org/x/sys/unix"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 func TestTypedSecurityAndContextWrappers(t *testing.T) {
@@ -91,7 +93,7 @@ func TestTypedProtectedOpenNative(t *testing.T) {
 	if oracle == "" {
 		oracle = filepath.Join(t.TempDir(), "darwin-wrappers")
 		source := filepath.Join("..", "..", "testdata", "appledouble", "native", "darwin-wrappers.c")
-		if out, err := exec.Command("xcrun", "clang", "-Wall", "-Wextra", "-Werror", "-DDARWIN_WRAPPERS_ORACLE", source, "-o", oracle).CombinedOutput(); err != nil {
+		if out, err := cirunner.Command("xcrun", "clang", "-Wall", "-Wextra", "-Werror", "-DDARWIN_WRAPPERS_ORACLE", source, "-o", oracle).CombinedOutput(); err != nil {
 			t.Fatalf("compile native observer: %v\n%s", err, out)
 		}
 	}
@@ -103,7 +105,7 @@ func TestTypedProtectedOpenNative(t *testing.T) {
 	for _, name := range []string{"existing", "missing"} {
 		t.Run(name, func(t *testing.T) {
 			path := filepath.Join(directory, name)
-			output, err := exec.Command(oracle, path).Output()
+			output, err := cirunner.Command(oracle, path).Output()
 			if err != nil {
 				t.Fatalf("native observation: %v", err)
 			}

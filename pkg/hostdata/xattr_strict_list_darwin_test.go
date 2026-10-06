@@ -3,13 +3,15 @@ package hostdata
 import (
 	"errors"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"reflect"
 	"slices"
 	"testing"
 
 	"golang.org/x/sys/unix"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 func TestStrictXattrListDarwinVisibility(t *testing.T) {
@@ -48,14 +50,14 @@ func TestStrictXattrListDarwinVisibility(t *testing.T) {
 			t.Fatal(nonzero, names, e)
 		}
 	}
-	if out, e := exec.Command("/bin/chmod", "+a", "everyone allow read", path).CombinedOutput(); e != nil {
+	if out, e := cirunner.Command("/bin/chmod", "+a", "everyone allow read", path).CombinedOutput(); e != nil {
 		t.Fatal(e, string(out))
 	}
-	t.Cleanup(func() { _ = exec.Command("/bin/chmod", "-N", path).Run() })
+	t.Cleanup(func() { _ = cirunner.Command("/bin/chmod", "-N", path).Run() })
 	if names, e := ListXattrNames(f, MaxXattrListSize); e != nil || slices.Contains(names, SecurityName) {
 		t.Fatal("security visibility", names, e)
 	}
-	if out, e := exec.Command("/bin/chmod", "+a", "everyone deny readextattr", path).CombinedOutput(); e != nil {
+	if out, e := cirunner.Command("/bin/chmod", "+a", "everyone deny readextattr", path).CombinedOutput(); e != nil {
 		t.Fatal(e, string(out))
 	}
 	if names, e := ListXattrNames(f, MaxXattrListSize); names != nil || (!errors.Is(e, unix.EACCES) && !errors.Is(e, unix.EPERM)) {

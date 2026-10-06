@@ -24,6 +24,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/captureprovenance"
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/diskimage"
 )
 
@@ -92,7 +94,7 @@ func run(out string, check bool) (result error) {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
 		var stdout, stderr bytes.Buffer
-		cmd := exec.CommandContext(ctx, name, args...)
+		cmd := cirunner.CommandContext(ctx, name, args...)
 		cmd.Stdout = &stdout
 		cmd.Stderr = &stderr
 		err := cmd.Run()
@@ -114,6 +116,9 @@ func run(out string, check bool) (result error) {
 	}
 	digest := func(b []byte) string { s := sha256.Sum256(b); return hex.EncodeToString(s[:]) }
 	c := capture{Schema: 1, Sources: map[string]string{}}
+	if err := captureprovenance.Bind(os.DirFS("."), artifact, c.Sources); err != nil {
+		return err
+	}
 	for _, x := range []struct {
 		name   string
 		args   []string
@@ -422,6 +427,9 @@ func run(out string, check bool) (result error) {
 		var old capture
 		if e = json.NewDecoder(z).Decode(&old); e != nil {
 			return e
+		}
+		if err := captureprovenance.Verify(os.DirFS("."), old.Sources); err != nil {
+			return err
 		}
 		if old.Schema != c.Schema || !reflect.DeepEqual(old.Buffers, c.Buffers) || !reflect.DeepEqual(old.Kernel, c.Kernel) || !reflect.DeepEqual(old.Decoders, c.Decoders) {
 			return fmt.Errorf("native LZ4 observations differ; fresh evidence: %s", out)

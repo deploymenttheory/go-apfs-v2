@@ -14,7 +14,7 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -22,6 +22,8 @@ import (
 	"strings"
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/pathnative"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 func main() {
@@ -42,7 +44,7 @@ func verify(capture bool) error {
 		return err
 	}
 	for _, arch := range []string{"arm64", "x86_64"} {
-		out, err := exec.Command("xcrun", "clang", "-arch", arch, "-fsyntax-only", "-Xclang", "-ast-dump=json", source).Output()
+		out, err := cirunner.Command("xcrun", "clang", "-arch", arch, "-fsyntax-only", "-Xclang", "-ast-dump=json", source).Output()
 		if err != nil {
 			return err
 		}
@@ -54,7 +56,7 @@ func verify(capture bool) error {
 	if err != nil {
 		return err
 	}
-	if out, err := exec.Command("xcrun", "clang", "-Wall", "-Wextra", "-Werror", source, "-o", helper).CombinedOutput(); err != nil {
+	if out, err := cirunner.Command("xcrun", "clang", "-Wall", "-Wextra", "-Werror", source, "-o", helper).CombinedOutput(); err != nil {
 		return fmt.Errorf("compile: %w: %s", err, out)
 	}
 	fixture := pathnative.RemovalFixture{}
@@ -72,7 +74,7 @@ func verify(capture bool) error {
 						if directory >= 2 && (mode != 0755 || access != 0) {
 							continue
 						}
-						out, err := exec.Command(helper, strconv.Itoa(directory), strconv.FormatInt(int64(mode), 8), strconv.Itoa(acl), strconv.Itoa(access), owned, operation).CombinedOutput()
+						out, err := cirunner.Command(helper, strconv.Itoa(directory), strconv.FormatInt(int64(mode), 8), strconv.Itoa(acl), strconv.Itoa(access), owned, operation).CombinedOutput()
 						if err != nil {
 							return fmt.Errorf("mode%o dir%d ACL%d access%d: %w: %s", mode, directory, acl, access, err, out)
 						}
@@ -139,11 +141,11 @@ func verify(capture bool) error {
 	if len(fixture.Cases) != 228 {
 		return fmt.Errorf("incomplete context matrix: %d", len(fixture.Cases))
 	}
-	revision, err := exec.Command("git", "rev-parse", "HEAD").Output()
+	revision, err := cirunner.Command("git", "rev-parse", "HEAD").Output()
 	if err != nil {
 		return err
 	}
-	host, err := exec.Command("sw_vers").Output()
+	host, err := cirunner.Command("sw_vers").Output()
 	if err != nil {
 		return err
 	}
@@ -215,7 +217,7 @@ func verify(capture bool) error {
 		if err != nil {
 			return err
 		}
-		cmd := exec.Command("go", "test", "-json", "-count=1", "./pkg/hostdata", "-run", "^TestPathCapturedMutationNativeObservations$")
+		cmd := cirunner.Command("go", "test", "-json", "-count=1", "./pkg/hostdata", "-run", "^TestPathCapturedMutationNativeObservations$")
 		cmd.Env = append(os.Environ(), "CGO_ENABLED=0", "APPLEDOUBLE_MUTATION_FIXTURE="+current)
 		var transcript bytes.Buffer
 		cmd.Stdout, cmd.Stderr = io.MultiWriter(os.Stdout, log, &transcript), io.MultiWriter(os.Stderr, log)

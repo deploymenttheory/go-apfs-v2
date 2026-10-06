@@ -9,13 +9,15 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/evidenceaudit"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 func main() {
@@ -36,7 +38,7 @@ func verify() error {
 	defer log.Close()
 	var transcript bytes.Buffer
 	profile := filepath.Join(dir, "coverage.out")
-	cmd := exec.Command("go", "test", "-count=1", "-json", "-run", "^Test(HeldMetadata|HeldLifecycle|LogicalMetadata|MetadataArgument|DarwinSecurity|OpenMetadata|MetadataOpen|MetadataStat|DarwinMetadata|ContentOpen|EntryType|MetadataParent)", "-covermode=atomic", "-coverprofile="+profile, "-coverpkg=./pkg/hostdata/...", "./pkg/hostdata")
+	cmd := cirunner.Command("go", "test", "-count=1", "-json", "-run", "^Test(HeldMetadata|HeldLifecycle|LogicalMetadata|MetadataArgument|DarwinSecurity|OpenMetadata|MetadataOpen|MetadataStat|DarwinMetadata|ContentOpen|EntryType|MetadataParent)", "-covermode=atomic", "-coverprofile="+profile, "-coverpkg=./pkg/hostdata/...", "./pkg/hostdata")
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 	cmd.Stdout = io.MultiWriter(os.Stdout, log, &transcript)
 	cmd.Stderr = io.MultiWriter(os.Stderr, log)
@@ -146,11 +148,11 @@ func verify() error {
 	files = append(files, "pkg/hostdata/held_lifecycle.go", "pkg/hostdata/held_lifecycle_test.go", "pkg/hostdata/held_lifecycle_native_test.go", "internal/testutil/heldlifecycle/oracle.go", "testdata/appledouble/native/held-lifecycle.c", "testdata/appledouble/native/held-lifecycle.json.gz", "scripts/verify-held-lifecycle.go")
 	files = append(files, "pkg/hostdata/content_open.go", "pkg/hostdata/content_open_unix.go", "pkg/hostdata/content_open_windows.go", "pkg/hostdata/content_open_other.go", "pkg/hostdata/content_open_test.go", "pkg/hostdata/content_open_unix_test.go", "pkg/hostdata/content_open_windows_test.go", "pkg/hostdata/content_open_darwin_test.go", "pkg/hostdata/content_open_fixture_test.go", "scripts/capture-content-open.go", "testdata/appledouble/native/content-open.c", "testdata/appledouble/native/content-open.json")
 	files = append(files, "pkg/hostdata/entry_type*.go", "pkg/hostdata/metadata_parent*.go", "internal/testutil/entrytype/*.go", "scripts/capture-entry-type.go", "testdata/appledouble/native/entry-type.c", "testdata/appledouble/native/entry-type.json")
-	hashes, e := evidenceaudit.SourceHashes(os.DirFS("."), files)
+	hashes, e := evidenceaudit.HarnessSourceHashes(os.DirFS("."), files)
 	if e != nil {
 		return e
 	}
-	revision, e := exec.Command("git", "rev-parse", "HEAD").Output()
+	revision, e := cirunner.Command("git", "rev-parse", "HEAD").Output()
 	if e != nil {
 		return e
 	}

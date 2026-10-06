@@ -35,6 +35,8 @@ jobs:
       # plus its companion attributes. Preserve that fixture and the no-skip gate
       # on tmpfs, which supports the complete native Linux xattr/ACL contract.
       # The separate replacement workflow still qualifies the runner filesystem.
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
       - name: Provide native Linux storage for the complete attribute fixture
         if: runner.os == 'Linux'
         shell: bash
@@ -45,7 +47,8 @@ jobs:
           findmnt --target "$RUNNER_TEMP/owned-compression" > artifacts/compression-owned-coverage/test-filesystem.txt
           echo "TMPDIR=$RUNNER_TEMP/owned-compression" >> "$GITHUB_ENV"
       - name: Require complete hostdata and every changed binding file above 95 percent
-        run: go run scripts/verify-compression-owned.go
+        run: |
+          apfs-ci-runner --suite compression-owned/portable/step4 --timeout 29m -- go run scripts/verify-compression-owned.go
       - name: Release Linux qualification filesystem
         if: always() && runner.os == 'Linux'
         shell: bash
@@ -61,6 +64,14 @@ jobs:
           name: compression-owned-coverage-${{ matrix.os }}
           path: artifacts/compression-owned-coverage/
           if-no-files-found: error
+      - name: Retain complete CI command diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-observability-compression-owned-portable-${{ strategy.job-index || 0 }}-${{ github.run_attempt }}
+          path: artifacts/ci-observability/
+          compression-level: 9
+          if-no-files-found: error
   native:
     name: Native owned compression (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
@@ -74,8 +85,11 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
       - name: Capture both Clang targets and replay all 72 native cases on host APFS and HFS+
-        run: go run scripts/capture-compression-owned.go -out artifacts/compression-owned/native.json.gz -check
+        run: |
+          apfs-ci-runner --suite compression-owned/native/step3 --timeout 29m -- go run scripts/capture-compression-owned.go -out artifacts/compression-owned/native.json.gz -check
       - name: Validate complete fresh native evidence independently
         if: always()
         shell: bash
@@ -84,11 +98,20 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p artifacts/compression-owned
-          go test -count=1 -json ./pkg/hostdata -run '^TestCompressionOwnedNativeEvidence$' > artifacts/compression-owned/evidence-replay.jsonl
+          apfs-ci-runner --suite compression-owned/native/step4 --timeout 29m -- go test -count=1 -json ./pkg/hostdata -run '^TestCompressionOwnedNativeEvidence$' > artifacts/compression-owned/evidence-replay.jsonl
       - name: Retain native bytes source provenance both ASTs and mount cleanup
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: compression-owned-native-${{ matrix.os }}
           path: artifacts/compression-owned/
+          if-no-files-found: error
+
+      - name: Retain complete CI command diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-observability-compression-owned-native-${{ strategy.job-index || 0 }}-${{ github.run_attempt }}
+          path: artifacts/ci-observability/
+          compression-level: 9
           if-no-files-found: error

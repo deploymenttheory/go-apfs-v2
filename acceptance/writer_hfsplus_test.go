@@ -8,7 +8,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -16,6 +16,8 @@ import (
 	"time"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/hfsplus"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 // memWriterAt is an in-memory io.WriterAt that grows as needed.
@@ -113,7 +115,7 @@ func TestWriteFsckClean(t *testing.T) {
 	dev := attachRaw(t, path)
 	defer detach(t, dev)
 
-	out, _ := exec.Command("fsck_hfs", "-n", dev).CombinedOutput()
+	out, _ := cirunner.Command("fsck_hfs", "-n", dev).CombinedOutput()
 	// fsck_hfs exits non-zero when it cannot open the raw device for the
 	// character-device pass, yet still completes the check via the buffered
 	// device; the authoritative signal is the "appears to be OK" line.
@@ -137,7 +139,7 @@ func TestWriteMountsViaHdiutil(t *testing.T) {
 	}
 
 	mnt := t.TempDir()
-	out, err := exec.Command("hdiutil", "attach", "-readonly", "-nobrowse",
+	out, err := cirunner.Command("hdiutil", "attach", "-readonly", "-nobrowse",
 		"-mountpoint", mnt, path).CombinedOutput()
 	if err != nil {
 		t.Fatalf("hdiutil attach: %v\n%s", err, out)
@@ -175,7 +177,7 @@ func TestWriteMountsViaHdiutil(t *testing.T) {
 		t.Errorf("resource fork = %q", rsrc)
 	}
 	// And as the attribute macOS presents it as.
-	xattr, err := exec.Command("xattr", "-p", "com.apple.ResourceFork",
+	xattr, err := cirunner.Command("xattr", "-p", "com.apple.ResourceFork",
 		filepath.Join(mnt, "forked.txt")).CombinedOutput()
 	if err != nil {
 		t.Errorf("xattr -p com.apple.ResourceFork: %v\n%s", err, xattr)
@@ -187,7 +189,7 @@ func TestWriteMountsViaHdiutil(t *testing.T) {
 	// fsck_hfs reporting the attributes file well-formed is a weaker claim than
 	// the kernel being able to hand the values back, so both are checked.
 	attrsPath := filepath.Join(mnt, "attrs.txt")
-	small, err := exec.Command("xattr", "-p", "com.example.small", attrsPath).CombinedOutput()
+	small, err := cirunner.Command("xattr", "-p", "com.example.small", attrsPath).CombinedOutput()
 	if err != nil {
 		t.Errorf("xattr -p com.example.small: %v\n%s", err, small)
 	} else if !bytes.Contains(small, []byte("value42")) {
@@ -196,7 +198,7 @@ func TestWriteMountsViaHdiutil(t *testing.T) {
 
 	// The large one exercises the fork-data record: its value lives in an
 	// allocation extent rather than inside the attribute record.
-	big2, err := exec.Command("xattr", "-p", "-x", "com.example.big", attrsPath).CombinedOutput()
+	big2, err := cirunner.Command("xattr", "-p", "-x", "com.example.big", attrsPath).CombinedOutput()
 	if err != nil {
 		t.Errorf("xattr -p com.example.big: %v\n%s", err, big2)
 	} else {
@@ -208,7 +210,7 @@ func TestWriteMountsViaHdiutil(t *testing.T) {
 	}
 
 	// A listing must name both and not invent others.
-	list, err := exec.Command("xattr", attrsPath).CombinedOutput()
+	list, err := cirunner.Command("xattr", attrsPath).CombinedOutput()
 	if err != nil {
 		t.Errorf("xattr listing: %v\n%s", err, list)
 	} else {
@@ -300,14 +302,14 @@ func TestWriteCaseInsensitiveFsckAndMount(t *testing.T) {
 	}
 
 	dev := attachRaw(t, path)
-	out, _ := exec.Command("fsck_hfs", "-n", dev).CombinedOutput()
+	out, _ := cirunner.Command("fsck_hfs", "-n", dev).CombinedOutput()
 	detach(t, dev)
 	if !bytes.Contains(out, []byte("appears to be OK")) {
 		t.Fatalf("fsck_hfs did not report clean:\n%s", out)
 	}
 
 	mnt := t.TempDir()
-	attached, err := exec.Command("hdiutil", "attach", "-readonly", "-nobrowse",
+	attached, err := cirunner.Command("hdiutil", "attach", "-readonly", "-nobrowse",
 		"-mountpoint", mnt, path).CombinedOutput()
 	if err != nil {
 		t.Fatalf("hdiutil attach: %v\n%s", err, attached)

@@ -21,6 +21,8 @@ import (
 	"time"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/exitcode"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 var (
@@ -84,7 +86,7 @@ func TestMain(m *testing.M) {
 	if runtime.GOOS == "windows" {
 		binPath += ".exe"
 	}
-	build := exec.Command("go", "build", "-o", binPath, "./cmd/apfs")
+	build := cirunner.Command("go", "build", "-o", binPath, "./cmd/apfs")
 	build.Dir = repoRoot
 	if out, err := build.CombinedOutput(); err != nil {
 		fmt.Fprintf(os.Stderr, "unable to build CLI: %v\n%s", err, out)
@@ -210,7 +212,7 @@ func runTimeout(t *testing.T, limit time.Duration, args ...string) (string, stri
 	ctx, cancel := context.WithTimeout(context.Background(), limit)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, binPath, args...)
+	cmd := cirunner.CommandContext(ctx, binPath, args...)
 	cmd.Env = cleanEnv()
 	var stdout, stderr strings.Builder
 	cmd.Stdout = &stdout
@@ -233,7 +235,7 @@ func runTimeout(t *testing.T, limit time.Duration, args ...string) (string, stri
 // exercise SOURCE_DATE_EPOCH and its precedence.
 func runEnv(t *testing.T, env []string, args ...string) (string, string, int) {
 	t.Helper()
-	cmd := exec.Command(binPath, args...)
+	cmd := cirunner.Command(binPath, args...)
 	cmd.Env = cleanEnv(env...)
 	var stdout, stderr strings.Builder
 	cmd.Stdout = &stdout
@@ -253,7 +255,7 @@ func runEnv(t *testing.T, env []string, args ...string) (string, string, int) {
 // interactive `inspect IMAGE fstree` explorer.
 func runWithStdin(t *testing.T, stdin string, args ...string) (string, string, int) {
 	t.Helper()
-	cmd := exec.Command(binPath, args...)
+	cmd := cirunner.Command(binPath, args...)
 	cmd.Env = cleanEnv()
 	cmd.Stdin = strings.NewReader(stdin)
 	var stdout, stderr strings.Builder

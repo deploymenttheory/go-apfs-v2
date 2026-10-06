@@ -11,7 +11,7 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -19,6 +19,8 @@ import (
 	"time"
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/evidenceaudit"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 func main() {
@@ -39,7 +41,7 @@ func verify() error {
 		return e
 	}
 	fullProfile := filepath.Join(dir, "full-hostdata-coverage.out")
-	full := exec.CommandContext(ctx, "go", "test", "-count=1", "-json", "-covermode=atomic", "-coverprofile="+fullProfile, "./pkg/hostdata")
+	full := cirunner.CommandContext(ctx, "go", "test", "-count=1", "-json", "-covermode=atomic", "-coverprofile="+fullProfile, "./pkg/hostdata")
 	full.Env = append(os.Environ(), "CGO_ENABLED=0")
 	full.Stdout = io.MultiWriter(os.Stdout, fullLog)
 	full.Stderr = io.MultiWriter(os.Stderr, fullLog)
@@ -60,7 +62,7 @@ func verify() error {
 	defer log.Close()
 	var transcript bytes.Buffer
 	profile := filepath.Join(dir, "coverage.out")
-	cmd := exec.CommandContext(ctx, "go", "test", "-count=1", "-json", "-run", "^Test(Replacement|RootReplacement)", "-covermode=atomic", "-coverprofile="+profile, "-coverpkg=./pkg/hostdata/...", "./pkg/hostdata")
+	cmd := cirunner.CommandContext(ctx, "go", "test", "-count=1", "-json", "-run", "^Test(Replacement|RootReplacement)", "-covermode=atomic", "-coverprofile="+profile, "-coverpkg=./pkg/hostdata/...", "./pkg/hostdata")
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 	cmd.Stdout = io.MultiWriter(os.Stdout, log, &transcript)
 	cmd.Stderr = io.MultiWriter(os.Stderr, log)
@@ -191,11 +193,11 @@ func verify() error {
 		return fmt.Errorf("incomplete replacement tests: %d", passed)
 	}
 	files := []string{"pkg/hostdata/replacement*.go", "scripts/verify-replacement.go", "scripts/verify-replacement-native.go", "testdata/appledouble/native/replacement-copy.c", "testdata/appledouble/native/quarantine-process-capture.h", "testdata/appledouble/native/replacement-copy.json", "testdata/appledouble/native/replacement-compressed.c", "testdata/appledouble/native/replacement-compressed.json", "testdata/appledouble/native/decmpfs-formats.c", "testdata/appledouble/native/decmpfs-formats.json.gz", "go.mod", "go.sum", ".github/workflows/replacement.yml"}
-	hashes, e := evidenceaudit.SourceHashes(os.DirFS("."), files)
+	hashes, e := evidenceaudit.HarnessSourceHashes(os.DirFS("."), files)
 	if e != nil {
 		return e
 	}
-	revision, e := exec.Command("git", "rev-parse", "HEAD").Output()
+	revision, e := cirunner.Command("git", "rev-parse", "HEAD").Output()
 	if e != nil {
 		return e
 	}

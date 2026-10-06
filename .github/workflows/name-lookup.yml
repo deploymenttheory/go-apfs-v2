@@ -29,12 +29,16 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
       - name: Capture every mounted and ordinary native limit control
-        run: go run scripts/capture-name-lookup.go -out artifacts/name-lookup
+        run: |
+          apfs-ci-runner --suite name-lookup/native/step3 --timeout 29m -- go run scripts/capture-name-lookup.go -out artifacts/name-lookup
       - name: Replay the complete fresh native capture through the production resolver
         env:
           APFS_NAME_LOOKUP_CAPTURE: ${{ github.workspace }}/artifacts/name-lookup/capture.json.gz
-        run: go test -tags native_name_lookup_fresh ./pkg/recompression -run '^TestFreshNativeNameLookup$' -count=1 -v
+        run: |
+          apfs-ci-runner --suite name-lookup/native/step4 --timeout 29m -- go test -json -tags native_name_lookup_fresh ./pkg/recompression -run '^TestFreshNativeNameLookup$' -count=1 -v
       - name: Retain native outputs, complete ASTs, source bytes and mount cleanup evidence
         if: always()
         uses: actions/upload-artifact@v7
@@ -43,8 +47,17 @@ jobs:
           path: artifacts/name-lookup/
           if-no-files-found: error
       - name: Require all three retained native release profiles
-        run: go test ./pkg/recompression -run '^TestNativeNameLookup$' -count=1 -v
+        run: |
+          apfs-ci-runner --suite name-lookup/native/step6 --timeout 29m -- go test -json ./pkg/recompression -run '^TestNativeNameLookup$' -count=1 -v
 
+      - name: Retain complete CI command diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-observability-name-lookup-native-${{ strategy.job-index || 0 }}-${{ github.run_attempt }}
+          path: artifacts/ci-observability/
+          compression-level: 9
+          if-no-files-found: error
   portable:
     name: Replay name lookup (${{ matrix.os }})
     needs: native
@@ -59,5 +72,17 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
       - name: Replay all three mandatory retained native release profiles
-        run: go test ./pkg/recompression -run '^TestNativeNameLookup$' -count=1 -v
+        run: |
+          apfs-ci-runner --suite name-lookup/portable/step3 --timeout 19m -- go test -json ./pkg/recompression -run '^TestNativeNameLookup$' -count=1 -v
+
+      - name: Retain complete CI command diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-observability-name-lookup-portable-${{ strategy.job-index || 0 }}-${{ github.run_attempt }}
+          path: artifacts/ci-observability/
+          compression-level: 9
+          if-no-files-found: error

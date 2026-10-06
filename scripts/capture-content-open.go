@@ -7,11 +7,13 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/captureprovenance"
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 	"golang.org/x/sys/unix"
 )
 
@@ -21,7 +23,7 @@ func must(err error) {
 	}
 }
 func run(name string, args ...string) []byte {
-	b, err := exec.Command(name, args...).CombinedOutput()
+	b, err := cirunner.Command(name, args...).CombinedOutput()
 	if err != nil {
 		panic(fmt.Sprintf("%s %v: %v: %s", name, args, err, b))
 	}
@@ -34,6 +36,8 @@ func hash(path string) string {
 	return hex.EncodeToString(h[:])
 }
 func main() {
+	out := flag.String("out", "artifacts/content-open/native.json", "fresh capture output")
+	flag.Parse()
 	dir, err := os.MkdirTemp("", "content-open-native-")
 	must(err)
 	defer os.RemoveAll(dir)
@@ -63,12 +67,13 @@ func main() {
 		run("/bin/chmod", "-RN", parent)
 	}
 	hashes := map[string]string{}
+	must(captureprovenance.Bind(os.DirFS("."), filepath.Dir(*out), hashes))
 	for _, p := range []string{"scripts/capture-content-open.go", "testdata/appledouble/native/content-open.c"} {
 		hashes[p] = hash(p)
 	}
 	record := map[string]any{"schema": 1, "macos": string(run("/usr/bin/sw_vers")), "compiler": string(run("/usr/bin/clang", "--version")), "source_sha256": hashes, "cases": cases}
 	b, err := json.MarshalIndent(record, "", "  ")
 	must(err)
-	must(os.WriteFile("testdata/appledouble/native/content-open.json", append(b, '\n'), 0644))
+	must(os.WriteFile(*out, append(b, '\n'), 0644))
 	fmt.Println("captured", len(cases), "native content acquisition cases")
 }

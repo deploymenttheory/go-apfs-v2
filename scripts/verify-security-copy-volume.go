@@ -13,7 +13,7 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -23,6 +23,8 @@ import (
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/securitycopy"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfswrite"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 type command struct {
@@ -46,7 +48,7 @@ func run(input string, args ...string) []byte {
 	return b
 }
 func execute(input string, args ...string) ([]byte, error) {
-	cmd := exec.Command(args[0], args[1:]...)
+	cmd := cirunner.Command(args[0], args[1:]...)
 	cmd.Stdin = strings.NewReader(input)
 	var out, errout bytes.Buffer
 	cmd.Stdout = &out

@@ -10,6 +10,8 @@ import (
 	"testing"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/disk"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 // reconstructToRaw decompresses a DMG to a raw image file (fsck/attach need the
@@ -38,7 +40,7 @@ func fsckRaw(t *testing.T, rawPath string) string {
 	dev := attachRaw(t, rawPath)
 	defer detach(t, dev)
 
-	fo, _ := exec.Command("fsck_apfs", "-n", dev).CombinedOutput()
+	fo, _ := cirunner.Command("fsck_apfs", "-n", dev).CombinedOutput()
 	return string(fo)
 }
 

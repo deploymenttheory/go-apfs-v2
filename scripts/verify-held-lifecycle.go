@@ -13,7 +13,7 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -21,6 +21,8 @@ import (
 	"time"
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/heldlifecycle"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 func main() {
@@ -82,7 +84,7 @@ func verify(capture bool, cache string) error {
 	helperSource := "testdata/appledouble/native/held-lifecycle.c"
 	helper := filepath.Join(dir, "held-lifecycle")
 	for _, arch := range []string{"arm64", "x86_64"} {
-		ast, e := exec.Command("xcrun", "clang", "-arch", arch, "-I", dir, "-fsyntax-only", "-Xclang", "-ast-dump=json", helperSource).Output()
+		ast, e := cirunner.Command("xcrun", "clang", "-arch", arch, "-I", dir, "-fsyntax-only", "-Xclang", "-ast-dump=json", helperSource).Output()
 		if e != nil {
 			return fmt.Errorf("%s AST: %w", arch, e)
 		}
@@ -90,7 +92,7 @@ func verify(capture bool, cache string) error {
 			return e
 		}
 	}
-	if out, e := exec.Command("xcrun", "clang", "-Wall", "-Wextra", "-Werror", "-I", dir, helperSource, "-o", helper).CombinedOutput(); e != nil {
+	if out, e := cirunner.Command("xcrun", "clang", "-Wall", "-Wextra", "-Werror", "-I", dir, helperSource, "-o", helper).CombinedOutput(); e != nil {
 		return fmt.Errorf("compile: %w %s", e, out)
 	}
 	cases := heldlifecycle.Cases()
@@ -98,7 +100,7 @@ func verify(capture bool, cache string) error {
 	for _, c := range cases {
 		fmt.Fprintf(&input, "%d %d %d %d %d %d %d\n", c.SourceMode, c.SourceError, c.FallbackError, c.Selected, c.Cached, c.Failures, c.StageCode)
 	}
-	cmd := exec.Command(helper)
+	cmd := cirunner.Command(helper)
 	cmd.Stdin = strings.NewReader(input.String())
 	out, err := cmd.Output()
 	if err != nil {
@@ -123,11 +125,11 @@ func verify(capture bool, cache string) error {
 	if err = decoder.Decode(&extra); err != io.EOF {
 		return fmt.Errorf("unexpected native trailing data: %v", err)
 	}
-	revision, err := exec.Command("git", "rev-parse", "HEAD").Output()
+	revision, err := cirunner.Command("git", "rev-parse", "HEAD").Output()
 	if err != nil {
 		return err
 	}
-	host, err := exec.Command("sw_vers").Output()
+	host, err := cirunner.Command("sw_vers").Output()
 	if err != nil {
 		return err
 	}

@@ -15,7 +15,7 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -29,6 +29,8 @@ import (
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 	sandbox "github.com/deploymenttheory/go-apfs-v2/pkg/hostdata/sandbox"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 const artifactDir = "artifacts/appledouble-object-sandbox"
@@ -60,7 +62,7 @@ func must(err error) {
 func read(name string) []byte { data, err := os.ReadFile(name); must(err); return data }
 func hash(data []byte) string { sum := sha256.Sum256(data); return hex.EncodeToString(sum[:]) }
 func run(args ...string) []byte {
-	data, err := exec.Command(args[0], args[1:]...).CombinedOutput()
+	data, err := cirunner.Command(args[0], args[1:]...).CombinedOutput()
 	if err != nil {
 		panic(fmt.Sprintf("%s: %v: %s", args[0], err, data))
 	}
@@ -324,7 +326,7 @@ func main() {
 	if len(cases) != 18 {
 		panic("incomplete signed object matrix")
 	}
-	hashes, err := evidenceaudit.SourceHashes(os.DirFS("."), []string{nativeSource, "testdata/appledouble/native/appledouble-object.c", "scripts/verify-appledouble-object-sandbox.go", "internal/testutil/quarantinetime/*.go", "pkg/hostdata/appledouble_object*.go", "pkg/hostdata/held*.go", "pkg/hostdata/quarantine*.go", "pkg/hostdata/sandbox/sandbox*.go", "pkg/hostdata/xattrintent/xattr_intent*.go", "pkg/hostdata/libsystem*.go", "go.mod", "go.sum"})
+	hashes, err := evidenceaudit.HarnessSourceHashes(os.DirFS("."), []string{nativeSource, "testdata/appledouble/native/appledouble-object.c", "scripts/verify-appledouble-object-sandbox.go", "internal/testutil/quarantinetime/*.go", "pkg/hostdata/appledouble_object*.go", "pkg/hostdata/held*.go", "pkg/hostdata/quarantine*.go", "pkg/hostdata/sandbox/sandbox*.go", "pkg/hostdata/xattrintent/xattr_intent*.go", "pkg/hostdata/libsystem*.go", "go.mod", "go.sum"})
 	must(err)
 	must(os.RemoveAll(work))
 	must(os.RemoveAll(denied))

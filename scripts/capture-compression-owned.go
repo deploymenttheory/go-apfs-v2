@@ -19,6 +19,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/captureprovenance"
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/diskimage"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/osversion"
 )
@@ -35,7 +37,7 @@ type trial struct {
 }
 
 func command(ctx context.Context, name string, args ...string) ([]byte, error) {
-	b, e := exec.CommandContext(ctx, name, args...).CombinedOutput()
+	b, e := cirunner.CommandContext(ctx, name, args...).CombinedOutput()
 	if e != nil {
 		return b, fmt.Errorf("%s %v: %w: %s", name, args, e, b)
 	}
@@ -93,6 +95,9 @@ func run(out string, check bool) (result error) {
 		return e
 	}
 	report := capture{Schema: 1, Host: string(host), Sources: map[string]string{}}
+	if err := captureprovenance.Bind(os.DirFS("."), artifact, report.Sources); err != nil {
+		return err
+	}
 	hashFile := func(name, key string) error {
 		b, e := os.ReadFile(name)
 		if e != nil {
@@ -184,7 +189,7 @@ func run(out string, check bool) (result error) {
 			if e = os.WriteFile(capturedPath, observed, 0644); e != nil {
 				return e
 			}
-			replay := exec.CommandContext(ctx, "go", "test", "-count=1", "-json", "./pkg/hostdata", "-run", "^TestNativeCompressionOwnedMounted$")
+			replay := cirunner.CommandContext(ctx, "go", "test", "-count=1", "-json", "./pkg/hostdata", "-run", "^TestNativeCompressionOwnedMounted$")
 			replay.Env = append(os.Environ(), "APFS_COMPRESSION_OWNED_MOUNT="+base, "APFS_COMPRESSION_OWNED_CAPTURE="+capturedPath)
 			transcript, replayErr := replay.CombinedOutput()
 			writeErr := os.WriteFile(filepath.Join(artifact, strings.ReplaceAll(filesystem, "+", "plus")+"-replay.jsonl"), transcript, 0644)
@@ -248,7 +253,7 @@ func mount(ctx context.Context, directory, kind, artifact string) (string, func(
 		defer cancel()
 		var attempts []map[string]any
 		e := diskimage.RetryDetach(cleanupCtx, func() (int, error) {
-			b, e := exec.CommandContext(cleanupCtx, "hdiutil", "detach", device).CombinedOutput()
+			b, e := cirunner.CommandContext(cleanupCtx, "hdiutil", "detach", device).CombinedOutput()
 			code := 0
 			if e != nil {
 				code = -1
@@ -286,6 +291,11 @@ func readCapture(name string) (capture, error) {
 // in both archives. Absolute inode numbers and operation-clock times are not
 // reproducible across independent files; relationships are checked by replay.
 func compare(before, after capture) error {
+	for _, sources := range []map[string]string{before.Sources, after.Sources} {
+		if err := captureprovenance.Verify(os.DirFS("."), sources); err != nil {
+			return err
+		}
+	}
 	if before.Schema != 1 || len(before.Cases) != 72 || len(after.Cases) != 72 {
 		return errors.New("incomplete retained capture")
 	}

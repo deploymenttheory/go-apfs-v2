@@ -13,10 +13,12 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/captureprovenance"
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 func main() {
@@ -50,7 +52,7 @@ func verify(capture, compressedCapture string) (result error) {
 		result = errors.Join(result, err)
 	}()
 	run := func(name string, args ...string) ([]byte, error) {
-		cmd := exec.Command(name, args...)
+		cmd := cirunner.Command(name, args...)
 		var stdout, stderr bytes.Buffer
 		cmd.Stdout = &stdout
 		cmd.Stderr = &stderr
@@ -71,6 +73,9 @@ func verify(capture, compressedCapture string) (result error) {
 	}
 	const source = "testdata/appledouble/native/replacement-copy.c"
 	hashes := map[string]string{}
+	if err := captureprovenance.Bind(os.DirFS("."), out, hashes); err != nil {
+		return err
+	}
 	hashFile := func(path string) error {
 		b, err := os.ReadFile(path)
 		if err != nil {
@@ -150,7 +155,7 @@ func verify(capture, compressedCapture string) (result error) {
 				return err
 			}
 			defer func() { _, err := run("hdiutil", "detach", mount); result = errors.Join(result, err) }()
-			cmd := exec.Command("go", "test", "-count=1", "-json", "-run", "^TestReplacement(Copy|Compressed)DarwinNative$", "./pkg/hostdata")
+			cmd := cirunner.Command("go", "test", "-count=1", "-json", "-run", "^TestReplacement(Copy|Compressed)DarwinNative$", "./pkg/hostdata")
 			cmd.Env = append(os.Environ(), "CGO_ENABLED=0", "APFS_REPLACEMENT_MOUNT="+mount, "APFS_REPLACEMENT_ORACLE="+helper, "APFS_REPLACEMENT_FS="+filesystem)
 			data, err := cmd.CombinedOutput()
 			if e := os.WriteFile(filepath.Join(out, strings.ReplaceAll(filesystem, "+", "plus")+".jsonl"), data, 0600); e != nil {

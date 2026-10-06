@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 // This suite mutates genuine native output after a successful pristine replay.
@@ -29,7 +31,7 @@ func TestWriterNativeGuards(t *testing.T) {
 		}
 		for _, mutation := range mutations {
 			t.Run(family+"/"+mutation, func(t *testing.T) {
-				cmd := exec.CommandContext(t.Context(), binary, "-test.run=^TestWriterNativeGuardChild$", "-test.v")
+				cmd := cirunner.CommandContext(t.Context(), binary, "-test.run=^TestWriterNativeGuardChild$", "-test.v")
 				cmd.Env = append(os.Environ(), "APFS_WRITER_NATIVE_GUARD="+family+"/"+mutation)
 				output, err := cmd.CombinedOutput()
 				if mutation == "positive" {

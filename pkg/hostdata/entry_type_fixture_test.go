@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/captureprovenance"
 )
 
 func TestEntryTypeFixtureProvenance(t *testing.T) {
@@ -27,7 +29,14 @@ func TestEntryTypeFixtureProvenance(t *testing.T) {
 	if err := json.Unmarshal(data, &corpus); err != nil {
 		t.Fatal(err)
 	}
-	if corpus.Schema != 1 || corpus.MacOS == "" || corpus.Compiler == "" || len(corpus.Hashes) != 3 || len(corpus.Cases) != 17 {
+	harness, err := captureprovenance.Inventory(os.DirFS("../.."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = captureprovenance.Verify(os.DirFS("../.."), corpus.Hashes); err != nil {
+		t.Fatal(err)
+	}
+	if corpus.Schema != 1 || corpus.MacOS == "" || corpus.Compiler == "" || len(corpus.Hashes) != 3+len(harness) || len(corpus.Cases) != 17 {
 		t.Fatal("incomplete native record")
 	}
 	for _, p := range []string{"scripts/capture-entry-type.go", "testdata/appledouble/native/entry-type.c", "internal/testutil/entrytype/fixture_darwin.go"} {

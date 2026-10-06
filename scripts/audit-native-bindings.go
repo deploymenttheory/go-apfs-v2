@@ -17,11 +17,13 @@ import (
 	"io"
 	"io/fs"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 type finding struct {
@@ -112,7 +114,7 @@ func audit(output string, check bool) error {
 	bad := len(imports) != 0
 	for _, goos := range []string{"linux", "darwin", "windows"} {
 		for _, arch := range []string{"amd64", "arm64"} {
-			cmd := exec.Command("go", "list", "-deps", "-json", "./cmd/...", "./pkg/...")
+			cmd := cirunner.Command("go", "list", "-deps", "-json", "./cmd/...", "./pkg/...")
 			cmd.Env = append(os.Environ(), "CGO_ENABLED=0", "GOOS="+goos, "GOARCH="+arch, "GOWORK=off")
 			var stderr bytes.Buffer
 			cmd.Stderr = &stderr

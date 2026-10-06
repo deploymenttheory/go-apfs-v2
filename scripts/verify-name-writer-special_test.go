@@ -10,13 +10,15 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"reflect"
 	"strconv"
 	"testing"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/hfsplus"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 type writerSpecialRecord struct {
@@ -50,7 +52,7 @@ func writerSpecialInspect(t *testing.T, mode, input string, target uint32, desti
 	if err != nil {
 		t.Fatal(err)
 	}
-	cmd := exec.CommandContext(t.Context(), "go", "test", "scripts/capture-hfs-special-names.go", "scripts/inspect-hfs-special-writer_test.go", "-run", "^TestInspectWriterHFSSpecial$", "-count=1")
+	cmd := cirunner.CommandContext(t.Context(), "go", "test", "scripts/capture-hfs-special-names.go", "scripts/inspect-hfs-special-writer_test.go", "-run", "^TestInspectWriterHFSSpecial$", "-count=1")
 	cmd.Env = append(os.Environ(), "APFS_WRITER_SPECIAL_MODE="+mode, "APFS_WRITER_SPECIAL_INPUT="+absolute, "APFS_WRITER_SPECIAL_OUTPUT="+output, "APFS_WRITER_SPECIAL_TARGET="+strconv.FormatUint(uint64(target), 10))
 	if raw, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("independent HFS %s inspection failed: %v\n%s", mode, err, raw)

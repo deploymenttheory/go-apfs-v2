@@ -21,10 +21,12 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 // compressibleTree builds a source tree holding one compressed file and one
@@ -44,7 +46,7 @@ func compressibleTree(t *testing.T) (dir string, wantSum string, size int64) {
 	}
 
 	dir = filepath.Join(t.TempDir(), "compressed")
-	if out, err := exec.Command("ditto", "--hfsCompression", plain, dir).CombinedOutput(); err != nil {
+	if out, err := cirunner.Command("ditto", "--hfsCompression", plain, dir).CombinedOutput(); err != nil {
 		t.Skipf("ditto --hfsCompression failed, so there is no compressed file to pack: %v\n%s", err, out)
 	}
 
@@ -63,7 +65,7 @@ func packedFile(t *testing.T, dmg, name string) (data []byte, size int64, compre
 	t.Helper()
 	requireTools(t, "hdiutil")
 
-	out, err := exec.Command("hdiutil", "attach", "-readonly", dmg).CombinedOutput()
+	out, err := cirunner.Command("hdiutil", "attach", "-readonly", dmg).CombinedOutput()
 	if err != nil {
 		t.Fatalf("hdiutil attach %s: %v\n%s", dmg, err, out)
 	}

@@ -20,6 +20,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/captureprovenance"
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/diskimage"
 )
 
@@ -52,7 +54,7 @@ func mountCases() []mountedCase {
 	return cases
 }
 func runCommand(ctx context.Context, name string, args ...string) ([]byte, error) {
-	b, e := exec.CommandContext(ctx, name, args...).CombinedOutput()
+	b, e := cirunner.CommandContext(ctx, name, args...).CombinedOutput()
 	if e != nil {
 		return b, fmt.Errorf("%s %v: %w: %s", name, args, e, b)
 	}
@@ -93,7 +95,7 @@ func (i *mountedImage) detach() error {
 	defer cancel()
 	var attempts []map[string]any
 	e := diskimage.RetryDetach(ctx, func() (int, error) {
-		b, e := exec.CommandContext(ctx, "hdiutil", "detach", i.device).CombinedOutput()
+		b, e := cirunner.CommandContext(ctx, "hdiutil", "detach", i.device).CombinedOutput()
 		code := 0
 		if e != nil {
 			code = -1
@@ -190,6 +192,9 @@ func run(out, oracle string, useSudo, require bool) (result error) {
 	}
 	if e = json.Unmarshal(capture, &provenance); e != nil {
 		return e
+	}
+	if err := captureprovenance.Verify(os.DirFS("."), provenance.Sources); err != nil {
+		return err
 	}
 	if provenance.Sources["probe"] != hash(binaryBytes) {
 		return errors.New("oracle binary digest mismatch")
@@ -336,7 +341,11 @@ func run(out, oracle string, useSudo, require bool) (result error) {
 	if e != nil {
 		return e
 	}
-	report := map[string]any{"schema": 1, "host": string(host), "source_sha256": map[string]string{"oracle_capture.json": hash(capture), "probe.c": hash(source), "probe": hash(binaryBytes), "capture.go": hash(script), "case-manifest.json": hash(specBytes)}, "expected_cases": len(cases), "unavailable_cases": unavailable, "sudo_available": sudoAvailable, "sudo_diagnostic": string(sudoOutput), "cases": observations, "mounts_detached": true}
+	sources := map[string]string{"oracle_capture.json": hash(capture), "probe.c": hash(source), "probe": hash(binaryBytes), "capture.go": hash(script), "case-manifest.json": hash(specBytes)}
+	if err := captureprovenance.Bind(os.DirFS("."), out, sources); err != nil {
+		return err
+	}
+	report := map[string]any{"schema": 1, "host": string(host), "source_sha256": sources, "expected_cases": len(cases), "unavailable_cases": unavailable, "sudo_available": sudoAvailable, "sudo_diagnostic": string(sudoOutput), "cases": observations, "mounts_detached": true}
 	if e = writeJSON(filepath.Join(out, "capture.json"), report); e != nil {
 		return e
 	}

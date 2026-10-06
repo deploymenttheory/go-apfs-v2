@@ -11,7 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -19,6 +19,8 @@ import (
 	"syscall"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 type native struct {
@@ -44,7 +46,7 @@ func must(e error) {
 	}
 }
 func run(args ...string) []byte {
-	b, e := exec.Command(args[0], args[1:]...).CombinedOutput()
+	b, e := cirunner.Command(args[0], args[1:]...).CombinedOutput()
 	commands = append(commands, command{args, string(b)})
 	if e != nil {
 		panic(fmt.Sprintf("%v: %v: %s", args, e, b))
@@ -91,7 +93,7 @@ func main() {
 	run("xcrun", "clang", "-Wall", "-Wextra", "-Werror", source, "-o", helper)
 	for _, arch := range []string{"arm64", "x86_64"} {
 		args := []string{"clang", "-arch", arch, "-Xclang", "-ast-dump=json", "-fsyntax-only", source}
-		b, e := exec.Command("xcrun", args...).Output()
+		b, e := cirunner.Command("xcrun", args...).Output()
 		must(e)
 		var ast map[string]any
 		must(json.Unmarshal(b, &ast))
@@ -202,7 +204,7 @@ func main() {
 	run("/usr/bin/xattr", "-d", hostdata.ResourceForkName, path)
 	capture("fork-removed", path, f, false)
 	run("/bin/chmod", "+a", "everyone allow read", path)
-	defer exec.Command("/bin/chmod", "-N", path).Run()
+	defer cirunner.Command("/bin/chmod", "-N", path).Run()
 	capture("security-hidden", path, f, false)
 	run("/bin/chmod", "+a", "everyone deny readextattr", path)
 	capture("list-denied", path, f, false)

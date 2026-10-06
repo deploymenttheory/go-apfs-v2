@@ -11,10 +11,12 @@ package acceptance
 
 import (
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 const hardLinkBody = "shared content, stored once\n"
@@ -51,7 +53,7 @@ func TestPackHFSPlusHardLinksAreFsckClean(t *testing.T) {
 	_, dev := attachHFS(t, dmg)
 	defer detach(t, dev)
 
-	out, _ := exec.Command("fsck_hfs", "-n", dev).CombinedOutput()
+	out, _ := cirunner.Command("fsck_hfs", "-n", dev).CombinedOutput()
 	text := string(out)
 	t.Logf("fsck_hfs output:\n%s", text)
 	if !strings.Contains(text, "appears to be OK") {
@@ -158,7 +160,7 @@ func TestPackHFSPlusCompressedHardLinks(t *testing.T) {
 		}
 	}
 
-	out, _ := exec.Command("fsck_hfs", "-n", dev).CombinedOutput()
+	out, _ := cirunner.Command("fsck_hfs", "-n", dev).CombinedOutput()
 	if !strings.Contains(string(out), "appears to be OK") {
 		t.Errorf("fsck_hfs did not report the volume clean:\n%s", out)
 	}

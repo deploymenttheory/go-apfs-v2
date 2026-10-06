@@ -16,11 +16,13 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 const pinned = "testdata/appledouble/native/pathname-authorization-source"
@@ -64,7 +66,7 @@ func capture(out string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 	run := func(args ...string) ([]byte, error) {
-		b, err := exec.CommandContext(ctx, "xcrun", args...).CombinedOutput()
+		b, err := cirunner.CommandContext(ctx, "xcrun", args...).CombinedOutput()
 		if err != nil {
 			return nil, fmt.Errorf("xcrun %v: %w\n%s", args, err, b)
 		}
@@ -180,7 +182,7 @@ func capture(out string) error {
 				return e
 			}
 			var diagnostic bytes.Buffer
-			cmd := exec.CommandContext(ctx, "xcrun", args...)
+			cmd := cirunner.CommandContext(ctx, "xcrun", args...)
 			cmd.Stdout = f
 			cmd.Stderr = &diagnostic
 			runErr := cmd.Run()
@@ -256,7 +258,7 @@ func capture(out string) error {
 	if len(summaries) != 4 || len(sources) < 40 {
 		return errors.New("incomplete source/AST inventory")
 	}
-	revision, err := exec.CommandContext(ctx, "git", "rev-parse", "HEAD").Output()
+	revision, err := cirunner.CommandContext(ctx, "git", "rev-parse", "HEAD").Output()
 	if err != nil {
 		return err
 	}

@@ -15,12 +15,14 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"reflect"
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/captureprovenance"
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 type sample struct {
@@ -46,7 +48,7 @@ func hash(b []byte) string    { h := sha256.Sum256(b); return hex.EncodeToString
 func run(name string, args ...string) []byte {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
-	b, e := exec.CommandContext(ctx, name, args...).CombinedOutput()
+	b, e := cirunner.CommandContext(ctx, name, args...).CombinedOutput()
 	if e != nil {
 		panic(fmt.Sprintf("%s %v: %v: %s", name, args, e, b))
 	}
@@ -95,16 +97,24 @@ func saveFork(source, destination string) string {
 func main() {
 	out := flag.String("out", "artifacts/large-compression", "artifact directory")
 	capture := flag.Bool("capture", false, "replace retained native fixtures after full kernel qualification")
+	captureOutput := flag.String("capture-output", "", "explicit fresh capture destination (directory for large storage, file for source report)")
 	flag.Parse()
+	if *captureOutput != "" && !*capture {
+		panic("capture-output requires capture mode")
+	}
 	if runtime.GOOS != "darwin" {
 		panic("native qualification requires macOS")
 	}
 	must(os.MkdirAll(*out, 0755))
 	fixture := "testdata/appledouble/native/large-compression"
+	if *captureOutput != "" {
+		fixture = *captureOutput
+	}
 	if *capture {
 		must(os.MkdirAll(fixture, 0755))
 	}
 	r := report{Host: string(run("sw_vers")), Compiler: string(run("xcrun", "clang", "--version")), SDK: string(run("xcrun", "--show-sdk-version")), Sources: map[string]string{}}
+	must(captureprovenance.Bind(os.DirFS("."), *out, r.Sources))
 	defer func() { b, e := json.MarshalIndent(r, "", "  "); must(e); save(filepath.Join(*out, "report.json"), b) }()
 	sdk := strings.TrimSpace(string(run("xcrun", "--show-sdk-path")))
 	for _, path := range []string{"scripts/verify-large-compression.go", "testdata/appledouble/native/decmpfs-large.c", "testdata/appledouble/native/decmpfs-expand.c", filepath.Join(sdk, "usr/include/sys/xattr.h"), filepath.Join(sdk, "usr/include/sys/stat.h")} {
@@ -206,6 +216,7 @@ func main() {
 	} else {
 		var old report
 		must(json.Unmarshal(read(filepath.Join(fixture, "manifest.json")), &old))
+		must(captureprovenance.Verify(os.DirFS("."), old.Sources))
 		if !reflect.DeepEqual(old.Cases, r.Cases) {
 			panic("native large-compression observations changed; fresh evidence retained")
 		}

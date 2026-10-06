@@ -14,7 +14,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -22,6 +21,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/captureprovenance"
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/authorization"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
@@ -131,7 +132,7 @@ func main() {
 		total++
 	}
 	if *report != "" {
-		revision, err := exec.Command("git", "rev-parse", "HEAD").Output()
+		revision, err := cirunner.Command("git", "rev-parse", "HEAD").Output()
 		must(err)
 		output, err := json.MarshalIndent(map[string]any{"schema": 1, "revision": strings.TrimSpace(string(revision)), "capture_sha256": captureHash, "spec_sha256": digest(specBytes), "host": runtime.GOOS, "arch": runtime.GOARCH, "compared": total, "failed": failed}, "", "  ")
 		must(err)
@@ -284,6 +285,16 @@ func provenance(c captureRecord, directory string, spec []byte) error {
 		}
 		expected[key] = ""
 		pinned[key] = s.SHA256
+	}
+	harness, err := captureprovenance.Inventory(os.DirFS("."))
+	if err != nil {
+		return err
+	}
+	if err = captureprovenance.Verify(os.DirFS("."), c.Sources); err != nil {
+		return err
+	}
+	for name := range harness {
+		expected[name] = name
 	}
 	if len(c.Sources) != len(expected) {
 		return errors.New("source provenance inventory differs")
@@ -536,6 +547,16 @@ func verifyMounted(capturePath, artifactDirectory, oracleDirectory, reportPath s
 		return err
 	}
 	inputs := map[string]string{"oracle_capture.json": filepath.Join(oracleDirectory, "capture.json"), "probe.c": filepath.Join(oracleDirectory, "probe.c"), "probe": filepath.Join(oracleDirectory, "probe"), "capture.go": "scripts/capture-pathname-mounts.go", "case-manifest.json": "testdata/appledouble/native/pathname-mount-cases.json"}
+	harness, err := captureprovenance.Inventory(os.DirFS("."))
+	if err != nil {
+		return err
+	}
+	if err = captureprovenance.Verify(os.DirFS("."), captured.Sources); err != nil {
+		return err
+	}
+	for name := range harness {
+		inputs[name] = name
+	}
 	if len(captured.Sources) != len(inputs) {
 		return errors.New("mounted source provenance inventory differs")
 	}
@@ -547,7 +568,7 @@ func verifyMounted(capturePath, artifactDirectory, oracleDirectory, reportPath s
 		if captured.Sources[name] != digest(b) {
 			return fmt.Errorf("mounted capture source mismatch: %s", name)
 		}
-		if name == "capture.go" || name == "case-manifest.json" || name == "oracle_capture.json" {
+		if name == "capture.go" || name == "case-manifest.json" || name == "oracle_capture.json" || harness[name] != "" {
 			artifact, err := os.ReadFile(filepath.Join(artifactDirectory, name))
 			if err != nil {
 				return err
@@ -613,7 +634,7 @@ func verifyMounted(capturePath, artifactDirectory, oracleDirectory, reportPath s
 		compared++
 	}
 	if reportPath != "" {
-		revision, err := exec.Command("git", "rev-parse", "HEAD").Output()
+		revision, err := cirunner.Command("git", "rev-parse", "HEAD").Output()
 		if err != nil {
 			return err
 		}

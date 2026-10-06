@@ -23,13 +23,25 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
       - name: Parse unchanged source bodies and reject tampered ranges
         env:
           CGO_ENABLED: "0"
-        run: go test -count=1 -v scripts/capture-pathname-authorization-ast.go scripts/capture-name-cache-ast_test.go
+        run: |
+          apfs-ci-runner --suite name-cache-ast/native/step3 --timeout 19m -- go test -json -count=1 -v scripts/capture-pathname-authorization-ast.go scripts/capture-name-cache-ast_test.go
       - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: name-cache-ast-${{ matrix.os }}
           path: artifacts/name-cache-ast/
+          if-no-files-found: error
+
+      - name: Retain complete CI command diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-observability-name-cache-ast-native-${{ strategy.job-index || 0 }}-${{ github.run_attempt }}
+          path: artifacts/ci-observability/
+          compression-level: 9
           if-no-files-found: error

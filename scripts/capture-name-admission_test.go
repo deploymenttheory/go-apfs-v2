@@ -6,8 +6,11 @@ import (
 	"bytes"
 	"encoding/hex"
 	"encoding/json"
+	"os"
 	"strings"
 	"testing"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/captureprovenance"
 )
 
 func fixture() capture {
@@ -52,7 +55,15 @@ func clone(c capture) capture {
 	return out
 }
 func TestAdmissionEvidence(t *testing.T) {
+	t.Chdir("..")
 	original := fixture()
+	harness, err := captureprovenance.Inventory(os.DirFS("."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, hash := range harness {
+		original.Sources[name] = hash
+	}
 	if e := compare(original, clone(original)); e != nil {
 		t.Fatal(e)
 	}

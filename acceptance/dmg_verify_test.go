@@ -18,20 +18,22 @@ import (
 	"bytes"
 	"math/rand"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/disk"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 // hdiutilVerify runs `hdiutil verify` on dmg and fails unless it is valid.
 // hdiutil caches results by path, so dmg must be freshly named.
 func hdiutilVerify(t *testing.T, dmg string) {
 	t.Helper()
-	out, err := exec.Command("hdiutil", "verify", dmg).CombinedOutput()
+	out, err := cirunner.Command("hdiutil", "verify", dmg).CombinedOutput()
 	if err != nil || !strings.Contains(string(out), "is VALID") {
 		t.Fatalf("hdiutil verify rejected %s (%v):\n%s", filepath.Base(dmg), err, out)
 	}
@@ -78,10 +80,10 @@ func TestPackedDMGsMountAndRead(t *testing.T) {
 				dmg := filepath.Join(t.TempDir(), "packed.dmg")
 				mustRun(t, "pack", src, dmg, "--fs", fs, "--compression", codec)
 				mnt := t.TempDir()
-				if out, err := exec.Command("hdiutil", "attach", "-readonly", "-nobrowse", "-noautoopen", "-mountpoint", mnt, dmg).CombinedOutput(); err != nil {
+				if out, err := cirunner.Command("hdiutil", "attach", "-readonly", "-nobrowse", "-noautoopen", "-mountpoint", mnt, dmg).CombinedOutput(); err != nil {
 					t.Fatalf("hdiutil attach: %v\n%s", err, out)
 				}
-				defer func() { _ = exec.Command("hdiutil", "detach", "-force", mnt).Run() }()
+				defer func() { _ = cirunner.Command("hdiutil", "detach", "-force", mnt).Run() }()
 				got, err := os.ReadFile(filepath.Join(mnt, "random.bin"))
 				if err != nil || !bytes.Equal(got, data) {
 					t.Fatalf("mounted random.bin does not match: %v", err)

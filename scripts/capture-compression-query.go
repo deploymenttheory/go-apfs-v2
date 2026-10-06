@@ -17,11 +17,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-
 	"runtime"
 	"strings"
 	"time"
 
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/captureprovenance"
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/diskimage"
 )
 
@@ -99,7 +100,7 @@ func run(out string, check bool) (result error) {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
 		var stderr bytes.Buffer
-		cmd := exec.CommandContext(ctx, name, args...)
+		cmd := cirunner.CommandContext(ctx, name, args...)
 		cmd.Stderr = &stderr
 		b, e := cmd.Output()
 		if e != nil {
@@ -108,6 +109,9 @@ func run(out string, check bool) (result error) {
 		return b, nil
 	}
 	c := capture{Schema: 1, Sources: map[string]string{}}
+	if err := captureprovenance.Bind(os.DirFS("."), artifact, c.Sources); err != nil {
+		return err
+	}
 	for _, v := range []struct {
 		name   string
 		args   []string
@@ -318,6 +322,9 @@ func run(out string, check bool) (result error) {
 		if e = json.NewDecoder(reader).Decode(&expected); e != nil {
 			return e
 		}
+		if err := captureprovenance.Verify(os.DirFS("."), expected.Sources); err != nil {
+			return err
+		}
 		// Marshal both inventories to compare every raw observation field while
 		// ignoring JSON indentation introduced by the retained envelope.
 		oldCases, e := json.Marshal(expected.Cases)
@@ -368,7 +375,7 @@ func queryDetachCommand(ctx context.Context, device string) ([]byte, []byte, int
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 	var stdout, stderr bytes.Buffer
-	cmd := exec.CommandContext(ctx, "hdiutil", "detach", device)
+	cmd := cirunner.CommandContext(ctx, "hdiutil", "detach", device)
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	err := cmd.Run()
 	code := 0

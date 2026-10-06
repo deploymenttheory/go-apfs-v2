@@ -17,7 +17,7 @@ import (
 	"io/fs"
 	"net/http"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -30,6 +30,8 @@ import (
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/hfsplus"
 	aclmeta "github.com/deploymenttheory/go-apfs-v2/pkg/hostdata/acl"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 type metadata struct {
@@ -80,7 +82,7 @@ func read(p string) []byte     { b, e := os.ReadFile(p); must(e); return b }
 func write(p string, b []byte) { must(os.WriteFile(p, b, 0600)) }
 func sum(b []byte) string      { return fmt.Sprintf("%x", sha256.Sum256(b)) }
 func run(args ...string) []byte {
-	b, e := exec.Command(args[0], args[1:]...).CombinedOutput()
+	b, e := cirunner.Command(args[0], args[1:]...).CombinedOutput()
 	c := command{Args: args, Output: string(b)}
 	if e != nil {
 		c.Error = e.Error()
@@ -254,7 +256,7 @@ func main() {
 }
 func apply(helper, dir, input string, tc application, kind string) (metadata, result, string) {
 	args := []string{filepath.Join(dir, kind), tc.Kind, fmt.Sprintf("%o", tc.Mode), fmt.Sprint(tc.Flags), input, kind}
-	cmd := exec.Command(helper, args...)
+	cmd := cirunner.Command(helper, args...)
 	stdin, e := cmd.StdinPipe()
 	must(e)
 	stdout, e := cmd.StdoutPipe()
@@ -539,7 +541,7 @@ func restoreRun(helper, dir, destination, input string, tc restorationCase, kind
 		setup = "plain"
 	}
 	args := []string{filepath.Join(destination, kind), tc.Kind, fmt.Sprintf("%o", tc.Mode), fmt.Sprint(tc.Flags), input, kind, setup}
-	cmd := exec.Command(helper, args...)
+	cmd := cirunner.Command(helper, args...)
 	stdin, e := cmd.StdinPipe()
 	must(e)
 	stdout, e := cmd.StdoutPipe()
@@ -789,7 +791,7 @@ func verifyAttributeMetadata(m aclmeta.ACLMetadata, want metadata) {
 }
 func attributeRun(helper, dir, input string, tc attributeApplication, kind string, encode func(aclmeta.ACLMetadata) ([]byte, string, error)) (metadata, []byte, result, []byte, []byte) {
 	args := []string{filepath.Join(dir, kind), tc.Kind, fmt.Sprintf("%o", tc.Mode), fmt.Sprint(tc.Flags), input, kind, fmt.Sprint(tc.Initial)}
-	cmd := exec.Command(helper, args...)
+	cmd := cirunner.Command(helper, args...)
 	stdin, e := cmd.StdinPipe()
 	must(e)
 	stdout, e := cmd.StdoutPipe()
@@ -1052,7 +1054,7 @@ func (p principalPipe) WriteACL(m aclmeta.ACLMetadata) error {
 }
 func principalRun(helper, dir, destination, input string, tc principalCase, kind string) (principalRead, principalObservation, *aclmeta.DarwinChmodRequest, aclmeta.ACLRestoreResult) {
 	args := []string{destination, input, kind, fmt.Sprint(tc.UID), fmt.Sprint(tc.GID), tc.Filesystem}
-	cmd := exec.Command(helper, args...)
+	cmd := cirunner.Command(helper, args...)
 	stdin, e := cmd.StdinPipe()
 	must(e)
 	defer stdin.Close()
@@ -1432,7 +1434,7 @@ func propertyRequestLine(r aclmeta.DarwinChmodArguments) string {
 func propertyRun(helper, dir, kind string, tc propertyApplication) (metadata, []byte, propertyResult) {
 	args := []string{filepath.Join(dir, kind), tc.Kind, fmt.Sprint(tc.Initial), fmt.Sprint(tc.Flags), kind}
 	args = append(args, tc.Input.arguments(dir)...)
-	cmd := exec.Command(helper, args...)
+	cmd := cirunner.Command(helper, args...)
 	input := ""
 	if kind == "go" {
 		input = propertyRequestLine(tc.Request)

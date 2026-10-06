@@ -34,6 +34,8 @@ import (
 	"github.com/deploymenttheory/go-apfs-v2/pkg/hfsplus"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/metatransport"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 const imageSize int64 = (1 << 32) + (128 << 20)
@@ -145,7 +147,7 @@ func writeJSON(name string, v any) {
 	must(os.WriteFile(name, append(b, '\n'), 0600))
 }
 func run(args ...string) []byte {
-	b, e := exec.Command(args[0], args[1:]...).CombinedOutput()
+	b, e := cirunner.Command(args[0], args[1:]...).CombinedOutput()
 	evidence.Commands = append(evidence.Commands, command{args, fmt.Sprintf("%s\nerror: %v", b, e)})
 	if e != nil {
 		panic(fmt.Errorf("%v: %w: %s", args, e, b))
@@ -235,7 +237,7 @@ func archive(name, destination string) (string, int64) {
 func detach(name string) {
 	must(diskimage.RetryDetach(context.Background(), func() (int, error) {
 		args := []string{"hdiutil", "detach", name}
-		b, e := exec.Command(args[0], args[1:]...).CombinedOutput()
+		b, e := cirunner.Command(args[0], args[1:]...).CombinedOutput()
 		code := 0
 		if e != nil {
 			code = -1
@@ -355,7 +357,7 @@ func main() {
 			panic("large-fork qualification exceeded 512 MiB sampled Go heap budget")
 		}
 	}()
-	evidence.Sources, e = evidenceaudit.SourceHashes(os.DirFS("."), []string{"scripts/verify-large-resource-fork.go", "testdata/appledouble/native/large-resource-fork.c", "internal/testutil/largefork/*.go", "internal/testutil/diskimage/*.go", "internal/tools/extract*.go", "internal/hostwalk/*.go", "pkg/metatransport/*.go", "pkg/hostdata/*.go", "pkg/hostdata/*/*.go", "internal/hosttime/*.go", "internal/testutil/heldfixture/*.go", "pkg/appledouble/*.go", "pkg/apfswrite/*.go", "pkg/apfs/*.go", "pkg/hfsplus/*.go", "go.mod", "go.sum"})
+	evidence.Sources, e = evidenceaudit.HarnessSourceHashes(os.DirFS("."), []string{"scripts/verify-large-resource-fork.go", "testdata/appledouble/native/large-resource-fork.c", "internal/testutil/largefork/*.go", "internal/testutil/diskimage/*.go", "internal/tools/extract*.go", "internal/hostwalk/*.go", "pkg/metatransport/*.go", "pkg/hostdata/*.go", "pkg/hostdata/*/*.go", "internal/hosttime/*.go", "internal/testutil/heldfixture/*.go", "pkg/appledouble/*.go", "pkg/apfswrite/*.go", "pkg/apfs/*.go", "pkg/hfsplus/*.go", "go.mod", "go.sum"})
 	must(e)
 	evidence.ExpectedSHA256 = valueHash(&largefork.Value{})
 	if runtime.GOOS == "darwin" {

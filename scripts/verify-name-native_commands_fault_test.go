@@ -16,6 +16,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 func TestNativeReadbackCommandChild(t *testing.T) {
@@ -37,7 +39,7 @@ func TestNativeReadbackCommandChild(t *testing.T) {
 		if err != nil {
 			os.Exit(10)
 		}
-		child := exec.Command(exe, "-test.run=^TestNativeReadbackCommandChild$")
+		child := cirunner.Command(exe, "-test.run=^TestNativeReadbackCommandChild$")
 		child.Env = append(os.Environ(), "APFS_READBACK_COMMAND_CHILD=hold")
 		child.Stdout = os.Stdout
 		child.Stderr = os.Stderr
@@ -202,7 +204,7 @@ func TestNativeReadbackCommandLiveProgress(t *testing.T) {
 	if _, err = runner.run(ctx, exe, "-test.run=^TestNativeReadbackCommandChild$"); !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatal(err)
 	}
-	for _, text := range []string{"PROGRESS native command", "ERROR native command", "context deadline exceeded", "case=blocked candidate=0 operation=openat-file"} {
+	for _, text := range []string{"ACTIVITY command=", "CANCEL command=", "context deadline exceeded", "case=blocked candidate=0 operation=openat-file"} {
 		if !strings.Contains(output.String(), text) {
 			t.Fatalf("missing %q in live progress: %s", text, output.String())
 		}
@@ -260,7 +262,7 @@ func TestNativeReadbackCommandStreamsBeforeExit(t *testing.T) {
 	if err != nil || !strings.Contains(string(retained), "NATIVE START case=blocked candidate=0 operation=openat-file") {
 		t.Fatal("lost retained trace", string(retained), err)
 	}
-	if !strings.Contains(output.String(), "ERROR native command") {
+	if !strings.Contains(output.String(), "CANCEL command=") {
 		t.Fatal("missing live cancellation error")
 	}
 }

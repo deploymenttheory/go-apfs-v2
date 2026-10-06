@@ -31,6 +31,8 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
       - name: Require EFS service for native encrypted-file controls
         if: runner.os == 'Windows'
         shell: pwsh
@@ -42,11 +44,21 @@ jobs:
           fsutil behavior query disableencryption
           if ($LASTEXITCODE -ne 0) { throw 'Cannot query required EFS capability' }
       - name: Require complete hostdata and every changed replacement file above 95 percent
-        run: go run scripts/verify-replacement.go
+        run: |
+          apfs-ci-runner --suite replacement/qualification/step4 --timeout 39m -- go run scripts/verify-replacement.go
       - name: Retain exact tests and per-file coverage
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: replacement-qualification-${{ matrix.os }}
           path: artifacts/replacement-coverage/
+          if-no-files-found: error
+
+      - name: Retain complete CI command diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-observability-replacement-qualification-${{ strategy.job-index || 0 }}-${{ github.run_attempt }}
+          path: artifacts/ci-observability/
+          compression-level: 9
           if-no-files-found: error

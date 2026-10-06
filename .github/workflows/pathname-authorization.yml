@@ -25,22 +25,30 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
       - name: Test full-body source extraction integrity
-        run: go test scripts/capture-pathname-authorization-ast.go scripts/capture-pathname-authorization-ast_test.go
+        run: |
+          apfs-ci-runner --suite pathname-authorization/native/step3 --timeout 29m -- go test -json scripts/capture-pathname-authorization-ast.go scripts/capture-pathname-authorization-ast_test.go
       - name: Capture complete pinned XNU bodies for both architectures and configurations
-        run: go run scripts/capture-pathname-authorization-ast.go -out artifacts/pathname-authorization-ast
+        run: |
+          apfs-ci-runner --suite pathname-authorization/native/step4 --timeout 29m -- go run scripts/capture-pathname-authorization-ast.go -out artifacts/pathname-authorization-ast
       - name: Capture every specified native case without interactive credentials
         run: |
           mkdir -p artifacts
-          go run scripts/capture-pathname-authorization.go -out artifacts/pathname-authorization -sudo -require-complete
+          apfs-ci-runner --suite pathname-authorization/native/step5 --timeout 29m -- go run scripts/capture-pathname-authorization.go -out artifacts/pathname-authorization -sudo -require-complete
       - name: Test strict native inventory rejection
-        run: go test scripts/verify-pathname-authorization.go scripts/verify-pathname-authorization_test.go
+        run: |
+          apfs-ci-runner --suite pathname-authorization/native/step6 --timeout 29m -- go test -json scripts/verify-pathname-authorization.go scripts/verify-pathname-authorization_test.go
       - name: Replay the complete fresh native corpus through portable authorization
-        run: go run scripts/verify-pathname-authorization.go -capture artifacts/pathname-authorization/capture.json.gz -report artifacts/pathname-authorization/replay.json
+        run: |
+          apfs-ci-runner --suite pathname-authorization/native/step7 --timeout 29m -- go run scripts/verify-pathname-authorization.go -capture artifacts/pathname-authorization/capture.json.gz -report artifacts/pathname-authorization/replay.json
       - name: Capture all mounted readonly and cross-device cases
-        run: go run scripts/capture-pathname-mounts.go -out artifacts/pathname-mounts -oracle-artifacts artifacts/pathname-authorization -sudo -require-complete
+        run: |
+          apfs-ci-runner --suite pathname-authorization/native/step8 --timeout 29m -- go run scripts/capture-pathname-mounts.go -out artifacts/pathname-mounts -oracle-artifacts artifacts/pathname-authorization -sudo -require-complete
       - name: Replay complete mounted operations through production authorization
-        run: go run scripts/verify-pathname-authorization.go -mounted -capture artifacts/pathname-mounts/capture.json -oracle-artifacts artifacts/pathname-authorization -report artifacts/pathname-mounts/replay.json
+        run: |
+          apfs-ci-runner --suite pathname-authorization/native/step9 --timeout 29m -- go run scripts/verify-pathname-authorization.go -mounted -capture artifacts/pathname-mounts/capture.json -oracle-artifacts artifacts/pathname-authorization -report artifacts/pathname-mounts/replay.json
       - name: Retain native output, source and SDK provenance, and complete ASTs
         if: always()
         uses: actions/upload-artifact@v7
@@ -63,6 +71,14 @@ jobs:
           path: artifacts/pathname-mounts/
           if-no-files-found: error
 
+      - name: Retain complete CI command diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-observability-pathname-authorization-native-${{ strategy.job-index || 0 }}-${{ github.run_attempt }}
+          path: artifacts/ci-observability/
+          compression-level: 9
+          if-no-files-found: error
   portable:
     name: Replay every native profile (${{ matrix.os }})
     needs: native
@@ -77,6 +93,8 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
       - uses: actions/download-artifact@v8.0.1
         with:
           pattern: pathname-authorization-*
@@ -86,7 +104,8 @@ jobs:
           pattern: pathname-mounts-*
           path: artifacts/native
       - name: Test strict native inventory rejection
-        run: go test scripts/verify-pathname-authorization.go scripts/verify-pathname-authorization_test.go
+        run: |
+          apfs-ci-runner --suite pathname-authorization/portable/step5 --timeout 29m -- go test -json scripts/verify-pathname-authorization.go scripts/verify-pathname-authorization_test.go
       - name: Replay all three complete native profiles and mounted operations
         shell: bash
         run: |
@@ -94,8 +113,8 @@ jobs:
           for profile in macos-15 macos-latest xcode-27; do
             oracle="artifacts/native/pathname-authorization-${profile}"
             mounted="artifacts/native/pathname-mounts-${profile}"
-            go run scripts/verify-pathname-authorization.go -capture "${oracle}/capture.json.gz" -report "artifacts/replay/${profile}-pathname.json"
-            go run scripts/verify-pathname-authorization.go -mounted -capture "${mounted}/capture.json" -oracle-artifacts "${oracle}" -report "artifacts/replay/${profile}-mounted.json"
+            apfs-ci-runner --suite pathname-authorization/portable/step6 --timeout 29m -- go run scripts/verify-pathname-authorization.go -capture "${oracle}/capture.json.gz" -report "artifacts/replay/${profile}-pathname.json"
+            apfs-ci-runner --suite pathname-authorization/portable/step6 --timeout 29m -- go run scripts/verify-pathname-authorization.go -mounted -capture "${mounted}/capture.json" -oracle-artifacts "${oracle}" -report "artifacts/replay/${profile}-mounted.json"
           done
       - name: Retain revision-bound cross-platform replay reports
         if: always()
@@ -103,4 +122,13 @@ jobs:
         with:
           name: pathname-portable-${{ matrix.os }}
           path: artifacts/replay/
+          if-no-files-found: error
+
+      - name: Retain complete CI command diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-observability-pathname-authorization-portable-${{ strategy.job-index || 0 }}-${{ github.run_attempt }}
+          path: artifacts/ci-observability/
+          compression-level: 9
           if-no-files-found: error

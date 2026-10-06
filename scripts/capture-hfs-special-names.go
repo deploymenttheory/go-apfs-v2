@@ -23,6 +23,8 @@ import (
 	"time"
 	"unicode/utf16"
 
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/captureprovenance"
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/diskimage"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/disk"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/osversion"
@@ -71,7 +73,7 @@ type specialCapture struct {
 
 func specialHash(b []byte) string { h := sha256.Sum256(b); return hex.EncodeToString(h[:]) }
 func specialCommand(ctx context.Context, name string, args ...string) ([]byte, error) {
-	b, e := exec.CommandContext(ctx, name, args...).CombinedOutput()
+	b, e := cirunner.CommandContext(ctx, name, args...).CombinedOutput()
 	if e != nil {
 		return b, fmt.Errorf("%s %v: %w: %s", name, args, e, b)
 	}
@@ -122,6 +124,9 @@ func captureSpecial(out string) error {
 		return err
 	}
 	report := specialCapture{Schema: 1, Host: string(host), Compiler: string(compiler), SDK: strings.TrimSpace(string(sdk)), Revision: strings.TrimSpace(string(revision)), Sources: map[string]string{}}
+	if err := captureprovenance.Bind(os.DirFS("."), out, report.Sources); err != nil {
+		return err
+	}
 	for _, p := range []string{specialSource, "scripts/capture-hfs-special-names.go", "testdata/appledouble/native/name-comparison-source/vfs_utfconv.c.gz", "testdata/appledouble/native/name-comparison-source/sources.json", "go.mod", "go.sum"} {
 		b, e := os.ReadFile(p)
 		if e != nil {
@@ -206,7 +211,7 @@ func captureSpecialVolume(ctx context.Context, out, kind, probe string) (result 
 		cleanup, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 		defer cancel()
 		e := diskimage.RetryDetach(cleanup, func() (int, error) {
-			b, e := exec.CommandContext(cleanup, "hdiutil", "detach", device).CombinedOutput()
+			b, e := cirunner.CommandContext(cleanup, "hdiutil", "detach", device).CombinedOutput()
 			result.Detach = append(result.Detach, string(b))
 			code := 0
 			if e != nil {

@@ -14,7 +14,7 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -22,6 +22,8 @@ import (
 	"strings"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 type rawProcessInfo struct {
@@ -95,7 +97,7 @@ func readRuntime(path string) []byte     { b, e := os.ReadFile(path); mustRuntim
 func writeRuntime(path string, b []byte) { mustRuntime(os.WriteFile(path, b, 0600)) }
 func hashRuntime(b []byte) string        { return fmt.Sprintf("%x", sha256.Sum256(b)) }
 func runRuntime(args ...string) []byte {
-	b, e := exec.Command(args[0], args[1:]...).CombinedOutput()
+	b, e := cirunner.Command(args[0], args[1:]...).CombinedOutput()
 	c := runtimeCommand{Args: args, Output: string(b)}
 	if e != nil {
 		c.Error = e.Error()

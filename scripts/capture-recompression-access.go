@@ -13,12 +13,14 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"reflect"
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/captureprovenance"
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 type accessCapture struct {
@@ -39,7 +41,7 @@ type accessOpenCase struct {
 func accessCommand(name string, args ...string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, name, args...)
+	cmd := cirunner.CommandContext(ctx, name, args...)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	data, err := cmd.Output()
@@ -102,6 +104,9 @@ func accessRun(out string, check bool) (err error) {
 		return e
 	}
 	capture := accessCapture{Schema: 1, Host: version, SDK: strings.TrimSpace(string(sdk)), Compiler: string(compiler), Sources: map[string]string{}}
+	if err := captureprovenance.Bind(os.DirFS("."), filepath.Dir(out), capture.Sources); err != nil {
+		return err
+	}
 	source := "testdata/appledouble/native/recompression-access.c"
 	for _, name := range []string{source, "scripts/capture-recompression-access.go", "testdata/appledouble/native/recompression-open.c", "testdata/appledouble/native/compression-lz4.json.gz", "testdata/appledouble/native/recompression-access-source/sources.json", "testdata/appledouble/native/recompression-access-source/vfs_subr.c.gz", "testdata/appledouble/native/recompression-access-source/vfs_syscalls.c.gz", "testdata/appledouble/native/recompression-access-source/kern_authorization.c.gz", "testdata/appledouble/native/recompression-access-source/kern_credential.c.gz"} {
 		data, e := os.ReadFile(name)
@@ -237,6 +242,9 @@ func accessRun(out string, check bool) (err error) {
 		}
 		if old.Schema != 1 || len(old.Cases) != len(capture.Cases) || len(old.OpenCases) != 2 {
 			return errors.New("native access inventory differs")
+		}
+		if err := captureprovenance.Verify(os.DirFS("."), old.Sources); err != nil {
+			return err
 		}
 		for _, name := range []string{source, "scripts/capture-recompression-access.go", "testdata/appledouble/native/recompression-open.c", "testdata/appledouble/native/compression-lz4.json.gz", "testdata/appledouble/native/recompression-access-source/sources.json", "testdata/appledouble/native/recompression-access-source/vfs_subr.c.gz", "testdata/appledouble/native/recompression-access-source/vfs_syscalls.c.gz", "testdata/appledouble/native/recompression-access-source/kern_authorization.c.gz", "testdata/appledouble/native/recompression-access-source/kern_credential.c.gz"} {
 			if old.Sources[name] != capture.Sources[name] {

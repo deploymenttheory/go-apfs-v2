@@ -7,13 +7,15 @@ import (
 	"compress/gzip"
 	"encoding/binary"
 	"encoding/hex"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"unicode/utf16"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/captureprovenance"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
 )
 
 func casesForTest(t *testing.T) []nameCase {
@@ -164,8 +166,16 @@ func TestCollationNativeInventoryRejectsGaps(t *testing.T) {
 	}
 }
 func TestCollationStableComparison(t *testing.T) {
+	t.Chdir("..")
 	n, cases := sampleNative(t)
 	a := capture{Schema: 1, Cases: cases, Sources: map[string]string{"scripts/capture-name-collation.go": "source"}}
+	harness, err := captureprovenance.Inventory(os.DirFS("."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, hash := range harness {
+		a.Sources[name] = hash
+	}
 	for _, kind := range []string{"APFS", "APFSX", "HFS+", "HFSX"} {
 		v := volumeCapture{Kind: kind, Native: n}
 		v.Native.Cases = append([]nativeCase(nil), n.Cases...)

@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 // Reproduce the intermediate state from a partially completed detach: volumes
@@ -18,7 +20,7 @@ func TestDetachAfterVolumeUnmount(t *testing.T) {
 	defer cancel()
 	run := func(args ...string) ([]byte, error) {
 		t.Helper()
-		b, err := exec.CommandContext(ctx, args[0], args[1:]...).CombinedOutput()
+		b, err := cirunner.CommandContext(ctx, args[0], args[1:]...).CombinedOutput()
 		t.Logf("command=%q output=%q error=%v", args, b, err)
 		return b, err
 	}

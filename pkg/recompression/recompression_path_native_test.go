@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/captureprovenance"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/authorization"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/metatransport"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/osversion"
@@ -264,7 +265,14 @@ func replayNativePathLimitCase(t *testing.T, n nativePathLimits, c nativePathLim
 func verifyNativePathSources(t *testing.T, name string, sources map[string]string, oracle, script string) {
 	t.Helper()
 	currentFiles := map[string]string{"probe.c": filepath.Join("..", "..", "testdata", "appledouble", "native", oracle), "capture.go": filepath.Join("..", "..", "scripts", script)}
-	expectedSourceCount := 15
+	harness, err := captureprovenance.Inventory(os.DirFS("../.."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = captureprovenance.Verify(os.DirFS("../.."), sources); err != nil {
+		t.Fatal(err)
+	}
+	expectedSourceCount := 15 + len(harness)
 	if oracle == "name-lookup.c" {
 		expectedSourceCount++
 	}

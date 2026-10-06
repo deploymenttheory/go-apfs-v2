@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 // Run the actual fatal-on-invalid validators in isolated test processes. Every
@@ -31,7 +33,7 @@ func TestWriterManifestGuards(t *testing.T) {
 	cases := []string{"positive", "missing-case", "duplicate-case", "created-bytes", "query-bytes", "stored-bytes", "parent", "inode", "lookup-inode", "create-errno", "lookup-errno", "hash", "raw-key", "raw-value", "missing-check", "duplicate-check", "write-before-rejection", "check-input", "check-errno", "unknown-field", "trailing-json", "truncated-json"}
 	for _, mutation := range cases {
 		t.Run(mutation, func(t *testing.T) {
-			cmd := exec.CommandContext(t.Context(), binary, "-test.run=^TestWriterManifestGuardChild$", "-test.v")
+			cmd := cirunner.CommandContext(t.Context(), binary, "-test.run=^TestWriterManifestGuardChild$", "-test.v")
 			cmd.Env = append(os.Environ(), "APFS_WRITER_GUARD="+mutation, "APFS_WRITER_MANIFEST="+manifest)
 			output, err := cmd.CombinedOutput()
 			if mutation == "positive" {

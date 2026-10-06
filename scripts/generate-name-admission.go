@@ -17,6 +17,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/captureprovenance"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/osversion"
 )
 
@@ -56,6 +57,9 @@ func main() {
 		must(requireAdmissionProfile(c.Host, major))
 		if c.Schema != 1 || len(c.Volumes) != 2 {
 			panic("native inventory")
+		}
+		if err := captureprovenance.Verify(os.DirFS("."), c.Sources); err != nil {
+			panic(err)
 		}
 		for p, want := range c.Sources {
 			if strings.HasPrefix(p, "testdata/") || strings.HasPrefix(p, "scripts/") || strings.HasPrefix(p, ".github/") || p == "go.mod" || p == "go.sum" {

@@ -51,7 +51,7 @@ func TestCoverage(t *testing.T) {
 			}
 		})
 	}
-	if len(CoverageDirectories()) != 30 {
+	if len(CoverageDirectories()) != 31 {
 		t.Fatal("inventory changed: update qualification expectations")
 	}
 	cases := []struct {

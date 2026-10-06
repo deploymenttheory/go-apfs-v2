@@ -500,6 +500,9 @@ compared byte-for-byte against an `hdiutil` mount of the same image. See the
 [vendor DMG fixtures](docs/vendor-dmg-acceptance.md) for pinned versions,
 checksums, format differences and local test commands.
 
+CI command reporting and raw evidence retention are described in
+[CI observability](docs/ci-observability.md).
+
 ## Acknowledgements
 
 The design and on-disk handling draw on

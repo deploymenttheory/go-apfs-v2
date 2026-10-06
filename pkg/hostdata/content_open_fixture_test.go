@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/captureprovenance"
 )
 
 func TestContentOpenFixtureProvenance(t *testing.T) {
@@ -29,7 +31,14 @@ func TestContentOpenFixtureProvenance(t *testing.T) {
 	if err := json.Unmarshal(data, &fixture); err != nil {
 		t.Fatal(err)
 	}
-	if fixture.Schema != 1 || fixture.MacOS == "" || fixture.Compiler == "" || len(fixture.Cases) != 12 || len(fixture.Hashes) != 2 {
+	harness, err := captureprovenance.Inventory(os.DirFS(base))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = captureprovenance.Verify(os.DirFS(base), fixture.Hashes); err != nil {
+		t.Fatal(err)
+	}
+	if fixture.Schema != 1 || fixture.MacOS == "" || fixture.Compiler == "" || len(fixture.Cases) != 12 || len(fixture.Hashes) != 2+len(harness) {
 		t.Fatal("incomplete native fixture")
 	}
 	for _, name := range []string{"scripts/capture-content-open.go", "testdata/appledouble/native/content-open.c"} {

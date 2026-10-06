@@ -13,7 +13,7 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -22,6 +22,8 @@ import (
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/pathnative"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 func main() {
@@ -43,7 +45,7 @@ func verify(capture bool) error {
 	}
 	const source = "testdata/appledouble/native/path-copyfile.c"
 	for _, arch := range []string{"arm64", "x86_64"} {
-		cmd := exec.Command("xcrun", "clang", "-arch", arch, "-fsyntax-only", "-Xclang", "-ast-dump=json", source)
+		cmd := cirunner.Command("xcrun", "clang", "-arch", arch, "-fsyntax-only", "-Xclang", "-ast-dump=json", source)
 		var stderr bytes.Buffer
 		cmd.Stderr = &stderr
 		ast, err := cmd.Output()
@@ -58,7 +60,7 @@ func verify(capture bool) error {
 	if err != nil {
 		return err
 	}
-	if out, err := exec.Command("xcrun", "clang", "-Wall", "-Wextra", "-Werror", source, "-o", helper).CombinedOutput(); err != nil {
+	if out, err := cirunner.Command("xcrun", "clang", "-Wall", "-Wextra", "-Werror", source, "-o", helper).CombinedOutput(); err != nil {
 		return fmt.Errorf("compile: %w %s", err, out)
 	}
 	if err := verifyLinkWrite(dir); err != nil {
@@ -70,11 +72,11 @@ func verify(capture bool) error {
 			return fmt.Errorf("case %d (%+v): %w", i, cases[i], err)
 		}
 	}
-	revision, err := exec.Command("git", "rev-parse", "HEAD").Output()
+	revision, err := cirunner.Command("git", "rev-parse", "HEAD").Output()
 	if err != nil {
 		return err
 	}
-	host, err := exec.Command("sw_vers").Output()
+	host, err := cirunner.Command("sw_vers").Output()
 	if err != nil {
 		return err
 	}
@@ -150,7 +152,7 @@ func verify(capture bool) error {
 		if err != nil {
 			return err
 		}
-		cmd := exec.Command("go", "test", "-json", "-count=1", "./pkg/hostdata", "-run", "^TestAppleDoublePathNativeReplay$")
+		cmd := cirunner.Command("go", "test", "-json", "-count=1", "./pkg/hostdata", "-run", "^TestAppleDoublePathNativeReplay$")
 		cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 		cmd.Stdout, cmd.Stderr = io.MultiWriter(os.Stdout, log), io.MultiWriter(os.Stderr, log)
 		err = cmd.Run()
@@ -185,7 +187,7 @@ func verify(capture bool) error {
 func verifyLinkWrite(dir string) error {
 	const source = "testdata/appledouble/native/path-link-write.c"
 	for _, arch := range []string{"arm64", "x86_64"} {
-		out, err := exec.Command("xcrun", "clang", "-arch", arch, "-fsyntax-only", "-Xclang", "-ast-dump=json", source).Output()
+		out, err := cirunner.Command("xcrun", "clang", "-arch", arch, "-fsyntax-only", "-Xclang", "-ast-dump=json", source).Output()
 		if err != nil {
 			return fmt.Errorf("link write AST %s: %w", arch, err)
 		}
@@ -197,10 +199,10 @@ func verifyLinkWrite(dir string) error {
 	if err != nil {
 		return err
 	}
-	if out, err := exec.Command("xcrun", "clang", "-Wall", "-Wextra", "-Werror", source, "-o", helper).CombinedOutput(); err != nil {
+	if out, err := cirunner.Command("xcrun", "clang", "-Wall", "-Wextra", "-Werror", source, "-o", helper).CombinedOutput(); err != nil {
 		return fmt.Errorf("link write compile: %w: %s", err, out)
 	}
-	out, err := exec.Command(helper).CombinedOutput()
+	out, err := cirunner.Command(helper).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("native link write: %w: %s", err, out)
 	}
@@ -292,7 +294,7 @@ func observe(helper, dir string, c *pathnative.Case) error {
 	if c.SetUmask {
 		mask = c.Umask
 	}
-	cmd := exec.Command(helper, src, dst, target, strconv.Itoa(c.Route), strconv.Itoa(c.Selected), strconv.Itoa(c.Quit), strconv.Itoa(c.SourceMode), strconv.Itoa(mask))
+	cmd := cirunner.Command(helper, src, dst, target, strconv.Itoa(c.Route), strconv.Itoa(c.Selected), strconv.Itoa(c.Quit), strconv.Itoa(c.SourceMode), strconv.Itoa(mask))
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()

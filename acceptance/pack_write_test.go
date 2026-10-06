@@ -7,13 +7,15 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/disk"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 func sha256Hex(b []byte) string {
@@ -168,15 +170,15 @@ func TestPackDirFsckAndMount(t *testing.T) {
 	}
 
 	// Attach the raw image without mounting, fsck the device, then detach.
-	out, err := exec.Command("hdiutil", "attach", "-imagekey", "diskimage-class=CRawDiskImage",
+	out, err := cirunner.Command("hdiutil", "attach", "-imagekey", "diskimage-class=CRawDiskImage",
 		"-nomount", "-readonly", rawPath).CombinedOutput()
 	if err != nil {
 		t.Fatalf("hdiutil attach (nomount) failed: %v\n%s", err, out)
 	}
 	dev := firstDevice(string(out))
-	defer exec.Command("hdiutil", "detach", dev).Run()
+	defer cirunner.Command("hdiutil", "detach", dev).Run()
 
-	fsckOut, _ := exec.Command("fsck_hfs", "-n", dev).CombinedOutput()
+	fsckOut, _ := cirunner.Command("fsck_hfs", "-n", dev).CombinedOutput()
 	if !strings.Contains(string(fsckOut), "appears to be OK") {
 		t.Errorf("fsck_hfs did not report clean:\n%s", fsckOut)
 	}
@@ -184,11 +186,11 @@ func TestPackDirFsckAndMount(t *testing.T) {
 	// Mount read-only and verify content.
 	mnt := filepath.Join(t.TempDir(), "mnt")
 	os.MkdirAll(mnt, 0755)
-	if out, err := exec.Command("hdiutil", "attach", "-readonly", "-nobrowse",
+	if out, err := cirunner.Command("hdiutil", "attach", "-readonly", "-nobrowse",
 		"-mountpoint", mnt, rawPath).CombinedOutput(); err != nil {
 		t.Fatalf("hdiutil mount failed: %v\n%s", err, out)
 	}
-	defer exec.Command("hdiutil", "detach", mnt).Run()
+	defer cirunner.Command("hdiutil", "detach", mnt).Run()
 
 	for rel, want := range manifest {
 		got, err := fileSHA256(filepath.Join(mnt, filepath.FromSlash(rel)))

@@ -11,6 +11,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/captureprovenance"
 )
 
 func TestCompressionOwnedNativeEvidence(t *testing.T) {
@@ -43,7 +45,14 @@ func TestCompressionOwnedNativeEvidence(t *testing.T) {
 			if err = json.NewDecoder(z).Decode(&raw); err != nil {
 				t.Fatal(err)
 			}
-			if raw.Schema != 1 || raw.Host == "" || raw.Compiler == "" || raw.SDK == "" || len(raw.Cases) != 72 || len(raw.Sources) != 15 {
+			harness, err := captureprovenance.Inventory(os.DirFS("../.."))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err = captureprovenance.Verify(os.DirFS("../.."), raw.Sources); err != nil {
+				t.Fatal(err)
+			}
+			if raw.Schema != 1 || raw.Host == "" || raw.Compiler == "" || raw.SDK == "" || len(raw.Cases) != 72 || len(raw.Sources) != 15+len(harness) {
 				t.Fatal("incomplete provenance", len(raw.Cases), len(raw.Sources))
 			}
 			for _, name := range []string{"testdata/appledouble/native/compression-owned.c", "scripts/capture-compression-owned.go", "pkg/osversion/version.go", "pkg/osversion/macos.go", "go.mod", "go.sum"} {

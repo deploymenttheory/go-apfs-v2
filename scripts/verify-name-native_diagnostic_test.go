@@ -65,7 +65,7 @@ func verifySingleNameSources(root, dir string, got, expected map[string]string) 
 		if name == "native-binary" {
 			path = filepath.Join(dir, "probe")
 		}
-		if strings.HasPrefix(name, "testdata/") || strings.HasPrefix(name, "scripts/") || strings.HasPrefix(name, ".github/") || name == "go.mod" || name == "go.sum" {
+		if strings.HasPrefix(name, "internal/") || strings.HasPrefix(name, "testdata/") || strings.HasPrefix(name, "scripts/") || strings.HasPrefix(name, ".github/") || name == "go.mod" || name == "go.sum" {
 			path = filepath.Join(root, filepath.FromSlash(name))
 		}
 		b, err := os.ReadFile(path)

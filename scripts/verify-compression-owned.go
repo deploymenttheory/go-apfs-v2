@@ -12,7 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -20,6 +20,8 @@ import (
 	"time"
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/evidenceaudit"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 type counter struct{ Covered, Statements int }
@@ -41,7 +43,7 @@ func run() error {
 	if e != nil {
 		return e
 	}
-	command := exec.CommandContext(ctx, "go", "test", "-count=1", "-json", "-covermode=atomic", "-coverprofile="+filepath.Join(dir, "coverage.out"), "./pkg/hostdata")
+	command := cirunner.CommandContext(ctx, "go", "test", "-count=1", "-json", "-covermode=atomic", "-coverprofile="+filepath.Join(dir, "coverage.out"), "./pkg/hostdata")
 	command.Env = append(os.Environ(), "CGO_ENABLED=0")
 	command.Stdout = transcript
 	command.Stderr = os.Stderr
@@ -65,7 +67,7 @@ func run() error {
 		return e
 	}
 	args := []string{"test", "-count=1", "-json", "-run=^Test(NativeCompressionOwned|NativeCompressionAcquisitionCancellationOwnership|CompressionVolumeObservation|CompressionOwnedNativeEvidence|ResourceForkContext|ResourceForkLegacyContext|ResourceForkNativeLateCancellationCloses)", "./pkg/hostdata"}
-	command = exec.CommandContext(ctx, "go", args...)
+	command = cirunner.CommandContext(ctx, "go", args...)
 	command.Env = append(os.Environ(), "CGO_ENABLED=0")
 	command.Stdout = focused
 	command.Stderr = os.Stderr
@@ -135,11 +137,11 @@ func run() error {
 		focusedTotal.Covered += value.Covered
 		focusedTotal.Statements += value.Statements
 	}
-	hashes, e := evidenceaudit.SourceHashes(os.DirFS("."), []string{"pkg/hostdata/*.go", "pkg/osversion/*.go", "pkg/appledouble/*.go", "pkg/compression/decmpfs/*.go", "internal/decmpfs/*.go", "internal/hostwalk/*.go", "internal/evidenceaudit/*.go", "scripts/verify-compression-owned.go", "scripts/capture-compression-owned.go", "testdata/appledouble/native/compression-owned*", ".github/workflows/compression-owned.yml", "go.mod", "go.sum"})
+	hashes, e := evidenceaudit.HarnessSourceHashes(os.DirFS("."), []string{"pkg/hostdata/*.go", "pkg/osversion/*.go", "pkg/appledouble/*.go", "pkg/compression/decmpfs/*.go", "internal/decmpfs/*.go", "internal/hostwalk/*.go", "internal/evidenceaudit/*.go", "scripts/verify-compression-owned.go", "scripts/capture-compression-owned.go", "testdata/appledouble/native/compression-owned*", ".github/workflows/compression-owned.yml", "go.mod", "go.sum"})
 	if e != nil {
 		return e
 	}
-	revision, e := exec.CommandContext(ctx, "git", "rev-parse", "HEAD").Output()
+	revision, e := cirunner.CommandContext(ctx, "git", "rev-parse", "HEAD").Output()
 	if e != nil {
 		return e
 	}

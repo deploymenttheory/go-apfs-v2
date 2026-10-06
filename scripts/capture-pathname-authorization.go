@@ -13,11 +13,13 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/captureprovenance"
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 type caseSpec struct {
@@ -37,7 +39,7 @@ func must(err error) {
 func read(path string) []byte { b, e := os.ReadFile(path); must(e); return b }
 func hash(b []byte) string    { sum := sha256.Sum256(b); return hex.EncodeToString(sum[:]) }
 func command(name string, args ...string) []byte {
-	b, e := exec.Command(name, args...).CombinedOutput()
+	b, e := cirunner.Command(name, args...).CombinedOutput()
 	if e != nil {
 		panic(fmt.Sprintf("%s %v: %v\n%s", name, args, e, b))
 	}
@@ -74,6 +76,7 @@ func main() {
 	sdk := strings.TrimSpace(string(command("xcrun", "--sdk", "macosx", "--show-sdk-path")))
 	command("xcrun", "clang", "-std=c11", "-Wall", "-Wextra", "-Werror", oracle, "-o", binary)
 	sources := map[string]string{"probe.c": hash(read(oracle)), "probe": hash(read(binary)), "capture.go": hash(read("scripts/capture-pathname-authorization.go"))}
+	must(captureprovenance.Bind(os.DirFS("."), *out, sources))
 	must(os.WriteFile(filepath.Join(*out, "capture.go"), read("scripts/capture-pathname-authorization.go"), 0644))
 	for _, target := range []string{"arm64-apple-macos15", "x86_64-apple-macos15"} {
 		ast := command("xcrun", "clang", "-target", target, "-isysroot", sdk, "-std=c11", "-Xclang", "-ast-dump=json", "-fsyntax-only", oracle)
@@ -132,7 +135,7 @@ func main() {
 	var sudoAvailable bool
 	var sudoDiagnostic string
 	if *sudo {
-		b, e := exec.Command("sudo", "-n", "true").CombinedOutput()
+		b, e := cirunner.Command("sudo", "-n", "true").CombinedOutput()
 		sudoAvailable = e == nil
 		sudoDiagnostic = string(b)
 	}
@@ -145,7 +148,7 @@ func main() {
 			args = append([]string{"-n", binary}, args...)
 			name = "sudo"
 		}
-		cmd := exec.Command(name, args...)
+		cmd := cirunner.Command(name, args...)
 		var stderr bytes.Buffer
 		cmd.Stderr = &stderr
 		b, e := cmd.Output()

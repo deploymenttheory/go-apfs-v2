@@ -25,6 +25,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/captureprovenance"
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/diskimage"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/disk"
@@ -75,7 +77,7 @@ type capture struct {
 }
 
 func command(ctx context.Context, name string, args ...string) ([]byte, error) {
-	b, e := exec.CommandContext(ctx, name, args...).CombinedOutput()
+	b, e := cirunner.CommandContext(ctx, name, args...).CombinedOutput()
 	if e != nil {
 		return b, fmt.Errorf("%s %v: %w\n%s", name, args, e, b)
 	}
@@ -130,6 +132,9 @@ func run(out string, check bool) error {
 		return e
 	}
 	report := capture{Schema: 1, Host: string(host), Compiler: string(compiler), SDK: sdk, Revision: strings.TrimSpace(string(revision)), Sources: map[string]string{}}
+	if err := captureprovenance.Bind(os.DirFS("."), out, report.Sources); err != nil {
+		return err
+	}
 	raw, e := os.ReadFile(filepath.Join(corpusDir, "sources.json"))
 	if e != nil {
 		return e
@@ -290,7 +295,7 @@ func captureVolume(ctx context.Context, out, kind, binary, casePath string, case
 		defer cancel()
 		var attempts []map[string]any
 		e := diskimage.RetryDetach(cleanupCtx, func() (int, error) {
-			b, e := exec.CommandContext(cleanupCtx, "hdiutil", "detach", device).CombinedOutput()
+			b, e := cirunner.CommandContext(cleanupCtx, "hdiutil", "detach", device).CombinedOutput()
 			code := 0
 			if e != nil {
 				code = -1
@@ -643,6 +648,11 @@ func validateRecords(v volumeCapture) error {
 	return nil
 }
 func compareStable(a, b capture) error {
+	for _, sources := range []map[string]string{a.Sources, b.Sources} {
+		if err := captureprovenance.Verify(os.DirFS("."), sources); err != nil {
+			return err
+		}
+	}
 	if a.Schema != 1 || b.Schema != 1 || len(a.Cases) != casesPerVolume || len(b.Cases) != casesPerVolume || len(a.Volumes) != 4 || len(b.Volumes) != 4 {
 		return errors.New("incomplete retained native corpus")
 	}

@@ -10,6 +10,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/captureprovenance"
 )
 
 func TestReplacementCompressedNativeFixture(t *testing.T) {
@@ -36,6 +38,9 @@ func TestReplacementCompressedNativeFixture(t *testing.T) {
 	}
 	if capture.Schema != 2 || len(capture.Cases) != 68 {
 		t.Fatalf("incomplete native capture: %d/%d", capture.Schema, len(capture.Cases))
+	}
+	if err := captureprovenance.Verify(os.DirFS("../.."), capture.Hashes); err != nil {
+		t.Fatal(err)
 	}
 	for _, name := range []string{"testdata/appledouble/native/replacement-compressed.c", "testdata/appledouble/native/decmpfs-formats.c", "testdata/appledouble/native/decmpfs-formats.json.gz"} {
 		b, err := os.ReadFile("../../" + name)

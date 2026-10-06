@@ -14,13 +14,15 @@ import (
 	"github.com/deploymenttheory/go-apfs-v2/internal/evidenceaudit"
 	"io"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"runtime"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 type count struct{ Covered, Statements int64 }
@@ -52,7 +54,7 @@ func run() error {
 		if e != nil {
 			return e
 		}
-		cmd := exec.CommandContext(ctx, "go", args...)
+		cmd := cirunner.CommandContext(ctx, "go", args...)
 		cmd.Env = append(os.Environ(), "CGO_ENABLED=0", "APFS_BIG_DMG="+filepath.Join(base, "name-collation-xcode-27", "APFS.dmg"), "HFSPLUS_TEST_IMG="+filepath.Join(base, "name-collation-xcode-27", "HFSplus.dmg"))
 		cmd.Stdout = f
 		cmd.Stderr = os.Stderr
@@ -106,11 +108,11 @@ func run() error {
 			return fmt.Errorf("whole %s must exceed 95%%: %+v", pkg, c)
 		}
 	}
-	sources, e := evidenceaudit.SourceHashes(os.DirFS("."), []string{"internal/nameunicode/*.go", "pkg/apfs/*.go", "pkg/apfswrite/*.go", "pkg/hfsplus/*.go", "scripts/*name*", "testdata/appledouble/native/hfs-special-names.c", "testdata/appledouble/native/hfs-special-names-macos*.json.gz", "testdata/appledouble/native/name-*.c", "testdata/appledouble/native/name-*.json.gz", "testdata/appledouble/native/name-collation-source/*", "testdata/appledouble/native/name-comparison-source/*", ".github/workflows/name-comparison.yml", "go.mod", "go.sum"})
+	sources, e := evidenceaudit.HarnessSourceHashes(os.DirFS("."), []string{"internal/nameunicode/*.go", "pkg/apfs/*.go", "pkg/apfswrite/*.go", "pkg/hfsplus/*.go", "scripts/*name*", "testdata/appledouble/native/hfs-special-names.c", "testdata/appledouble/native/hfs-special-names-macos*.json.gz", "testdata/appledouble/native/name-*.c", "testdata/appledouble/native/name-*.json.gz", "testdata/appledouble/native/name-collation-source/*", "testdata/appledouble/native/name-comparison-source/*", ".github/workflows/name-comparison.yml", "go.mod", "go.sum"})
 	if e != nil {
 		return e
 	}
-	revision, e := exec.CommandContext(ctx, "git", "rev-parse", "HEAD").Output()
+	revision, e := cirunner.CommandContext(ctx, "git", "rev-parse", "HEAD").Output()
 	if e != nil {
 		return e
 	}

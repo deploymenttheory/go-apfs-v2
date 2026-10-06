@@ -8,10 +8,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 func main() {
@@ -31,7 +33,7 @@ func verify() error {
 	}
 	var commands []map[string]any
 	run := func(name string, args ...string) ([]byte, error) {
-		cmd := exec.Command(name, args...)
+		cmd := cirunner.Command(name, args...)
 		out, err := cmd.CombinedOutput()
 		record := map[string]any{"command": append([]string{name}, args...), "output": string(out)}
 		if err != nil {
@@ -108,7 +110,7 @@ func verify() error {
 	if err := os.WriteFile(overlayPath, overlay, 0600); err != nil {
 		return err
 	}
-	cmd := exec.Command("go", "test", "-overlay="+overlayPath, "-count=1", "-json", "-tags=native_quarantine_oracle", "-run=^TestQuarantine(Capture|File)NativeOracle$", "./pkg/hostdata")
+	cmd := cirunner.Command("go", "test", "-overlay="+overlayPath, "-count=1", "-json", "-tags=native_quarantine_oracle", "-run=^TestQuarantine(Capture|File)NativeOracle$", "./pkg/hostdata")
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0", "APFS_QUARANTINE_ORACLE="+library)
 	out, err := cmd.CombinedOutput()
 	if writeErr := os.WriteFile(filepath.Join(dir, "tests.jsonl"), out, 0600); writeErr != nil {

@@ -13,7 +13,7 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -21,6 +21,8 @@ import (
 	"time"
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/evidenceaudit"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 const artifact = "artifacts/carrier-recompression-portable"
@@ -48,7 +50,7 @@ func run() error {
 	var transcript bytes.Buffer
 	commands := [][]string{{"test", "-count=1", "-json", "-covermode=atomic", "-coverprofile=" + filepath.Join(out, "coverage.out"), "./pkg/metatransport", "./pkg/recompression", "./pkg/authorization"}, {"test", "-count=1", "-json", "-run=^TestCarrierRecompressionNativeProfiles$", "./acceptance"}}
 	for _, args := range commands {
-		cmd := exec.CommandContext(ctx, "go", args...)
+		cmd := cirunner.CommandContext(ctx, "go", args...)
 		cmd.Env = append(os.Environ(), "CGO_ENABLED=0", "APFS_CARRIER_RECOMPRESSION_OUTPUT="+out)
 		cmd.Stdout = io.MultiWriter(log, &transcript)
 		cmd.Stderr = os.Stderr
@@ -192,11 +194,11 @@ func run() error {
 	if covered != allCovered || total != allStatements {
 		return errors.New("incomplete package coverage totals")
 	}
-	hashes, e := evidenceaudit.SourceHashes(os.DirFS("."), []string{"pkg/metatransport/*.go", "pkg/recompression/*.go", "pkg/authorization/*.go", "pkg/compression/decmpfs/*.go", "internal/decmpfs/*.go", "pkg/hostdata/*.go", "pkg/osversion/*.go", "pkg/apfswrite/*.go", "pkg/hfsplus/*.go", "internal/hostwalk/*.go", "acceptance/carrier_recompression_test.go", "acceptance/carrier_replacement_test.go", "scripts/verify-carrier-recompression*.go", "testdata/appledouble/native/carrier-recompression-readback.c", "testdata/appledouble/native/compression-operation*.json.gz", "scripts/capture-recompression-access.go", "testdata/appledouble/native/recompression-access*.json.gz", "testdata/appledouble/native/recompression-access.c", "testdata/appledouble/native/recompression-open.c", "testdata/appledouble/native/recompression-access-source/*", ".github/workflows/carrier-recompression.yml", "go.mod", "go.sum"})
+	hashes, e := evidenceaudit.HarnessSourceHashes(os.DirFS("."), []string{"pkg/metatransport/*.go", "pkg/recompression/*.go", "pkg/authorization/*.go", "pkg/compression/decmpfs/*.go", "internal/decmpfs/*.go", "pkg/hostdata/*.go", "pkg/osversion/*.go", "pkg/apfswrite/*.go", "pkg/hfsplus/*.go", "internal/hostwalk/*.go", "acceptance/carrier_recompression_test.go", "acceptance/carrier_replacement_test.go", "scripts/verify-carrier-recompression*.go", "testdata/appledouble/native/carrier-recompression-readback.c", "testdata/appledouble/native/compression-operation*.json.gz", "scripts/capture-recompression-access.go", "testdata/appledouble/native/recompression-access*.json.gz", "testdata/appledouble/native/recompression-access.c", "testdata/appledouble/native/recompression-open.c", "testdata/appledouble/native/recompression-access-source/*", ".github/workflows/carrier-recompression.yml", "go.mod", "go.sum"})
 	if e != nil {
 		return e
 	}
-	revision, e := exec.CommandContext(ctx, "git", "rev-parse", "HEAD").Output()
+	revision, e := cirunner.CommandContext(ctx, "git", "rev-parse", "HEAD").Output()
 	if e != nil {
 		return e
 	}

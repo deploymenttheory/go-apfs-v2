@@ -13,12 +13,14 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 const nameCacheSource = "testdata/appledouble/native/name-cache-source"
@@ -131,7 +133,7 @@ func TestNativeNameCacheAST(t *testing.T) {
 	defer cancel()
 	run := func(name string, args ...string) string {
 		t.Helper()
-		b, e := exec.CommandContext(ctx, name, args...).CombinedOutput()
+		b, e := cirunner.CommandContext(ctx, name, args...).CombinedOutput()
 		if e != nil {
 			t.Fatalf("%s %v: %v\n%s", name, args, e, b)
 		}
@@ -198,7 +200,7 @@ func TestNativeNameCacheAST(t *testing.T) {
 			}
 			args = append(args, filepath.Join(out, "bodies.c"))
 			commands[id] = args
-			cmd := exec.CommandContext(ctx, "xcrun", args...)
+			cmd := cirunner.CommandContext(ctx, "xcrun", args...)
 			var diag bytes.Buffer
 			cmd.Stderr = &diag
 			raw, e := cmd.Output()

@@ -5,10 +5,12 @@ package hostdata
 import (
 	"errors"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"runtime"
 	"testing"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 func TestMetadataStatIdentityAndContainment(t *testing.T) {
@@ -73,7 +75,7 @@ func TestMetadataStatIdentityAndContainment(t *testing.T) {
 
 func metadataStatCommand(t *testing.T, name string, args ...string) {
 	t.Helper()
-	out, err := exec.Command(name, args...).CombinedOutput()
+	out, err := cirunner.Command(name, args...).CombinedOutput()
 	if err != nil {
 		t.Fatalf("%s %v: %v: %s", name, args, err, out)
 	}

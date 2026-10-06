@@ -4,19 +4,21 @@ import (
 	"bytes"
 	"errors"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"syscall"
 	"testing"
 
 	heldfixture "github.com/deploymenttheory/go-apfs-v2/internal/testutil/heldfixture"
 	"golang.org/x/sys/unix"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 func TestReplacementDarwinACLFlagsAndBirthTime(t *testing.T) {
 	replacementVariants(t, func(t *testing.T, prepare func(*os.File, string) (*testedReplacement, error)) {
 		source := heldfixture.Source(t, 0751)
-		if output, err := exec.Command("/bin/chmod", "+a", "everyone allow read", source.Name()).CombinedOutput(); err != nil {
+		if output, err := cirunner.Command("/bin/chmod", "+a", "everyone allow read", source.Name()).CombinedOutput(); err != nil {
 			t.Fatalf("chmod ACL: %v: %s", err, output)
 		}
 		if err := unix.Fchflags(int(source.Fd()), unix.UF_HIDDEN); err != nil {
@@ -27,7 +29,7 @@ func TestReplacementDarwinACLFlagsAndBirthTime(t *testing.T) {
 			t.Fatal(err)
 		}
 		parent := t.TempDir()
-		if output, err := exec.Command("/bin/chmod", "+a", "everyone allow read,file_inherit,directory_inherit", parent).CombinedOutput(); err != nil {
+		if output, err := cirunner.Command("/bin/chmod", "+a", "everyone allow read,file_inherit,directory_inherit", parent).CombinedOutput(); err != nil {
 			t.Fatalf("parent ACL: %v: %s", err, output)
 		}
 		r, err := prepare(source, parent)
@@ -50,7 +52,7 @@ func TestReplacementDarwinACLFlagsAndBirthTime(t *testing.T) {
 			t.Fatalf("birth time or flags changed: %#v -> %#v", old, new)
 		}
 		acl := func(path string) []byte {
-			out, err := exec.Command("/bin/ls", "-lde", path).CombinedOutput()
+			out, err := cirunner.Command("/bin/ls", "-lde", path).CombinedOutput()
 			if err != nil {
 				t.Fatalf("read ACL: %v: %s", err, out)
 			}

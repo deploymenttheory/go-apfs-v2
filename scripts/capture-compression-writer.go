@@ -13,12 +13,14 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"reflect"
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/captureprovenance"
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 type sample struct {
@@ -65,7 +67,7 @@ func main() {
 	run := func(name string, args ...string) []byte {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
-		b, e := exec.CommandContext(ctx, name, args...).CombinedOutput()
+		b, e := cirunner.CommandContext(ctx, name, args...).CombinedOutput()
 		if e != nil {
 			panic(fmt.Sprintf("%s %v: %v: %s", name, args, e, b))
 		}
@@ -75,6 +77,7 @@ func main() {
 	helper := filepath.Join(dir, "producer")
 	run("xcrun", "clang", "-Wall", "-Wextra", "-Werror", "-framework", "CoreFoundation", source, "-o", helper)
 	c := capture{Host: string(run("sw_vers")), Compiler: string(run("xcrun", "clang", "--version")), SDK: string(run("xcrun", "--show-sdk-version")), Sources: map[string]string{}}
+	must(captureprovenance.Bind(os.DirFS("."), filepath.Dir(*out), c.Sources))
 	must(os.MkdirAll(filepath.Dir(*out), 0755))
 	framework := "/System/Library/PrivateFrameworks/AppleFSCompression.framework/AppleFSCompression"
 	c.Library = string(run("xcrun", "dyld_info", "-uuid", framework))
@@ -119,7 +122,7 @@ func main() {
 		path := base + ".input"
 		must(os.WriteFile(path, s.Plain, 0644))
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-		command := exec.CommandContext(ctx, helper, fmt.Sprint(s.Requested), path, base)
+		command := cirunner.CommandContext(ctx, helper, fmt.Sprint(s.Requested), path, base)
 		var stderr bytes.Buffer
 		command.Stderr = &stderr
 		output, e := command.Output()
@@ -183,6 +186,7 @@ func main() {
 		defer z.Close()
 		var old capture
 		must(json.NewDecoder(z).Decode(&old))
+		must(captureprovenance.Verify(os.DirFS("."), old.Sources))
 		for _, path := range []string{source, "scripts/capture-compression-writer.go"} {
 			if old.Sources[path] != c.Sources[path] {
 				panic("stale capture provenance: " + path)

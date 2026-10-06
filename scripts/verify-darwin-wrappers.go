@@ -11,11 +11,13 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 func main() {
@@ -28,19 +30,19 @@ func verify() error {
 	if runtime.GOOS != "darwin" {
 		return fmt.Errorf("typed Darwin qualification requires macOS")
 	}
-	if out, err := exec.Command("go", "run", "scripts/generate-darwin-wrappers.go", "-check").CombinedOutput(); err != nil {
+	if out, err := cirunner.Command("go", "run", "scripts/generate-darwin-wrappers.go", "-check").CombinedOutput(); err != nil {
 		return fmt.Errorf("generated wrappers: %w: %s", err, out)
 	}
 	const dir = "artifacts/darwin-wrappers"
 	if e := os.MkdirAll(dir, 0755); e != nil {
 		return e
 	}
-	sdk, err := exec.Command("xcrun", "--show-sdk-path").Output()
+	sdk, err := cirunner.Command("xcrun", "--show-sdk-path").Output()
 	if err != nil {
 		return err
 	}
 	for _, arch := range []string{"arm64", "x86_64"} {
-		cmd := exec.Command("xcrun", "clang", "-arch", arch, "-isysroot", strings.TrimSpace(string(sdk)), "-Wall", "-Wextra", "-Werror", "-DDARWIN_WRAPPERS_ORACLE", "-fsyntax-only", "-Xclang", "-ast-dump=json", "testdata/appledouble/native/darwin-wrappers.c")
+		cmd := cirunner.Command("xcrun", "clang", "-arch", arch, "-isysroot", strings.TrimSpace(string(sdk)), "-Wall", "-Wextra", "-Werror", "-DDARWIN_WRAPPERS_ORACLE", "-fsyntax-only", "-Xclang", "-ast-dump=json", "testdata/appledouble/native/darwin-wrappers.c")
 		var stderr bytes.Buffer
 		cmd.Stderr = &stderr
 		ast, err := cmd.Output()
@@ -52,7 +54,7 @@ func verify() error {
 		}
 	}
 	for _, arch := range []string{"amd64", "arm64"} {
-		cmd := exec.Command("go", "test", "-c", "-o", filepath.Join(dir, "wrappers-"+arch+".test"), "./internal/darwinabi")
+		cmd := cirunner.Command("go", "test", "-c", "-o", filepath.Join(dir, "wrappers-"+arch+".test"), "./internal/darwinabi")
 		cmd.Env = append(os.Environ(), "CGO_ENABLED=0", "GOOS=darwin", "GOARCH="+arch)
 		if out, err := cmd.CombinedOutput(); err != nil {
 			return fmt.Errorf("%s wrapper link: %w: %s", arch, err, out)
@@ -62,7 +64,7 @@ func verify() error {
 	if err != nil {
 		return err
 	}
-	if out, err := exec.Command("xcrun", "clang", "-Wall", "-Wextra", "-Werror", "-DDARWIN_WRAPPERS_ORACLE", "testdata/appledouble/native/darwin-wrappers.c", "-o", oracle).CombinedOutput(); err != nil {
+	if out, err := cirunner.Command("xcrun", "clang", "-Wall", "-Wextra", "-Werror", "-DDARWIN_WRAPPERS_ORACLE", "testdata/appledouble/native/darwin-wrappers.c", "-o", oracle).CombinedOutput(); err != nil {
 		return fmt.Errorf("native observer: %w: %s", err, out)
 	}
 	log, e := os.Create(filepath.Join(dir, "tests.jsonl"))
@@ -72,14 +74,14 @@ func verify() error {
 	defer log.Close()
 	var transcript bytes.Buffer
 	profile := filepath.Join(dir, "coverage.out")
-	cmd := exec.Command("go", "test", "-count=1", "-json", "-run", "^Test(Typed|Darwin|Held|Path|Quarantine|ACLIdentity|LibSystem|SandboxCapture|CaptureXattrs|XattrCapture|XattrValues|Metadata|OpenMetadata|EntryType)", "-covermode=atomic", "-coverprofile="+profile, "-coverpkg=./internal/darwinabi", "./pkg/hostdata", "./pkg/hostdata/acl", "./pkg/hostdata/sandbox", "./internal/darwinabi")
+	cmd := cirunner.Command("go", "test", "-count=1", "-json", "-run", "^Test(Typed|Darwin|Held|Path|Quarantine|ACLIdentity|LibSystem|SandboxCapture|CaptureXattrs|XattrCapture|XattrValues|Metadata|OpenMetadata|EntryType)", "-covermode=atomic", "-coverprofile="+profile, "-coverpkg=./internal/darwinabi", "./pkg/hostdata", "./pkg/hostdata/acl", "./pkg/hostdata/sandbox", "./internal/darwinabi")
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0", "APFS_DARWIN_WRAPPERS_ORACLE="+oracle)
 	cmd.Stdout = io.MultiWriter(os.Stdout, log, &transcript)
 	cmd.Stderr = io.MultiWriter(os.Stderr, log)
 	if e := cmd.Run(); e != nil {
 		return e
 	}
-	functions, err := exec.Command("go", "tool", "cover", "-func="+profile).CombinedOutput()
+	functions, err := cirunner.Command("go", "tool", "cover", "-func="+profile).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("coverage diagnostics: %w: %s", err, functions)
 	}
@@ -174,7 +176,7 @@ func verify() error {
 		h := sha256.Sum256(b)
 		hashes[path] = hex.EncodeToString(h[:])
 	}
-	revision, e := exec.Command("git", "rev-parse", "HEAD").Output()
+	revision, e := cirunner.Command("git", "rev-parse", "HEAD").Output()
 	if e != nil {
 		return e
 	}

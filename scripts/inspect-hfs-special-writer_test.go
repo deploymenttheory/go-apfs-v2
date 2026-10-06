@@ -15,6 +15,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/captureprovenance"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/osversion"
 )
 
@@ -66,10 +67,20 @@ func TestInspectWriterHFSSpecial(t *testing.T) {
 		if err != nil || uint64(target.Major) != major {
 			t.Fatal("mismatched native target", err)
 		}
-		if capture.Schema != 1 || len(capture.Volumes) != 2 || len(capture.Sources) != 16 || capture.Compiler == "" || capture.SDK == "" {
+		harness, err := captureprovenance.Inventory(os.DirFS("."))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = captureprovenance.Verify(os.DirFS("."), capture.Sources); err != nil {
+			t.Fatal(err)
+		}
+		if capture.Schema != 1 || len(capture.Volumes) != 2 || len(capture.Sources) != 16+len(harness) || capture.Compiler == "" || capture.SDK == "" {
 			t.Fatal("incomplete native special corpus")
 		}
 		expected := map[string]bool{}
+		for name := range harness {
+			expected[name] = true
+		}
 		for _, name := range []string{specialSource, "scripts/capture-hfs-special-names.go", "testdata/appledouble/native/name-comparison-source/vfs_utfconv.c.gz", "testdata/appledouble/native/name-comparison-source/sources.json", "go.mod", "go.sum", "native-binary", "arm64.ast.json", "x86_64.ast.json", "SDK/sys/stat.h", "SDK/sys/mount.h", "SDK/sys/attr.h", "SDK/sys/fcntl.h", "SDK/dirent.h", "SDK/unistd.h", "SDK/sys/errno.h"} {
 			expected[name] = true
 		}

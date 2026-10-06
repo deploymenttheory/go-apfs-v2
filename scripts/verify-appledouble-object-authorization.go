@@ -15,7 +15,7 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -28,6 +28,8 @@ import (
 	"github.com/deploymenttheory/go-apfs-v2/internal/evidenceaudit"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 const artifactDir = "artifacts/appledouble-object-authorization"
@@ -53,7 +55,7 @@ func must(err error) {
 	}
 }
 func run(args ...string) []byte {
-	b, e := exec.Command(args[0], args[1:]...).CombinedOutput()
+	b, e := cirunner.Command(args[0], args[1:]...).CombinedOutput()
 	if e != nil {
 		panic(fmt.Sprintf("%s: %v: %s", args[0], e, b))
 	}
@@ -102,7 +104,7 @@ func main() {
 	if len(cases) != 16 {
 		panic("incomplete authorization matrix")
 	}
-	hashes, e := evidenceaudit.SourceHashes(os.DirFS("."), []string{cSource, "scripts/verify-appledouble-object-authorization.go", "pkg/hostdata/*.go", "pkg/hostdata/*/*.go", "internal/hosttime/*.go", "internal/testutil/heldfixture/*.go", "pkg/hostdata/held_lifecycle*.go", "pkg/hostdata/held_metadata*.go", "pkg/hostdata/appledouble_pack*.go", "pkg/hostdata/appledouble_sequential*.go", "pkg/hostdata/quarantine_file*.go", "go.mod", "go.sum"})
+	hashes, e := evidenceaudit.HarnessSourceHashes(os.DirFS("."), []string{cSource, "scripts/verify-appledouble-object-authorization.go", "pkg/hostdata/*.go", "pkg/hostdata/*/*.go", "internal/hosttime/*.go", "internal/testutil/heldfixture/*.go", "pkg/hostdata/held_lifecycle*.go", "pkg/hostdata/held_metadata*.go", "pkg/hostdata/appledouble_pack*.go", "pkg/hostdata/appledouble_sequential*.go", "pkg/hostdata/quarantine_file*.go", "go.mod", "go.sum"})
 	must(e)
 	report := map[string]any{"revision": strings.TrimSpace(string(run("git", "rev-parse", "HEAD"))), "goos": runtime.GOOS, "goarch": runtime.GOARCH, "source_sha256": hashes, "ast_sha256": ast, "cases": cases, "passed": true, "sdk": strings.TrimSpace(string(run("xcrun", "--show-sdk-version"))), "host": string(run("sw_vers")), "compiler": string(run("xcrun", "clang", "--version")), "authorization": "actual root and existing nobody UID; held descriptors acquired before credential drop; supplementary groups cleared; no account mutation"}
 	b, e := json.MarshalIndent(report, "", "  ")
@@ -163,7 +165,7 @@ func child(operation string, stat bool) {
 	emit(out)
 }
 func invoke(binary string, args []string, uid, gid uint32, source, target *os.File) result {
-	command := exec.Command(binary, args...)
+	command := cirunner.Command(binary, args...)
 	command.ExtraFiles = []*os.File{source, target}
 	command.SysProcAttr = &syscall.SysProcAttr{Credential: &syscall.Credential{Uid: uid, Gid: gid, Groups: []uint32{}}}
 	b, e := command.CombinedOutput()

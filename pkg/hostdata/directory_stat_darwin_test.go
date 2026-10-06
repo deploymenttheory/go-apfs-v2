@@ -5,12 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"testing"
 	"time"
 
 	"golang.org/x/sys/unix"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 func directoryStatExpectedMode(mode uint16, volume unix.Statfs_t) uint16 {
@@ -39,7 +41,7 @@ int main(int argc, char **argv) {
 		t.Fatal(err)
 	}
 	oracle := filepath.Join(dir, "copy-stat")
-	if out, err := exec.Command("/usr/bin/clang", "-Wall", "-Werror", c, "-o", oracle).CombinedOutput(); err != nil {
+	if out, err := cirunner.Command("/usr/bin/clang", "-Wall", "-Werror", c, "-o", oracle).CombinedOutput(); err != nil {
 		t.Fatalf("compile oracle: %v: %s", err, out)
 	}
 	for _, flags := range []int{0, unix.UF_HIDDEN, unix.UF_NODUMP | unix.UF_OPAQUE, unix.UF_TRACKED | unix.UF_HIDDEN} {
@@ -59,7 +61,7 @@ int main(int argc, char **argv) {
 					t.Fatal(err)
 				}
 			}
-			if out, err := exec.Command(oracle, source.Name(), native.Name()).CombinedOutput(); err != nil {
+			if out, err := cirunner.Command(oracle, source.Name(), native.Name()).CombinedOutput(); err != nil {
 				t.Fatalf("copyfile: %v: %s", err, out)
 			}
 			if err := CopyDirectoryStat(source, target); err != nil {
@@ -83,11 +85,11 @@ func TestCopyDirectoryStatDarwinRetainsACLAndXattrs(t *testing.T) {
 	source, target := directoryStatFixture(t), directoryStatFixture(t)
 	acl := func(f *os.File, entry string) string {
 		if entry != "" {
-			if out, err := exec.Command("/bin/chmod", "+a", entry, f.Name()).CombinedOutput(); err != nil {
+			if out, err := cirunner.Command("/bin/chmod", "+a", entry, f.Name()).CombinedOutput(); err != nil {
 				t.Fatalf("set ACL: %v %s", err, out)
 			}
 		}
-		out, err := exec.Command("/bin/ls", "-lde", f.Name()).CombinedOutput()
+		out, err := cirunner.Command("/bin/ls", "-lde", f.Name()).CombinedOutput()
 		if err != nil {
 			t.Fatal(err)
 		}

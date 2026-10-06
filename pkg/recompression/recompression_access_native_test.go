@@ -14,10 +14,10 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/deploymenttheory/go-apfs-v2/pkg/metatransport"
-
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/captureprovenance"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/metatransport"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/osversion"
 )
 
@@ -68,6 +68,9 @@ func TestRecompressionAccessNativeEvidence(t *testing.T) {
 				t.Fatal("incomplete independent access evidence", len(capture.Cases), len(capture.OpenCases))
 			}
 			version, err := osversion.Parse(capture.Host)
+			if err := captureprovenance.Verify(os.DirFS("../.."), capture.Sources); err != nil {
+				t.Fatal(err)
+			}
 			if err != nil {
 				t.Fatal(err)
 			}
