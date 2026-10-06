@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -381,3 +382,115 @@ func TestReplacementWindowsEFSKeyValidation(t *testing.T) {
 }
 
 func setReplacementTestInfo(r *Replacement, info os.FileInfo) { r.rooted.info = info }
+
+func TestReplacementWindowsFinalPathProvider(t *testing.T) {
+	for _, tc := range []struct {
+		name, path    string
+		first, second error
+		limit         uint32
+		wantError     bool
+	}{
+		{name: "GUID", path: `\\?\Volume{example}\held`},
+		{name: "large buffer", path: `\\?\Volume{example}\` + strings.Repeat("segment\\", 100)},
+		{name: "UNC missing GUID", path: `\\?\UNC\server\share\held`, first: windows.ERROR_PATH_NOT_FOUND},
+		{name: "UNC unsupported GUID", path: `\\?\UNC\server\share\held`, first: windows.ERROR_INVALID_PARAMETER},
+		{name: "mutable drive rejected", path: `C:\held`, first: windows.ERROR_PATH_NOT_FOUND, wantError: true},
+		{name: "permission not retried", first: windows.ERROR_ACCESS_DENIED, wantError: true},
+		{name: "both forms missing", first: windows.ERROR_PATH_NOT_FOUND, second: windows.ERROR_PATH_NOT_FOUND, wantError: true},
+		{name: "namespace bound", limit: 32769, wantError: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			calls := 0
+			path, err := replacementResolveFinalPath(t.Context(), func(buffer []uint16, flags uint32) (uint32, error) {
+				calls++
+				if flags == 1 && tc.first != nil {
+					return 0, tc.first
+				}
+				if flags == 0 && tc.second != nil {
+					return 0, tc.second
+				}
+				if tc.limit != 0 {
+					return tc.limit, nil
+				}
+				encoded, e := windows.UTF16FromString(tc.path)
+				if e != nil {
+					t.Fatal(e)
+				}
+				if len(encoded) > len(buffer) {
+					return uint32(len(encoded)), nil
+				}
+				copy(buffer, encoded)
+				return uint32(len(encoded) - 1), nil
+			})
+			if tc.wantError {
+				if err == nil || path != "" {
+					t.Fatal(path, err)
+				}
+			} else if err != nil || path != tc.path {
+				t.Fatal(path, err)
+			}
+			if tc.name == "permission not retried" && calls != 1 {
+				t.Fatalf("permission failure retried %d times", calls)
+			}
+			if tc.name == "large buffer" && calls != 2 {
+				t.Fatalf("growth calls %d", calls)
+			}
+		})
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	calls := 0
+	_, err := replacementResolveFinalPath(ctx, func([]uint16, uint32) (uint32, error) { calls++; cancel(); return 1024, nil })
+	if !errors.Is(err, context.Canceled) || calls != 1 {
+		t.Fatal(err, calls)
+	}
+	_, err = replacementResolveFinalPath(ctx, func([]uint16, uint32) (uint32, error) { t.Fatal("query after cancellation"); return 0, nil })
+	if !errors.Is(err, context.Canceled) {
+		t.Fatal(err)
+	}
+}
+
+func TestReplacementWindowsSecurityValidation(t *testing.T) {
+	if e := replacementFileControl(new(os.File), func(windows.Handle) error { t.Fatal("invalid file reached callback"); return nil }); !errors.Is(e, os.ErrInvalid) {
+		t.Fatal(e)
+	}
+
+	file, err := os.CreateTemp(t.TempDir(), "security")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	if err = replacementSetFileSecurity(file, windows.DACL_SECURITY_INFORMATION, &windows.SECURITY_DESCRIPTOR{}); err == nil {
+		t.Fatal("invalid security revision accepted")
+	}
+	sd, err := windows.SecurityDescriptorFromString("D:P(A;;FA;;;WD)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	absolute, err := sd.ToAbsolute()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = replacementSetFileSecurity(file, windows.DACL_SECURITY_INFORMATION, absolute); !errors.Is(err, windows.ERROR_INVALID_PARAMETER) {
+		t.Fatal(err)
+	}
+	// The held read-only capability cannot modify the security descriptor even
+	// when a separate owner handle has sufficient access to the same file.
+	readOnly, err := os.Open(file.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer readOnly.Close()
+	if err = replacementSetFileSecurity(readOnly, windows.DACL_SECURITY_INFORMATION, sd); !errors.Is(err, windows.ERROR_ACCESS_DENIED) {
+		t.Fatal(err)
+	}
+	closed, err := os.CreateTemp(t.TempDir(), "closed-control")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = closed.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err = replacementFileControl(closed, func(windows.Handle) error { t.Fatal("closed file reached native callback"); return nil }); !errors.Is(err, os.ErrClosed) {
+		t.Fatal(err)
+	}
+}

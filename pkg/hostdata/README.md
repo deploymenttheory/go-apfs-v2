@@ -368,7 +368,8 @@ closes a caller-owned source or root.
   state; it never reattaches the source flag to rewritten logical data.
   Recompression is a separate caller policy, not an automatic replacement step.
 - Linux copies owner/group, mode and readable xattrs (including POSIX ACLs),
-  with an 8 MiB aggregate limit each for names and values. Inherited staging
+  with an 8 MiB bound for the name list and each individual value. Values are
+  transferred separately, without a cumulative attribute-byte limit. Inherited staging
   ACLs are removed first. Linux inode flags and birth time are not preserved.
 - Windows uses `CopyFileEx` inside an atomically secured private directory, with
   held namespace pins. A path obtained from the source handle is a lookup hint:
@@ -377,7 +378,10 @@ closes a caller-owned source or root.
   copy handle is duplicated without increasing its rights; separate held
   security/attribute rights allow deferred acquisition of the writable data
   handle after native copying finishes. Temporary permissions apply only to the
-  private copy. The source owner, group and DACL are restored after writing.
+  private copy. The source owner, group and complete DACL are restored after writing,
+  including inherited ACEs and protection/auto-inheritance control bits. A held
+  `NtSetSecurityObject` operation avoids re-inheriting permissions from the private
+  staging directory. Closed files never reach this operation as pseudohandles.
   Ordinary/sparse alternate streams, EAs, NTFS compression, encryption, creation
   time and ordinary attributes are preserved. EFS user and recovery-certificate
   hashes/SIDs are compared through pinned names: a decrypted destination or

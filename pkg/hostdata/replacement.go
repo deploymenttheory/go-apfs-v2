@@ -35,8 +35,8 @@ type Replacement struct {
 // restored. On Windows a contained CopyFileEx transfer validates actual source and target
 // handle identities and preserves streams, compression and encryption. EFS
 // recipient and recovery keys must match; the owner, group and DACL are restored
-// explicitly. A nameless unencrypted source uses a held streaming fallback. Linux xattr names and values each have
-// an 8 MiB aggregate limit. Darwin's copying fallback bounds names to 1 MiB and
+// explicitly. A nameless unencrypted source uses a held streaming fallback. Linux bounds the xattr name list and each individual
+// value to 8 MiB; values transfer separately without a cumulative byte limit. Darwin's copying fallback bounds names to 1 MiB and
 // ordinary values to 8 MiB in aggregate; resource forks stream in 64 KiB chunks
 // without that value limit. Modification/access timestamps and Linux inode flags
 // are not preserved. No cgo is required.

@@ -208,7 +208,7 @@ func replacementTestStage(t *testing.T) (*os.Root, *os.Root, string) {
 }
 
 func TestReplacementWindowsCopyCallbacks(t *testing.T) {
-	for _, name := range []string{"success", "empty", "cancel-first", "cancel-after-copy", "omitted-callback", "wrong-source", "ancestor-rename", "posix-ancestor-rename", "source-rebind", "dangling-leaf"} {
+	for _, name := range []string{"success", "empty", "cancel-first", "cancel-after-copy", "cancel-after-copy-restrictive", "omitted-callback", "wrong-source", "ancestor-rename", "posix-ancestor-rename", "source-rebind", "dangling-leaf"} {
 		t.Run(name, func(t *testing.T) {
 			root, stage, parent := replacementTestStage(t)
 			sourcePath := filepath.Join(t.TempDir(), "source")
@@ -218,6 +218,21 @@ func TestReplacementWindowsCopyCallbacks(t *testing.T) {
 			}
 			if err := os.WriteFile(sourcePath, data, 0600); err != nil {
 				t.Fatal(err)
+			}
+			if name == "cancel-after-copy-restrictive" {
+				pointer, e := windows.UTF16PtrFromString(sourcePath)
+				if e != nil {
+					t.Fatal(e)
+				}
+				if e = windows.SetFileAttributes(pointer, windows.FILE_ATTRIBUTE_READONLY); e != nil {
+					t.Fatal(e)
+				}
+				t.Cleanup(func() {
+					if e := windows.SetFileAttributes(pointer, windows.FILE_ATTRIBUTE_NORMAL); e != nil {
+						t.Error(e)
+					}
+				})
+				replacementDenyWrites(t, sourcePath)
 			}
 			sourceName, e := windows.UTF16PtrFromString(sourcePath)
 			if e != nil {
@@ -289,12 +304,12 @@ func TestReplacementWindowsCopyCallbacks(t *testing.T) {
 					return nil
 				}
 				e := runReplacementCopy(from, to, state)
-				if name == "cancel-after-copy" {
+				if name == "cancel-after-copy" || name == "cancel-after-copy-restrictive" {
 					cancel()
 				}
 				return e
 			})
-			wantError := name == "cancel-first" || name == "cancel-after-copy" || name == "omitted-callback" || name == "wrong-source" || name == "source-rebind" || name == "dangling-leaf"
+			wantError := name == "cancel-first" || (name == "cancel-after-copy" || name == "cancel-after-copy-restrictive") || name == "omitted-callback" || name == "wrong-source" || name == "source-rebind" || name == "dangling-leaf"
 			if wantError {
 				if err == nil || copied != nil {
 					t.Fatalf("unsafe copy accepted: %v", err)
@@ -310,9 +325,19 @@ func TestReplacementWindowsCopyCallbacks(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			if name == "cancel-first" || name == "cancel-after-copy" {
+			if name == "cancel-first" || (name == "cancel-after-copy" || name == "cancel-after-copy-restrictive") {
 				if !errors.Is(err, context.Canceled) {
 					t.Fatalf("cancellation lost: %v", err)
+				}
+			}
+			if name == "cancel-after-copy-restrictive" {
+				// Cleanup must use the retained capability after native copy has installed
+				// the deny-write ACL and readonly bit; a new attribute-write open is denied.
+				if e := stage.Chmod("replacement", 0600); e != nil {
+					t.Fatalf("late cancellation left inaccessible private metadata: %v", e)
+				}
+				if e := stage.Remove("replacement"); e != nil {
+					t.Fatalf("late cancellation left private file: %v", e)
 				}
 			}
 			if _, e := os.Stat(outside); !errors.Is(e, os.ErrNotExist) {

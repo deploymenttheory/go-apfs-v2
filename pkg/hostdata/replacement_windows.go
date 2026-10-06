@@ -16,8 +16,24 @@ var replacementSetSecurityObject = windows.NewLazySystemDLL("ntdll.dll").NewProc
 // directory and therefore changes the source's inherited ACEs. The documented
 // NtSetSecurityObject interface accepts the descriptor and its control bits:
 // https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntifs/nf-ntifs-zwsetsecurityobject
+// RawConn.Control returns the poller's closing error directly, unlike os.File
+// methods which translate it to os.ErrClosed. Preserve that original cause and
+// expose the standard file lifecycle error without matching an error string.
+func replacementFileControl(file *os.File, invoke func(windows.Handle) error) error {
+	conn, err := file.SyscallConn()
+	if err != nil {
+		return err
+	}
+	var native error
+	err = conn.Control(func(fd uintptr) { native = invoke(windows.Handle(fd)) })
+	if err != nil {
+		return errors.Join(os.ErrClosed, err, native)
+	}
+	return native
+}
+
 func replacementSetFileSecurity(target *os.File, flags windows.SECURITY_INFORMATION, sd *windows.SECURITY_DESCRIPTOR) error {
-	conn, err := target.SyscallConn()
+	control, _, err := sd.Control()
 	if err != nil {
 		return err
 	}
@@ -28,24 +44,20 @@ func replacementSetFileSecurity(target *os.File, flags windows.SECURITY_INFORMAT
 	if err != nil {
 		return err
 	}
-	control, _, err := owned.Control()
-	if err != nil {
-		return err
-	}
 	if control&windows.SE_DACL_AUTO_INHERITED != 0 {
 		if err = owned.SetControl(windows.SE_DACL_AUTO_INHERIT_REQ, windows.SE_DACL_AUTO_INHERIT_REQ); err != nil {
 			return err
 		}
 	}
-	var native error
-	err = conn.Control(func(fd uintptr) {
-		result, _, _ := replacementSetSecurityObject.Call(fd, uintptr(flags), uintptr(unsafe.Pointer(owned)))
+	err = replacementFileControl(target, func(handle windows.Handle) error {
+		result, _, _ := replacementSetSecurityObject.Call(uintptr(handle), uintptr(flags), uintptr(unsafe.Pointer(owned)))
 		if status := windows.NTStatus(result); status != 0 {
-			native = status.Errno()
+			return status.Errno()
 		}
+		return nil
 	})
 	runtime.KeepAlive(owned)
-	return errors.Join(err, native)
+	return err
 }
 
 func restoreReplacementMetadataContext(ctx context.Context, source, target *os.File, st os.FileInfo) error {

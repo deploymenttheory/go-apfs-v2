@@ -53,36 +53,9 @@ func replacementFinalPath(ctx context.Context, file *os.File) (string, error) {
 	var path string
 	var native error
 	err = conn.Control(func(fd uintptr) {
-		for _, flags := range []uint32{1, 0} {
-			buffer := make([]uint16, 256)
-			for {
-				if native = ctx.Err(); native != nil {
-					return
-				}
-				var n uint32
-				n, native = windows.GetFinalPathNameByHandle(windows.Handle(fd), &buffer[0], uint32(len(buffer)), flags)
-				if native != nil {
-					break
-				}
-				if n < uint32(len(buffer)) {
-					path = windows.UTF16ToString(buffer[:n])
-					if flags == 0 && !strings.HasPrefix(strings.ToUpper(path), `\\?\UNC\`) {
-						native = fmt.Errorf("replacement requires a stable volume or UNC path")
-					}
-					return
-				}
-				if n > 32768 {
-					native = fmt.Errorf("replacement path exceeds Windows namespace bounds")
-					return
-				}
-				buffer = make([]uint16, n+1)
-			}
-			// GUID paths do not exist on network shares. Use their fully resolved UNC
-			// form, but do not turn a permission or unrelated provider error into retry.
-			if !errors.Is(native, windows.ERROR_PATH_NOT_FOUND) && !errors.Is(native, windows.ERROR_INVALID_PARAMETER) {
-				return
-			}
-		}
+		path, native = replacementResolveFinalPath(ctx, func(buffer []uint16, flags uint32) (uint32, error) {
+			return windows.GetFinalPathNameByHandle(windows.Handle(fd), &buffer[0], uint32(len(buffer)), flags)
+		})
 	})
 	if err = errors.Join(err, native, ctx.Err()); err != nil {
 		return "", err
@@ -90,9 +63,50 @@ func replacementFinalPath(ctx context.Context, file *os.File) (string, error) {
 	return path, nil
 }
 
+// Keep the bounded native provider protocol separate from descriptor ownership.
+// A provider may require a larger buffer or lack volume GUID paths (UNC shares).
+func replacementResolveFinalPath(ctx context.Context, query func([]uint16, uint32) (uint32, error)) (string, error) {
+	var native error
+	for _, flags := range []uint32{1, 0} {
+		buffer := make([]uint16, 256)
+		for {
+			if native = ctx.Err(); native != nil {
+				return "", native
+			}
+			var n uint32
+			n, native = query(buffer, flags)
+			if native != nil {
+				break
+			}
+			if n < uint32(len(buffer)) {
+				path := windows.UTF16ToString(buffer[:n])
+				if flags == 0 && !strings.HasPrefix(strings.ToUpper(path), `\\?\UNC\`) {
+					return "", fmt.Errorf("replacement requires a stable volume or UNC path")
+				}
+				return path, nil
+			}
+			if n > 32768 {
+				return "", fmt.Errorf("replacement path exceeds Windows namespace bounds")
+			}
+			buffer = make([]uint16, n+1)
+		}
+		// Retry only the documented unavailable volume form. Other provider errors
+		// must not turn into a path resolution through mutable drive-letter mappings.
+		if !errors.Is(native, windows.ERROR_PATH_NOT_FOUND) && !errors.Is(native, windows.ERROR_INVALID_PARAMETER) {
+			return "", native
+		}
+	}
+	return "", native
+}
+
 // A native CopyFileEx source/destination handle is borrowed for the callback.
 // Never os.NewFile it directly: its finalizer could close a native-owned handle.
 func duplicateReplacementHandle(handle windows.Handle, name string) (*os.File, error) {
+	// INVALID_HANDLE_VALUE is also the current-process pseudohandle to
+	// DuplicateHandle. Validate a file capability before calling that API.
+	if _, err := windows.GetFileType(handle); err != nil {
+		return nil, err
+	}
 	var owned windows.Handle
 	if err := windows.DuplicateHandle(windows.CurrentProcess(), handle, windows.CurrentProcess(), &owned, 0, false, windows.DUPLICATE_SAME_ACCESS); err != nil {
 		return nil, err
@@ -288,6 +302,24 @@ func copyReplacementWindows(ctx context.Context, source *os.File, stage *os.Root
 		return nil, err
 	}
 	state := &replacementCopyState{ctx: ctx, source: sourceID, stage: stage, path: to}
+	// Keep the already granted metadata capability until the whole operation has
+	// succeeded. CopyFileEx may restore a restrictive source DACL/readonly flag
+	// after its last callback; cancellation after native completion still needs
+	// to discard that file without acquiring new write-attribute permissions.
+	defer func() {
+		if state.security == nil {
+			return
+		}
+		if err != nil {
+			cleanup := replacementCleanupMetadata(stage, state.security)
+			if cleanup == nil {
+				cleanup = replacementPrivateFileAccess(state.security)
+			}
+			err = errors.Join(err, cleanupReplacement(func() error { return cleanup }))
+		}
+		err = errors.Join(err, state.security.Close())
+	}()
+
 	err = copyNative(src, dst, state)
 	if err != nil && errors.Is(err, os.ErrNotExist) && !state.validated {
 		if _, missing := os.Stat(from); errors.Is(missing, os.ErrNotExist) {
@@ -300,9 +332,6 @@ func copyReplacementWindows(ctx context.Context, source *os.File, stage *os.Root
 	if err != nil {
 		if state.file != nil {
 			err = errors.Join(err, state.file.Close())
-		}
-		if state.security != nil {
-			err = errors.Join(err, state.security.Close())
 		}
 		return nil, err
 	}
@@ -319,8 +348,7 @@ func copyReplacementWindows(ctx context.Context, source *os.File, stage *os.Root
 	if err == nil {
 		state.file, err = reopenReplacementFile(state.security, windows.GENERIC_READ|windows.GENERIC_WRITE|windows.WRITE_DAC|windows.WRITE_OWNER)
 	}
-	err = errors.Join(err, state.security.Close(), ctx.Err())
-	state.security = nil
+	err = errors.Join(err, ctx.Err())
 	if err != nil {
 		if state.file != nil {
 			err = errors.Join(err, state.file.Close())
@@ -390,7 +418,9 @@ func replacementPrivateFileAccess(file *os.File) error {
 	if err != nil {
 		return err
 	}
-	return windows.SetSecurityInfo(windows.Handle(file.Fd()), windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION|windows.PROTECTED_DACL_SECURITY_INFORMATION, nil, nil, acl, nil)
+	return replacementFileControl(file, func(handle windows.Handle) error {
+		return windows.SetSecurityInfo(handle, windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION|windows.PROTECTED_DACL_SECURITY_INFORMATION, nil, nil, acl, nil)
+	})
 }
 
 func replacementClearReadonly(ctx context.Context, file *os.File) error {
