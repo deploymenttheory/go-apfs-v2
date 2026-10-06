@@ -106,6 +106,8 @@ func validateNativeNameTranscript(raw []byte, cell nativeNameCell, test string) 
 }
 
 func TestQualifyNativeNameMatrix(t *testing.T) {
+	// Producer captures and receiver references bind repository-root paths.
+	t.Chdir("..")
 	base := os.Getenv("APFS_NAME_MATRIX_ARTIFACTS")
 	inputs := os.Getenv("APFS_NAME_IMAGE_ARTIFACTS")
 	revision := os.Getenv("GITHUB_SHA")
@@ -154,12 +156,12 @@ func TestQualifyNativeNameMatrix(t *testing.T) {
 			if err := verifyNativeNameEvidence(out, report.Evidence); err != nil {
 				t.Fatal(err)
 			}
-			sources, err := captureprovenance.Inventory(os.DirFS(".."))
+			sources, err := captureprovenance.Inventory(os.DirFS("."))
 			if err != nil {
 				t.Fatal(err)
 			}
 			for _, path := range nativeNameHarnessSources {
-				sources[path] = sum(read(filepath.Join("..", filepath.FromSlash(path))))
+				sources[path] = sum(read(filepath.FromSlash(path)))
 			}
 			for _, path := range []string{"arm64.ast.json", "x86_64.ast.json", "SDK/sys/stat.h", "SDK/sys/fcntl.h", "SDK/unistd.h", "SDK/sys/errno.h"} {
 				sources[path] = sum(read(filepath.Join(out, filepath.FromSlash(path))))
@@ -193,19 +195,9 @@ func TestQualifyNativeNameMatrix(t *testing.T) {
 					if volume.ImageSHA256 != expectedInputs[artifact+"/"+image] {
 						t.Fatal("producer image hash mismatch")
 					}
-					original, err := os.Getwd()
+					want, record, err := loadNativeReceiverReference(filepath.Join(out, "reference"), cell, report.Host, volume, producerDir)
 					if err != nil {
 						t.Fatal(err)
-					}
-					if err = os.Chdir(".."); err != nil {
-						t.Fatal(err)
-					}
-					want, record, referenceErr := loadNativeReceiverReference(filepath.Join(out, "reference"), cell, report.Host, volume, producerDir)
-					if err = os.Chdir(original); err != nil {
-						t.Fatal(err)
-					}
-					if referenceErr != nil {
-						t.Fatal(referenceErr)
 					}
 					if record != nil {
 						// The receiver must not have mounted this image; its replay
