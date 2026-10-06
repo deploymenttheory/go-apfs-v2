@@ -1,5 +1,10 @@
 name: Supplemental macOS 15 image diagnostics
 on:
+  workflow_call:
+    inputs:
+      producer_run:
+        type: string
+        required: true
   workflow_dispatch:
     inputs:
       producer_run:

@@ -2,16 +2,32 @@ name: Filename comparison and image readers
 on:
   workflow_call:
   workflow_dispatch:
+    inputs:
+      diagnostic_only:
+        description: Run supplemental per-image macOS 15 diagnostics; cannot qualify the full gate
+        type: boolean
+        default: false
+      producer_run:
+        description: Completed genuine image producer run for supplemental diagnostics
+        type: string
+        default: "37433253504"
 concurrency:
-  group: name-comparison-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  group: name-comparison-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}${{ inputs.diagnostic_only && '-diagnostic' || '' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 permissions:
   contents: read
+  actions: read
 env:
   CGO_ENABLED: "0"
   GOTOOLCHAIN: local
 jobs:
+  supplemental-diagnostic:
+    if: github.event_name == 'workflow_dispatch' && inputs.diagnostic_only
+    uses: ./.github/workflows/name-image-diagnostic.yml
+    with:
+      producer_run: ${{ inputs.producer_run }}
   native-images:
+    if: inputs.diagnostic_only != true
     name: Comparison images (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 40

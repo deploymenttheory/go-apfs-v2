@@ -16,6 +16,9 @@ permissions:
 
 jobs:
   name-comparison:
+    permissions:
+      contents: read
+      actions: read
     uses: ./.github/workflows/name-comparison.yml
 
   name-writer:
