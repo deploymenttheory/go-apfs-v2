@@ -705,6 +705,15 @@ jobs:
             artifacts/compression-lz4/
             artifacts/compression-query/
           if-no-files-found: error
+      - name: Complete foreign recompression and carrier publication above 95 percent coverage
+        run: go run scripts/verify-carrier-recompression.go
+      - name: Upload complete foreign recompression evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: carrier-recompression-portable-${{ matrix.os }}
+          path: artifacts/carrier-recompression-portable/
+          if-no-files-found: error
       - name: Audit portable AppleDouble qualification evidence
         env:
           CGO_ENABLED: "0"

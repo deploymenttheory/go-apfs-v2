@@ -100,6 +100,7 @@ type Manifest struct {
 type Store struct {
 	payload, metadata carrierRoot
 	limits            Limits
+	writeMu           sync.Mutex
 	mu                sync.Mutex
 	closed            bool
 }
@@ -167,6 +168,8 @@ func Open(payloadDir, metadataDir string, limits Limits) (*Store, error) {
 	return &Store{payload: p, metadata: m, limits: limits}, nil
 }
 func (s *Store) Close() error {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closed {
@@ -265,7 +268,10 @@ func copyExact(ctx context.Context, dst io.Writer, src io.ReaderAt, size int64) 
 	}
 	return ctx.Err()
 }
-func verify(ctx context.Context, f *os.File, ref BlobRef) error {
+func verify(ctx context.Context, f interface {
+	io.ReaderAt
+	Stat() (os.FileInfo, error)
+}, ref BlobRef) error {
 	info, e := f.Stat()
 	if e != nil {
 		return e
@@ -286,9 +292,12 @@ func verify(ctx context.Context, f *os.File, ref BlobRef) error {
 // PutBlob writes with bounded scratch, syncs and publishes an immutable blob.
 // It does not publish a manifest. An unreferenced blob after failure is harmless.
 // src is borrowed and must remain immutable and open until this call returns.
+// Reads may use this Store's borrowed values, including through range wrappers.
+// The writer/close lock pins directory lifetime without holding the read-state
+// mutex while invoking caller-provided ReaderAt methods.
 func (s *Store) PutBlob(ctx context.Context, src io.ReaderAt, size int64) (ref BlobRef, err error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
 	if e := s.ready(ctx); e != nil {
 		return ref, e
 	}
@@ -582,60 +591,86 @@ func (s *Store) acquire() (func() error, error) {
 // Commit publishes generation expected+1 after verifying every referenced blob.
 // It rejects concurrent writers and stale generations. Payload changes are not
 // rolled back. The caller must validate payload baselines before selecting them.
-func (s *Store) Commit(ctx context.Context, m Manifest, expected uint64) (err error) {
+func (s *Store) Commit(ctx context.Context, m Manifest, expected uint64) error {
+	_, err := s.commitWithPayload(ctx, m, expected, nil)
+	return err
+}
+
+// commitWithPayload prepares durable manifest bytes and verifies the generation
+// under the writer lock before an optional payload transition. A failed final
+// rename can leave the payload changed; existing baseline verification makes
+// that state explicit instead of reusing obsolete compression storage.
+func (s *Store) commitWithPayload(ctx context.Context, m Manifest, expected uint64, transition func() error) (published bool, err error) {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
 	s.mu.Lock()
-	defer s.mu.Unlock()
+	locked := true
+	defer func() {
+		if locked {
+			s.mu.Unlock()
+		}
+	}()
 	if e := s.ready(ctx); e != nil {
-		return e
+		return false, e
 	}
 	if m.Generation != expected || expected == ^uint64(0) {
-		return ErrConflict
+		return false, ErrConflict
 	}
 	if e := s.validate(m); e != nil {
-		return e
+		return false, e
 	}
 	release, e := s.acquire()
 	if e != nil {
-		return e
+		return false, e
 	}
 	defer func() { err = errors.Join(err, release()) }()
 	_, existsErr := s.metadata.Lstat("manifest.json")
 	current, e := s.load(ctx)
 	if errors.Is(existsErr, fs.ErrNotExist) {
 		if expected != 0 {
-			return ErrConflict
+			return false, ErrConflict
 		}
 	} else if e != nil {
-		return e
+		return false, e
 	} else if current.Generation != expected {
-		return ErrConflict
+		return false, ErrConflict
 	}
 	if e = s.verifyRefs(ctx, m); e != nil {
-		return e
+		return false, e
 	}
 	m.Generation = expected + 1
 	b, e := json.Marshal(m)
 	if e != nil {
-		return e
+		return false, e
 	}
 	if int64(len(b)) > s.limits.ManifestBytes {
-		return ErrLimit
+		return false, ErrLimit
 	}
 	tmp := ".manifest-" + rand.Text()
 	f, e := s.metadata.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 	if e != nil {
-		return e
+		return false, e
 	}
 	defer func() { err = errors.Join(err, removeAbsentOK(s.metadata, tmp)) }()
 	_, writeErr := f.Write(b)
 	e = errors.Join(writeErr, f.Sync(), f.Close())
 	if e != nil {
-		return e
+		return false, e
 	}
 	if e = ctx.Err(); e != nil {
-		return e
+		return false, e
 	}
-	return s.metadata.Rename(tmp, "manifest.json")
+	// The writer lock pins root lifetime. Release the read-state mutex before
+	// caller I/O so borrowed values and association checks cannot deadlock.
+	s.mu.Unlock()
+	locked = false
+	if transition != nil {
+		if e = transition(); e != nil {
+			return false, e
+		}
+	}
+	err = s.metadata.Rename(tmp, "manifest.json")
+	return err == nil, err
 }
 
 // VerifyPayload checks an association baseline without following a symlink.
