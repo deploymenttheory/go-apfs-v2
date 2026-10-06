@@ -65,12 +65,31 @@ jobs:
           go run scripts/verify-name-comparison.go
       - name: Verify bounded native command diagnostics
         run: go test -count=1 -run '^TestNativeReadback(Command|Mount)' scripts/verify-name-native_commands_test.go scripts/verify-name-native_commands_fault_test.go
-      - name: Independently mount all three producer profiles on this macOS
+      - name: Build native image readback harness
         if: runner.os == 'macOS'
+        timeout-minutes: 5
         shell: bash
         run: |
+          set -euo pipefail
+          mkdir -p artifacts/name-native-build
+          go test -c -o "$GITHUB_WORKSPACE/artifacts/name-native-build/native-readback.test" scripts/capture-name-collation.go scripts/verify-name-comparison_test.go scripts/verify-name-native_readback_test.go scripts/verify-name-native_commands_test.go 2>&1 | tee artifacts/name-native-build/build.log
+      - name: Preserve native harness build diagnostics before execution
+        if: always() && runner.os == 'macOS'
+        uses: actions/upload-artifact@v7
+        with:
+          name: name-native-build-${{ matrix.os }}
+          path: artifacts/name-native-build/
+          compression-level: 9
+          if-no-files-found: error
+      - name: Independently mount all three producer profiles on this macOS
+        if: runner.os == 'macOS'
+        timeout-minutes: 32
+        shell: bash
+        run: |
+          set -euo pipefail
           export APFS_NAME_IMAGE_ARTIFACTS="$GITHUB_WORKSPACE/artifacts/native-images"
-          go test -count=1 -timeout=30m -json -run='^TestNativeCrossVersionNameImages$' scripts/capture-name-collation.go scripts/verify-name-comparison_test.go scripts/verify-name-native_readback_test.go scripts/verify-name-native_commands_test.go > artifacts/name-native-readback-tests.jsonl
+          cd scripts
+          go tool test2json -t -p command-line-arguments "$GITHUB_WORKSPACE/artifacts/name-native-build/native-readback.test" -test.v=test2json -test.count=1 -test.timeout=30m -test.run='^TestNativeCrossVersionNameImages$' | tee "$GITHUB_WORKSPACE/artifacts/name-native-readback-tests.jsonl"
       - uses: actions/upload-artifact@v7
         if: always()
         with:
