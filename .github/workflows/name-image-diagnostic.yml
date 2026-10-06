@@ -33,6 +33,7 @@ jobs:
         profile: [15, 26, 27]
         filesystem: [APFS, APFSX, HFS+, HFSX]
     env:
+      GH_TOKEN: ${{ github.token }}
       APFS_NAME_DIAGNOSTIC_PROFILE: ${{ matrix.profile }}
       APFS_NAME_DIAGNOSTIC_FILESYSTEM: ${{ matrix.filesystem }}
       APFS_NAME_DIAGNOSTIC_RUN: ${{ inputs.producer_run }}

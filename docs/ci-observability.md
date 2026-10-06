@@ -177,3 +177,11 @@ a cancelled dependency produces a retained command failure instead of preventing
 the diagnostics directory from being created. This does not convert cancellation
 into success. Native kernel or runner nontermination can still prevent later
 uploads; pre-execution checkpoints survive independently of those later steps.
+
+Pull-request image producers may run at GitHub's generated merge commit rather
+than the run API's branch `head_sha`. Supplemental diagnostics retain the commit
+API response and require the captured revision to have exactly two parents:
+the recorded PR base and the immutable run head, in that order. Wrong repository,
+run, event, revision or parent relationships fail. Branch-head captures retain
+their existing exact-revision check; source hashes are never relabeled. Held
+syscall checkpoints also retain the actual APFS driver, kernel and SDK metadata.

@@ -23,7 +23,7 @@ import (
 var syscallTraceHeaders = []string{"sys/stat.h", "sys/fcntl.h", "unistd.h", "sys/errno.h", "stdio.h", "stdlib.h", "string.h", "signal.h", "time.h"}
 
 func syscallTraceSourceNames() []string {
-	names := []string{"testdata/appledouble/native/name-syscall-trace.c", "scripts/verify-name-native_syscall_test.go", ".github/workflows/name-syscall-diagnostic.yml", "syscall-arm64.ast.json", "syscall-x86_64.ast.json", "syscall-probe"}
+	names := []string{"testdata/appledouble/native/name-syscall-trace.c", "scripts/verify-name-native_syscall_test.go", ".github/workflows/name-syscall-diagnostic.yml", "syscall-arm64.ast.json", "syscall-x86_64.ast.json", "syscall-probe", "apfs-driver.plist", "sdk-settings.plist", "uname.txt"}
 	for _, header := range syscallTraceHeaders {
 		names = append(names, "syscall-SDK/"+header)
 	}
@@ -180,6 +180,24 @@ func TestPrepareNativeSyscallTrace(t *testing.T) {
 		t.Fatal(e)
 	}
 	sdk := strings.TrimSpace(string(sdkRaw))
+	for name, path := range map[string]string{"apfs-driver.plist": "/System/Library/Extensions/apfs.kext/Contents/Info.plist", "sdk-settings.plist": filepath.Join(sdk, "SDKSettings.plist")} {
+		b, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = os.WriteFile(filepath.Join(out, name), b, 0600); err != nil {
+			t.Fatal(err)
+		}
+		plan.Sources[name] = sum(b)
+	}
+	uname, err := commands.run(ctx, "uname", "-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(filepath.Join(out, "uname.txt"), uname, 0600); err != nil {
+		t.Fatal(err)
+	}
+	plan.Sources["uname.txt"] = sum(uname)
 	source := "testdata/appledouble/native/name-syscall-trace.c"
 	if _, e = commands.run(ctx, "xcrun", "clang", "-std=c11", "-Wall", "-Wextra", "-Werror", "-isysroot", sdk, source, "-o", filepath.Join(out, "syscall-probe")); e != nil {
 		t.Fatal(e)

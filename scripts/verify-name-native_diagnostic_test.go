@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -149,17 +150,60 @@ func singleNameInput(t *testing.T) (singleNameCheckpoint, string, string, volume
 		t.Fatal(err)
 	}
 	run := os.Getenv("APFS_NAME_DIAGNOSTIC_RUN")
-	if err = validateSingleNameRun(raw, run, fresh.Revision); err != nil {
-		t.Fatal(err)
-	}
 	out := filepath.Join(root, "artifacts/name-native-diagnostic")
 	if err = os.MkdirAll(out, 0755); err != nil {
 		t.Fatal(err)
+	}
+	var mergeProof []byte
+	if err = validateSingleNameRun(raw, run, fresh.Revision); err != nil {
+		var identity struct {
+			HeadSHA string `json:"head_sha"`
+			Event   string
+		}
+		if decodeErr := json.Unmarshal(raw, &identity); decodeErr != nil {
+			t.Fatal(decodeErr)
+		}
+		// A PR workflow checks out a generated merge commit. First establish
+		// the completed run identity, then prove both exact merge parents.
+		if identity.Event != "pull_request" {
+			t.Fatal(err)
+		}
+		if err = validateSingleNameRun(raw, run, identity.HeadSHA); err != nil {
+			t.Fatal(err)
+		}
+		if !nativeCommitSHA(fresh.Revision) {
+			t.Fatal("invalid producer revision")
+		}
+		path := filepath.Join(out, "producer-merge-commit.json")
+		mergeProof, err = os.ReadFile(path)
+		if errors.Is(err, os.ErrNotExist) {
+			ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
+			defer cancel()
+			commands := &nativeCommandRunner{Directory: filepath.Join(out, "producer-identity-commands")}
+			mergeProof, err = commands.run(ctx, "gh", "api", "repos/deploymenttheory/go-apfs-v2/commits/"+fresh.Revision)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err = validateSingleNameMerge(raw, mergeProof, run, fresh.Revision); err != nil {
+				t.Fatal(err)
+			}
+			if err = os.WriteFile(path, mergeProof, 0600); err != nil {
+				t.Fatal(err)
+			}
+		} else if err != nil {
+			t.Fatal(err)
+		}
+		if err = validateSingleNameMerge(raw, mergeProof, run, fresh.Revision); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if err = os.WriteFile(filepath.Join(out, "producer-run.json"), raw, 0644); err != nil {
 		t.Fatal(err)
 	}
 	checkpoint := singleNameCheckpoint{Schema: 1, DiagnosticOnly: true, Profile: major, Filesystem: os.Getenv("APFS_NAME_DIAGNOSTIC_FILESYSTEM"), ProducerRun: run, ProducerRevision: fresh.Revision, Cases: 3753, Observations: 7506, InputSHA256: map[string]string{"producer-run.json": sum(raw)}, SourceSHA256: map[string]string{}}
+	if mergeProof != nil {
+		checkpoint.InputSHA256["producer-merge-commit.json"] = sum(mergeProof)
+	}
 	for _, name := range []string{"native.json.gz", "cases.tsv"} {
 		b, e := os.ReadFile(filepath.Join(dir, name))
 		if e != nil {
@@ -450,5 +494,73 @@ func TestSingleNameDiagnosticCaseSelection(t *testing.T) {
 	duplicate := []nameCase{{"ascii", "61", "41"}, {"ascii", "61", "41"}}
 	if _, _, err := selectSingleNameDiagnosticCase([]byte("ascii\t61\t41\nascii\t61\t41\n"), duplicate, "ascii"); err == nil {
 		t.Fatal("accepted duplicate source case")
+	}
+}
+
+func nativeCommitSHA(value string) bool {
+	decoded, err := hex.DecodeString(value)
+	return err == nil && len(decoded) == 20 && value == strings.ToLower(value)
+}
+func validateSingleNameMerge(raw, proof []byte, run, revision string) error {
+	var identity struct {
+		HeadSHA      string `json:"head_sha"`
+		Event        string
+		PullRequests []struct {
+			Base struct {
+				SHA  string
+				Repo struct{ URL string }
+			}
+		} `json:"pull_requests"`
+	}
+	if err := json.Unmarshal(raw, &identity); err != nil {
+		return err
+	}
+	if err := validateSingleNameRun(raw, run, identity.HeadSHA); err != nil {
+		return err
+	}
+	if identity.Event != "pull_request" || len(identity.PullRequests) != 1 || !nativeCommitSHA(identity.HeadSHA) || !nativeCommitSHA(revision) {
+		return errors.New("unqualified PR producer identity")
+	}
+	base := identity.PullRequests[0].Base
+	if !nativeCommitSHA(base.SHA) || base.Repo.URL != "https://api.github.com/repos/deploymenttheory/go-apfs-v2" {
+		return errors.New("unqualified PR base identity")
+	}
+	var commit struct {
+		SHA     string
+		Parents []struct{ SHA string }
+	}
+	if err := json.Unmarshal(proof, &commit); err != nil {
+		return err
+	}
+	if commit.SHA != revision || len(commit.Parents) != 2 || commit.Parents[0].SHA != base.SHA || commit.Parents[1].SHA != identity.HeadSHA {
+		return errors.New("captured revision is not the exact producer test merge")
+	}
+	return nil
+}
+
+func TestSingleNameDiagnosticMergeProvenance(t *testing.T) {
+	head, base, merge := strings.Repeat("a", 40), strings.Repeat("b", 40), strings.Repeat("c", 40)
+	raw := fmt.Sprintf(`{"id":123,"status":"completed","event":"pull_request","head_sha":%q,"repository":{"full_name":"deploymenttheory/go-apfs-v2"},"pull_requests":[{"base":{"sha":%q,"repo":{"url":"https://api.github.com/repos/deploymenttheory/go-apfs-v2"}}}]}`, head, base)
+	proof := fmt.Sprintf(`{"sha":%q,"parents":[{"sha":%q},{"sha":%q}]}`, merge, base, head)
+	if err := validateSingleNameMerge([]byte(raw), []byte(proof), "123", merge); err != nil {
+		t.Fatal(err)
+	}
+	for _, bad := range []string{"{", strings.Replace(proof, merge, head, 1), strings.Replace(proof, head, base, 1), strings.Replace(proof, base, head, 1), `{"sha":"` + merge + `","parents":[]}`} {
+		if err := validateSingleNameMerge([]byte(raw), []byte(bad), "123", merge); err == nil {
+			t.Fatal("accepted wrong merge proof")
+		}
+	}
+	for _, bad := range []string{"{", strings.Replace(raw, "completed", "in_progress", 1), strings.Replace(raw, "pull_request\"", "workflow_dispatch\"", 1), strings.ReplaceAll(raw, "deploymenttheory/go-apfs-v2", "other/repo"), strings.Replace(raw, base, head, 1)} {
+		if err := validateSingleNameMerge([]byte(bad), []byte(proof), "123", merge); err == nil {
+			t.Fatal("accepted invalid producer identity")
+		}
+	}
+	for _, bad := range []string{"", strings.Repeat("z", 40), strings.Repeat("A", 40), head[:39]} {
+		if nativeCommitSHA(bad) {
+			t.Fatal("accepted invalid SHA", bad)
+		}
+	}
+	if err := validateSingleNameMerge([]byte(raw), []byte(proof), "456", merge); err == nil {
+		t.Fatal("accepted wrong producer run")
 	}
 }
