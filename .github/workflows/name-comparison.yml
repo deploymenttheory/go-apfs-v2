@@ -11,6 +11,10 @@ on:
         description: Supplemental single-image host, attach, readback and detach checkpoints
         type: boolean
         default: false
+      diagnostic_case:
+        description: Exact retained case ID for supplemental boundary diagnostics; empty means all cases
+        type: string
+        default: ""
       diagnostic_profile:
         type: string
         default: "26"
@@ -22,7 +26,7 @@ on:
         type: string
         default: "37433253504"
 concurrency:
-  group: name-comparison-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}${{ inputs.command_boundaries && '-boundary' || (inputs.diagnostic_only && '-diagnostic' || '') }}
+  group: name-comparison-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}${{ inputs.command_boundaries && format('-boundary-{0}-{1}-{2}', inputs.diagnostic_profile, inputs.diagnostic_filesystem, inputs.diagnostic_case || 'all') || (inputs.diagnostic_only && '-diagnostic' || '') }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 permissions:
   contents: read
@@ -43,6 +47,7 @@ jobs:
       producer_run: ${{ inputs.producer_run }}
       profile: ${{ inputs.diagnostic_profile }}
       filesystem: ${{ inputs.diagnostic_filesystem }}
+      case_id: ${{ inputs.diagnostic_case }}
   native-images:
     if: inputs.diagnostic_only != true
     name: Comparison images (${{ matrix.os }})

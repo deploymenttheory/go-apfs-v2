@@ -21,6 +21,9 @@ import (
 )
 
 type singleNameCheckpoint struct {
+	CaseID           string            `json:"case_id,omitempty"`
+	ReferenceCase    *nameCase         `json:"reference_case,omitempty"`
+	ReferenceNative  *nativeCase       `json:"reference_native,omitempty"`
 	Schema           int               `json:"schema"`
 	DiagnosticOnly   bool              `json:"diagnostic_only"`
 	Profile          int               `json:"producer_profile"`
@@ -179,7 +182,27 @@ func singleNameInput(t *testing.T) (singleNameCheckpoint, string, string, volume
 				t.Fatal("selected native image hash mismatch", e)
 			}
 			checkpoint.InputSHA256[name] = sum(b)
+			if selector := os.Getenv("APFS_NAME_DIAGNOSTIC_CASE"); selector != "" {
+				tsv, e := os.ReadFile(filepath.Join(dir, "cases.tsv"))
+				if e != nil {
+					t.Fatal(e)
+				}
+				index, derived, e := selectSingleNameDiagnosticCase(tsv, fresh.Cases, selector)
+				if e != nil {
+					t.Fatal(e)
+				}
+				if volume.Native.Cases[index].ID != selector {
+					t.Fatal("native reference case mismatch")
+				}
+				reference := fresh.Cases[index]
+				native := volume.Native.Cases[index]
+				checkpoint.CaseID, checkpoint.ReferenceCase, checkpoint.ReferenceNative = selector, &reference, &native
+				checkpoint.Cases, checkpoint.Observations = 1, 2
+				checkpoint.InputSHA256["selected-cases.tsv"] = sum(derived)
+				volume.Native.Cases = []nativeCase{native}
+			}
 			return checkpoint, out, dir, volume
+
 		}
 	}
 	t.Fatal("selected native volume missing")
@@ -188,6 +211,12 @@ func singleNameInput(t *testing.T) (singleNameCheckpoint, string, string, volume
 
 func TestPrepareNativeSingleNameImageDiagnostic(t *testing.T) {
 	checkpoint, out, _, _ := singleNameInput(t)
+	if checkpoint.ReferenceCase != nil {
+		c := checkpoint.ReferenceCase
+		if err := os.WriteFile(filepath.Join(out, "selected-cases.tsv"), []byte(fmt.Sprintf("%s\t%s\t%s\n", c.ID, c.Created, c.Queried)), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
 	defer cancel()
 	commands := &nativeCommandRunner{Directory: filepath.Join(out, "build-commands")}
@@ -237,6 +266,9 @@ func TestPrepareNativeSingleNameImageDiagnostic(t *testing.T) {
 
 func TestNativeSingleNameImageDiagnostic(t *testing.T) {
 	checkpoint, out, dir, volume, raw := preparedSingleNameInput(t)
+	if checkpoint.CaseID != "" {
+		t.Fatal("single-case selection requires the explicit command-boundary route")
+	}
 	binary := filepath.Join(out, "native-probe")
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
 	defer cancel()
@@ -364,5 +396,59 @@ func preparedSingleNameInput(t *testing.T) (singleNameCheckpoint, string, string
 	if err = matchSingleNameCheckpoint(raw, expected); err != nil {
 		t.Fatal(err)
 	}
+	if checkpoint.CaseID != "" {
+		selected, err := os.ReadFile(filepath.Join(out, "selected-cases.tsv"))
+		if err != nil || sum(selected) != checkpoint.InputSHA256["selected-cases.tsv"] {
+			t.Fatal("derived selected TSV changed", err)
+		}
+	}
 	return checkpoint, out, dir, volume, raw
+}
+
+func selectSingleNameDiagnosticCase(tsv []byte, cases []nameCase, selector string) (int, []byte, error) {
+	if selector == "" {
+		return -1, nil, errors.New("explicit diagnostic case required")
+	}
+	lines := strings.Split(strings.TrimSuffix(string(tsv), "\n"), "\n")
+	if len(lines) != len(cases) || len(cases) == 0 {
+		return -1, nil, errors.New("source TSV inventory mismatch")
+	}
+	found := -1
+	for i, c := range cases {
+		if lines[i] != fmt.Sprintf("%s\t%s\t%s", c.ID, c.Created, c.Queried) {
+			return -1, nil, errors.New("source TSV differs from retained case bytes")
+		}
+		if c.ID == selector {
+			if found >= 0 {
+				return -1, nil, errors.New("ambiguous diagnostic case")
+			}
+			found = i
+		}
+	}
+	if found < 0 {
+		return -1, nil, errors.New("diagnostic case absent from validated source")
+	}
+	return found, []byte(lines[found] + "\n"), nil
+}
+func TestSingleNameDiagnosticCaseSelection(t *testing.T) {
+	cases := []nameCase{{"ascii", "61", "41"}, {"fold-A7CE", "ea9f8e", "ea9f8f"}}
+	source := []byte("ascii\t61\t41\nfold-A7CE\tea9f8e\tea9f8f\n")
+	index, selected, err := selectSingleNameDiagnosticCase(source, cases, "fold-A7CE")
+	if err != nil || index != 1 || string(selected) != "fold-A7CE\tea9f8e\tea9f8f\n" {
+		t.Fatal("exact selected source bytes", index, string(selected), err)
+	}
+	for _, bad := range []string{"", "unknown", "../ascii"} {
+		if _, _, err := selectSingleNameDiagnosticCase(source, cases, bad); err == nil {
+			t.Fatal("accepted invalid case", bad)
+		}
+	}
+	for _, bad := range [][]byte{[]byte("ascii\t61\t41\n"), []byte("ascii\t62\t41\nfold-A7CE\tea9f8e\tea9f8f\n"), append(append([]byte(nil), source...), []byte("extra\t61\t41\n")...)} {
+		if _, _, err := selectSingleNameDiagnosticCase(bad, cases, "ascii"); err == nil {
+			t.Fatal("accepted altered source TSV")
+		}
+	}
+	duplicate := []nameCase{{"ascii", "61", "41"}, {"ascii", "61", "41"}}
+	if _, _, err := selectSingleNameDiagnosticCase([]byte("ascii\t61\t41\nascii\t61\t41\n"), duplicate, "ascii"); err == nil {
+		t.Fatal("accepted duplicate source case")
+	}
 }

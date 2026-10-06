@@ -205,6 +205,17 @@ func nativeImageReadback(t *testing.T, ctx context.Context, commands *nativeComm
 // Shared without changing the native oracle's required inventory or assertions.
 func validateNativeNameReadback(t *testing.T, raw []byte, v volumeCapture) {
 	t.Helper()
+	if len(v.Native.Cases) != 3753 {
+		t.Fatal("incomplete native source readback inventory")
+	}
+	validateNativeNameResults(t, raw, v.Native.Cases, 3753)
+}
+
+func validateNativeNameResults(t *testing.T, raw []byte, expected []nativeCase, required int) {
+	t.Helper()
+	if required <= 0 || len(expected) != required {
+		t.Fatal("invalid explicit native readback inventory")
+	}
 	var observed struct {
 		Count int
 		Cases []struct {
@@ -219,11 +230,11 @@ func validateNativeNameReadback(t *testing.T, raw []byte, v volumeCapture) {
 	if e := json.Unmarshal(raw, &observed); e != nil {
 		t.Fatal(e)
 	}
-	if observed.Count != 3753 || len(observed.Cases) != 3753 {
+	if observed.Count != required || len(observed.Cases) != required {
 		t.Fatal("incomplete native readback")
 	}
 	for i, c := range observed.Cases {
-		want := v.Native.Cases[i]
+		want := expected[i]
 		if c.ID != want.ID || len(c.Results) != 2 {
 			t.Fatal("readback case inventory")
 		}

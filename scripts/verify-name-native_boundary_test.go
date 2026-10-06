@@ -107,18 +107,22 @@ func TestNativeNameBoundaryReadback(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
 	defer cancel()
 	commands := &nativeCommandRunner{Directory: filepath.Join(out, "boundary-readback-commands")}
-	result, err := commands.run(ctx, filepath.Join(out, "native-probe"), mount, filepath.Join(dir, "cases.tsv"))
+	casesPath := filepath.Join(dir, "cases.tsv")
+	if c.CaseID != "" {
+		casesPath = filepath.Join(out, "selected-cases.tsv")
+	}
+	result, err := commands.run(ctx, filepath.Join(out, "native-probe"), mount, casesPath)
 	writeErr := os.WriteFile(filepath.Join(out, "boundary-readback-native.json"), result, 0644)
 	if err = errors.Join(err, writeErr); err != nil {
 		t.Fatal(err)
 	}
-	validateNativeNameReadback(t, result, volume)
+	validateNativeNameResults(t, result, volume.Native.Cases, c.Cases)
 	name := strings.ReplaceAll(volume.Kind, "+", "plus") + ".dmg"
 	after, err := os.ReadFile(filepath.Join(dir, name))
 	if err != nil || sum(after) != c.InputSHA256[name] {
 		t.Fatal("native readback changed the image", err)
 	}
-	boundaryResult(t, out, "readback", map[string]any{"diagnostic_only": true, "qualifies_full_gate": false, "observations": 7506, "checkpoint_sha256": sum(raw), "readback_sha256": sum(result)})
+	boundaryResult(t, out, "readback", map[string]any{"diagnostic_only": true, "qualifies_full_gate": false, "observations": c.Observations, "case_id": c.CaseID, "checkpoint_sha256": sum(raw), "readback_sha256": sum(result)})
 }
 func TestNativeNameBoundaryDetach(t *testing.T) {
 	// Cleanup intentionally does not require successful source/image revalidation:
