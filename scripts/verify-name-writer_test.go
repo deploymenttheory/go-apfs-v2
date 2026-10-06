@@ -27,6 +27,8 @@ type nameWriterCheck struct {
 	Errno, Writes           int
 }
 type nameWriterRecord struct {
+	Payload                      string
+	UTF16                        []uint16
 	ID, Created, Queried, Stored string
 	CreateErrno, LookupErrno     int
 	Parent, Inode, QueriedInode  uint64
@@ -34,6 +36,8 @@ type nameWriterRecord struct {
 	Key, Value                   string
 }
 type nameWriterImage struct {
+	ExtraFixtureSHA256                string
+	ExtraCases                        []nameWriterRecord
 	Target                            uint32
 	Kind, File, SHA256, FixtureSHA256 string
 	Size                              int64
@@ -67,7 +71,7 @@ func nativeNameErrno(err error) (int, error) {
 	return 0, fmt.Errorf("unqualified portable name error: %w", err)
 }
 func nameWriterSources() (map[string]string, error) {
-	paths := []string{"go.mod", "go.sum", "scripts/verify-name-writer_test.go", "scripts/capture-name-collation.go", "scripts/verify-name-comparison_test.go"}
+	paths := []string{"scripts/verify-name-writer-special_test.go", "scripts/inspect-hfs-special-writer_test.go", "scripts/capture-hfs-special-names.go", "go.mod", "go.sum", "scripts/verify-name-writer_test.go", "scripts/capture-name-collation.go", "scripts/verify-name-comparison_test.go"}
 	for _, dir := range []string{"pkg/apfswrite", "pkg/apfs", "pkg/hfsplus", "pkg/osversion", "internal/nameunicode"} {
 		err := filepath.WalkDir(dir, func(path string, entry fs.DirEntry, err error) error {
 			if err != nil {
@@ -347,6 +351,9 @@ func produceHFSNameImage(t *testing.T, out string, target uint32, source volumeC
 	t.Helper()
 	result := nameWriterImage{Target: target, Kind: source.Kind, File: fmt.Sprintf("macos%d-%s.img", target, source.Kind)}
 	corpus := &hfsplus.Entry{Name: "collation", Mode: os.ModeDir}
+	special, specialDigest := readWriterSpecialVolume(t, target, source.Kind)
+	result.ExtraFixtureSHA256 = specialDigest
+	appendWriterSpecialCases(t, &result, corpus, special, source.Native.Sensitive)
 	for _, c := range source.Native.Cases {
 		created, err := hex.DecodeString(c.Created)
 		if err != nil {
@@ -481,6 +488,7 @@ func produceHFSNameImage(t *testing.T, out string, target uint32, source volumeC
 	if len(result.Cases) != casesPerVolume {
 		t.Fatal("HFS case count differs")
 	}
+	collectWriterSpecialCases(t, &result, volume, imagePath, special)
 	raw, err := os.ReadFile(imagePath)
 	if err != nil {
 		t.Fatal(err)

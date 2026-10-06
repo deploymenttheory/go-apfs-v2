@@ -111,7 +111,7 @@ func TestNativeCrossVersionNameImages(t *testing.T) {
 			t.Fatal(err)
 		}
 		inputs[p.artifact+"/native.json.gz"] = sum(input)
-		fresh := readComparisonCapture(t, capturePath)
+		fresh := readComparisonCapture(t, capturePath, p.major)
 		prior := readComparisonCapture(t, fmt.Sprintf("testdata/appledouble/native/name-collation-macos%d.json.gz", p.major))
 		if e = compareStable(prior, fresh); e != nil {
 			t.Fatal(e)

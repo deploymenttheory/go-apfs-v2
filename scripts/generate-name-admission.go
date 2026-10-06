@@ -9,11 +9,15 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"go/format"
+	"io"
 	"os"
 	"strings"
+
+	"github.com/deploymenttheory/go-apfs-v2/pkg/osversion"
 )
 
 func must(e error) {
@@ -34,6 +38,7 @@ func main() {
 		z, e := gzip.NewReader(bytes.NewReader(raw))
 		must(e)
 		var c struct {
+			Host    string
 			Schema  int
 			Sources map[string]string
 			Volumes []struct {
@@ -45,8 +50,10 @@ func main() {
 				}
 			}
 		}
-		must(json.NewDecoder(z).Decode(&c))
-		must(z.Close())
+		plain, err := io.ReadAll(z)
+		must(errors.Join(err, z.Close()))
+		must(json.Unmarshal(plain, &c))
+		must(requireAdmissionProfile(c.Host, major))
 		if c.Schema != 1 || len(c.Volumes) != 2 {
 			panic("native inventory")
 		}
@@ -108,4 +115,18 @@ func main() {
 		return
 	}
 	must(os.WriteFile(dest, body, 0644))
+}
+
+func requireAdmissionProfile(host string, expected int) error {
+	profile, err := osversion.ParseProductVersion(host)
+	if err != nil {
+		return err
+	}
+	if _, err = osversion.ProfileForMacOS(profile); err != nil {
+		return err
+	}
+	if int(profile.Major) != expected {
+		return fmt.Errorf("native admission Host profile%d differs from filename%d", profile.Major, expected)
+	}
+	return nil
 }

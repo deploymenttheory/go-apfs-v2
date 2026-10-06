@@ -23,7 +23,7 @@ func TestWriterNativeGuards(t *testing.T) {
 	for _, family := range []string{"readback", "preflight"} {
 		mutations := []string{"positive", "missing-case", "duplicate-case", "unknown-case", "count", "unknown-field", "trailing-json", "truncated-json"}
 		if family == "readback" {
-			mutations = append(mutations, "missing-result", "lookup-errno", "inode", "size", "read", "missing-stored", "stored-name", "stored-inode")
+			mutations = append(mutations, "payload", "missing-result", "lookup-errno", "inode", "size", "read", "missing-stored", "stored-name", "stored-inode")
 		} else {
 			mutations = append(mutations, "filesystem", "root-actor", "readonly", "case-policy", "unknown-policy", "cleanup", "operation", "first-errno", "first-created", "second-errno", "second-created")
 		}
@@ -144,6 +144,8 @@ func TestWriterNativeGuardChild(t *testing.T) {
 	case "unknown-field":
 		object["unexpected"] = true
 	case "trailing-json", "truncated-json":
+	case "payload":
+		first["results"].([]any)[0].(map[string]any)["data"] = "70"
 	case "missing-result":
 		first["results"] = first["results"].([]any)[:1]
 	case "lookup-errno", "inode", "size", "read":

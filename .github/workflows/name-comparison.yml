@@ -57,6 +57,7 @@ jobs:
         run: |
           go run scripts/generate-name-tables.go -check
           go run scripts/generate-name-admission.go -check
+          go test scripts/generate-name-admission.go scripts/generate-name-admission_test.go
       - name: Verify strict harness rejection tests
         run: go test scripts/verify-name-comparison.go scripts/verify-name-comparison_gate_test.go
       - name: Verify all native image lookups and production coverage

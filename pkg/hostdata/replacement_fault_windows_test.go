@@ -429,6 +429,62 @@ func TestReplacementWindowsNativeFailures(t *testing.T) {
 			}
 		})
 	}
+	t.Run("callback metadata access denied", func(t *testing.T) {
+		_, stage, parent := replacementTestStage(t)
+		target, e := stage.OpenFile("replacement", os.O_CREATE|os.O_EXCL|os.O_RDWR, 0600)
+		if e != nil {
+			t.Fatal(e)
+		}
+		defer target.Close()
+		guard, e := reopenReplacementFile(target, windows.READ_CONTROL|windows.WRITE_DAC)
+		if e != nil {
+			t.Fatal(e)
+		}
+		defer guard.Close()
+		// OWNER RIGHTS prevents the implicit owner WRITE_DAC grant. Keep an
+		// existing authorized capability so the test can restore the private DACL.
+		sd, e := windows.SecurityDescriptorFromString("D:P(D;;WD;;;S-1-3-4)(A;;FA;;;WD)")
+		if e != nil {
+			t.Fatal(e)
+		}
+		if e = replacementSetFileSecurity(guard, windows.DACL_SECURITY_INFORMATION, sd); e != nil {
+			t.Fatal(e)
+		}
+		defer func() {
+			if e := replacementPrivateFileAccess(guard); e != nil && !errors.Is(e, os.ErrClosed) {
+				t.Error(e)
+			}
+		}()
+		denied, nativeErr := reopenReplacementFile(target, windows.WRITE_DAC)
+		if denied != nil {
+			_ = denied.Close()
+		}
+		if !errors.Is(nativeErr, windows.ERROR_ACCESS_DENIED) || denied != nil {
+			t.Fatalf("native owner-rights control: file=%v error=%v", denied, nativeErr)
+		}
+		state := replacementCopyState{ctx: t.Context(), source: id, stage: stage, path: target.Name()}
+		if state.progress(0, windows.Handle(live.Fd()), windows.Handle(target.Fd())) != 1 || !errors.Is(state.err, windows.ERROR_ACCESS_DENIED) || state.file != nil || state.security != nil || state.validated {
+			t.Fatalf("denied metadata admission retained capability: %#v", state)
+		}
+		if e = replacementPrivateFileAccess(guard); e != nil {
+			t.Fatal(e)
+		}
+		if e = errors.Join(guard.Close(), target.Close()); e != nil {
+			t.Fatal(e)
+		}
+		pointer, e := windows.UTF16PtrFromString(filepath.Join(parent, "private", "replacement"))
+		if e != nil {
+			t.Fatal(e)
+		}
+		handle, e := windows.CreateFile(pointer, windows.GENERIC_READ|windows.GENERIC_WRITE, 0, nil, windows.OPEN_EXISTING, 0, 0)
+		if e != nil {
+			t.Fatalf("callback failure leaked duplicated native handle: %v", e)
+		}
+		if e = windows.CloseHandle(handle); e != nil {
+			t.Fatal(e)
+		}
+	})
+
 }
 
 func TestReplacementWindowsEFSKeyValidation(t *testing.T) {
@@ -810,23 +866,41 @@ func TestReplacementWindowsHeldUnlinkedSource(t *testing.T) {
 		var streamInfo [4096]byte
 		streamErr := windows.GetFileInformationByHandleEx(handle, windows.FileStreamInfo, &streamInfo[0], uint32(len(streamInfo)))
 		t.Logf("nameless native stream enumeration: error=%v first128=%x", streamErr, streamInfo[:128])
-		for _, streamName := range []string{":metadata", ":metadata:$DATA"} {
-			unicodeName, unicodeErr := windows.NewNTUnicodeString(streamName)
-			if unicodeErr != nil {
-				t.Fatal(unicodeErr)
+		for _, rootKind := range []string{"original", "reopened"} {
+			streamRoot := source
+			if rootKind == "reopened" {
+				streamRoot, err = reopenReplacementFile(source, windows.GENERIC_READ)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer streamRoot.Close()
 			}
-			attributes := windows.OBJECT_ATTRIBUTES{Length: uint32(unsafe.Sizeof(windows.OBJECT_ATTRIBUTES{})), RootDirectory: handle, ObjectName: unicodeName}
-			var streamHandle windows.Handle
-			var streamStatus windows.IO_STATUS_BLOCK
-			openErr := windows.NtCreateFile(&streamHandle, windows.GENERIC_READ|windows.SYNCHRONIZE, &attributes, &streamStatus, nil, 0, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, windows.FILE_OPEN, windows.FILE_NON_DIRECTORY_FILE|windows.FILE_SYNCHRONOUS_IO_NONALERT, 0, 0)
-			if openErr != nil {
-				t.Logf("nameless native relative stream %q: %v", streamName, openErr)
-				continue
+			var standard struct {
+				AllocationSize, EndOfFile int64
+				NumberOfLinks             uint32
+				DeletePending, Directory  byte
+				_                         [2]byte
 			}
-			named := os.NewFile(uintptr(streamHandle), streamName)
-			streamBytes, readErr := io.ReadAll(named)
-			readErr = errors.Join(readErr, named.Close())
-			t.Logf("nameless native relative stream %q: data=%x error=%v", streamName, streamBytes, readErr)
+			standardErr := windows.GetFileInformationByHandleEx(windows.Handle(streamRoot.Fd()), windows.FileStandardInfo, (*byte)(unsafe.Pointer(&standard)), uint32(unsafe.Sizeof(standard)))
+			t.Logf("nameless native %s standard info: %+v error=%v", rootKind, standard, standardErr)
+			for _, streamName := range []string{":metadata", ":metadata:$DATA"} {
+				unicodeName, unicodeErr := windows.NewNTUnicodeString(streamName)
+				if unicodeErr != nil {
+					t.Fatal(unicodeErr)
+				}
+				attributes := windows.OBJECT_ATTRIBUTES{Length: uint32(unsafe.Sizeof(windows.OBJECT_ATTRIBUTES{})), RootDirectory: windows.Handle(streamRoot.Fd()), ObjectName: unicodeName}
+				var streamHandle windows.Handle
+				var streamStatus windows.IO_STATUS_BLOCK
+				openErr := windows.NtCreateFile(&streamHandle, windows.GENERIC_READ|windows.SYNCHRONIZE, &attributes, &streamStatus, nil, 0, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, windows.FILE_OPEN, windows.FILE_NON_DIRECTORY_FILE|windows.FILE_SYNCHRONOUS_IO_NONALERT, 0, 0)
+				if openErr != nil {
+					t.Logf("nameless native %s relative stream %q: %v", rootKind, streamName, openErr)
+					continue
+				}
+				named := os.NewFile(uintptr(streamHandle), streamName)
+				streamBytes, readErr := io.ReadAll(named)
+				readErr = errors.Join(readErr, named.Close())
+				t.Logf("nameless native %s relative stream %q: data=%x error=%v", rootKind, streamName, streamBytes, readErr)
+			}
 		}
 		parent := t.TempDir()
 		replacement, err := prepare(source, parent)

@@ -139,20 +139,14 @@ func qualifyNativeNameWriters(t *testing.T, producers []string) {
 			stem := producer + "-" + strings.ReplaceAll(image.Kind, "+", "plus")
 			casePath := filepath.Join(out, stem+"-cases.tsv")
 			var cases strings.Builder
-			for _, c := range image.Cases {
+			for _, c := range append(append([]nameWriterRecord{}, image.Cases...), image.ExtraCases...) {
 				fmt.Fprintf(&cases, "%s\t%s\t%s\n", c.ID, c.Created, c.Queried)
 			}
 			if err = os.WriteFile(casePath, []byte(cases.String()), 0644); err != nil {
 				t.Fatal(err)
 			}
 			mountedWriterVolume(t, ctx, out, stem, imagePath, true, func(mount string) {
-				result, err := command(ctx, oracle, mount, casePath)
-				if err != nil {
-					t.Fatal(err)
-				}
-				if err = os.WriteFile(filepath.Join(out, stem+"-readback.json"), result, 0644); err != nil {
-					t.Fatal(err)
-				}
+				result := runWriterNative(t, ctx, filepath.Join(out, stem+"-readback.json"), oracle, mount, casePath)
 				validateWriterReadback(t, result, image)
 			})
 			after, err := os.ReadFile(imagePath)
@@ -167,7 +161,7 @@ func qualifyNativeNameWriters(t *testing.T, producers []string) {
 				firstChecks[image.Kind] = image.Checks
 			}
 			observedImages++
-			observedNames += len(image.Cases) * 2
+			observedNames += (len(image.Cases) + len(image.ExtraCases)) * 2
 		}
 		if len(expected) != 0 {
 			t.Fatal("missing produced target image", producer)
@@ -211,18 +205,12 @@ func qualifyNativeNameWriters(t *testing.T, producers []string) {
 			t.Fatal(err)
 		}
 		mountedWriterVolume(t, ctx, out, stem, image, false, func(mount string) {
-			result, err := command(ctx, preflight, mount, table)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if err = os.WriteFile(filepath.Join(out, stem+"-native.json"), result, 0644); err != nil {
-				t.Fatal(err)
-			}
+			result := runWriterNative(t, ctx, filepath.Join(out, stem+"-native.json"), preflight, mount, table)
 			validateWriterPreflight(t, result, kind, checks)
 		})
 		observedChecks += len(checks)
 	}
-	if observedImages != 4*len(producers) || observedNames != 4*len(producers)*casesPerVolume*2 {
+	if observedImages != 4*len(producers) || observedNames != len(producers)*(4*casesPerVolume*2+44) {
 		t.Fatal("native writer readback inventory incomplete", observedImages, observedNames)
 	}
 	evidence := map[string]string{}
@@ -297,7 +285,7 @@ func validateWriterImageManifest(t *testing.T, image nameWriterImage, source vol
 	}
 	for i, c := range image.Cases {
 		expected := source.Native.Cases[i]
-		if c.ID != expected.ID || c.Created != expected.Created || c.Queried != expected.Queried || c.Stored != expected.Stored || c.CreateErrno != expected.CreateErrno || c.LookupErrno != expected.LookupErrno || c.Parent == 0 {
+		if c.Payload != "" || len(c.UTF16) != 0 || c.ID != expected.ID || c.Created != expected.Created || c.Queried != expected.Queried || c.Stored != expected.Stored || c.CreateErrno != expected.CreateErrno || c.LookupErrno != expected.LookupErrno || c.Parent == 0 {
 			t.Fatal("produced case differs from native input", c.ID)
 		}
 		if (c.Inode != 0) != (c.CreateErrno == 0) || (c.QueriedInode != 0) != (c.LookupErrno == 0) || (c.LookupErrno == 0 && c.Inode != c.QueriedInode) {
@@ -337,6 +325,7 @@ func validateWriterImageManifest(t *testing.T, image nameWriterImage, source vol
 		checks[check.Kind+"/"+check.ID] = check
 	}
 
+	validateWriterSpecialManifest(t, image, checks)
 	for _, check := range image.Checks {
 		key := check.Kind + "/" + check.ID
 		if expected, ok := checks[key]; !ok || check != expected {
@@ -350,11 +339,13 @@ func validateWriterImageManifest(t *testing.T, image nameWriterImage, source vol
 }
 func validateWriterReadback(t *testing.T, raw []byte, image nameWriterImage) {
 	t.Helper()
+	cases := append(append([]nameWriterRecord{}, image.Cases...), image.ExtraCases...)
 	var result struct {
 		Count int
 		Cases []struct {
 			ID      string
 			Results []struct {
+				Data       string
 				Errno      int
 				Inode      uint64
 				Size, Read int64
@@ -366,11 +357,11 @@ func validateWriterReadback(t *testing.T, raw []byte, image nameWriterImage) {
 		}
 	}
 	decodeWriterNative(t, raw, &result)
-	if result.Count != casesPerVolume || len(result.Cases) != casesPerVolume {
+	if result.Count != len(cases) || len(result.Cases) != len(cases) {
 		t.Fatal("incomplete native readback")
 	}
 	for i, actual := range result.Cases {
-		want := image.Cases[i]
+		want := cases[i]
 		if actual.ID != want.ID || len(actual.Results) != 2 {
 			t.Fatal("native readback case mismatch")
 		}
@@ -382,7 +373,15 @@ func validateWriterReadback(t *testing.T, raw []byte, image nameWriterImage) {
 					code = 0
 				}
 			}
-			if r.Errno != code || r.Inode != inode || r.Size != 0 || (code == 0 && r.Read != 0) || (code != 0 && r.Read != -1) {
+			payload, err := hex.DecodeString(want.Payload)
+			if err != nil {
+				t.Fatal(err)
+			}
+			size, read, data := int64(len(payload)), int64(len(payload)), want.Payload
+			if code != 0 {
+				size, read, data = 0, -1, ""
+			}
+			if r.Errno != code || r.Inode != inode || r.Size != size || r.Read != read || r.Data != data {
 				t.Fatalf("native produced image mismatch %s/%d: %+v expected errno%d inode%d", want.ID, j, r, code, inode)
 			}
 		}
@@ -578,4 +577,26 @@ func decodeWriterNative(t *testing.T, raw []byte, destination any) {
 	if err := decoder.Decode(new(any)); err != io.EOF {
 		t.Fatal("trailing native evidence", err)
 	}
+}
+
+// Retain even partial stdout and all stderr before reporting an oracle failure.
+func runWriterNative(t *testing.T, ctx context.Context, path, binary string, args ...string) []byte {
+	t.Helper()
+	var stdout, stderr bytes.Buffer
+	command := exec.CommandContext(ctx, binary, args...)
+	command.Stdout = &stdout
+	command.Stderr = &stderr
+	runErr := command.Run()
+	recordErr := errors.Join(os.WriteFile(path, stdout.Bytes(), 0644), os.WriteFile(path+".stderr.txt", stderr.Bytes(), 0644))
+	if recordErr != nil {
+		t.Fatal(recordErr)
+	}
+	if runErr != nil {
+		message := stderr.String()
+		if len(message) > 4096 {
+			message = message[:4096] + " [full stderr retained]"
+		}
+		t.Fatalf("native oracle failed: %v; output retained at %s; stderr: %s", runErr, path, message)
+	}
+	return stdout.Bytes()
 }

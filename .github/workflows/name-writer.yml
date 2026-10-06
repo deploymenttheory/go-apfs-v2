@@ -35,11 +35,15 @@ jobs:
       - name: Produce twelve APFS/APFSX/HFS+/HFSX images and require native rejection parity before any write
         env:
           FILESYSTEM_NAME_WRITER_OUTPUT: ${{ github.workspace }}/artifacts/name-writer-${{ matrix.host }}
-        run: go test scripts/capture-name-collation.go scripts/verify-name-comparison_test.go scripts/verify-name-writer_test.go -run '^TestProduceNameImages$' -count=1 -v
+        run: go test scripts/capture-name-collation.go scripts/verify-name-comparison_test.go scripts/verify-name-writer_test.go scripts/verify-name-writer-special_test.go -run '^TestProduceNameImages$' -count=1 -v
       - name: Prove malformed producer manifests fail closed
         env:
           FILESYSTEM_NAME_WRITER_OUTPUT: ${{ github.workspace }}/artifacts/name-writer-${{ matrix.host }}
-        run: go test scripts/capture-name-collation.go scripts/verify-name-comparison_test.go scripts/verify-name-writer_test.go scripts/verify-name-writer-native_test.go scripts/verify-name-writer-validation_test.go -run '^TestWriterManifestGuards$' -count=1 -v
+        run: go test scripts/capture-name-collation.go scripts/verify-name-comparison_test.go scripts/verify-name-writer_test.go scripts/verify-name-writer-special_test.go scripts/verify-name-writer-native_test.go scripts/verify-name-writer-validation_test.go -run '^TestWriterManifestGuards$' -count=1 -v
+      - name: Reject missing or corrupted special-name provenance and raw catalog records
+        env:
+          FILESYSTEM_NAME_WRITER_OUTPUT: ${{ github.workspace }}/artifacts/name-writer-${{ matrix.host }}
+        run: go test scripts/capture-name-collation.go scripts/verify-name-comparison_test.go scripts/verify-name-writer_test.go scripts/verify-name-writer-special_test.go scripts/verify-name-writer-native_test.go scripts/verify-name-writer-special-validation_test.go -run '^TestWriterSpecialGuards$' -count=1 -v
       - name: Retain complete image bytes and source-bound producer manifest
         if: always()
         uses: actions/upload-artifact@v7
@@ -71,12 +75,12 @@ jobs:
       - name: Check every produced image on its matching native target and compare exclusive-create error ordering
         env:
           FILESYSTEM_NAME_WRITER_ARTIFACTS: ${{ github.workspace }}/artifacts/portable-name-writers
-        run: go test scripts/capture-name-collation.go scripts/verify-name-comparison_test.go scripts/verify-name-writer_test.go scripts/verify-name-writer-native_test.go -run '^TestNativeNameWriterReadback$' -count=1 -timeout 35m -v
+        run: go test scripts/capture-name-collation.go scripts/verify-name-comparison_test.go scripts/verify-name-writer_test.go scripts/verify-name-writer-special_test.go scripts/verify-name-writer-native_test.go -run '^TestNativeNameWriterReadback$' -count=1 -timeout 35m -v
       - name: Reject incomplete or contradictory native readback and create evidence
         env:
           FILESYSTEM_NAME_WRITER_ARTIFACTS: ${{ github.workspace }}/artifacts/portable-name-writers
           FILESYSTEM_NAME_WRITER_NATIVE_OUTPUT: ${{ github.workspace }}/artifacts/name-writer-native
-        run: go test scripts/capture-name-collation.go scripts/verify-name-comparison_test.go scripts/verify-name-writer_test.go scripts/verify-name-writer-native_test.go scripts/verify-name-writer-native-validation_test.go -run '^TestWriterNativeGuards$' -count=1 -v
+        run: go test scripts/capture-name-collation.go scripts/verify-name-comparison_test.go scripts/verify-name-writer_test.go scripts/verify-name-writer-special_test.go scripts/verify-name-writer-native_test.go scripts/verify-name-writer-native-validation_test.go -run '^TestWriterNativeGuards$' -count=1 -v
       - name: Retain full native output, source and both AST targets, image integrity and mount cleanup
         if: always()
         uses: actions/upload-artifact@v7

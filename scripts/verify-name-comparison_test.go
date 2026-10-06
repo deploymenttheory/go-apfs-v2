@@ -5,6 +5,7 @@
 package main
 
 import (
+	"bytes"
 	"compress/gzip"
 	"crypto/sha256"
 	"encoding/hex"
@@ -14,6 +15,7 @@ import (
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/disk"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/hfsplus"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/osversion"
 	"io"
 	"io/fs"
 	"os"
@@ -22,23 +24,77 @@ import (
 	"testing"
 )
 
-func readComparisonCapture(t *testing.T, path string) capture {
-	t.Helper()
-	f, e := os.Open(path)
-	if e != nil {
-		t.Fatal(e)
-	}
-	defer f.Close()
-	z, e := gzip.NewReader(f)
-	if e != nil {
-		t.Fatal(e)
-	}
-	defer z.Close()
+func decodeComparisonCapture(raw []byte) (capture, error) {
 	var c capture
-	if e = json.NewDecoder(z).Decode(&c); e != nil {
-		t.Fatal(e)
+	z, err := gzip.NewReader(bytes.NewReader(raw))
+	if err != nil {
+		return c, err
+	}
+	plain, err := io.ReadAll(z)
+	if err = errors.Join(err, z.Close()); err != nil {
+		return c, err
+	}
+	err = json.Unmarshal(plain, &c)
+	return c, err
+}
+
+func readComparisonCapture(t *testing.T, path string, expected ...int) capture {
+	t.Helper()
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err := decodeComparisonCapture(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	major := 0
+	for _, supported := range []int{15, 26, 27} {
+		if filepath.Base(path) == fmt.Sprintf("name-collation-macos%d.json.gz", supported) {
+			major = supported
+		}
+	}
+	if len(expected) > 0 {
+		major = expected[0]
+	}
+	if err = validateComparisonProfile(c, major); err != nil {
+		t.Fatal(err)
 	}
 	return c
+}
+
+func TestComparisonCaptureEnvelope(t *testing.T) {
+	raw, err := os.ReadFile("../testdata/appledouble/native/name-collation-macos27.json.gz")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err := decodeComparisonCapture(raw)
+	if err != nil || c.Schema != 1 {
+		t.Fatal("valid native capture", err)
+	}
+	if _, err = decodeComparisonCapture(raw[:len(raw)-1]); err == nil {
+		t.Fatal("accepted truncated gzip checksum")
+	}
+	corrupt := append([]byte(nil), raw...)
+	corrupt[len(corrupt)-8] ^= 1
+	if _, err = decodeComparisonCapture(corrupt); err == nil {
+		t.Fatal("accepted corrupt gzip checksum")
+	}
+	plain, err := json.Marshal(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	z := gzip.NewWriter(&out)
+	if _, err = z.Write(append(plain, []byte("{}")...)); err != nil {
+		t.Fatal(err)
+	}
+	if err = z.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = decodeComparisonCapture(out.Bytes()); err == nil {
+		t.Fatal("accepted trailing JSON")
+	}
 }
 
 func TestNativeNameImageReaders(t *testing.T) {
@@ -69,7 +125,7 @@ func TestNativeNameImageReaders(t *testing.T) {
 	}{{15, "name-collation-macos-15"}, {26, "name-collation-macos-latest"}, {27, "name-collation-xcode-27"}} {
 		t.Run(fmt.Sprint(profile.major), func(t *testing.T) {
 			dir := filepath.Join(base, profile.artifact)
-			fresh := readComparisonCapture(t, filepath.Join(dir, "native.json.gz"))
+			fresh := readComparisonCapture(t, filepath.Join(dir, "native.json.gz"), profile.major)
 			prior := readComparisonCapture(t, fmt.Sprintf("testdata/appledouble/native/name-collation-macos%d.json.gz", profile.major))
 			if e := compareStable(prior, fresh); e != nil {
 				t.Fatal(e)
@@ -167,5 +223,40 @@ func TestNativeNameImageReaders(t *testing.T) {
 	}
 	if checked != 90072 {
 		t.Fatalf("reader observations %d want90072", checked)
+	}
+}
+
+func validateComparisonProfile(c capture, expected int) error {
+	profile, err := osversion.ParseProductVersion(c.Host)
+	if err != nil {
+		return err
+	}
+	if _, err = osversion.ProfileForMacOS(profile); err != nil {
+		return err
+	}
+	if expected != 0 && int(profile.Major) != expected {
+		return fmt.Errorf("native macOS%d does not match expected macOS%d", profile.Major, expected)
+	}
+	return nil
+}
+func TestComparisonProfileIdentity(t *testing.T) {
+	c := readComparisonCapture(t, "../testdata/appledouble/native/name-collation-macos27.json.gz")
+	for _, wrong := range []int{15, 26} {
+		if validateComparisonProfile(c, wrong) == nil {
+			t.Fatal("accepted mislabeled native profile", wrong)
+		}
+	}
+	if err := validateComparisonProfile(c, 0); err != nil {
+		t.Fatal(err)
+	}
+	c.Host = "ProductName: macOS\nProductVersion: 26.6.2\nBuildVersion: native"
+	if validateComparisonProfile(c, 27) == nil {
+		t.Fatal("accepted macOS26 evidence as27")
+	}
+	for _, host := range []string{"", "ProductVersion: 14.0"} {
+		c.Host = host
+		if validateComparisonProfile(c, 0) == nil {
+			t.Fatal("accepted invalid native host")
+		}
 	}
 }

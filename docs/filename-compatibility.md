@@ -34,6 +34,13 @@ UTF-8 path contract: normalize an explicitly raw component before passing the
 result to that adapter. This does not authorize directory search or reinterpret
 an entire path.
 
+Native HFS also exposes catalog UTF-16 NUL as U+2400 (`␀`). Readers and writers
+preserve that reversible spelling; literal pathname NUL remains invalid. Direct
+`.` and `..` cannot be created as ordinary entries, while the independently
+observed variants with ignored characters remain valid. A separate native corpus
+checks these cases through actual creation, lookup, readdir, full payload reads,
+and raw catalog key bytes on each supported macOS profile.
+
 Both image writers reject equivalent sibling names before any output writes.
 HFS validation uses its observed catalog conversion and volume case policy.
 APFS validation additionally uses its explicit target creation policy. File-entry

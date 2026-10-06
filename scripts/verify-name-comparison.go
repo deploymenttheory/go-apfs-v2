@@ -66,7 +66,7 @@ func run() error {
 	if e != nil {
 		return e
 	}
-	required := []string{"TestCanonicalPipelines", "TestCompleteNativeScalarAdmission", "TestCreateNameTargetAdmission", "TestHFSEscapedByteConversion", "TestNameCollationNativeEvidence", "TestNameCollationNativeEvidence/15", "TestNameCollationNativeEvidence/26", "TestNameCollationNativeEvidence/27", "TestNameHashInputBoundaries", "TestNameEncodingComparison", "TestSharedNameComparison", "TestLookupNameValidation", "TestIllegalUTF8CatalogAliases", "TestNativeNameImageReaders", "TestDirectoryLookupValidatesBeforeReading", "TestNativeNormalizedComponentReader", "TestCreationNamesBeforeOutput", "TestCreationNamePreflight", "TestHFSSpecialNativeEvidence", "TestHFSSpecialNativeEnvelopeRejectsCorruption"}
+	required := []string{"TestComparisonCaptureEnvelope", "TestComparisonProfileIdentity", "TestCanonicalPipelines", "TestCompleteNativeScalarAdmission", "TestCreateNameTargetAdmission", "TestHFSEscapedByteConversion", "TestNameCollationNativeEvidence", "TestNameCollationNativeEvidence/15", "TestNameCollationNativeEvidence/26", "TestNameCollationNativeEvidence/27", "TestNameHashInputBoundaries", "TestNameEncodingComparison", "TestSharedNameComparison", "TestLookupNameValidation", "TestIllegalUTF8CatalogAliases", "TestNativeNameImageReaders", "TestDirectoryLookupValidatesBeforeReading", "TestNativeNormalizedComponentReader", "TestCreationNamesBeforeOutput", "TestCreationNamePreflight", "TestHFSSpecialNativeEvidence", "TestHFSSpecialNativeEnvelopeRejectsCorruption"}
 	for _, major := range []string{"15", "26", "27"} {
 		required = append(required, "TestHFSSpecialNativeEvidence/hfs-special-names-macos"+major+".json.gz")
 		for _, kind := range []string{"APFS", "APFSX", "HFS+", "HFSX"} {
@@ -84,7 +84,7 @@ func run() error {
 	}
 	selected := map[string][2]int64{}
 	var total count
-	for _, p := range []string{"internal/nameunicode/normalize.go", "internal/nameunicode/admission.go", "pkg/apfs/file_system_btree.go", "pkg/apfswrite/writer.go", "pkg/apfswrite/name_admission.go", "pkg/apfs/name_hash.go", "pkg/apfs/name_lookup.go", "pkg/apfs/name_create.go", "pkg/hfsplus/posixname.go", "pkg/hfsplus/name_create.go", "pkg/hfsplus/writer.go", "pkg/hfsplus/name_compare.go", "pkg/hfsplus/name_lookup.go", "pkg/hfsplus/normalize.go", "pkg/hfsplus/casefold_table.go", "pkg/hfsplus/volume.go"} {
+	for _, p := range []string{"internal/nameunicode/normalize.go", "internal/nameunicode/admission.go", "pkg/apfs/file_system_btree.go", "pkg/apfswrite/writer.go", "pkg/apfswrite/name_admission.go", "pkg/apfs/name_hash.go", "pkg/apfs/name_lookup.go", "pkg/apfs/name_create.go", "pkg/hfsplus/posixname.go", "pkg/hfsplus/name_create.go", "pkg/hfsplus/writer.go", "pkg/hfsplus/btree_writer.go", "pkg/hfsplus/name_compare.go", "pkg/hfsplus/name_lookup.go", "pkg/hfsplus/normalize.go", "pkg/hfsplus/casefold_table.go", "pkg/hfsplus/volume.go"} {
 		c := totals[p]
 		selected[p] = [2]int64{c.Covered, c.Statements}
 		total.Covered += c.Covered

@@ -57,16 +57,20 @@ int main(int ac, char **av) {
       int e = file < 0 ? errno : 0;
       struct stat st = {0};
       ssize_t n = -1;
+      unsigned char data[8] = {0};
       if (file >= 0) {
         must(fstat(file, &st), "file stat");
-        char byte;
-        n = read(file, &byte, 1);
+        n = read(file, data, sizeof(data));
         must(n < 0, "read file");
         must(close(file), "close file");
       }
-      printf("%s{\"errno\":%d,\"inode\":%llu,\"size\":%lld,\"read\":%lld}",
+      printf("%s{\"errno\":%d,\"inode\":%llu,\"size\":%lld,\"read\":%lld,"
+             "\"data\":\"",
              i ? "," : "", e, (unsigned long long)st.st_ino,
              (long long)st.st_size, (long long)n);
+      for (ssize_t j = 0; j < n; j++)
+        printf("%02x", data[j]);
+      printf("\"}");
     }
     printf("],\"stored\":[");
     int duplicate = dup(dir);
