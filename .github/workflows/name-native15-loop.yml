@@ -1,6 +1,16 @@
 name: Native macOS 15 loop (temporary)
 on:
   workflow_dispatch:
+  push:
+    branches: [feat/complete-codesign-filesystem-prerequisites]
+    paths:
+      - .github/workflows/name-native15-loop.yml
+      - scripts/verify-name-native_*.go
+      - scripts/verify-name-comparison_test.go
+      - scripts/capture-name-collation.go
+      - scripts/ci-run.go
+      - internal/testutil/cirunner/**
+      - testdata/appledouble/native/name-*.c
 concurrency:
   group: name-native15-loop-${{ github.ref }}
   cancel-in-progress: false
