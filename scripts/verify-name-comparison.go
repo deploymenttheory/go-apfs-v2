@@ -83,7 +83,7 @@ func run() error {
 	}
 	selected := map[string][2]int64{}
 	var total count
-	for _, p := range []string{"internal/nameunicode/normalize.go", "internal/nameunicode/admission.go", "pkg/apfs/file_system_btree.go", "pkg/apfswrite/writer.go", "pkg/apfswrite/name_admission.go", "pkg/apfs/name_hash.go", "pkg/apfs/name_lookup.go", "pkg/apfs/name_create.go", "pkg/hfsplus/name_create.go", "pkg/hfsplus/writer.go", "pkg/hfsplus/name_compare.go", "pkg/hfsplus/name_lookup.go", "pkg/hfsplus/normalize.go", "pkg/hfsplus/casefold_table.go", "pkg/hfsplus/volume.go"} {
+	for _, p := range []string{"internal/nameunicode/normalize.go", "internal/nameunicode/admission.go", "pkg/apfs/file_system_btree.go", "pkg/apfswrite/writer.go", "pkg/apfswrite/name_admission.go", "pkg/apfs/name_hash.go", "pkg/apfs/name_lookup.go", "pkg/apfs/name_create.go", "pkg/hfsplus/posixname.go", "pkg/hfsplus/name_create.go", "pkg/hfsplus/writer.go", "pkg/hfsplus/name_compare.go", "pkg/hfsplus/name_lookup.go", "pkg/hfsplus/normalize.go", "pkg/hfsplus/casefold_table.go", "pkg/hfsplus/volume.go"} {
 		c := totals[p]
 		selected[p] = [2]int64{c.Covered, c.Statements}
 		total.Covered += c.Covered

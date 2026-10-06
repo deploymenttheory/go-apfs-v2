@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"syscall"
 	"testing"
 	"time"
 	"unsafe"
@@ -261,6 +262,8 @@ func TestReplacementWindowsCopyCallbacks(t *testing.T) {
 				defer windows.CloseHandle(adversary)
 			}
 			seen := 0
+			var anchorPin *os.File
+			var anchorRemovalErr syscall.Errno
 			outside := filepath.Join(t.TempDir(), "must-not-exist")
 			copied, err := copyReplacementWindows(ctx, source, stage, func(from, to *uint16, state *replacementCopyState) error {
 				if name == "omitted-callback" {
@@ -318,8 +321,19 @@ func TestReplacementWindowsCopyCallbacks(t *testing.T) {
 					if e != nil {
 						t.Fatalf("native copy control: %v", e)
 					}
-					if attributeErr := stage.Chmod("anchor", 0400); attributeErr != nil {
-						t.Fatal(attributeErr)
+					anchor, openErr := stage.Open("anchor")
+					if openErr != nil {
+						t.Fatal(openErr)
+					}
+					anchorPin, openErr = reopenReplacementFileSharing(anchor, windows.GENERIC_READ, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE)
+					openErr = errors.Join(openErr, anchor.Close())
+					if openErr != nil {
+						t.Fatal(openErr)
+					}
+					t.Cleanup(func() { _ = anchorPin.Close() })
+					// Obtain the real native removal cause while the independent pin lives.
+					if removeErr := stage.Remove("anchor"); !errors.As(removeErr, &anchorRemovalErr) || anchorRemovalErr == 0 {
+						t.Fatalf("native anchor deletion pin control: %v", removeErr)
 					}
 				}
 				if name == "cancel-after-copy" || name == "cancel-after-copy-restrictive" {
@@ -354,8 +368,8 @@ func TestReplacementWindowsCopyCallbacks(t *testing.T) {
 			if name == "stage-closed-after-copy" || name == "anchor-cleanup-failure" {
 				wantCause := error(os.ErrClosed)
 				if name == "anchor-cleanup-failure" {
-					wantCause = windows.ERROR_ACCESS_DENIED
-					if e := stage.Chmod("anchor", 0600); e != nil {
+					wantCause = anchorRemovalErr
+					if e := anchorPin.Close(); e != nil {
 						t.Fatal(e)
 					}
 					if e := stage.Remove("anchor"); e != nil {

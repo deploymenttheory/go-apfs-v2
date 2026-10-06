@@ -27,6 +27,9 @@ func validateCreationNames(root *Entry, caseSensitive bool) error {
 				return fmt.Errorf("hfsplus: nil child entry: %w", syscall.EINVAL)
 			}
 			if represented {
+				if child.Name == "." || child.Name == ".." {
+					return fmt.Errorf("hfsplus: reserved component %q: %w", child.Name, syscall.EEXIST)
+				}
 				if _, err := NormalizeLookupName(child.Name); err != nil {
 					return fmt.Errorf("hfsplus: entry %q: %w", child.Name, err)
 				}

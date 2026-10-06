@@ -1,0 +1,81 @@
+name: Portable filesystem name writers
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: name-writer-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CGO_ENABLED: "0"
+  GOTOOLCHAIN: local
+
+jobs:
+  produce:
+    name: Write all native filesystem profiles (${{ matrix.host }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {os: ubuntu-latest, host: linux}
+          - {os: windows-latest, host: windows}
+          - {os: macos-latest, host: darwin}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Produce twelve APFS/APFSX/HFS+/HFSX images and require native rejection parity before any write
+        env:
+          FILESYSTEM_NAME_WRITER_OUTPUT: ${{ github.workspace }}/artifacts/name-writer-${{ matrix.host }}
+        run: go test scripts/capture-name-collation.go scripts/verify-name-comparison_test.go scripts/verify-name-writer_test.go -run '^TestProduceNameImages$' -count=1 -v
+      - name: Prove malformed producer manifests fail closed
+        env:
+          FILESYSTEM_NAME_WRITER_OUTPUT: ${{ github.workspace }}/artifacts/name-writer-${{ matrix.host }}
+        run: go test scripts/capture-name-collation.go scripts/verify-name-comparison_test.go scripts/verify-name-writer_test.go scripts/verify-name-writer-native_test.go scripts/verify-name-writer-validation_test.go -run '^TestWriterManifestGuards$' -count=1 -v
+      - name: Retain complete image bytes and source-bound producer manifest
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: name-writer-${{ matrix.host }}
+          path: artifacts/name-writer-${{ matrix.host }}/
+          if-no-files-found: error
+          compression-level: 6
+
+  native:
+    name: Native readback of all three writers (${{ matrix.os }})
+    needs: produce
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, macos-latest, xcode-27]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Obtain all Linux, Windows and macOS images
+        uses: actions/download-artifact@v8
+        with:
+          pattern: name-writer-*
+          path: artifacts/portable-name-writers
+      - name: Check every produced image on its matching native target and compare exclusive-create error ordering
+        env:
+          FILESYSTEM_NAME_WRITER_ARTIFACTS: ${{ github.workspace }}/artifacts/portable-name-writers
+        run: go test scripts/capture-name-collation.go scripts/verify-name-comparison_test.go scripts/verify-name-writer_test.go scripts/verify-name-writer-native_test.go -run '^TestNativeNameWriterReadback$' -count=1 -timeout 35m -v
+      - name: Retain full native output, source and both AST targets, image integrity and mount cleanup
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: name-writer-native-${{ matrix.os }}
+          path: artifacts/name-writer-native/
+          if-no-files-found: error

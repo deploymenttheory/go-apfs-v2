@@ -13,7 +13,7 @@ import (
 // HFS+ stores the colon as a slash, so without the mapping the entry is listed
 // with a slash inside one element and no path can open it.
 func TestPOSIXNamesRoundTrip(t *testing.T) {
-	names := []string{"Chasing Shadows Clap:Snare 01.loopdata", `1\16 Alternating Pan.pst`, "plain.txt"}
+	names := []string{"Chasing Shadows Clap:Snare 01.loopdata", `1\16 Alternating Pan.pst`, "plain.txt", "x\u2400y", "\u2400"}
 	children := make([]*Entry, 0, len(names))
 	for _, name := range names {
 		children = append(children, &Entry{Name: name, Mode: 0o644, Data: []byte(name)})
@@ -56,5 +56,40 @@ func TestPOSIXNamesRoundTrip(t *testing.T) {
 	}
 	if err := fstest.TestFS(checked, names[0]); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestAlternateNULCatalogEncoding(t *testing.T) {
+	for _, insensitive := range []bool{false, true} {
+		image := &memWriterAt{}
+		if err := CreateImage(image, 0, "Names", &Entry{Children: []*Entry{{Name: "x\u2400y", Data: []byte("payload")}, {Name: "\u2400", Data: []byte("payload")}}}, &CreateOptions{CaseInsensitive: insensitive}); err != nil {
+			t.Fatal(err)
+		}
+		volume, err := New(bytes.NewReader(image.b))
+		if err != nil {
+			t.Fatal(err)
+		}
+		found := map[string]bool{}
+		if err = volume.catalogTree.walkLeaves(func(record leafRecord) error {
+			parent, name, err := parseCatalogKey(record.key)
+			if err != nil {
+				return err
+			}
+			if parent == HFSRootFolderID && (name == "x\x00y" || name == "\x00") {
+				found[name] = true
+			}
+			return nil
+		}); err != nil {
+			t.Fatal(err)
+		}
+		if !found["x\x00y"] || !found["\x00"] {
+			t.Fatal("native UTF16 NUL encoding absent", found)
+		}
+		for _, name := range []string{"x\u2400y", "\u2400"} {
+			data, err := volume.ReadFile(name)
+			if err != nil || string(data) != "payload" {
+				t.Fatal(name, string(data), err)
+			}
+		}
 	}
 }

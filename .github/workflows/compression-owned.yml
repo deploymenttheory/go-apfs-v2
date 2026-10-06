@@ -31,8 +31,29 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+      # ext4's combined per-inode xattr block can reject the existing 4 KB value
+      # plus its companion attributes. Preserve that fixture and the no-skip gate
+      # on tmpfs, which supports the complete native Linux xattr/ACL contract.
+      # The separate replacement workflow still qualifies the runner filesystem.
+      - name: Provide native Linux storage for the complete attribute fixture
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/compression-owned-coverage "$RUNNER_TEMP/owned-compression"
+          sudo -n mount -t tmpfs -o size=2G,mode=1777 tmpfs "$RUNNER_TEMP/owned-compression"
+          findmnt --target "$RUNNER_TEMP/owned-compression" > artifacts/compression-owned-coverage/test-filesystem.txt
+          echo "TMPDIR=$RUNNER_TEMP/owned-compression" >> "$GITHUB_ENV"
       - name: Require complete hostdata and every changed binding file above 95 percent
         run: go run scripts/verify-compression-owned.go
+      - name: Release Linux qualification filesystem
+        if: always() && runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if mountpoint -q "$RUNNER_TEMP/owned-compression"; then
+            sudo -n umount "$RUNNER_TEMP/owned-compression"
+          fi
       - name: Retain full tests and coverage
         if: always()
         uses: actions/upload-artifact@v7

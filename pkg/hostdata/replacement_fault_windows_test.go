@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"golang.org/x/sys/windows"
 	"io"
 	"os"
@@ -98,6 +99,67 @@ func TestReplacementWindowsHeldStreams(t *testing.T) {
 			}
 		})
 	}
+	t.Run("compressed cancellation checkpoints", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "source")
+		if err := os.WriteFile(path, []byte("original main payload"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		stream := bytes.Repeat([]byte("metadata"), 8193)
+		if err := os.WriteFile(path+":metadata", stream, 0600); err != nil {
+			t.Fatal(err)
+		}
+		replacementCompress(t, path)
+		source, err := os.Open(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer source.Close()
+		info, err := source.Stat()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err = source.Seek(7, io.SeekStart); err != nil {
+			t.Fatal(err)
+		}
+		checkpoints := 0
+		for stop := 0; stop <= checkpoints; stop++ {
+			t.Run(fmt.Sprintf("stop-%d", stop), func(t *testing.T) {
+				_, stage, parent := replacementTestStage(t)
+				base, cancel := context.WithCancel(t.Context())
+				defer cancel()
+				ctx := &replacementCheckpointContext{Context: base, cancel: cancel, stop: stop}
+				file, operationErr := prepareReplacementStreamsAtContext(ctx, source, stage, info)
+				if stop == 0 {
+					if operationErr != nil || file == nil {
+						t.Fatalf("compressed backup control: %v", operationErr)
+					}
+					defer file.Close()
+					checkpoints = ctx.calls
+					basic, e := replacementBasic(file)
+					if e != nil || basic.Attributes&windows.FILE_ATTRIBUTE_COMPRESSED == 0 {
+						t.Fatalf("compression lost: %#x %v", basic.Attributes, e)
+					}
+					got, e := os.ReadFile(filepath.Join(parent, "private", "replacement") + ":metadata")
+					if e != nil || !bytes.Equal(got, stream) {
+						t.Fatalf("compressed backup ADS: %d bytes %v", len(got), e)
+					}
+					if e = file.Close(); e != nil {
+						t.Fatal(e)
+					}
+				} else if !errors.Is(operationErr, context.Canceled) || file != nil {
+					t.Fatalf("checkpoint %d/%d returned file=%v error=%v", stop, checkpoints, file, operationErr)
+				}
+				// Removal is also a native handle-leak proof after partial BackupWrite.
+				if e := stage.Remove("replacement"); e != nil && !errors.Is(e, os.ErrNotExist) {
+					t.Fatalf("canceled backup retained target capability: %v", e)
+				}
+				if position, e := source.Seek(0, io.SeekCurrent); e != nil || position != 7 {
+					t.Fatalf("borrowed source position changed: %d %v", position, e)
+				}
+			})
+		}
+	})
+
 }
 
 func TestReplacementWindowsBackupAdapterFailures(t *testing.T) {
@@ -731,6 +793,10 @@ func TestReplacementWindowsHeldUnlinkedSource(t *testing.T) {
 		finalName, nameErr := replacementFinalPath(t.Context(), source)
 		reopened, reopenErr := reopenReplacementFile(source, windows.GENERIC_READ)
 		if reopened != nil {
+			backup := &replacementBackup{file: reopened, call: replacementBackupRead}
+			_, backupErr := io.Copy(io.Discard, backup)
+			backupErr = errors.Join(backupErr, backup.close())
+			t.Logf("nameless native reopened BackupRead control: %v", backupErr)
 			reopenErr = errors.Join(reopenErr, reopened.Close())
 		}
 		t.Logf("nameless native controls: links=%d info_error=%v final_name=%q path_error=%v reopen_error=%v", nativeInfo.NumberOfLinks, infoErr, finalName, nameErr, reopenErr)

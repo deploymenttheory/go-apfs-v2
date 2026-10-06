@@ -269,6 +269,18 @@ func copyReplacementWindows(ctx context.Context, source *os.File, stage *os.Root
 	if err != nil {
 		return nil, fmt.Errorf("query held replacement source identity: %w", err)
 	}
+	var sourceInfo windows.ByHandleFileInformation
+	if err := replacementFileControl(source, func(handle windows.Handle) error {
+		return windows.GetFileInformationByHandle(handle, &sourceInfo)
+	}); err != nil {
+		return nil, fmt.Errorf("query held replacement source links: %w", err)
+	}
+	if sourceInfo.NumberOfLinks == 0 {
+		// A POSIX-unlinked NTFS handle can report an internal $Deleted path.
+		// Its zero held link count, not a pathname permission error, admits the
+		// unencrypted held-stream fallback. CopyFileEx cannot open that name.
+		return nil, errors.Join(errReplacementSourcePathMissing, ctx.Err())
+	}
 	from, err := replacementFinalPath(ctx, source)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {

@@ -15,6 +15,9 @@ permissions:
   contents: read
 
 jobs:
+  name-writer:
+    uses: ./.github/workflows/name-writer.yml
+
   pathname-authorization:
     uses: ./.github/workflows/pathname-authorization.yml
 

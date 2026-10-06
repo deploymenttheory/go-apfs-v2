@@ -25,6 +25,11 @@ func TestCreationNamePreflight(t *testing.T) {
 		insensitive bool
 		want        error
 	}{
+		{"dot", []*Entry{{Name: "."}}, false, syscall.EEXIST},
+		{"dotdot", []*Entry{{Name: ".."}}, false, syscall.EEXIST},
+		{"ignored dot", []*Entry{{Name: ".\u200d"}}, true, nil},
+		{"ignored dotdot", []*Entry{{Name: "..\u200d"}}, true, nil},
+		{"ignored only", []*Entry{{Name: "\u200d"}}, true, nil},
 		{"nil", []*Entry{nil}, false, syscall.EINVAL},
 		{"cycle", []*Entry{cycle}, false, syscall.EINVAL},
 		{"empty", []*Entry{{Name: ""}}, false, syscall.ENOENT},
