@@ -14,11 +14,119 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/procgroup"
 )
+
+func processAlive(pid int) bool {
+	p, err := os.FindProcess(pid)
+	if err != nil {
+		return false
+	}
+	if runtime.GOOS == "windows" {
+		return true
+	}
+	return p.Signal(syscall.Signal(0)) == nil
+}
+
+// Cancellation must reach a grandchild that detached into its own process
+// group; otherwise an unresponsive native descendant outlives the step.
+func TestNativeReadbackCommandCancelKillsTree(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("process groups are not used on Windows")
+	}
+	t.Setenv("APFS_READBACK_COMMAND_CHILD", "tree")
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	runner := &nativeCommandRunner{Directory: t.TempDir()}
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	go func() {
+		for {
+			out, _ := os.ReadFile(filepath.Join(runner.Directory, "command-001.stdout"))
+			if strings.Contains(string(out), "\n") {
+				cancel()
+				return
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(20 * time.Millisecond):
+			}
+		}
+	}()
+	out, err := runner.run(ctx, exe, "-test.run=^TestNativeReadbackCommandChild$")
+	if !errors.Is(err, context.Canceled) {
+		t.Fatal(err)
+	}
+	grandchild, e := strconv.Atoi(strings.TrimSpace(string(out)))
+	if e != nil {
+		t.Fatal(string(out), e)
+	}
+	defer func() {
+		if p, err := os.FindProcess(grandchild); err == nil {
+			_ = p.Kill()
+		}
+	}()
+	deadline := time.Now().Add(5 * time.Second)
+	for processAlive(grandchild) {
+		if time.Now().After(deadline) {
+			t.Fatal("detached grandchild survived cancellation")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if report := readNativeCommandFinish(t, runner.Directory); report.Abandoned {
+		t.Fatal("killable tree was reported abandoned")
+	}
+}
+
+// A child the kernel will not release: cancellation does nothing to it and no
+// kill ever lands. The runner must still return, record the abandonment and
+// leave the child to the kernel instead of blocking the step.
+func TestNativeReadbackCommandAbandonsUnreleasedChild(t *testing.T) {
+	t.Setenv("APFS_READBACK_COMMAND_CHILD", "hold")
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	runner := &nativeCommandRunner{Directory: t.TempDir(), progressOutput: &output, progressInterval: 20 * time.Millisecond, cancel: func(*os.Process) error { return nil }, abandonAfter: 100 * time.Millisecond}
+	ctx, cancel := context.WithTimeout(t.Context(), 150*time.Millisecond)
+	defer cancel()
+	started := time.Now()
+	_, err = runner.run(ctx, exe, "-test.run=^TestNativeReadbackCommandChild$")
+	if !errors.Is(err, errNativeAbandoned) || !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatal(err)
+	}
+	if time.Since(started) > 5*time.Second {
+		t.Fatal("abandonment did not bound the wait")
+	}
+	report := readNativeCommandFinish(t, runner.Directory)
+	if !report.Abandoned || report.ExitCode != -1 || report.ContextError != context.DeadlineExceeded.Error() {
+		t.Fatal(report)
+	}
+	if !strings.Contains(output.String(), "ABANDON command=") {
+		t.Fatal("missing live abandonment record", output.String())
+	}
+	var pid struct{ PID int }
+	for _, line := range strings.Split(output.String(), "\n") {
+		if strings.HasPrefix(line, "ABANDON command=") {
+			_, _ = fmt.Sscanf(line[strings.Index(line, "pid=")+4:], "%d", &pid.PID)
+		}
+	}
+	if pid.PID <= 0 {
+		t.Fatal("abandonment record lacks pid", output.String())
+	}
+	if p, err := os.FindProcess(pid.PID); err == nil {
+		_ = p.Kill()
+	}
+}
 
 func TestNativeReadbackCommandChild(t *testing.T) {
 	switch os.Getenv("APFS_READBACK_COMMAND_CHILD") {
@@ -32,6 +140,22 @@ func TestNativeReadbackCommandChild(t *testing.T) {
 		os.Exit(7)
 	case "hold":
 		fmt.Fprintln(os.Stderr, "NATIVE START case=blocked candidate=0 operation=openat-file")
+		time.Sleep(30 * time.Second)
+		os.Exit(0)
+	case "tree":
+		// A grandchild in its own process group that keeps running after its
+		// parent exits unless cancellation kills the whole descendant tree.
+		exe, err := os.Executable()
+		if err != nil {
+			os.Exit(10)
+		}
+		child := cirunner.Command(exe, "-test.run=^TestNativeReadbackCommandChild$")
+		child.Env = append(os.Environ(), "APFS_READBACK_COMMAND_CHILD=hold")
+		child.SysProcAttr = procgroup.Attr()
+		if err = child.Start(); err != nil {
+			os.Exit(11)
+		}
+		fmt.Fprintln(os.Stdout, child.Process.Pid)
 		time.Sleep(30 * time.Second)
 		os.Exit(0)
 	case "inherit":

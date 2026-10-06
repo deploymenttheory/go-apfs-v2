@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/diskimage"
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/procgroup"
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
@@ -25,7 +26,18 @@ type nativeCommandRunner struct {
 	progressInterval time.Duration
 	progressOutput   io.Writer
 	liveStderr       bool
+	// Fault injection for tests only; zero values select the real behaviour.
+	cancel       func(*os.Process) error
+	waitDelay    time.Duration
+	abandonAfter time.Duration
 }
+
+// A cancelled native command that the kernel has not released after WaitDelay
+// plus this bound is abandoned: the harness stops waiting on it, records the
+// abandonment, and lets the step end so its evidence uploads still run.
+const nativeAbandonAfter = 10 * time.Second
+
+var errNativeAbandoned = errors.New("native command did not exit after cancellation; abandoned")
 
 type nativeProgressWriter struct {
 	mu     sync.Mutex
@@ -39,7 +51,10 @@ func (w *nativeProgressWriter) Write(p []byte) (int, error) {
 }
 
 // The image-specific manifest remains here; command lifecycle reporting is shared
-// with every other CI capture and verification command.
+// with every other CI capture and verification command. Live stderr is tailed
+// from the retained regular file, so the probe inherits no pipe at all. The
+// child runs in its own process group and cancellation kills the whole tree;
+// a child that still does not exit is abandoned rather than awaited.
 func (r *nativeCommandRunner) wait(ctx context.Context, cmd *cirunner.Cmd, stderr *os.File, stem string) (result error) {
 	destination := r.progressOutput
 	if destination == nil {
@@ -59,9 +74,43 @@ func (r *nativeCommandRunner) wait(ctx context.Context, cmd *cirunner.Cmd, stder
 	cmd.Options.Label = stem
 	cmd.Options.Heartbeat = r.progressInterval
 	if r.liveStderr {
-		cmd.Stderr = io.MultiWriter(output, stderr)
+		forward := cirunner.ForwardFile(stderr, output)
+		defer func() {
+			cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Second)
+			defer cancel()
+			result = errors.Join(result, forward.Stop(cleanup))
+		}()
 	}
-	return cmd.Run()
+	kill := r.cancel
+	if kill == nil {
+		kill = procgroup.KillTree
+	}
+	cmd.SysProcAttr = procgroup.Attr()
+	cmd.Cancel = func() error { return kill(cmd.Process) }
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	pid := cmd.Process.Pid
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	select {
+	case err := <-done:
+		return err
+	case <-ctx.Done():
+	}
+	abandon := r.abandonAfter
+	if abandon <= 0 {
+		abandon = nativeAbandonAfter
+	}
+	timer := time.NewTimer(cmd.WaitDelay + abandon)
+	defer timer.Stop()
+	select {
+	case err := <-done:
+		return err
+	case <-timer.C:
+		fmt.Fprintf(output, "ABANDON command=%q pid=%d; process did not exit after cancellation\n", stem, pid)
+		return fmt.Errorf("%w: pid %d", errNativeAbandoned, pid)
+	}
 }
 
 type nativeCommandObservation struct {
@@ -73,13 +122,16 @@ type nativeCommandObservation struct {
 	ExitCode     int       `json:"exit_code"`
 	Error        string    `json:"error,omitempty"`
 	ContextError string    `json:"context_error,omitempty"`
+	Abandoned    bool      `json:"abandoned,omitempty"`
 	Stdout       string    `json:"stdout"`
 	Stderr       string    `json:"stderr"`
 }
 
-// Generic command streams use owned regular files: a child daemon retaining
+// Every command stream is an owned regular file: a child daemon retaining
 // stdout/stderr cannot hold a pipe open. The single-process native probe opts
-// into live stderr with an additional retained copy and a five-second WaitDelay.
+// into live stderr, tailed from that same retained file, and a five-second
+// WaitDelay. Cancellation kills the whole descendant tree; a child that still
+// does not exit is abandoned rather than awaited.
 func (r *nativeCommandRunner) run(ctx context.Context, name string, args ...string) ([]byte, error) {
 	if err := os.MkdirAll(r.Directory, 0755); err != nil {
 		return nil, err
@@ -110,6 +162,9 @@ func (r *nativeCommandRunner) run(ctx context.Context, name string, args ...stri
 	fmt.Fprintf(os.Stderr, "START native command %s %v (%s)\n", name, args, stem)
 	cmd := cirunner.CommandContext(ctx, name, args...)
 	cmd.WaitDelay = 5 * time.Second
+	if r.cancel != nil {
+		cmd.WaitDelay = r.waitDelay
+	}
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
 	runErr := r.wait(ctx, cmd, stderr, stem)
@@ -119,6 +174,7 @@ func (r *nativeCommandRunner) run(ctx context.Context, name string, args ...stri
 	}
 	if runErr != nil {
 		observation.Error = runErr.Error()
+		observation.Abandoned = errors.Is(runErr, errNativeAbandoned)
 	}
 	if ctx.Err() != nil {
 		observation.ContextError = ctx.Err().Error()

@@ -108,6 +108,10 @@ int main(int argc, char **argv) {
         OBSERVE(status, "close-case", close(directory));
         must(status, "close case");
         count++;
+        if (count % 100 == 0) {
+            must(fprintf(stderr, "NATIVE PROGRESS cases=%u last=%s\n", count, id) < 0 ||
+                 fflush(stderr) == EOF, "progress");
+        }
     }
     must(ferror(input), "read cases");
     case_id = "-";

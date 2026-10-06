@@ -79,6 +79,7 @@ int main(int argc,char **argv) {
         candidate=1;observe(directory,b);
         candidate=-1;CALL(status,"close-case",close(directory)); require(status,"directory close");
         count++;
+        if(count%100==0) { require(fprintf(stderr,"REFERENCE PROGRESS cases=%u last=%s\n",count,id)<0 || fflush(stderr),"progress"); }
     }
     require(ferror(cases),"cases read");require(fclose(cases),"cases close");
     current_case="-";free(line);
