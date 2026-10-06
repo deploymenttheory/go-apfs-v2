@@ -433,15 +433,16 @@ func TestReplacementWindowsEncryptedLateUnlink(t *testing.T) {
 			t.Fatal(err)
 		}
 		replacementEncrypt(t, name)
-		source, err := os.Open(name)
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer source.Close()
 		pointer, err := windows.UTF16PtrFromString(name)
 		if err != nil {
 			t.Fatal(err)
 		}
+		readHandle, err := windows.CreateFile(pointer, windows.GENERIC_READ, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, nil, windows.OPEN_EXISTING, 0, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		source := os.NewFile(uintptr(readHandle), name)
+		defer source.Close()
 		h, err := windows.CreateFile(pointer, windows.DELETE, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, nil, windows.OPEN_EXISTING, 0, 0)
 		if err != nil {
 			t.Fatal(err)
