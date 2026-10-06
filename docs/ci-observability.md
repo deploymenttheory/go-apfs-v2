@@ -122,6 +122,17 @@ version and unchanged tracked files before and after execution. These jobs
 write artifact destinations only; they neither rewrite retained baselines nor
 satisfy the normal acceptance gates.
 
+Promote a capture as a complete fixture set. Compression-state observations bind
+both `compression-state-APFS.dmg` and `compression-state-HFS+.dmg`; large-compression
+observations bind all 42 retained resource-fork sidecars. Verify the recorded
+hashes against the freshly produced bytes, then replay the existing consuming
+acceptance gate in an isolated checkout before promotion. A codec-only replay
+does not qualify image consumers. For compression state, run
+`go run scripts/verify-compression-state.go`, which requires all 480 image/carrier
+cases and the existing per-file coverage threshold. Commit matching observations
+and required sidecars together; never repair a mismatch by changing recorded
+hashes or reducing the inventory.
+
 Evidence uploads explicitly include hidden files: the bound setup action lives
 under `.github`, and omitting it would leave an incomplete source archive. The
 workflow audit rejects owned evidence uploads without this setting. For a
