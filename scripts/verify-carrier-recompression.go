@@ -61,6 +61,15 @@ func run() error {
 		return e
 	}
 	passed, cases, compositions, packages := 0, 0, 0, 0
+	unitCompositions := make(map[string]bool)
+	for _, count := range []int{2, 3} {
+		for _, linked := range []bool{false, true} {
+			for _, outcome := range []string{"recompress", "admission-denied", "cancel-publication", "stale-generation", "failure-after-rename", "cancel-after-rename", "cancel-after-publication"} {
+				unitCompositions[fmt.Sprintf("TestCarrierReplacementRecompressionComposition/names-%d/linked-%t/%s", count, linked, outcome)] = false
+			}
+			unitCompositions[fmt.Sprintf("TestCarrierInPlaceEditedAliases/names-%d/linked-%t", count, linked)] = false
+		}
+	}
 	top := false
 	scanner := bufio.NewScanner(&transcript)
 	scanner.Buffer(make([]byte, 4096), 1<<20)
@@ -73,6 +82,12 @@ func run() error {
 			return fmt.Errorf("qualification %s: %s", event.Action, event.Test)
 		}
 		if event.Action == "pass" {
+			if seen, required := unitCompositions[event.Test]; required {
+				if seen {
+					return fmt.Errorf("duplicate carrier composition: %s", event.Test)
+				}
+				unitCompositions[event.Test] = true
+			}
 			if event.Test == "" {
 				packages++
 			} else {
@@ -91,6 +106,11 @@ func run() error {
 	}
 	if e = scanner.Err(); e != nil {
 		return e
+	}
+	for name, seen := range unitCompositions {
+		if !seen {
+			return fmt.Errorf("required carrier composition missing: %s", name)
+		}
 	}
 	if !top || cases != 648 || compositions != 72 || packages != 4 {
 		return fmt.Errorf("incomplete carrier qualification: top=%v native cases=%d compositions=%d packages=%d", top, cases, compositions, packages)

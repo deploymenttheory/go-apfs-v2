@@ -32,7 +32,7 @@ func TestInventoryRejectsMalformedCaptures(t *testing.T) {
 	makeCapture := func() captureRecord {
 		c := captureRecord{Schema: 1, Expected: len(expected)}
 		for _, spec := range expected {
-			r := record{ID: spec.ID, Family: spec.Family, Profile: spec.Profile, Operation: spec.Operation, Route: spec.Route, Qualification: "captured", Cleanup: true, User: strings.Repeat("00", 16), Group: strings.Repeat("00", 16), Result: result{Groups: []uint32{20}}}
+			r := record{ID: spec.ID, Family: spec.Family, Profile: spec.Profile, Operation: spec.Operation, Route: spec.Route, Qualification: "captured", Cleanup: true, Control: &result{}, User: strings.Repeat("00", 16), Group: strings.Repeat("00", 16), Result: result{Groups: []uint32{20}}}
 			for _, name := range []string{"root", "a", "a/b", "a/b/file", "a/b/stage", "a/c", "a/c/file"} {
 				r.Before = append(r.Before, entry{Name: name, State: state{Captured: true}})
 			}

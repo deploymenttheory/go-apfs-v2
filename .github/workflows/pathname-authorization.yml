@@ -37,6 +37,10 @@ jobs:
         run: go test scripts/verify-pathname-authorization.go scripts/verify-pathname-authorization_test.go
       - name: Replay the complete fresh native corpus through portable authorization
         run: go run scripts/verify-pathname-authorization.go -capture artifacts/pathname-authorization/capture.json.gz -report artifacts/pathname-authorization/replay.json
+      - name: Capture all mounted readonly and cross-device cases
+        run: go run scripts/capture-pathname-mounts.go -out artifacts/pathname-mounts -oracle-artifacts artifacts/pathname-authorization -sudo -require-complete
+      - name: Replay complete mounted operations through production authorization
+        run: go run scripts/verify-pathname-authorization.go -mounted -capture artifacts/pathname-mounts/capture.json -oracle-artifacts artifacts/pathname-authorization -report artifacts/pathname-mounts/replay.json
       - name: Retain native output, source and SDK provenance, and complete ASTs
         if: always()
         uses: actions/upload-artifact@v7
@@ -50,4 +54,53 @@ jobs:
         with:
           name: pathname-authorization-ast-${{ matrix.os }}
           path: artifacts/pathname-authorization-ast/
+          if-no-files-found: error
+      - name: Retain independent mounted operation observations and detach attempts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: pathname-mounts-${{ matrix.os }}
+          path: artifacts/pathname-mounts/
+          if-no-files-found: error
+
+  portable:
+    name: Replay every native profile (${{ matrix.os }})
+    needs: native
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - uses: actions/download-artifact@v8.0.1
+        with:
+          pattern: pathname-authorization-*
+          path: artifacts/native
+      - uses: actions/download-artifact@v8.0.1
+        with:
+          pattern: pathname-mounts-*
+          path: artifacts/native
+      - name: Test strict native inventory rejection
+        run: go test scripts/verify-pathname-authorization.go scripts/verify-pathname-authorization_test.go
+      - name: Replay all three complete native profiles and mounted operations
+        shell: bash
+        run: |
+          mkdir -p artifacts/replay
+          for profile in macos-15 macos-latest xcode-27; do
+            oracle="artifacts/native/pathname-authorization-${profile}"
+            mounted="artifacts/native/pathname-mounts-${profile}"
+            go run scripts/verify-pathname-authorization.go -capture "${oracle}/capture.json.gz" -report "artifacts/replay/${profile}-pathname.json"
+            go run scripts/verify-pathname-authorization.go -mounted -capture "${mounted}/capture.json" -oracle-artifacts "${oracle}" -report "artifacts/replay/${profile}-mounted.json"
+          done
+      - name: Retain revision-bound cross-platform replay reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: pathname-portable-${{ matrix.os }}
+          path: artifacts/replay/
           if-no-files-found: error

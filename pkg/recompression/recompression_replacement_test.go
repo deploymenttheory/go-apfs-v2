@@ -20,7 +20,7 @@ import (
 func TestCarrierReplacementRecompressionComposition(t *testing.T) {
 	for _, count := range []int{2, 3} {
 		for _, linked := range []bool{false, true} {
-			for _, outcome := range []string{"recompress", "admission-denied", "cancel-publication", "stale-generation", "failure-after-rename", "cancel-after-rename"} {
+			for _, outcome := range []string{"recompress", "admission-denied", "cancel-publication", "stale-generation", "failure-after-rename", "cancel-after-rename", "cancel-after-publication"} {
 				t.Run(fmt.Sprintf("names-%d/linked-%t/%s", count, linked, outcome), func(t *testing.T) {
 					s, payload, _, initial, options := carrierRecompressionFixture(t)
 					first, err := RecompressRecord(t.Context(), s, "file", 1, options)
@@ -224,10 +224,19 @@ func TestCarrierReplacementRecompressionComposition(t *testing.T) {
 					if outcome == "admission-denied" {
 						options.Authority = &Authority{UID: 502, Groups: []uint32{20}}
 					}
-					result, err := RecompressRecord(t.Context(), s, "file", 4, options)
+					recompressionContext := t.Context()
+					if outcome == "cancel-after-publication" {
+						cancel()
+						recompressionContext = ctx
+					}
+					result, err := RecompressRecord(recompressionContext, s, "file", 4, options)
 					if outcome == "admission-denied" {
 						if err == nil || result.Published || result.Operation.Accepted {
 							t.Fatal(result, err)
+						}
+					} else if outcome == "cancel-after-publication" {
+						if !errors.Is(err, context.Canceled) || result.Published || result.Operation.Accepted {
+							t.Fatal("canceled recompression changed committed baseline", result, err)
 						}
 					} else if err != nil || !result.Published || !result.Operation.Accepted {
 						t.Fatal(result, err)
@@ -236,7 +245,7 @@ func TestCarrierReplacementRecompressionComposition(t *testing.T) {
 					if err != nil {
 						t.Fatal(err)
 					}
-					if after.Generation != 4 && outcome == "admission-denied" || after.Generation != 5 && outcome == "recompress" {
+					if after.Generation != 4 && outcome != "recompress" || after.Generation != 5 && outcome == "recompress" {
 						t.Fatal("generation", after.Generation)
 					}
 					for i, record := range after.Records {
@@ -251,7 +260,7 @@ func TestCarrierReplacementRecompressionComposition(t *testing.T) {
 							if !bytes.Equal(data, replacement) || record.LinkGroup != "" || *record.Payload != ref {
 								t.Fatal("replacement association", record)
 							}
-							if outcome == "admission-denied" && !reflect.DeepEqual(record, target) {
+							if outcome != "recompress" && !reflect.DeepEqual(record, target) {
 								t.Fatal("failed admission lost uncompressed signed baseline", record)
 							}
 						} else {

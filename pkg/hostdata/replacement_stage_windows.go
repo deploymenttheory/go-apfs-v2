@@ -3,6 +3,7 @@ package hostdata
 import (
 	"context"
 	"errors"
+	"fmt"
 	"golang.org/x/sys/windows"
 	"os"
 	"path/filepath"
@@ -76,4 +77,35 @@ func prepareReplacementPrivateContext(ctx context.Context, source *os.File, pare
 		return nil, errors.Join(err, root.Close())
 	}
 	return &Replacement{File: staged.File, source: source, info: staged.info, dir: filepath.Join(parent, staged.dir), rooted: staged, ownedRoot: root}, nil
+}
+
+// Retain the already granted attribute rights until Close, even if the caller
+// closes File after restoring an ACL which denies new write-attribute opens.
+func replacementCleanupCapability(file *os.File) (owned *os.File, err error) {
+	conn, err := file.SyscallConn()
+	if err != nil {
+		return nil, err
+	}
+	var native error
+	err = conn.Control(func(fd uintptr) { owned, native = duplicateReplacementHandle(windows.Handle(fd), file.Name()) })
+	return owned, errors.Join(err, native)
+}
+func replacementCleanupMetadata(stage *os.Root, held *os.File) error {
+	if held == nil {
+		return stage.Chmod("replacement", 0600)
+	}
+	named, err := openReplacementStageMetadata(stage)
+	if err != nil {
+		return err
+	}
+	expected, err := replacementHeldIdentity(held)
+	actual, lookupErr := replacementHeldIdentity(named)
+	err = errors.Join(err, lookupErr, named.Close())
+	if err != nil {
+		return err
+	}
+	if actual != expected {
+		return fmt.Errorf("private replacement identity changed before cleanup")
+	}
+	return replacementClearReadonly(context.Background(), held)
 }

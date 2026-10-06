@@ -37,3 +37,8 @@ func makeReplacementDirectoryAt(ctx context.Context, root *os.Root, name string)
 	}
 	return func() error { return nil }, ctx.Err()
 }
+
+func replacementCleanupCapability(_ *os.File) (*os.File, error) { return nil, nil }
+func replacementCleanupMetadata(stage *os.Root, _ *os.File) error {
+	return stage.Chmod("replacement", 0600)
+}

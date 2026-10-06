@@ -162,6 +162,16 @@ component and total path limits, symlink-expanded lengths and the symlink traver
 boundary. Native source/SDK constants alone do not establish the filesystem
 name-length unit or the error ordering relative to directory authorization.
 
+Qualify the shared comparison and on-disk hash implementations together. Full
+case folds, canonical decomposition/reordering, ignorable characters and Unicode
+revision differences need actual native directory-key observations, not equality
+unit tests alone. Do not substitute current Go Unicode tables or a historical
+Unicode revision for measured macOS behavior. Preserve the distinction between
+APFS/APFSX name hashing and HFS+/HFSX catalog comparison. Replay independently
+retained native names and raw hashes, produce images on Linux and Windows, and
+read them back natively on every supported macOS version. A foreign operation's
+explicit target profile must not be inferred from the receiving host.
+
 Search, create, delete and rename require distinct authorization operations.
 Capture per-directory SEARCH before lookup; ADD_FILE/ADD_SUBDIRECTORY for creation;
 leaf DELETE versus parent DELETE_CHILD, POSIX/sticky fallback and immutable/append

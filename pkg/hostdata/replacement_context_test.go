@@ -131,7 +131,7 @@ func TestReplacementContextSteps(t *testing.T) {
 				t.Fatal("clone after cancellation")
 			}
 			if held != nil {
-				if _, e := held.Stat(); !errors.Is(e, os.ErrClosed) {
+				if n, e := held.Write([]byte("closed-capability-probe")); n != 0 || !errors.Is(e, os.ErrClosed) {
 					t.Fatal("staging handle leaked", e)
 				}
 			}
@@ -238,7 +238,7 @@ func TestReplacementEveryCancellationCheckpoint(t *testing.T) {
 						}
 					}
 					if file != nil {
-						if _, e := file.Stat(); !errors.Is(e, os.ErrClosed) {
+						if n, e := file.Write([]byte("closed-capability-probe")); n != 0 || !errors.Is(e, os.ErrClosed) {
 							t.Fatalf("stage handle leaked: %v", e)
 						}
 					}
@@ -393,12 +393,12 @@ func TestReplacementHeldAuxiliaryCleanup(t *testing.T) {
 				}
 			}
 			if auxiliary != nil {
-				if _, e := auxiliary.Stat(); !errors.Is(e, os.ErrClosed) {
+				if n, e := auxiliary.Write([]byte("closed-capability-probe")); n != 0 || !errors.Is(e, os.ErrClosed) {
 					t.Fatalf("auxiliary leak: %v", e)
 				}
 			}
 			if result != nil {
-				if _, e := result.Stat(); !errors.Is(e, os.ErrClosed) {
+				if n, e := result.Write([]byte("closed-capability-probe")); n != 0 || !errors.Is(e, os.ErrClosed) {
 					t.Fatalf("result leak: %v", e)
 				}
 			}

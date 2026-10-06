@@ -22,6 +22,7 @@ type RootReplacement struct {
 	Path string
 
 	source        *os.File
+	cleanup       *os.File
 	info          os.FileInfo
 	root, staging *os.Root
 	dir           string
@@ -34,9 +35,11 @@ type RootReplacement struct {
 // File is unspecified; write the complete replacement and truncate it.
 //
 // The supported metadata and Darwin cloning/copying behavior match PrepareReplacement.
-// Windows additionally rejects compressed, encrypted and reparse files;
-// ordinary and sparse alternate data streams, attributes, owner/group and DACL
-// are retained. Sparse source replacements retain the sparse attribute; the
+// Windows preserves compressed/encrypted inputs and rejects reparse files.
+// Ordinary and sparse alternate streams have no aggregate byte or record limit;
+// attributes, owner/group and DACL are retained. Encrypted copies require matching
+// recipient and recovery keys. Namespace hints are validated against held copy
+// handles, and the private Windows directory has its DACL installed at creation. Sparse source replacements retain the sparse attribute; the
 // caller supplies all new main data and controls its physical allocation.
 // Concurrent modification of the source or staging tree is unsupported. The
 // caller must validate destination identity before committing its own rename.
@@ -76,6 +79,9 @@ func PrepareReplacementAtContext(ctx context.Context, source *os.File, root *os.
 	}
 	r := &RootReplacement{source: source, info: info, root: root, staging: stage, dir: dir, Path: filepath.Join(dir, "replacement")}
 	r.File, err = prepareReplacementAtContext(ctx, source, stage, info)
+	if err == nil {
+		r.cleanup, err = replacementCleanupCapability(r.File)
+	}
 	err = errors.Join(err, ctx.Err(), release())
 	if err != nil {
 		return nil, errors.Join(fmt.Errorf("prepare replacement: %w", err), r.Close())
@@ -116,6 +122,9 @@ func (r *RootReplacement) Close() error {
 		return nil
 	}
 	r.closed = true
+	// Inspect only the private name before using a retained metadata capability.
+	// A committed replacement has no name in staging and must not be changed.
+	chmodErr := replacementCleanupMetadata(r.staging, r.cleanup)
 	var closeErr error
 	if r.File != nil {
 		closeErr = r.File.Close()
@@ -123,9 +132,9 @@ func (r *RootReplacement) Close() error {
 			closeErr = nil
 		}
 	}
-	// A readonly Windows copy needs its attribute cleared for deletion. Only
-	// touch the private staging name, which is absent after a successful commit.
-	chmodErr := r.staging.Chmod("replacement", 0600)
+	if r.cleanup != nil {
+		closeErr = errors.Join(closeErr, r.cleanup.Close())
+	}
 	if errors.Is(chmodErr, os.ErrNotExist) {
 		chmodErr = nil
 	}
