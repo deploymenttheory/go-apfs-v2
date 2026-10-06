@@ -664,7 +664,7 @@ func TestReplacementWindowsEFSEveryCancellationCheckpoint(t *testing.T) {
 		}
 		return h
 	}
-	for _, operation := range []string{"pin", "query", "verify"} {
+	for _, operation := range []string{"pin", "query", "verify", "prepare"} {
 		t.Run(operation, func(t *testing.T) {
 			checkpoints := 0
 			for stop := 0; stop <= checkpoints; stop++ {
@@ -692,6 +692,20 @@ func TestReplacementWindowsEFSEveryCancellationCheckpoint(t *testing.T) {
 					}
 				case "verify":
 					err = replacementVerifyEFS(observed, source, target)
+				case "prepare":
+					parent := t.TempDir()
+					r, e := PrepareReplacementContext(observed, source, parent)
+					err = e
+					if e != nil && r != nil {
+						t.Fatal("failed encrypted preparation returned stage")
+					}
+					if r != nil {
+						err = errors.Join(err, r.Close())
+					}
+					entries, e := os.ReadDir(parent)
+					if e != nil || len(entries) != 0 {
+						t.Fatalf("encrypted cancellation leaked stage: %v %v", entries, e)
+					}
 				}
 				cancel()
 				if stop == 0 {

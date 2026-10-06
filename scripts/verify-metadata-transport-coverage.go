@@ -36,7 +36,7 @@ func verify() error {
 	defer log.Close()
 	var transcript bytes.Buffer
 	profile := filepath.Join(dir, "coverage.out")
-	cmd := exec.Command("go", "test", "-count=1", "-json", "-run", "^(TestCompressionResourceFork|TestCarrier|TestCopyAccessTime(Invalid|Darwin)|TestRecordReadAccess(Invalid|Darwin)|TestCaptureXattrs|TestLibSystem|TestRecordAttribute|TestNativeBaseline|TestOpenWalk|TestLazyCarrier|TestNodeAndValue|TestValue|TestXattrValue|TestVolumeXattrValues|TestStreamedValues|TestOpenEntryTree|TestHFSValues|TestProjection|TestQuarantineCapture|TestQuarantineFile|TestACLIdentityCapture|TestAppleDoubleObject|TestPathCapturedRemoval|TestPathCapturedWrite|TestXattrIntent|TestSandboxCapture)", "-covermode=atomic", "-coverprofile="+profile, "-coverpkg=./internal/hosttime,./pkg/metatransport,./pkg/hostdata/...,./internal/hostwalk,./internal/tools,./pkg/apfs,./pkg/apfswrite,./pkg/hfsplus,./internal/decmpfs,./internal/testutil/largefork", "./pkg/metatransport", "./pkg/hostdata", "./pkg/hostdata/acl", "./pkg/hostdata/accesstime", "./pkg/hostdata/sandbox", "./pkg/hostdata/xattrintent", "./internal/hosttime", "./internal/hostwalk", "./internal/tools", "./pkg/apfs", "./pkg/apfswrite", "./pkg/hfsplus", "./internal/decmpfs", "./internal/testutil/largefork")
+	cmd := exec.Command("go", "test", "-count=1", "-json", "-run", "^(TestCompressionResourceFork|TestResourceFork|TestCarrier|TestCopyAccessTime(Invalid|Darwin)|TestRecordReadAccess(Invalid|Darwin)|TestCaptureXattrs|TestLibSystem|TestRecordAttribute|TestNativeBaseline|TestOpenWalk|TestLazyCarrier|TestNodeAndValue|TestValue|TestXattrValue|TestVolumeXattrValues|TestStreamedValues|TestOpenEntryTree|TestHFSValues|TestProjection|TestQuarantineCapture|TestQuarantineFile|TestACLIdentityCapture|TestAppleDoubleObject|TestPathCapturedRemoval|TestPathCapturedWrite|TestXattrIntent|TestSandboxCapture)", "-covermode=atomic", "-coverprofile="+profile, "-coverpkg=./internal/hosttime,./pkg/metatransport,./pkg/hostdata/...,./internal/hostwalk,./internal/tools,./pkg/apfs,./pkg/apfswrite,./pkg/hfsplus,./internal/decmpfs,./internal/testutil/largefork", "./pkg/metatransport", "./pkg/hostdata", "./pkg/hostdata/acl", "./pkg/hostdata/accesstime", "./pkg/hostdata/sandbox", "./pkg/hostdata/xattrintent", "./internal/hosttime", "./internal/hostwalk", "./internal/tools", "./pkg/apfs", "./pkg/apfswrite", "./pkg/hfsplus", "./internal/decmpfs", "./internal/testutil/largefork")
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 	cmd.Stdout = io.MultiWriter(os.Stdout, log, &transcript)
 	cmd.Stderr = io.MultiWriter(os.Stderr, log)
@@ -44,9 +44,9 @@ func verify() error {
 		return e
 	}
 	passed := 0
-	required := map[string]bool{"TestCompressionResourceForkProvenance": true}
+	required := map[string]bool{"TestCompressionResourceForkProvenance": true, "TestResourceForkContextOwnership": true}
 	if runtime.GOOS == "darwin" {
-		for _, name := range []string{"TestCompressionResourceForkOpeningNative", "TestCompressionResourceForkVersionRouting", "TestCompressionResourceForkLegacyFailures", "TestCompressionResourceForkLegacyIdentity"} {
+		for _, name := range []string{"TestCompressionResourceForkOpeningNative", "TestCompressionResourceForkVersionRouting", "TestCompressionResourceForkLegacyFailures", "TestCompressionResourceForkLegacyIdentity", "TestResourceForkContextVersionRouting", "TestResourceForkLegacyContextCheckpoints", "TestResourceForkNativeLateCancellationCloses", "TestResourceForkLegacyContextNativeBinding"} {
 			required[name] = true
 		}
 	}

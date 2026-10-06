@@ -36,23 +36,24 @@ func verify() error {
 	defer log.Close()
 	profile := filepath.Join(dir, "coverage.out")
 	var transcript bytes.Buffer
-	cmd := exec.Command("go", "test", "-count=1", "-json", "-run=^(TestRecompress|TestCompressionResourceFork|TestPathResourceForkNative|TestNativeCompressionAcquisition|TestCompressionOperation|TestInstallHeldCompression|TestInstallCompression|TestCommitHeldCompression|TestCommitCompression|TestActivateCompression|TestCaptureCompressionMetadata|TestCompressionMetadata|TestCompressionLifecycle|TestQueryCompressionHeldNativeCorpus|TestCompressionNativeMetadata)", "-covermode=atomic", "-coverprofile="+profile, "./pkg/hostdata")
+	cmd := exec.Command("go", "test", "-count=1", "-json", "-run=^(TestRecompress|TestCompressionResourceFork|TestCarrierNativeResourceFork|TestResourceFork|TestPathResourceForkNative|TestNativeCompressionAcquisition|TestNativeCompressionOwned|TestCompressionOperation|TestInstallHeldCompression|TestInstallCompression|TestCommitHeldCompression|TestCommitCompression|TestActivateCompression|TestCaptureCompressionMetadata|TestCompressionMetadata|TestCompressionLifecycle|TestQueryCompressionHeldNativeCorpus|TestCompressionNativeMetadata)", "-covermode=atomic", "-coverprofile="+profile, "./pkg/hostdata")
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 	cmd.Stdout = io.MultiWriter(os.Stdout, log, &transcript)
 	cmd.Stderr = io.MultiWriter(os.Stderr, log)
 	if e = cmd.Run(); e != nil {
 		return e
 	}
-	required := map[string]bool{}
+	required := map[string]bool{"TestResourceForkContextOwnership": true, "TestNativeCompressionOwnedValidation": true}
 	for _, name := range []string{"TestCompressionResourceForkProvenance", "TestRecompressNativeStorage", "TestRecompressNativeOperationProfiles", "TestRecompressAdmissionAndDeclines", "TestRecompressFailuresAndCancellation", "TestCompressionOperationProvenance", "TestInstallHeldCompressionBindingFailures", "TestInstallCompressionForeignFiles", "TestInstallCompressionStageFailures", "TestInstallCompressionForkNativeLifecycle", "TestInstallCompressionForkMultiBlockAndFailures", "TestInstallCompressionForkInvalidStorage", "TestCompressionMetadataHeldProviderBinding", "TestCommitHeldCompressionBinding", "TestCommitCompressionNativeLifecycle", "TestCommitCompressionCancellationAndValidation", "TestActivateCompressionNativeComparisons", "TestActivateCompressionCancellationAndReadFailures", "TestCaptureCompressionMetadataBounded", "TestCaptureCompressionMetadataFailures", "TestCaptureCompressionMetadataAbsent", "TestCompressionMetadataInvalidArguments", "TestCompressionLifecycleProvenance"} {
 		required[name] = true
 	}
 	if runtime.GOOS == "darwin" {
-		for _, name := range []string{"TestCompressionResourceForkOpeningNative", "TestCompressionResourceForkVersionRouting", "TestCompressionResourceForkLegacyFailures", "TestCompressionResourceForkLegacyIdentity", "TestPathResourceForkNative", "TestRecompressNativeFiles", "TestNativeCompressionAcquisitionErrors", "TestNativeCompressionAcquisitionDecompresses", "TestInstallHeldCompressionNativeReadback", "TestCommitHeldCompressionNativeReadback", "TestCommitHeldCompressionNativeErrors", "TestQueryCompressionHeldNativeCorpus", "TestCompressionMetadataHeldLargeFork", "TestCompressionMetadataNativeErrors"} {
+		for _, name := range []string{"TestNativeCompressionOwnedHeldAcquisition", "TestNativeCompressionOwnedNoAcquisitionCalls", "TestNativeCompressionOwnedReadOnlyAdmission", "TestNativeCompressionOwnedMounted", "TestCompressionResourceForkOpeningNative", "TestCarrierNativeResourceFork", "TestCompressionResourceForkVersionRouting", "TestCompressionResourceForkLegacyFailures", "TestCompressionResourceForkLegacyIdentity", "TestResourceForkContextVersionRouting", "TestResourceForkLegacyContextCheckpoints", "TestResourceForkNativeLateCancellationCloses", "TestResourceForkLegacyContextNativeBinding", "TestPathResourceForkNative", "TestRecompressNativeFiles", "TestNativeCompressionAcquisitionErrors", "TestNativeCompressionAcquisitionDecompresses", "TestInstallHeldCompressionNativeReadback", "TestCommitHeldCompressionNativeReadback", "TestCommitHeldCompressionNativeErrors", "TestQueryCompressionHeldNativeCorpus", "TestCompressionMetadataHeldLargeFork", "TestCompressionMetadataNativeErrors"} {
 			required[name] = true
 		}
 	} else {
 		required["TestNativeCompressionAcquisitionRequiresDarwinContext"] = true
+		required["TestNativeCompressionOwnedForeignHost"] = true
 		required["TestCompressionNativeMetadataRequiresDarwinContext"] = true
 		required["TestCommitHeldCompressionRequiresNativeDarwinView"] = true
 		required["TestInstallHeldCompressionRequiresNativeDarwinView"] = true

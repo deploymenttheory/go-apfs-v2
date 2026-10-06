@@ -65,12 +65,14 @@ jobs:
         run: |
           export APFS_NAME_IMAGE_ARTIFACTS="$GITHUB_WORKSPACE/artifacts/native-images"
           go run scripts/verify-name-comparison.go
+      - name: Verify bounded native command diagnostics
+        run: go test -count=1 -run '^TestNativeReadback(Command|Mount)' scripts/verify-name-native_commands_test.go scripts/verify-name-native_commands_fault_test.go
       - name: Independently mount all three producer profiles on this macOS
         if: runner.os == 'macOS'
         shell: bash
         run: |
           export APFS_NAME_IMAGE_ARTIFACTS="$GITHUB_WORKSPACE/artifacts/native-images"
-          go test -count=1 -json -run='^TestNativeCrossVersionNameImages$' scripts/capture-name-collation.go scripts/verify-name-comparison_test.go scripts/verify-name-native_readback_test.go > artifacts/name-native-readback-tests.jsonl
+          go test -count=1 -timeout=30m -json -run='^TestNativeCrossVersionNameImages$' scripts/capture-name-collation.go scripts/verify-name-comparison_test.go scripts/verify-name-native_readback_test.go scripts/verify-name-native_commands_test.go > artifacts/name-native-readback-tests.jsonl
       - uses: actions/upload-artifact@v7
         if: always()
         with:

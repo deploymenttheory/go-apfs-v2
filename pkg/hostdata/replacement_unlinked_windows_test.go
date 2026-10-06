@@ -53,6 +53,43 @@ func TestReplacementWindowsPreparedUnlinkedSource(t *testing.T) {
 							}
 						}
 					}
+					if kind == "encrypted" {
+						probe, e := os.Open(sourceName)
+						if e != nil {
+							t.Fatal(e)
+						}
+						value, present, e := ReadXattr(probe, "replacement.test", 128)
+						e = errors.Join(e, probe.Close())
+						t.Logf("native post-EncryptFile EA: value=%q present=%v error=%v", value, present, e)
+						if e != nil {
+							t.Fatal(e)
+						}
+						// Qualify an encrypted file that actually owns the required EA.
+						strictWindowsSet(t, sourceName, "replacement.test", []byte("native EA survives unlink"))
+						from, e := windows.UTF16PtrFromString(sourceName)
+						if e != nil {
+							t.Fatal(e)
+						}
+						reference := filepath.Join(t.TempDir(), "native-copy")
+						to, e := windows.UTF16PtrFromString(reference)
+						if e != nil {
+							t.Fatal(e)
+						}
+						ok, _, nativeErr := copyFileExW.Call(uintptr(unsafe.Pointer(from)), uintptr(unsafe.Pointer(to)), 0, 0, 0, 0x801)
+						if ok == 0 {
+							t.Fatal(nativeErr)
+						}
+						probe, e = os.Open(reference)
+						if e != nil {
+							t.Fatal(e)
+						}
+						value, present, e = ReadXattr(probe, "replacement.test", 128)
+						e = errors.Join(e, probe.Close())
+						t.Logf("native encrypted CopyFileEx EA: value=%q present=%v error=%v", value, present, e)
+						if e != nil {
+							t.Fatal(e)
+						}
+					}
 					replacementSetCreation(t, sourceName)
 					pointer, err := windows.UTF16PtrFromString(sourceName)
 					if err != nil {
@@ -80,6 +117,10 @@ func TestReplacementWindowsPreparedUnlinkedSource(t *testing.T) {
 					source := os.NewFile(uintptr(handle), sourceName)
 					defer source.Close()
 					before := replacementNativeSnapshot(t, source)
+					value, present, eaErr := ReadXattr(source, "replacement.test", 128)
+					if eaErr != nil || !present || string(value) != "native EA survives unlink" {
+						t.Fatalf("source preparation EA control: %q %v %v", value, present, eaErr)
+					}
 					securityFlags := windows.SECURITY_INFORMATION(windows.OWNER_SECURITY_INFORMATION | windows.GROUP_SECURITY_INFORMATION | windows.DACL_SECURITY_INFORMATION)
 					security, err := windows.GetSecurityInfo(handle, windows.SE_FILE_OBJECT, securityFlags)
 					if err != nil {
@@ -143,6 +184,7 @@ func TestReplacementWindowsPreparedUnlinkedSource(t *testing.T) {
 					if err = windows.GetFileInformationByHandle(handle, &nativeInfo); err != nil || nativeInfo.NumberOfLinks != 0 {
 						t.Fatalf("held zero-link control: links=%d %v", nativeInfo.NumberOfLinks, err)
 					}
+					t.Logf("source after unlink: %#v before=%#v", replacementNativeSnapshot(t, source), before)
 					held := make([]byte, len(payload))
 					if _, err = source.ReadAt(held, 0); err != nil || !bytes.Equal(held, payload) {
 						t.Fatalf("held source changed: %q %v", held, err)
@@ -172,13 +214,16 @@ func TestReplacementWindowsPreparedUnlinkedSource(t *testing.T) {
 					if err = restore(t.Context()); err != nil {
 						t.Fatalf("restore from held zero-link source: %v", err)
 					}
+					t.Logf("target after restore before close: %#v", replacementNativeSnapshot(t, file))
 					if err = file.Close(); err != nil {
 						t.Fatal(err)
 					}
+					t.Logf("target after close before rename: %#v", replacementUnlinkedPathSnapshot(t, file.Name()))
 					if err = publish(); err != nil {
 						t.Fatal(err)
 					}
 					t.Cleanup(func() { replacementResetTestFile(t, output) })
+					t.Logf("target after rename before cleanup: %#v", replacementUnlinkedPathSnapshot(t, output))
 					if err = closeStage(); err != nil {
 						t.Fatal(err)
 					}
@@ -270,4 +315,19 @@ func replacementUnlinkedAllocation(t *testing.T, file *os.File) int64 {
 		t.Fatal(err)
 	}
 	return info.AllocationSize
+}
+
+func replacementUnlinkedPathSnapshot(t *testing.T, name string) windows.ByHandleFileInformation {
+	t.Helper()
+	pointer, err := windows.UTF16PtrFromString(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	handle, err := windows.CreateFile(pointer, windows.FILE_READ_ATTRIBUTES, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, nil, windows.OPEN_EXISTING, 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	file := os.NewFile(uintptr(handle), name)
+	defer file.Close()
+	return replacementNativeSnapshot(t, file)
 }

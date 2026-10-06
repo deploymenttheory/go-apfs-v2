@@ -34,22 +34,30 @@ The implementation is in draft PR #208. The requirements below remain the review
 contract; implementation presence and local evidence do not close the checklist.
 The remaining acceptance work is:
 
-- Complete real Windows 2022/2025 qualification of a source whose link count is
-  zero. NTFS can return an internal deleted-file pathname even though native
-  pathname copy cannot open it. Select the unencrypted held-stream route using
-  held link metadata; never reinterpret an ordinary access denial as a missing
-  path. Qualify independent offsets, compressed streams, cancellation, cleanup
-  failures and every selected production file above 95%.
-- Retain and replay the separate HFS special-name corpus on 15/26/27, including
-  POSIX U+2400 to catalog NUL conversion, exact dot entries, ignored-character
-  variants and raw catalog bytes. Add these cases without rewriting earlier
-  collation fixtures or substituting inferred observations.
-- Complete the portable writer matrix: each Linux, Windows and Darwin producer
-  writes twelve images covering all three target versions and four filesystem
-  variants. Each native version reads its matching images from all three
-  producers and independently checks exclusive-create error ordering. Require
-  source/revision binding, complete image inventories, hash integrity, mount
-  cleanup and corruption controls for retained manifests and native reports.
+- Complete Windows 2022/2025 replacement qualification after correcting sparse
+  alternate-stream transfer. Unencrypted files use held BackupRead/BackupWrite;
+  EFS retains contained, identity-checked CopyFileEx. Require the 24-case
+  prepare-before-unlink matrix, exact stream allocation, EAs, encryption keys,
+  security, creation time, attributes, publication and cancellation cleanup.
+  Separately qualify late acquisition: native zero-link/delete-pending handles
+  can retain readable main data while refusing new alternate-stream opens. Keep
+  exact native controls and reject incomplete output rather than losing streams.
+- Re-run the complete image reader and writer matrices at the final revision.
+  All three HFS special-name baselines are retained, including U+2400/catalog
+  NUL, dot components, ignored characters, payloads and raw catalog bytes.
+  Linux/Windows/Darwin production and native 15/26/27 matching-profile readback
+  have passed together, including the corrected empty-thread catalog ordering;
+  later filesystem changes still require final-head qualification.
+- Qualify bounded native command diagnostics on macOS 15/26/27. A previous
+  macOS 15 cross-version reader job exceeded its runner deadline before uploading
+  diagnostic output. Retain complete command starts/finishes and raw streams,
+  a context-owned deadline, independent mount cleanup and an outer test timeout
+  that leaves cleanup time. Preserve all twelve cross-version images and all
+  90,072 reader observations; a timeout remains a failed acceptance result.
+- Include all fork-context and owned-input suites in the existing compression
+  lifecycle and metadata transport coverage filters. Require their presence and
+  the unchanged per-file/package thresholds on every host; the new standalone
+  coverage gate does not substitute for the earlier gates.
 - Require the full reader comparison matrix, all owned compression and replacement
   gates, pathname authority/limits/lookup, carrier composition, coverage, build,
   lint, race/fuzz, large-fork and commercial-image gates at one final revision.
@@ -157,7 +165,10 @@ preexisting destination symlink traversal with the documented copy flags. Exerci
 ordinary/POSIX ancestor rename, junction and dangling-leaf substitution at
 deterministic checkpoints. Callback validation alone cannot prove containment.
 
-Retain a fully held non-EFS route for sources whose names are unavailable. Remove
+Retain a fully held non-EFS route while the required stream capabilities remain
+acquirable. Preparation must capture complete metadata before namespace removal;
+a held main-data descriptor alone does not promise every stream can be reopened
+after native deletion. Preserve exact native failures and complete cleanup. Remove
 size-only ADS/EA/sparse-extent ceilings from bounded streaming while preserving
 checked offsets, format validation and bounded buffers. Preserve NTFS compression
 through held controls. EFS must not enter BackupRead or a plaintext fallback.

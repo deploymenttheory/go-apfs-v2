@@ -5,11 +5,8 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/diskimage"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -48,19 +45,20 @@ func TestNativeCrossVersionNameImages(t *testing.T) {
 	if e = os.MkdirAll(out, 0755); e != nil {
 		t.Fatal(e)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Minute)
+	ctx, cancel := context.WithTimeout(t.Context(), 25*time.Minute)
 	defer cancel()
+	commands := &nativeCommandRunner{Directory: filepath.Join(out, "commands")}
 	source := "testdata/appledouble/native/name-readback.c"
 	binary := filepath.Join(out, "probe")
-	if _, e = command(ctx, "xcrun", "clang", "-std=c11", "-Wall", "-Wextra", "-Werror", source, "-o", binary); e != nil {
+	if _, e = commands.run(ctx, "xcrun", "clang", "-std=c11", "-Wall", "-Wextra", "-Werror", source, "-o", binary); e != nil {
 		t.Fatal(e)
 	}
-	sdk, e := command(ctx, "xcrun", "--show-sdk-path")
+	sdk, e := commands.run(ctx, "xcrun", "--show-sdk-path")
 	if e != nil {
 		t.Fatal(e)
 	}
 	hashes := map[string]string{}
-	for _, p := range []string{source, "scripts/verify-name-native_readback_test.go", "scripts/verify-name-comparison_test.go", "scripts/capture-name-collation.go", "go.mod", "go.sum"} {
+	for _, p := range []string{source, "scripts/verify-name-native_readback_test.go", "scripts/verify-name-native_commands_test.go", "scripts/verify-name-comparison_test.go", "scripts/capture-name-collation.go", "go.mod", "go.sum"} {
 		b, e := os.ReadFile(p)
 		if e != nil {
 			t.Fatal(e)
@@ -68,7 +66,7 @@ func TestNativeCrossVersionNameImages(t *testing.T) {
 		hashes[p] = sum(b)
 	}
 	for _, arch := range []string{"arm64", "x86_64"} {
-		ast, e := command(ctx, "xcrun", "clang", "-std=c11", "-Wall", "-Wextra", "-Werror", "-target", arch+"-apple-macos15.0", "-isysroot", strings.TrimSpace(string(sdk)), "-Xclang", "-ast-dump=json", "-fsyntax-only", source)
+		ast, e := commands.run(ctx, "xcrun", "clang", "-std=c11", "-Wall", "-Wextra", "-Werror", "-target", arch+"-apple-macos15.0", "-isysroot", strings.TrimSpace(string(sdk)), "-Xclang", "-ast-dump=json", "-fsyntax-only", source)
 		if e != nil {
 			t.Fatal(e)
 		}
@@ -119,7 +117,7 @@ func TestNativeCrossVersionNameImages(t *testing.T) {
 		for _, v := range fresh.Volumes {
 			inputs[p.artifact+"/"+strings.ReplaceAll(v.Kind, "+", "plus")+".dmg"] = v.ImageSHA256
 			t.Run(fmt.Sprintf("%d/%s", p.major, v.Kind), func(t *testing.T) {
-				nativeImageReadback(t, ctx, out, dir, binary, p.major, v)
+				nativeImageReadback(t, ctx, commands, out, dir, binary, p.major, v)
 				checked += len(v.Native.Cases) * 2
 			})
 		}
@@ -127,32 +125,39 @@ func TestNativeCrossVersionNameImages(t *testing.T) {
 	if checked != 90072 {
 		t.Fatalf("native readbacks%d want90072", checked)
 	}
-	host, e := command(ctx, "sw_vers")
+	host, e := commands.run(ctx, "sw_vers")
 	if e != nil {
 		t.Fatal(e)
 	}
-	compiler, e := command(ctx, "xcrun", "clang", "--version")
+	compiler, e := commands.run(ctx, "xcrun", "clang", "--version")
 	if e != nil {
 		t.Fatal(e)
 	}
-	revision, e := command(ctx, "git", "rev-parse", "HEAD")
+	revision, e := commands.run(ctx, "git", "rev-parse", "HEAD")
 	if e != nil {
 		t.Fatal(e)
 	}
 	rawEvidence := map[string]string{}
-	entries, err := os.ReadDir(out)
+	err := filepath.WalkDir(out, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() || entry.Name() == "report.json" {
+			return nil
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		relative, err := filepath.Rel(out, path)
+		if err != nil {
+			return err
+		}
+		rawEvidence[filepath.ToSlash(relative)] = sum(data)
+		return nil
+	})
 	if err != nil {
 		t.Fatal(err)
-	}
-	for _, entry := range entries {
-		if entry.IsDir() || entry.Name() == "report.json" {
-			continue
-		}
-		data, err := os.ReadFile(filepath.Join(out, entry.Name()))
-		if err != nil {
-			t.Fatal(err)
-		}
-		rawEvidence[entry.Name()] = sum(data)
 	}
 	report := map[string]any{"schema": 1, "host": string(host), "compiler": string(compiler), "sdk": string(sdk), "revision": strings.TrimSpace(string(revision)), "source_sha256": hashes, "input_sha256": inputs, "evidence_sha256": rawEvidence, "observations": checked, "producer_profiles": 3, "volumes": 12}
 	b, e = json.MarshalIndent(report, "", "  ")
@@ -163,7 +168,7 @@ func TestNativeCrossVersionNameImages(t *testing.T) {
 		t.Fatal(e)
 	}
 }
-func nativeImageReadback(t *testing.T, ctx context.Context, out, dir, binary string, major int, v volumeCapture) {
+func nativeImageReadback(t *testing.T, ctx context.Context, commands *nativeCommandRunner, out, dir, binary string, major int, v volumeCapture) {
 	t.Helper()
 	stem := fmt.Sprintf("%d-%s", major, strings.ReplaceAll(v.Kind, "+", "plus"))
 	image := filepath.Join(dir, strings.ReplaceAll(v.Kind, "+", "plus")+".dmg")
@@ -175,50 +180,19 @@ func nativeImageReadback(t *testing.T, ctx context.Context, out, dir, binary str
 	if e = os.Mkdir(mount, 0700); e != nil {
 		t.Fatal(e)
 	}
-	attached, e := command(ctx, "hdiutil", "attach", "-readonly", "-plist", "-nobrowse", "-owners", "on", "-mountpoint", mount, image)
-	if e != nil {
-		t.Fatal(e)
-	}
-	device, parseErr := diskimage.AttachmentDevice(attached)
-	if device == "" {
-		device = mount
-	}
-	defer func() {
-		cleanup, cancel := context.WithTimeout(context.Background(), 45*time.Second)
-		defer cancel()
-		var attempts []map[string]any
-		e := diskimage.RetryDetach(cleanup, func() (int, error) {
-			b, e := exec.CommandContext(cleanup, "hdiutil", "detach", device).CombinedOutput()
-			code := 0
-			if e != nil {
-				code = -1
-				var x *exec.ExitError
-				if errors.As(e, &x) {
-					code = x.ExitCode()
-				}
-			}
-			attempts = append(attempts, map[string]any{"device": device, "exit_code": code, "output": string(b)})
-			return code, e
-		})
-		if e == nil {
-			e = os.Remove(mount)
+	var raw []byte
+	e = withNativeReadbackMount(ctx, commands.run, image, mount, filepath.Join(out, stem+"-detach.json"), func(attached []byte) error {
+		if err := os.WriteFile(filepath.Join(out, stem+"-attach.plist"), attached, 0644); err != nil {
+			return err
 		}
-		b, j := json.Marshal(attempts)
-		if err := errors.Join(e, j, os.WriteFile(filepath.Join(out, stem+"-detach.json"), b, 0644)); err != nil {
-			t.Error(err)
+		var err error
+		raw, err = commands.run(ctx, binary, mount, filepath.Join(dir, "cases.tsv"))
+		if err != nil {
+			return err
 		}
-	}()
-	if parseErr != nil {
-		t.Fatal(parseErr)
-	}
-	if e = os.WriteFile(filepath.Join(out, stem+"-attach.plist"), attached, 0644); e != nil {
-		t.Fatal(e)
-	}
-	raw, e := command(ctx, binary, mount, filepath.Join(dir, "cases.tsv"))
+		return os.WriteFile(filepath.Join(out, stem+"-readback.json"), raw, 0644)
+	})
 	if e != nil {
-		t.Fatal(e)
-	}
-	if e = os.WriteFile(filepath.Join(out, stem+"-readback.json"), raw, 0644); e != nil {
 		t.Fatal(e)
 	}
 	var observed struct {

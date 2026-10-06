@@ -58,34 +58,22 @@ func prepareReplacementAtContext(ctx context.Context, source *os.File, stage *os
 	if basic.Attributes&windows.FILE_ATTRIBUTE_REPARSE_POINT != 0 {
 		return nil, fmt.Errorf("%w: reparse source", ErrUnsupportedReplacement)
 	}
-	file, err := copyReplacementWindows(ctx, source, stage, runReplacementCopy)
-	if err == nil {
-		if basic.Attributes&windows.FILE_ATTRIBUTE_SPARSE_FILE != 0 {
-			var n uint32
-			err = replacementStep(ctx, func() error {
-				return windows.DeviceIoControl(windows.Handle(file.Fd()), windows.FSCTL_SET_SPARSE, nil, 0, nil, 0, &n, nil)
-			})
-		}
-		if err == nil {
-			err = replacementStep(ctx, func() error { return file.Truncate(0) })
-		}
-		if err == nil {
-			err = copyReplacementCompression(ctx, source, file)
-		}
-		if err != nil {
-			return nil, errors.Join(err, file.Close())
-		}
-		return file, nil
+	if basic.Attributes&windows.FILE_ATTRIBUTE_ENCRYPTED == 0 {
+		// BackupRead/Write retain sparse alternate streams and EAs through held
+		// capabilities. CopyFileEx can materialize those sparse streams.
+		return prepareReplacementStreamsAtContext(ctx, source, stage, info)
 	}
-	if !errors.Is(err, errReplacementSourcePathMissing) || basic.Attributes&windows.FILE_ATTRIBUTE_ENCRYPTED != 0 {
+	// Microsoft excludes EFS from BackupRead. Preserve its encrypted streams and
+	// key sets with the contained, identity-checked native copy operation.
+	file, err := copyReplacementWindows(ctx, source, stage, runReplacementCopy)
+	if err != nil {
 		return file, err
 	}
-	// BackupRead is only a held fallback for an unencrypted source whose name is
-	// no longer available. Permission/storage/identity errors never enable it.
-	if cleanup := cleanupReplacement(func() error { return stage.Chmod("replacement", 0600) }, func() error { return stage.Remove("replacement") }); cleanup != nil {
-		return nil, errors.Join(err, cleanup)
+	if err = initializeReplacementData(ctx, source, file, basic); err != nil {
+		return nil, errors.Join(err, file.Close())
 	}
-	return prepareReplacementStreamsAtContext(ctx, source, stage, info)
+	return file, nil
+
 }
 
 func prepareReplacementStreamsAtContext(ctx context.Context, source *os.File, stage *os.Root, _ os.FileInfo) (*os.File, error) {
@@ -111,19 +99,28 @@ func prepareReplacementStreamsAtContext(ctx context.Context, source *os.File, st
 	if closeErr != nil {
 		return nil, errors.Join(closeErr, target.Close())
 	}
-	if basic.Attributes&windows.FILE_ATTRIBUTE_SPARSE_FILE != 0 {
-		var returned uint32
-		if err := windows.DeviceIoControl(windows.Handle(target.Fd()), windows.FSCTL_SET_SPARSE, nil, 0, nil, 0, &returned, nil); err != nil {
-			return nil, errors.Join(err, target.Close())
-		}
-	}
 	if err := copyReplacementStreamsContext(ctx, source, target); err != nil {
 		return nil, errors.Join(err, target.Close())
 	}
-	if err := copyReplacementCompression(ctx, source, target); err != nil {
+	if err := initializeReplacementData(ctx, source, target, basic); err != nil {
 		return nil, errors.Join(err, target.Close())
 	}
 	return target, nil
+}
+
+func initializeReplacementData(ctx context.Context, source, target *os.File, basic replacementBasicInfo) error {
+	if basic.Attributes&windows.FILE_ATTRIBUTE_SPARSE_FILE != 0 {
+		var returned uint32
+		if err := replacementStep(ctx, func() error {
+			return windows.DeviceIoControl(windows.Handle(target.Fd()), windows.FSCTL_SET_SPARSE, nil, 0, nil, 0, &returned, nil)
+		}); err != nil {
+			return err
+		}
+	}
+	if err := replacementStep(ctx, func() error { return target.Truncate(0) }); err != nil {
+		return err
+	}
+	return copyReplacementCompression(ctx, source, target)
 }
 
 func restoreReplacementMetadataAtContext(ctx context.Context, source, target *os.File, info os.FileInfo) error {
