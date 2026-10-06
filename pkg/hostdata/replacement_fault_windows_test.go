@@ -807,6 +807,27 @@ func TestReplacementWindowsHeldUnlinkedSource(t *testing.T) {
 			t.Fatal(seekErr)
 		}
 		t.Logf("nameless native held BackupRead control: %v", backupErr)
+		var streamInfo [4096]byte
+		streamErr := windows.GetFileInformationByHandleEx(handle, windows.FileStreamInfo, &streamInfo[0], uint32(len(streamInfo)))
+		t.Logf("nameless native stream enumeration: error=%v first128=%x", streamErr, streamInfo[:128])
+		for _, streamName := range []string{":metadata", ":metadata:$DATA"} {
+			unicodeName, unicodeErr := windows.NewNTUnicodeString(streamName)
+			if unicodeErr != nil {
+				t.Fatal(unicodeErr)
+			}
+			attributes := windows.OBJECT_ATTRIBUTES{Length: uint32(unsafe.Sizeof(windows.OBJECT_ATTRIBUTES{})), RootDirectory: handle, ObjectName: unicodeName}
+			var streamHandle windows.Handle
+			var streamStatus windows.IO_STATUS_BLOCK
+			openErr := windows.NtCreateFile(&streamHandle, windows.GENERIC_READ|windows.SYNCHRONIZE, &attributes, &streamStatus, nil, 0, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, windows.FILE_OPEN, windows.FILE_NON_DIRECTORY_FILE|windows.FILE_SYNCHRONOUS_IO_NONALERT, 0, 0)
+			if openErr != nil {
+				t.Logf("nameless native relative stream %q: %v", streamName, openErr)
+				continue
+			}
+			named := os.NewFile(uintptr(streamHandle), streamName)
+			streamBytes, readErr := io.ReadAll(named)
+			readErr = errors.Join(readErr, named.Close())
+			t.Logf("nameless native relative stream %q: data=%x error=%v", streamName, streamBytes, readErr)
+		}
 		parent := t.TempDir()
 		replacement, err := prepare(source, parent)
 		if err != nil {
