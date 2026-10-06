@@ -28,6 +28,9 @@ type Mount struct {
 	Identity   string
 	Filesystem string
 	Flags      uint32
+	// CaseSensitive is observed volume name-comparison policy. Nil is unknown.
+	// Already-resolved permission checks do not require it; pathname lookup does.
+	CaseSensitive *bool
 }
 
 // Node supplies an observed vnode's attributes. Observed means the UID, GID,

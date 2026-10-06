@@ -21,7 +21,10 @@ A nil process policy means node-permission policy was not captured. An entitleme
 an override.
 
 Each `Node` supplies observed ownership, complete mode and BSD flags, logical
-inode identity, and its own mount identity, filesystem and flags. ACL observation
+inode identity, and its own mount identity, filesystem and flags. Path lookup also
+requires `Mount.CaseSensitive` from observed volume capabilities; nil means
+unknown. Already-resolved permission checks do not need name-comparison policy.
+ ACL observation
 has three states: `SecurityUncaptured`, `SecurityAbsent` and `SecurityPresent`.
 Absence must be established by source observation. A nil ACL from an incomplete
 extraction is not evidence of absence.

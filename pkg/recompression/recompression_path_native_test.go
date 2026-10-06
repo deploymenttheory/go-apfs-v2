@@ -28,6 +28,9 @@ type nativePathLimitCase struct {
 	LookupErr                    int    `json:"lookup_errno"`
 }
 type nativePathLimits struct {
+	Capabilities  [4]uint32
+	Valid         [4]uint32
+	CapabilityErr int `json:"capability_errno"`
 	Groups        []uint32
 	UID           uint32 `json:"actor_uid"`
 	GID           uint32 `json:"actor_gid"`
@@ -120,64 +123,7 @@ func replayNativePathLimits(t *testing.T, name string) {
 	if strings.Contains(filepath.Base(name), "-macos") && !strings.Contains(filepath.Base(name), fmt.Sprintf("-macos%d.", version.Major)) {
 		t.Fatal("native fixture target mislabeled")
 	}
-	sources := map[string]string{"probe.c": filepath.Join("..", "..", "testdata", "appledouble", "native", "pathname-limits.c"), "capture.go": filepath.Join("..", "..", "scripts", "capture-pathname-limits.go")}
-	if len(capture.Sources) != 15 {
-		t.Fatal("source/SDK/AST inventory differs")
-	}
-	required := []string{"probe.c", "capture.go", "probe", "arm64-apple-macos15.ast.json", "x86_64-apple-macos15.ast.json", "SDK/sys/stat.h", "SDK/sys/mount.h", "SDK/sys/attr.h", "SDK/sys/acl.h", "SDK/sys/fcntl.h", "SDK/sys/resource.h", "SDK/sys/param.h", "XNU/resource_private.h", "XNU/param.h", "XNU/syslimits.h"}
-	for _, key := range required {
-		if _, ok := capture.Sources[key]; !ok {
-			t.Fatal("missing native provenance", key)
-		}
-	}
-	// Fresh capture commands retain every artifact; verify actual bytes before
-	// accepting a bootstrap observation. Retained fixtures pin these digests.
-	if filepath.Base(name) == "capture.json" || filepath.Base(name) == "capture.json.gz" {
-		for key, want := range capture.Sources {
-			artifact, err := os.ReadFile(filepath.Join(filepath.Dir(name), filepath.FromSlash(key)))
-			if err != nil {
-				t.Fatal(err)
-			}
-			sum := sha256.Sum256(artifact)
-			if hex.EncodeToString(sum[:]) != want {
-				t.Fatal("native artifact digest mismatch", key)
-			}
-		}
-	}
-	for key, value := range capture.Sources {
-		digest, err := hex.DecodeString(value)
-		if err != nil || len(digest) != 32 {
-			t.Fatal("invalid source digest", key)
-		}
-	}
-	for _, header := range []string{"resource_private.h", "param.h", "syslimits.h"} {
-		compressed, err := os.ReadFile(filepath.Join("..", "..", "testdata", "appledouble", "native", "pathname-authorization-source", "headers", header+".gz"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		reader, err := gzip.NewReader(bytes.NewReader(compressed))
-		if err != nil {
-			t.Fatal(err)
-		}
-		current, readErr := io.ReadAll(reader)
-		if err = errors.Join(readErr, reader.Close()); err != nil {
-			t.Fatal(err)
-		}
-		sum := sha256.Sum256(current)
-		if capture.Sources["XNU/"+header] != hex.EncodeToString(sum[:]) {
-			t.Fatal("stale native XNU header capture", header)
-		}
-	}
-	for key, path := range sources {
-		current, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatal(err)
-		}
-		sum := sha256.Sum256(current)
-		if capture.Sources[key] != hex.EncodeToString(sum[:]) {
-			t.Fatal("stale native source capture", key)
-		}
-	}
+	verifyNativePathSources(t, name, capture.Sources, "pathname-limits.c", "capture-pathname-limits.go")
 	volumes := map[string]bool{"host": true, "APFS": true, "APFSX": true, "HFS+": true, "HFSX": true}
 	for _, volume := range capture.Volumes {
 		if !volumes[volume.Volume] {
@@ -185,6 +131,9 @@ func replayNativePathLimits(t *testing.T, name string) {
 		}
 		delete(volumes, volume.Volume)
 		n := volume.Native
+		if n.CapabilityErr != 0 || n.Valid[0]&0x100 == 0 {
+			t.Fatal("uncaptured native case-comparison policy")
+		}
 		if len(n.Cases) != 26 || !n.Cleanup || n.Groups == nil || !n.ACLEmpty || n.ProcessErr != 0 || n.ThreadErr != 0 || n.Process != 0 || n.Thread != 0 {
 			t.Fatal("uncaptured ordinary native path context", volume.Volume)
 		}
@@ -192,6 +141,15 @@ func replayNativePathLimits(t *testing.T, name string) {
 		// are never treated as a successful native long-path qualification.
 		if n.SetProcessErr != 1 || n.SetThreadErr != 1 {
 			t.Fatal("native long-path enable outcome needs qualification", n.SetProcessErr, n.SetThreadErr)
+		}
+		if volume.Volume != "host" {
+			filesystem := "apfs"
+			if strings.HasPrefix(volume.Volume, "HFS") {
+				filesystem = "hfs"
+			}
+			if n.Filesystem != filesystem || (n.Capabilities[0]&0x100 != 0) != strings.HasSuffix(volume.Volume, "X") {
+				t.Fatal("mounted path profile mislabeled", volume.Volume)
+			}
 		}
 		ids := pathLimitIDs()
 		for _, c := range n.Cases {
@@ -237,6 +195,8 @@ func replayNativePathLimitCase(t *testing.T, n nativePathLimits, c nativePathLim
 		observation := capture.Nodes[entry.name]
 		observation.Mount.Filesystem = n.Filesystem
 		observation.Mount.Flags = n.Flags
+		caseSensitive := n.Capabilities[0]&0x100 != 0
+		observation.Mount.CaseSensitive = &caseSensitive
 		if entry.security != "" {
 			raw, err := hex.DecodeString(entry.security)
 			if err != nil {
@@ -279,7 +239,7 @@ func replayNativePathLimitCase(t *testing.T, n nativePathLimits, c nativePathLim
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, _, actual := resolvePath(t.Context(), s, records, capture, evaluator, requested, 1024)
+	_, _, actual := resolvePath(t.Context(), s, records, capture, evaluator, requested, 1024, osversion.MacOSProfile(version.Major))
 	var expected error
 	switch c.LookupErr {
 	case 0:
@@ -298,5 +258,74 @@ func replayNativePathLimitCase(t *testing.T, n nativePathLimits, c nativePathLim
 	}
 	if !errors.Is(actual, expected) {
 		t.Fatalf("lookup %q: portable=%v native=%v", c.ID, actual, expected)
+	}
+}
+
+func verifyNativePathSources(t *testing.T, name string, sources map[string]string, oracle, script string) {
+	t.Helper()
+	currentFiles := map[string]string{"probe.c": filepath.Join("..", "..", "testdata", "appledouble", "native", oracle), "capture.go": filepath.Join("..", "..", "scripts", script)}
+	expectedSourceCount := 15
+	if oracle == "name-lookup.c" {
+		expectedSourceCount++
+	}
+	if len(sources) != expectedSourceCount {
+		t.Fatal("source/SDK/AST inventory differs")
+	}
+	required := []string{"probe.c", "capture.go", "probe", "arm64-apple-macos15.ast.json", "x86_64-apple-macos15.ast.json", "SDK/sys/stat.h", "SDK/sys/mount.h", "SDK/sys/attr.h", "SDK/sys/acl.h", "SDK/sys/fcntl.h", "SDK/sys/resource.h", "SDK/sys/param.h", "XNU/resource_private.h", "XNU/param.h", "XNU/syslimits.h"}
+	if oracle == "name-lookup.c" {
+		required = append(required, "SDK/dirent.h")
+	}
+	for _, key := range required {
+		if _, ok := sources[key]; !ok {
+			t.Fatal("missing native provenance", key)
+		}
+	}
+	// Fresh capture commands retain every artifact; verify actual bytes before
+	// accepting a bootstrap observation. Retained fixtures pin these digests.
+	if filepath.Base(name) == "capture.json" || filepath.Base(name) == "capture.json.gz" {
+		for key, want := range sources {
+			artifact, err := os.ReadFile(filepath.Join(filepath.Dir(name), filepath.FromSlash(key)))
+			if err != nil {
+				t.Fatal(err)
+			}
+			sum := sha256.Sum256(artifact)
+			if hex.EncodeToString(sum[:]) != want {
+				t.Fatal("native artifact digest mismatch", key)
+			}
+		}
+	}
+	for key, value := range sources {
+		digest, err := hex.DecodeString(value)
+		if err != nil || len(digest) != 32 {
+			t.Fatal("invalid source digest", key)
+		}
+	}
+	for _, header := range []string{"resource_private.h", "param.h", "syslimits.h"} {
+		compressed, err := os.ReadFile(filepath.Join("..", "..", "testdata", "appledouble", "native", "pathname-authorization-source", "headers", header+".gz"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		reader, err := gzip.NewReader(bytes.NewReader(compressed))
+		if err != nil {
+			t.Fatal(err)
+		}
+		current, readErr := io.ReadAll(reader)
+		if err = errors.Join(readErr, reader.Close()); err != nil {
+			t.Fatal(err)
+		}
+		sum := sha256.Sum256(current)
+		if sources["XNU/"+header] != hex.EncodeToString(sum[:]) {
+			t.Fatal("stale native XNU header capture", header)
+		}
+	}
+	for key, path := range currentFiles {
+		current, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		sum := sha256.Sum256(current)
+		if sources[key] != hex.EncodeToString(sum[:]) {
+			t.Fatal("stale native source capture", key)
+		}
 	}
 }

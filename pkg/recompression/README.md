@@ -147,3 +147,25 @@ prerequisite is qualified. A green SDK
 harness also does not finish codesign Phase 2: its consumer integration, native
 `--preserve-afsc` behavior, full failure matrix, shared resource budgets and
 large-file measurements remain obligations in that project's implementation plan.
+
+### Source name comparison and lookup
+
+`RecompressPath` additionally requires each searched directory's observed
+`Mount.CaseSensitive` value. `NewPathContext` snapshots that pointer along with
+other observations. Capture the source volume's case-sensitivity capability and
+its validity bit; do not infer it from the receiving host or the label "APFS" or
+"HFS+". APFS and HFS+ each have case-sensitive and case-insensitive variants.
+
+After directory search permission succeeds, lookup applies the source
+filesystem's component-length and decoding rules, then its shared name
+comparator. A carrier with two matching siblings returns `ErrConflict`, even if
+one spelling exactly matches the request. Lookup retains the selected original
+manifest name for publication. Creating a new name has different admission
+rules and must not be substituted for lookup of an existing entry.
+
+The native lookup corpus separately captures `O_RDWR` without `O_CREAT`, actual
+creation attempts, stored directory spelling, permission failures and contents.
+For example, HFS+ can resolve illegal UTF-8 bytes through literal percent-escaped
+catalog names, while APFS reports a missing name. Native capture and portable
+replay on macOS 15, 26 and 27 remain mandatory; one fresh bootstrap capture never
+replaces the three retained baselines.

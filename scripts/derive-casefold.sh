@@ -56,9 +56,9 @@ echo "==> Reading the catalog order and deriving the table"
 # Written via a temporary file so a failed derivation cannot leave the
 # committed table truncated.
 go run ./scripts/casefold derive "$WORK/fold.dmg" > "$WORK/casefold_table.go"
-gofmt "$WORK/casefold_table.go" > pkg/hfsplus/casefold_table.go
+gofmt "$WORK/casefold_table.go" > "$WORK/observed-casefold.go"
 
 echo "==> Verifying"
 go test ./pkg/hfsplus/ -run TestCaseFold
 
-echo "==> Done: pkg/hfsplus/casefold_table.go"
+echo "==> Native exploratory ordering verified; production tables use scripts/generate-name-tables.go"

@@ -43,7 +43,7 @@ func putReport(t *testing.T, artifacts fstest.MapFS, dir string, r report) {
 }
 
 func TestCoverage(t *testing.T) {
-	for _, dir := range []string{"appledouble", "strict-xattrs", "example", "compression-owned-coverage"} {
+	for _, dir := range []string{"appledouble", "strict-xattrs", "example", "compression-owned-coverage", "name-comparison-coverage"} {
 		t.Run(dir, func(t *testing.T) {
 			sources, artifacts, _ := fixture(t, dir)
 			if e := Coverage(sources, artifacts, dir, "head", "linux"); e != nil {
@@ -51,7 +51,7 @@ func TestCoverage(t *testing.T) {
 			}
 		})
 	}
-	if len(CoverageDirectories()) != 29 {
+	if len(CoverageDirectories()) != 30 {
 		t.Fatal("inventory changed: update qualification expectations")
 	}
 	cases := []struct {

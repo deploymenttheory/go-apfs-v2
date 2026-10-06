@@ -1,0 +1,76 @@
+name: Filename comparison and image readers
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+concurrency:
+  group: name-comparison-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+permissions:
+  contents: read
+env:
+  CGO_ENABLED: "0"
+  GOTOOLCHAIN: local
+jobs:
+  native-images:
+    name: Comparison images (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, macos-latest, xcode-27]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Capture all native names and validate exact retained profile
+        run: go run scripts/capture-name-collation.go -out artifacts/name-collation -check
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: name-collation-${{ matrix.os }}
+          path: artifacts/name-collation/
+          compression-level: 9
+          if-no-files-found: error
+  readers:
+    name: Name image readers (${{ matrix.os }})
+    needs: native-images
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-15, macos-latest, xcode-27]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: name-collation-*
+          path: artifacts/native-images
+      - name: Verify all native image lookups and production coverage
+        shell: bash
+        run: |
+          export APFS_NAME_IMAGE_ARTIFACTS="$GITHUB_WORKSPACE/artifacts/native-images"
+          go run scripts/verify-name-comparison.go
+      - name: Independently mount all three producer profiles on this macOS
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          export APFS_NAME_IMAGE_ARTIFACTS="$GITHUB_WORKSPACE/artifacts/native-images"
+          go test -count=1 -json -run='^TestNativeCrossVersionNameImages$' scripts/capture-name-collation.go scripts/verify-name-comparison_test.go scripts/verify-name-native_readback_test.go > artifacts/name-native-readback-tests.jsonl
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: name-comparison-${{ matrix.os }}
+          path: |
+            artifacts/name-comparison-coverage/
+            artifacts/name-native-readback/
+            artifacts/name-native-readback-tests.jsonl
+          compression-level: 9
+          if-no-files-found: error

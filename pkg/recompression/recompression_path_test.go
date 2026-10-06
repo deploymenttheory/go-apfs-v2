@@ -29,7 +29,8 @@ func pathFixture(t *testing.T) (*metatransport.Store, string, metatransport.Mani
 		t.Fatal(err)
 	}
 	m.Generation = 2
-	capture := PathCapture{Root: ".", Complete: true, Nodes: map[string]PathObservation{".": {Security: authorization.SecurityAbsent, Mount: authorization.Mount{Identity: "source-volume", Filesystem: "apfs"}}, "file": {Security: authorization.SecurityAbsent, Mount: authorization.Mount{Identity: "source-volume", Filesystem: "apfs"}}}}
+	caseSensitive := false
+	capture := PathCapture{Root: ".", Complete: true, Nodes: map[string]PathObservation{".": {Security: authorization.SecurityAbsent, Mount: authorization.Mount{Identity: "source-volume", Filesystem: "apfs", CaseSensitive: &caseSensitive}}, "file": {Security: authorization.SecurityAbsent, Mount: authorization.Mount{Identity: "source-volume", Filesystem: "apfs", CaseSensitive: &caseSensitive}}}}
 	bound, err := NewPathContext(t.Context(), s, 2, capture)
 	if err != nil {
 		t.Fatal(err)
@@ -190,7 +191,7 @@ func TestOriginalPathTraversal(t *testing.T) {
 		{"", syscall.ENOENT}, {"file\x00tail", metatransport.ErrInvalid}, {"missing", fs.ErrNotExist}, {"loop", syscall.ELOOP}, {"dangling", fs.ErrNotExist}, {"empty", fs.ErrNotExist}, {"nul", metatransport.ErrInvalid}, {"slash", syscall.ENOTDIR}, {"file/", syscall.ENOTDIR}, {"file/child", syscall.ENOTDIR}, {"a", syscall.EISDIR}, {"../file", ErrAuthority}, {"/file", ErrAuthority}, {"absolute", ErrAuthority},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			resolved, _, err := resolvePath(t.Context(), s, records, capture, evaluator, tc.name, 1024)
+			resolved, _, err := resolvePath(t.Context(), s, records, capture, evaluator, tc.name, 1024, osversion.MacOS27)
 			if !errors.Is(err, tc.want) || err == nil && resolved != "file" {
 				t.Fatalf("resolved=%s error=%v want=%v", resolved, err, tc.want)
 			}
@@ -198,24 +199,24 @@ func TestOriginalPathTraversal(t *testing.T) {
 	}
 	capture.FilesystemRoot = true
 	for _, name := range []string{"absolute", "/file", "../file"} {
-		resolved, _, err := resolvePath(t.Context(), s, records, capture, evaluator, name, 1024)
+		resolved, _, err := resolvePath(t.Context(), s, records, capture, evaluator, name, 1024, osversion.MacOS27)
 		if err != nil || resolved != "file" {
 			t.Fatal(name, resolved, err)
 		}
 	}
 	capture.Complete = false
-	if _, _, err := resolvePath(t.Context(), s, records, capture, evaluator, "missing", 1024); !errors.Is(err, ErrAuthority) {
+	if _, _, err := resolvePath(t.Context(), s, records, capture, evaluator, "missing", 1024, osversion.MacOS27); !errors.Is(err, ErrAuthority) {
 		t.Fatal(err)
 	}
 	// Searching a/.. still requires a's search authority; lexical cleaning would incorrectly grant this.
 	denied := uint32(0040600)
 	directory.Darwin.Mode = &denied
 	records["a"] = directory
-	if _, _, err := resolvePath(t.Context(), s, records, capture, evaluator, "a/../file", 1024); !errors.Is(err, syscall.EACCES) {
+	if _, _, err := resolvePath(t.Context(), s, records, capture, evaluator, "a/../file", 1024, osversion.MacOS27); !errors.Is(err, syscall.EACCES) {
 		t.Fatal(err)
 	}
 	delete(records, ".")
-	if _, _, err := resolvePath(t.Context(), s, records, capture, evaluator, "file", 1024); !errors.Is(err, ErrAuthority) {
+	if _, _, err := resolvePath(t.Context(), s, records, capture, evaluator, "file", 1024, osversion.MacOS27); !errors.Is(err, ErrAuthority) {
 		t.Fatal(err)
 	}
 }
@@ -261,12 +262,12 @@ func TestPathObservedSecurityAndFailures(t *testing.T) {
 	fault.borrow = func(context.Context, metatransport.Record) (map[string]appledouble.Value, error) {
 		return nil, sentinel
 	}
-	if _, _, err := resolvePath(t.Context(), fault, records, capture, evaluator, "file", 1024); !errors.Is(err, sentinel) {
+	if _, _, err := resolvePath(t.Context(), fault, records, capture, evaluator, "file", 1024, osversion.MacOS27); !errors.Is(err, sentinel) {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	if _, _, err := resolvePath(ctx, s, records, capture, evaluator, "file", 1024); !errors.Is(err, context.Canceled) {
+	if _, _, err := resolvePath(ctx, s, records, capture, evaluator, "file", 1024, osversion.MacOS27); !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
 	}
 	// Leaf admission remains a separately observable native operation failure.
@@ -371,7 +372,7 @@ func TestPathByteLimitsAndSearchOrdering(t *testing.T) {
 	records := map[string]metatransport.Record{".": m.Records[0], "file": m.Records[1]}
 	for _, limit := range []int{1024, 8192} {
 		for _, length := range []int{limit - 2, limit - 1, limit, limit + 1} {
-			_, _, err := resolvePath(t.Context(), s, records, capture, evaluator, pathOfLength(length), limit)
+			_, _, err := resolvePath(t.Context(), s, records, capture, evaluator, pathOfLength(length), limit, osversion.MacOS27)
 			if length < limit && err != nil || length >= limit && !errors.Is(err, syscall.ENAMETOOLONG) {
 				t.Fatal(limit, length, err)
 			}
@@ -387,7 +388,7 @@ func TestPathByteLimitsAndSearchOrdering(t *testing.T) {
 	}{
 		{"", syscall.ENOENT}, {"file", syscall.EACCES}, {strings.Repeat("x", 256), syscall.EACCES}, {pathOfLength(1023), syscall.EACCES}, {pathOfLength(1024), syscall.ENAMETOOLONG},
 	} {
-		_, _, err := resolvePath(t.Context(), s, records, capture, evaluator, tc.name, 1024)
+		_, _, err := resolvePath(t.Context(), s, records, capture, evaluator, tc.name, 1024, osversion.MacOS27)
 		if !errors.Is(err, tc.want) {
 			t.Fatal(len(tc.name), err, tc.want)
 		}
@@ -407,7 +408,7 @@ func TestPathSymlinkExpansionBoundary(t *testing.T) {
 			name string
 			want error
 		}{{"link", nil}, {"link/", syscall.ENOTDIR}, {"link/x", syscall.ENAMETOOLONG}} {
-			_, _, err := resolvePath(t.Context(), s, records, capture, evaluator, tc.name, 1024)
+			_, _, err := resolvePath(t.Context(), s, records, capture, evaluator, tc.name, 1024, osversion.MacOS27)
 			if !errors.Is(err, tc.want) {
 				t.Fatal(length, tc.name, err)
 			}
@@ -422,7 +423,7 @@ func TestPathSymlinkExpansionBoundary(t *testing.T) {
 			}
 			records[name] = metatransport.Record{Original: name, Kind: "symlink", Target: target}
 		}
-		_, _, err := resolvePath(t.Context(), s, records, capture, evaluator, "link0", 1024)
+		_, _, err := resolvePath(t.Context(), s, records, capture, evaluator, "link0", 1024, osversion.MacOS27)
 		if count <= 32 && err != nil || count == 33 && !errors.Is(err, syscall.ELOOP) {
 			t.Fatal(count, err)
 		}
@@ -446,5 +447,28 @@ func TestPathRequiresObservedLongPathPolicy(t *testing.T) {
 	result, err := RecompressPath(t.Context(), s, pathOfLength(1024), 2, options)
 	if err != nil || !result.Published {
 		t.Fatal(result, err)
+	}
+}
+
+func TestPathSymlinkTerminalSlashProfiles(t *testing.T) {
+	s, _, m, capture, options := pathFixture(t)
+	records := map[string]metatransport.Record{".": m.Records[0], "file": m.Records[1], "link": {Original: "link", Kind: "symlink", Target: "file"}, "target-slash": {Original: "target-slash", Kind: "symlink", Target: "file/"}}
+	for _, profile := range []osversion.MacOSProfile{osversion.MacOS15, osversion.MacOS26, osversion.MacOS27} {
+		evaluator, err := authorization.New(osversion.Version{Major: uint32(profile)}, options.Authority)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, name := range []string{"link/", "link//", "target-slash", "target-slash/", "file/", "link/."} {
+			t.Run(fmt.Sprintf("%d/%s", profile, name), func(t *testing.T) {
+				resolved, _, err := resolvePath(t.Context(), s, records, capture, evaluator, name, 1024, profile)
+				if profile == osversion.MacOS15 && (name == "link/" || name == "link//") {
+					if err != nil || resolved != "file" {
+						t.Fatal(resolved, err)
+					}
+				} else if !errors.Is(err, syscall.ENOTDIR) {
+					t.Fatal(resolved, err)
+				}
+			})
+		}
 	}
 }

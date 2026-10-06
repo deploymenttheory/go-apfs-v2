@@ -1,12 +1,11 @@
 package apfs
 
 import (
-	"unicode"
+	"slices"
 	"unicode/utf16"
 	"unicode/utf8"
 
-	"github.com/deploymenttheory/go-apfs-v2/internal/common"
-	"golang.org/x/text/unicode/norm"
+	"github.com/deploymenttheory/go-apfs-v2/internal/nameunicode"
 )
 
 // Build the table during package initialization. Hashing only reads it, so
@@ -35,129 +34,40 @@ func makeCRC32CTable() [256]uint32 {
 	return table
 }
 
-// CalculateNameHash calculates the APFS name hash from a UTF-8 string.
-// It is safe for concurrent use, including the first call.
-//
-// Note: This implementation uses Go's unicode.ToLower() and norm.NFD for case folding
-// and normalization. The C library has special case mappings for certain Unicode
-// characters (Greek letters, ligatures, etc.) that may not be handled identically
-// by Go's standard library. For most use cases, the Go implementation should produce
-// compatible results. If exact hash matching is required for edge cases, additional
-// special case mapping tables from the C implementation may need to be added.
-func CalculateNameHash(utf8String []byte, useCaseFolding bool) uint32 {
-	var calculatedChecksum uint32 = common.Uint32Mask
-	utf8Index := 0
-
-	// Process each character in the UTF-8 string
-	for utf8Index < len(utf8String) {
-		// Decode UTF-8 character
-		unicodeChar, size := utf8.DecodeRune(utf8String[utf8Index:])
-		if unicodeChar == utf8.RuneError || unicodeChar == 0 {
+// CalculateNameHash calculates APFS's raw CRC-32C over canonical comparison
+// scalars. Valid U+FFFD is a character, not a decoding failure. A terminating
+// NUL or malformed UTF-8 ends the legacy byte-string input.
+func CalculateNameHash(input []byte, fold bool) uint32 {
+	end := 0
+	for end < len(input) {
+		r, n := utf8.DecodeRune(input[end:])
+		if r == 0 || (r == utf8.RuneError && n == 1) {
 			break
 		}
-		utf8Index += size
-
-		// Apply case folding if requested
-		if useCaseFolding {
-			unicodeChar = unicode.ToLower(unicodeChar)
-		}
-
-		// Apply NFD (Canonical Decomposition) normalization
-		normalized := norm.NFD.String(string(unicodeChar))
-
-		// Process each rune in the normalized string
-		for _, nfdChar := range normalized {
-			// Convert to little-endian uint32 and process with CRC32
-			// Process 4 bytes (as per the C implementation)
-			unicodeValue := uint32(nfdChar)
-
-			// Process byte 0
-			byteValue := uint8(unicodeValue & 0xFF)
-			checksumTableIndex := (calculatedChecksum ^ uint32(byteValue)) & 0xFF
-			calculatedChecksum = crc32CTable[checksumTableIndex] ^ (calculatedChecksum >> 8)
-			unicodeValue >>= 8
-
-			// Process byte 1
-			byteValue = uint8(unicodeValue & 0xFF)
-			checksumTableIndex = (calculatedChecksum ^ uint32(byteValue)) & 0xFF
-			calculatedChecksum = crc32CTable[checksumTableIndex] ^ (calculatedChecksum >> 8)
-			unicodeValue >>= 8
-
-			// Process byte 2
-			byteValue = uint8(unicodeValue & 0xFF)
-			checksumTableIndex = (calculatedChecksum ^ uint32(byteValue)) & 0xFF
-			calculatedChecksum = crc32CTable[checksumTableIndex] ^ (calculatedChecksum >> 8)
-			unicodeValue >>= 8
-
-			// Process byte 3
-			byteValue = uint8(unicodeValue & 0xFF)
-			checksumTableIndex = (calculatedChecksum ^ uint32(byteValue)) & 0xFF
-			calculatedChecksum = crc32CTable[checksumTableIndex] ^ (calculatedChecksum >> 8)
-		}
+		end += n
 	}
-
-	// Mask to 22 bits (0x003fffff)
-	return calculatedChecksum & 0x003fffff
+	return hashName(nameunicode.APFS(string(input[:end]), fold))
 }
 
-// CalculateNameHashFromUTF16 calculates the APFS name hash from a UTF-16 string.
-// It is safe for concurrent use, including the first call.
-//
-// Note: This implementation uses Go's unicode.ToLower() and norm.NFD for case folding
-// and normalization. See CalculateNameHash for details about special case handling.
-func CalculateNameHashFromUTF16(utf16String []uint16, useCaseFolding bool) uint32 {
-	var calculatedChecksum uint32 = common.Uint32Mask
+// CalculateNameHashFromUTF16 hashes UTF-16 through the same canonical pipeline.
+func CalculateNameHashFromUTF16(input []uint16, fold bool) uint32 {
+	end := 0
+	for end < len(input) && input[end] != 0 {
+		end++
+	}
+	return hashName(nameunicode.APFS(UTF16ToString(input[:end]), fold))
+}
 
-	// Decode UTF-16 to runes
-	runes := utf16.Decode(utf16String)
-
-	// Process each rune
-	for _, unicodeChar := range runes {
-		// Stop at null terminator
-		if unicodeChar == 0 {
-			break
-		}
-
-		// Apply case folding if requested
-		if useCaseFolding {
-			unicodeChar = unicode.ToLower(unicodeChar)
-		}
-
-		// Apply NFD (Canonical Decomposition) normalization
-		normalized := norm.NFD.String(string(unicodeChar))
-
-		// Process each rune in the normalized string
-		for _, nfdChar := range normalized {
-			// Convert to little-endian uint32 and process with CRC32
-			unicodeValue := uint32(nfdChar)
-
-			// Process byte 0
-			byteValue := uint8(unicodeValue & 0xFF)
-			checksumTableIndex := (calculatedChecksum ^ uint32(byteValue)) & 0xFF
-			calculatedChecksum = crc32CTable[checksumTableIndex] ^ (calculatedChecksum >> 8)
-			unicodeValue >>= 8
-
-			// Process byte 1
-			byteValue = uint8(unicodeValue & 0xFF)
-			checksumTableIndex = (calculatedChecksum ^ uint32(byteValue)) & 0xFF
-			calculatedChecksum = crc32CTable[checksumTableIndex] ^ (calculatedChecksum >> 8)
-			unicodeValue >>= 8
-
-			// Process byte 2
-			byteValue = uint8(unicodeValue & 0xFF)
-			checksumTableIndex = (calculatedChecksum ^ uint32(byteValue)) & 0xFF
-			calculatedChecksum = crc32CTable[checksumTableIndex] ^ (calculatedChecksum >> 8)
-			unicodeValue >>= 8
-
-			// Process byte 3
-			byteValue = uint8(unicodeValue & 0xFF)
-			checksumTableIndex = (calculatedChecksum ^ uint32(byteValue)) & 0xFF
-			calculatedChecksum = crc32CTable[checksumTableIndex] ^ (calculatedChecksum >> 8)
+func hashName(scalars []rune) uint32 {
+	checksum := uint32(0xffffffff)
+	for _, r := range scalars {
+		value := uint32(r)
+		for range 4 {
+			checksum = crc32CTable[(checksum^value)&255] ^ (checksum >> 8)
+			value >>= 8
 		}
 	}
-
-	// Mask to 22 bits (0x003fffff)
-	return calculatedChecksum & 0x003fffff
+	return checksum & 0x3fffff
 }
 
 // UTF16ToString converts a UTF-16 slice to a UTF-8 string
@@ -172,77 +82,13 @@ func StringToUTF16(str string) []uint16 {
 	return utf16.Encode(runes)
 }
 
-// CompareNamesWithUTF8 compares two names using UTF-8 encoding with optional case folding
-// Returns 0 if equal, <0 if name1 < name2, >0 if name1 > name2
-func CompareNamesWithUTF8(name1 []byte, name2 []byte, useCaseFolding bool) int {
-	// Apply normalization and case folding as needed
-	str1 := string(name1)
-	str2 := string(name2)
-
-	if useCaseFolding {
-		// Apply case folding (convert to lowercase for comparison)
-		str1Runes := []rune(str1)
-		str2Runes := []rune(str2)
-
-		for i := range str1Runes {
-			str1Runes[i] = unicode.ToLower(str1Runes[i])
-		}
-		for i := range str2Runes {
-			str2Runes[i] = unicode.ToLower(str2Runes[i])
-		}
-
-		str1 = string(str1Runes)
-		str2 = string(str2Runes)
-	}
-
-	// Apply NFD normalization
-	str1 = norm.NFD.String(str1)
-	str2 = norm.NFD.String(str2)
-
-	// Compare
-	if str1 < str2 {
-		return -1
-	} else if str1 > str2 {
-		return 1
-	}
-	return 0
+// CompareNamesWithUTF8 compares canonical APFS names using full case folding
+// when requested. Admission by a specific macOS version is a separate policy.
+func CompareNamesWithUTF8(a, b []byte, fold bool) int {
+	return slices.Compare(nameunicode.APFS(string(a), fold), nameunicode.APFS(string(b), fold))
 }
 
-// CompareNamesWithUTF16 compares two names using UTF-16 encoding with optional case folding
-// Returns 0 if equal, <0 if name1 < name2, >0 if name1 > name2
-func CompareNamesWithUTF16(name1 []uint16, name2 []uint16, useCaseFolding bool) int {
-	// Convert UTF-16 to string
-	str1 := UTF16ToString(name1)
-	str2 := UTF16ToString(name2)
-
-	if useCaseFolding {
-		// Apply case folding (convert to lowercase for comparison)
-		str1Runes := []rune(str1)
-		str2Runes := []rune(str2)
-
-		for i := range str1Runes {
-			str1Runes[i] = unicode.ToLower(str1Runes[i])
-		}
-		for i := range str2Runes {
-			str2Runes[i] = unicode.ToLower(str2Runes[i])
-		}
-
-		str1 = string(str1Runes)
-		str2 = string(str2Runes)
-	}
-
-	// Apply NFD normalization
-	str1 = norm.NFD.String(str1)
-	str2 = norm.NFD.String(str2)
-
-	// Compare
-	if str1 < str2 {
-		return -1
-	} else if str1 > str2 {
-		return 1
-	}
-	return 0
+// CompareNamesWithUTF16 uses the same comparison pipeline for UTF-16 names.
+func CompareNamesWithUTF16(a, b []uint16, fold bool) int {
+	return CompareNamesWithUTF8([]byte(UTF16ToString(a)), []byte(UTF16ToString(b)), fold)
 }
-
-// Note: Helper functions for file system keys (CreateFileSystemKey, ExtractIdentifierFromKey, etc.)
-// are defined in btree_key_value.go

@@ -43,9 +43,9 @@ echo "==> Reading the stored names back and deriving the table"
 # Written via a temporary file so a failed derivation cannot leave the
 # committed table truncated.
 go run ./scripts/normalize derive "$WORK/norm.dmg" > "$WORK/normalize_table.go"
-gofmt "$WORK/normalize_table.go" > pkg/hfsplus/normalize_table.go
+gofmt "$WORK/normalize_table.go" > "$WORK/observed-normalization.go"
 
 echo "==> Verifying"
 go test ./pkg/hfsplus/ -run TestNormalize
 
-echo "==> Done: pkg/hfsplus/normalize_table.go"
+echo "==> Native BMP normalization verified; production tables use scripts/generate-name-tables.go"

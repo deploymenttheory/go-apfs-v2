@@ -1,6 +1,7 @@
-name: Native pathname limits
+name: Native existing-name lookup
 
 on:
+  pull_request:
   workflow_call:
   workflow_dispatch:
 
@@ -8,7 +9,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: pathname-limits-${{ github.event_name }}-${{ github.ref }}
+  group: name-lookup-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: false
 
 env:
@@ -17,7 +18,7 @@ env:
 
 jobs:
   native:
-    name: Native path limits (${{ matrix.os }})
+    name: Native name lookup (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
@@ -30,23 +31,23 @@ jobs:
         with:
           go-version-file: go.mod
       - name: Capture every mounted and ordinary native limit control
-        run: go run scripts/capture-pathname-limits.go -out artifacts/pathname-limits
+        run: go run scripts/capture-name-lookup.go -out artifacts/name-lookup
       - name: Replay the complete fresh native capture through the production resolver
         env:
-          APFS_PATHNAME_LIMITS_CAPTURE: ${{ github.workspace }}/artifacts/pathname-limits/capture.json.gz
-        run: go test -tags native_path_limits_fresh ./pkg/recompression -run '^TestFreshNativePathLimits$' -count=1 -v
+          APFS_NAME_LOOKUP_CAPTURE: ${{ github.workspace }}/artifacts/name-lookup/capture.json.gz
+        run: go test -tags native_name_lookup_fresh ./pkg/recompression -run '^TestFreshNativeNameLookup$' -count=1 -v
       - name: Retain native outputs, complete ASTs, source bytes and mount cleanup evidence
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: pathname-limits-${{ matrix.os }}
-          path: artifacts/pathname-limits/
+          name: name-lookup-${{ matrix.os }}
+          path: artifacts/name-lookup/
           if-no-files-found: error
       - name: Require all three retained native release profiles
-        run: go test ./pkg/recompression -run '^TestNativePathLimits$' -count=1 -v
+        run: go test ./pkg/recompression -run '^TestNativeNameLookup$' -count=1 -v
 
   portable:
-    name: Replay path limits (${{ matrix.os }})
+    name: Replay name lookup (${{ matrix.os }})
     needs: native
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
@@ -60,4 +61,4 @@ jobs:
         with:
           go-version-file: go.mod
       - name: Replay all three mandatory retained native release profiles
-        run: go test ./pkg/recompression -run '^TestNativePathLimits$' -count=1 -v
+        run: go test ./pkg/recompression -run '^TestNativeNameLookup$' -count=1 -v

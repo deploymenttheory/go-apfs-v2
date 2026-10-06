@@ -12,6 +12,7 @@ import (
 	"github.com/deploymenttheory/go-apfs-v2/pkg/authorization"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/metatransport"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/osversion"
 )
 
 // PathObservation records explicit source security and mount context for one
@@ -79,6 +80,10 @@ func NewPathContext(ctx context.Context, store *metatransport.Store, generation 
 	copy := capture
 	copy.Nodes = make(map[string]PathObservation, len(capture.Nodes))
 	for name, value := range capture.Nodes {
+		if value.Mount.CaseSensitive != nil {
+			policy := *value.Mount.CaseSensitive
+			value.Mount.CaseSensitive = &policy
+		}
 		copy.Nodes[name] = value
 	}
 	return &PathContext{store: store, generation: generation, digest: sha256.Sum256(encoded), capture: copy}, nil
@@ -155,7 +160,7 @@ func recompressPath(ctx context.Context, store *metatransport.Store, name string
 	for _, record := range manifest.Records {
 		records[record.Original] = record
 	}
-	resolved, leaf, err := resolvePath(ctx, store, records, bound.capture, evaluator, name, limit)
+	resolved, leaf, err := resolvePath(ctx, store, records, bound.capture, evaluator, name, limit, osversion.MacOSProfile(options.Target.Major))
 	if err != nil {
 		return Result{}, err
 	}
@@ -191,7 +196,7 @@ func observedNode(ctx context.Context, store carrier, record metatransport.Recor
 	return node, nil
 }
 
-func resolvePath(ctx context.Context, store carrier, records map[string]metatransport.Record, capture PathCapture, evaluator *authorization.Evaluator, name string, limit int) (string, authorization.Node, error) {
+func resolvePath(ctx context.Context, store carrier, records map[string]metatransport.Record, capture PathCapture, evaluator *authorization.Evaluator, name string, limit int, profile osversion.MacOSProfile) (string, authorization.Node, error) {
 	if strings.IndexByte(name, 0) >= 0 {
 		return "", authorization.Node{}, metatransport.ErrInvalid
 	}
@@ -258,8 +263,10 @@ func resolvePath(ctx context.Context, store carrier, records map[string]metatran
 			current = path.Dir(current)
 			continue
 		}
-		next := path.Join(current, component)
-		record, ok := records[next]
+		next, record, ok, err := lookupPathComponent(records, current, component, directory.Mount)
+		if err != nil {
+			return "", authorization.Node{}, err
+		}
 		if !ok {
 			return "", authorization.Node{}, missing()
 		}
@@ -289,6 +296,12 @@ func resolvePath(ctx context.Context, store carrier, records map[string]metatran
 					return "", authorization.Node{}, ErrAuthority
 				}
 				current = capture.Root
+			}
+			// macOS 15 loses caller terminal slashes when the final component
+			// expands a symlink; 26/27 preserve the directory requirement. Slashes
+			// belonging to the link target itself are parsed normally below.
+			if profile == osversion.MacOS15 && remaining == "" {
+				parts = nil
 			}
 			parts = append(strings.Split(record.Target, "/"), parts...)
 			continue
