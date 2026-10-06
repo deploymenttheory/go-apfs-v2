@@ -1,0 +1,138 @@
+name: Native macOS 15 loop (temporary)
+on:
+  workflow_dispatch:
+concurrency:
+  group: name-native15-loop-${{ github.ref }}
+  cancel-in-progress: false
+permissions:
+  contents: read
+env:
+  CGO_ENABLED: "0"
+  GOTOOLCHAIN: local
+jobs:
+  native-images:
+    name: Loop producer (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, macos-latest, xcode-27]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
+      - name: Capture all native names and validate exact retained profile
+        run: |
+          apfs-ci-runner --suite name-native15-loop/native-images/step3 --timeout 39m -- go run scripts/capture-name-collation.go -out artifacts/name-collation -check
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          include-hidden-files: true
+          name: name-collation-${{ matrix.os }}
+          path: artifacts/name-collation/
+          compression-level: 9
+          if-no-files-found: error
+      - name: Retain complete CI command diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: ci-observability-name-native15-loop-native-images-${{ strategy.job-index || 0 }}-${{ github.run_attempt }}
+          path: artifacts/ci-observability/
+          compression-level: 9
+          if-no-files-found: error
+  native-readers:
+    name: Loop cell (producer ${{ matrix.producer }}, receiver 15, ${{ matrix.filesystem }})
+    needs: native-images
+    runs-on: macos-15
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {producer: 15, filesystem: APFS}
+          - {producer: 26, filesystem: APFS}
+          - {producer: 26, filesystem: APFSX}
+          - {producer: 27, filesystem: APFS}
+          - {producer: 27, filesystem: APFSX}
+    env:
+      APFS_NAME_PRODUCER: ${{ matrix.producer }}
+      APFS_NAME_RECEIVER: "15"
+      APFS_NAME_FILESYSTEM: ${{ matrix.filesystem }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: name-collation-*
+          path: artifacts/native-images
+      - name: Build native image readback harness
+        timeout-minutes: 5
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/name-native-build
+          apfs-ci-runner --suite name-native15-loop/native-readers/step4 --timeout 4m -- go test -c -o "$GITHUB_WORKSPACE/artifacts/name-native-build/native-readback.test" scripts/capture-name-collation.go scripts/verify-name-comparison_test.go scripts/verify-name-native_readback_test.go scripts/verify-name-native_commands_test.go 2>&1 | tee artifacts/name-native-build/build.log
+      - name: Prepare source-bound receiver checkpoint without mounting images
+        timeout-minutes: 2
+        shell: bash
+        run: |
+          set -euo pipefail
+          export APFS_NAME_IMAGE_ARTIFACTS="$GITHUB_WORKSPACE/artifacts/native-images"
+          cd scripts
+          apfs-ci-runner --suite name-native15-loop/native-readers/prepare --timeout 90s -- go tool test2json -t -p command-line-arguments "$GITHUB_WORKSPACE/artifacts/name-native-build/native-readback.test" -test.v=test2json -test.count=1 -test.timeout=1m -test.run='^TestPrepareNativeNameReceiver$'
+      - name: Capture independent native receiver expectations
+        timeout-minutes: 5
+        shell: bash
+        run: |
+          set -euo pipefail
+          export APFS_NAME_IMAGE_ARTIFACTS="$GITHUB_WORKSPACE/artifacts/native-images"
+          cd scripts
+          apfs-ci-runner --suite name-native15-loop/native-readers/reference --timeout 4m -- go tool test2json -t -p command-line-arguments "$GITHUB_WORKSPACE/artifacts/name-native-build/native-readback.test" -test.v=test2json -test.count=1 -test.timeout=3m -test.run='^TestCaptureNativeNameReceiver$' | tee "$GITHUB_WORKSPACE/artifacts/name-native-reference-tests.jsonl"
+      - name: Preserve receiver reference before independent replay
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: name-native-reference-${{ matrix.producer }}-15-${{ matrix.filesystem }}
+          path: |
+            artifacts/name-native-reference/
+            artifacts/name-native-reference-tests.jsonl
+          compression-level: 9
+          if-no-files-found: error
+      - name: Read every case in this producer image on the actual receiver
+        timeout-minutes: 7
+        shell: bash
+        run: |
+          set -euo pipefail
+          export APFS_NAME_IMAGE_ARTIFACTS="$GITHUB_WORKSPACE/artifacts/native-images"
+          cd scripts
+          apfs-ci-runner --suite name-native15-loop/native-readers/step6 --timeout 6m -- go tool test2json -t -p command-line-arguments "$GITHUB_WORKSPACE/artifacts/name-native-build/native-readback.test" -test.v=test2json -test.count=1 -test.timeout=5m -test.run='^TestNativeCrossVersionNameImages$' | tee "$GITHUB_WORKSPACE/artifacts/name-native-readback-tests.jsonl"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          include-hidden-files: true
+          name: name-native-cell-${{ matrix.producer }}-15-${{ matrix.filesystem }}
+          path: |
+            artifacts/name-native-readback/
+            artifacts/name-native-readback-tests.jsonl
+            artifacts/name-native-reference-tests.jsonl
+          compression-level: 9
+          if-no-files-found: error
+      - name: Retain complete CI command diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: ci-observability-name-native15-loop-native-readers-${{ strategy.job-index || 0 }}-${{ github.run_attempt }}
+          path: artifacts/ci-observability/
+          compression-level: 9
+          if-no-files-found: error
