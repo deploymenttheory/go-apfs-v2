@@ -81,12 +81,9 @@ func TestTailClosedMissingReplacedAndNonRegular(t *testing.T) {
 	c := makeCommand()
 	c.tail(f)
 	c.finish(nil)
-	f, err = os.CreateTemp(t.TempDir(), "missing")
-	if err != nil {
-		t.Fatal(err)
-	}
+	f = createMovableFile(t, filepath.Join(t.TempDir(), "missing"))
 	defer f.Close()
-	if err = os.Remove(f.Name()); err != nil {
+	if err = os.Rename(f.Name(), f.Name()+"-held"); err != nil {
 		t.Fatal(err)
 	}
 	c = makeCommand()
@@ -96,10 +93,7 @@ func TestTailClosedMissingReplacedAndNonRegular(t *testing.T) {
 	if !strings.Contains(b.String(), "progress unavailable") {
 		t.Fatal(b.String())
 	}
-	f, err = os.CreateTemp(t.TempDir(), "replaced")
-	if err != nil {
-		t.Fatal(err)
-	}
+	f = createMovableFile(t, filepath.Join(t.TempDir(), "replaced"))
 	defer f.Close()
 	if err = os.Rename(f.Name(), f.Name()+"-old"); err != nil {
 		t.Fatal(err)
@@ -160,12 +154,10 @@ func TestStartupMonitoringIndependentOfBlockingPreparation(t *testing.T) {
 
 func TestStrictCommandFailsMissingProgressFile(t *testing.T) {
 	r, _ := testReporter(t)
-	f, err := os.CreateTemp(t.TempDir(), "removed")
-	if err != nil {
-		t.Fatal(err)
-	}
+	f := createMovableFile(t, filepath.Join(t.TempDir(), "removed"))
+	var err error
 	defer f.Close()
-	if err = os.Remove(f.Name()); err != nil {
+	if err = os.Rename(f.Name(), f.Name()+"-held"); err != nil {
 		t.Fatal(err)
 	}
 	c := helper(t, "json", r)

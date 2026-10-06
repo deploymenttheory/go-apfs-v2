@@ -12,6 +12,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"go/build"
+	"io"
 	"io/fs"
 	"os"
 	"path"
@@ -207,6 +209,8 @@ func validateReportingTranscript(raw []byte, required []string) (int, error) {
 var reportingLocation = regexp.MustCompile(`^([^:]+):[1-9][0-9]*\.[1-9][0-9]*,[1-9][0-9]*\.[1-9][0-9]*$`)
 
 func validateReportingCoverage(source fs.FS, raw []byte, required []string) (map[string]reportingCount, map[string]reportingCount, error) {
+	buildContext := build.Default
+	buildContext.OpenFile = func(name string) (io.ReadCloser, error) { return source.Open(filepath.ToSlash(name)) }
 	files := map[string]reportingCount{}
 	packages := map[string]reportingCount{}
 	for _, pkg := range required {
@@ -221,6 +225,13 @@ func validateReportingCoverage(source fs.FS, raw []byte, required []string) (map
 		found := false
 		for _, name := range names {
 			if !strings.HasSuffix(name, "_test.go") {
+				active, err := buildContext.MatchFile(pkg, path.Base(name))
+				if err != nil {
+					return nil, nil, err
+				}
+				if !active {
+					continue
+				}
 				files[name] = reportingCount{}
 				found = true
 			}

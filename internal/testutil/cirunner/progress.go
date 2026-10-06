@@ -127,7 +127,7 @@ func (c *Cmd) tail(file *os.File) (result error) {
 	if !info.Mode().IsRegular() {
 		return nil
 	}
-	reader, err := os.Open(file.Name())
+	reader, err := openObservationFile(file.Name())
 	if err != nil {
 		c.reporter.emit(fmt.Sprintf("CONSOLE command=%q file progress unavailable: %v; raw sink unchanged", c.label, err))
 		return err

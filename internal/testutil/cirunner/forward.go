@@ -50,7 +50,7 @@ func (f *FileForwarder) Stop(ctx context.Context) error {
 
 func (f *FileForwarder) run() {
 	defer close(f.done)
-	reader, err := os.Open(f.path)
+	reader, err := openObservationFile(f.path)
 	if err != nil {
 		f.err = err
 		return

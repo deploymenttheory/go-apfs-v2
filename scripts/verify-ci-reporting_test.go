@@ -4,6 +4,7 @@ package main
 
 import (
 	"fmt"
+	"runtime"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -64,5 +65,28 @@ func TestCIReportingCoverageRequiresAllProductionFiles(t *testing.T) {
 	}
 	if _, _, err := validateReportingCoverage(sources, []byte(good), []string{"missing"}); err == nil {
 		t.Fatal("missing source package")
+	}
+}
+
+func TestCIReportingCoverageRequiresEveryActivePlatformFile(t *testing.T) {
+	source := fstest.MapFS{
+		"p/common.go":  {Data: []byte("package p\n")},
+		"p/current.go": {Data: []byte("//go:build " + runtime.GOOS + "\n\npackage p\n")},
+		"p/foreign.go": {Data: []byte("//go:build !" + runtime.GOOS + "\n\npackage p\n")},
+	}
+	profile := "mode: atomic\n" + reportingModule + "p/common.go:1.1,1.2 1 1\n" + reportingModule + "p/current.go:1.1,1.2 1 1\n"
+	files, _, err := validateReportingCoverage(source, []byte(profile), []string{"p"})
+	if err != nil || len(files) != 2 {
+		t.Fatal(files, err)
+	}
+	if _, _, err = validateReportingCoverage(source, []byte(strings.ReplaceAll(profile, reportingModule+"p/current.go:1.1,1.2 1 1\n", "")), []string{"p"}); err == nil {
+		t.Fatal("accepted missing active platform coverage")
+	}
+	if _, _, err = validateReportingCoverage(source, []byte(profile+reportingModule+"p/foreign.go:1.1,1.2 1 1\n"), []string{"p"}); err == nil {
+		t.Fatal("accepted inactive platform coverage")
+	}
+	source["p/current.go"] = &fstest.MapFile{Data: []byte("//go:build (\n\npackage p\n")}
+	if _, _, err = validateReportingCoverage(source, []byte(profile), []string{"p"}); err == nil {
+		t.Fatal("accepted invalid build constraint")
 	}
 }

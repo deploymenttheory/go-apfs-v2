@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -85,18 +86,20 @@ func TestForwardFileOpenWriteAndIdentityFailures(t *testing.T) {
 	for _, test := range []string{"missing", "directory", "error", "short", "replace", "remove"} {
 		t.Run(test, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "raw")
-			f, err := os.Create(path)
-			if err != nil {
-				t.Fatal(err)
-			}
+			f := createMovableFile(t, path)
+			var err error
 			defer f.Close()
 			_, _ = f.WriteString("payload")
 			var writer io.Writer = io.Discard
 			switch test {
 			case "missing":
-				_ = os.Remove(path)
+				if err = os.Rename(path, path+"-held"); err != nil {
+					t.Fatal(err)
+				}
 			case "directory":
-				_ = os.Remove(path)
+				if err = os.Rename(path, path+"-held"); err != nil {
+					t.Fatal(err)
+				}
 				if err = os.Mkdir(path, 0700); err != nil {
 					t.Fatal(err)
 				}
@@ -108,16 +111,28 @@ func TestForwardFileOpenWriteAndIdentityFailures(t *testing.T) {
 			if test == "replace" || test == "remove" {
 				b := &blockedWriter{entered: make(chan struct{}), release: make(chan struct{})}
 				forward := ForwardFile(f, b)
+				var release sync.Once
+				t.Cleanup(func() {
+					release.Do(func() { close(b.release) })
+					ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+					defer cancel()
+					_ = forward.Stop(ctx)
+				})
 				<-b.entered
-				if err = os.Remove(path); err != nil {
+				if err = os.Rename(path, path+"-held"); err != nil {
 					t.Fatal(err)
+				}
+				if test == "remove" {
+					if err = os.Remove(path + "-held"); err != nil {
+						t.Fatal(err)
+					}
 				}
 				if test == "replace" {
 					if err = os.WriteFile(path, []byte("other"), 0600); err != nil {
 						t.Fatal(err)
 					}
 				}
-				close(b.release)
+				release.Do(func() { close(b.release) })
 				err = forward.Stop(t.Context())
 				if err == nil {
 					t.Fatal("lost identity failure")
