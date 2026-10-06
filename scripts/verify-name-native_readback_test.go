@@ -241,7 +241,7 @@ func runNativeNameImages(t *testing.T, reference, prepare bool) {
 				continue
 			}
 			t.Run(fmt.Sprintf("%d/%s", p.major, v.Kind), func(t *testing.T) {
-				nativeImageReadback(t, ctx, commands, out, dir, binary, string(host), p.major, v, reference, false)
+				nativeImageReadback(t, ctx, commands, out, dir, binary, string(host), p.major, v, reference)
 				checked += len(v.Native.Cases) * 2
 			})
 		}
@@ -297,7 +297,7 @@ func runNativeNameImages(t *testing.T, reference, prepare bool) {
 		t.Fatal(e)
 	}
 }
-func nativeImageReadback(t *testing.T, ctx context.Context, commands *nativeCommandRunner, out, dir, binary, host string, major int, v volumeCapture, reference, diagnostic bool) {
+func nativeImageReadback(t *testing.T, ctx context.Context, commands *nativeCommandRunner, out, dir, binary, host string, major int, v volumeCapture, reference bool) {
 	t.Helper()
 	stem := fmt.Sprintf("%d-%s", major, strings.ReplaceAll(v.Kind, "+", "plus"))
 	image := filepath.Join(dir, strings.ReplaceAll(v.Kind, "+", "plus")+".dmg")
@@ -306,7 +306,7 @@ func nativeImageReadback(t *testing.T, ctx context.Context, commands *nativeComm
 		t.Fatal("native image hash", e)
 	}
 	var want []byte
-	if !reference && !diagnostic {
+	if !reference {
 		cell := nativeNameCell{Producer: major, Filesystem: v.Kind}
 		version, err := osversion.ParseProductVersion(host)
 		if err != nil {
@@ -352,8 +352,6 @@ func nativeImageReadback(t *testing.T, ctx context.Context, commands *nativeComm
 		if err = os.WriteFile(filepath.Join(out, stem+"-observations.json"), normalized, 0644); err != nil {
 			t.Fatal(err)
 		}
-	} else if diagnostic {
-		validateNativeNameResults(t, raw, v.Native.Cases, len(v.Native.Cases))
 	} else {
 		if err := compareNativeReceiver(raw, want, v.Native.Cases); err != nil {
 			t.Fatal(err)
@@ -524,16 +522,6 @@ func parseNativeReceiver(raw []byte, expected []nativeCase) ([]byte, error) {
 	}
 	_, err = validateNativeObservations(encoded, expected, len(expected))
 	return encoded, err
-}
-
-// Supplemental diagnostics validate shape and identity without pretending that
-// producer lookup errno qualifies a receiving kernel. The full gate additionally
-// requires a separate, complete receiver reference and successful replay.
-func validateNativeNameResults(t *testing.T, raw []byte, expected []nativeCase, required int) {
-	t.Helper()
-	if _, err := validateNativeObservations(raw, expected, required); err != nil {
-		t.Fatal(err)
-	}
 }
 
 func loadNativeReceiverReference(out string, cell nativeNameCell, host string, v volumeCapture, input string) ([]byte, error) {

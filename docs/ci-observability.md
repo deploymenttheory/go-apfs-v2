@@ -164,24 +164,8 @@ the default remains `artifacts`. Existing output directories are rejected. Run
 `TestCaptureNativeNameReceiver` before `TestNativeCrossVersionNameImages` with
 the same explicit producer/receiver/filesystem selection and producer inputs.
 
-For a native operation that does not return, the supplemental held-syscall route
-preserves descriptor state between workflow steps and uploads a checkpoint before
-each operation. Dispatch `name-comparison.yml` with `diagnostic_only=true`,
-`syscall_boundaries=true`, an exact retained `diagnostic_case`, producer profile,
-filesystem and completed producer run. Its observations and cleanup are checked,
-but it cannot qualify the full matrix. Receiver errors are observations, while
-missing results, interrupted calls and failed cleanup remain failures.
-
 The aggregate job initializes reporting before testing upstream job results, so
 a cancelled dependency produces a retained command failure instead of preventing
 the diagnostics directory from being created. This does not convert cancellation
 into success. Native kernel or runner nontermination can still prevent later
-uploads; pre-execution checkpoints survive independently of those later steps.
-
-Pull-request image producers may run at GitHub's generated merge commit rather
-than the run API's branch `head_sha`. Supplemental diagnostics retain the commit
-API response and require the captured revision to have exactly two parents:
-the recorded PR base and the immutable run head, in that order. Wrong repository,
-run, event, revision or parent relationships fail. Branch-head captures retain
-their existing exact-revision check; source hashes are never relabeled. Held
-syscall checkpoints also retain the actual APFS driver, kernel and SDK metadata.
+uploads; the preparation checkpoint survives independently of those later steps.

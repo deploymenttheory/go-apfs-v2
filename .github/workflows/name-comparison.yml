@@ -2,66 +2,16 @@ name: Filename comparison and image readers
 on:
   workflow_call:
   workflow_dispatch:
-    inputs:
-      diagnostic_only:
-        description: Run supplemental per-image macOS 15 diagnostics; cannot qualify the full gate
-        type: boolean
-        default: false
-      command_boundaries:
-        description: Supplemental single-image host, attach, readback and detach checkpoints
-        type: boolean
-        default: false
-      syscall_boundaries:
-        description: Supplemental held-descriptor syscall checkpoints; never qualifies the full matrix
-        type: boolean
-        default: false
-      diagnostic_case:
-        description: Exact retained case ID for supplemental boundary diagnostics; empty means all cases
-        type: string
-        default: ""
-      diagnostic_profile:
-        type: string
-        default: "26"
-      diagnostic_filesystem:
-        type: string
-        default: APFS
-      producer_run:
-        description: Completed genuine image producer run for supplemental diagnostics
-        type: string
-        default: "37433253504"
 concurrency:
-  group: name-comparison-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}${{ inputs.command_boundaries && format('-boundary-{0}-{1}-{2}', inputs.diagnostic_profile, inputs.diagnostic_filesystem, inputs.diagnostic_case || 'all') || (inputs.diagnostic_only && '-diagnostic' || '') }}
+  group: name-comparison-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 permissions:
   contents: read
-  actions: read
 env:
   CGO_ENABLED: "0"
   GOTOOLCHAIN: local
 jobs:
-  supplemental-diagnostic:
-    if: github.event_name == 'workflow_dispatch' && inputs.diagnostic_only && !inputs.command_boundaries && !inputs.syscall_boundaries
-    uses: ./.github/workflows/name-image-diagnostic.yml
-    with:
-      producer_run: ${{ inputs.producer_run }}
-  boundary-diagnostic:
-    if: github.event_name == 'workflow_dispatch' && inputs.diagnostic_only && inputs.command_boundaries && !inputs.syscall_boundaries
-    uses: ./.github/workflows/name-image-boundary-diagnostic.yml
-    with:
-      producer_run: ${{ inputs.producer_run }}
-      profile: ${{ inputs.diagnostic_profile }}
-      filesystem: ${{ inputs.diagnostic_filesystem }}
-      case_id: ${{ inputs.diagnostic_case }}
-  syscall-diagnostic:
-    if: github.event_name == 'workflow_dispatch' && inputs.diagnostic_only && inputs.syscall_boundaries
-    uses: ./.github/workflows/name-syscall-diagnostic.yml
-    with:
-      producer_run: ${{ inputs.producer_run }}
-      profile: ${{ inputs.diagnostic_profile }}
-      filesystem: ${{ inputs.diagnostic_filesystem }}
-      case_id: ${{ inputs.diagnostic_case }}
   native-images:
-    if: inputs.diagnostic_only != true
     name: Comparison images (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 40
@@ -263,7 +213,7 @@ jobs:
           if-no-files-found: error
   qualify-matrix:
     name: Qualify complete producer and receiver matrix
-    if: always() && inputs.diagnostic_only != true
+    if: always()
     needs: [native-images, readers, native-readers]
     runs-on: ubuntu-latest
     timeout-minutes: 10
