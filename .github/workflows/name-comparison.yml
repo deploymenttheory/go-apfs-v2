@@ -7,6 +7,10 @@ on:
         description: Run supplemental per-image macOS 15 diagnostics; cannot qualify the full gate
         type: boolean
         default: false
+      syscall_trace:
+        description: Supplemental single-process syscall checkpoints; cannot qualify the full gate
+        type: boolean
+        default: false
       command_boundaries:
         description: Supplemental single-image host, attach, readback and detach checkpoints
         type: boolean
@@ -26,7 +30,7 @@ on:
         type: string
         default: "37433253504"
 concurrency:
-  group: name-comparison-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}${{ inputs.command_boundaries && format('-boundary-{0}-{1}-{2}', inputs.diagnostic_profile, inputs.diagnostic_filesystem, inputs.diagnostic_case || 'all') || (inputs.diagnostic_only && '-diagnostic' || '') }}
+  group: name-comparison-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}${{ inputs.syscall_trace && format('-syscalls-{0}-{1}-{2}', inputs.diagnostic_profile, inputs.diagnostic_filesystem, inputs.diagnostic_case) || inputs.command_boundaries && format('-boundary-{0}-{1}-{2}', inputs.diagnostic_profile, inputs.diagnostic_filesystem, inputs.diagnostic_case || 'all') || (inputs.diagnostic_only && '-diagnostic' || '') }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 permissions:
   contents: read
@@ -36,13 +40,21 @@ env:
   GOTOOLCHAIN: local
 jobs:
   supplemental-diagnostic:
-    if: github.event_name == 'workflow_dispatch' && inputs.diagnostic_only && !inputs.command_boundaries
+    if: github.event_name == 'workflow_dispatch' && inputs.diagnostic_only && !inputs.command_boundaries && !inputs.syscall_trace
     uses: ./.github/workflows/name-image-diagnostic.yml
     with:
       producer_run: ${{ inputs.producer_run }}
   boundary-diagnostic:
-    if: github.event_name == 'workflow_dispatch' && inputs.diagnostic_only && inputs.command_boundaries
+    if: github.event_name == 'workflow_dispatch' && inputs.diagnostic_only && inputs.command_boundaries && !inputs.syscall_trace
     uses: ./.github/workflows/name-image-boundary-diagnostic.yml
+    with:
+      producer_run: ${{ inputs.producer_run }}
+      profile: ${{ inputs.diagnostic_profile }}
+      filesystem: ${{ inputs.diagnostic_filesystem }}
+      case_id: ${{ inputs.diagnostic_case }}
+  syscall-diagnostic:
+    if: github.event_name == 'workflow_dispatch' && inputs.diagnostic_only && inputs.syscall_trace
+    uses: ./.github/workflows/name-syscall-diagnostic.yml
     with:
       producer_run: ${{ inputs.producer_run }}
       profile: ${{ inputs.diagnostic_profile }}
