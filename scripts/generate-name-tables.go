@@ -1,7 +1,6 @@
 //go:build ignore
 
 // Generate versioned normalization and HFS comparison tables from pinned sources.
-//
 package main
 
 import (
@@ -11,6 +10,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"go/format"
 	"io"
@@ -21,6 +21,8 @@ import (
 	"strconv"
 	"strings"
 )
+
+var check = flag.Bool("check", false, "verify committed tables without writing")
 
 const primary = "testdata/appledouble/native/name-comparison-source"
 
@@ -43,14 +45,17 @@ func read(p string) []byte {
 }
 func parse(s string) rune { v, e := strconv.ParseInt(s, 16, 32); must(e); return rune(v) }
 func main() {
+	flag.Parse()
 	var manifest struct {
 		Sources []struct{ File, SHA256 string }
 	}
-	must(json.Unmarshal(read(primary+"/sources.json"), &manifest))
-	for _, s := range manifest.Sources {
-		h := sha256.Sum256(read(filepath.Join(primary, s.File)))
-		if hex.EncodeToString(h[:]) != s.SHA256 {
-			panic("source hash " + s.File)
+	for _, dir := range []string{primary, "testdata/appledouble/native/name-collation-source"} {
+		must(json.Unmarshal(read(dir+"/sources.json"), &manifest))
+		for _, source := range manifest.Sources {
+			h := sha256.Sum256(read(filepath.Join(dir, source.File)))
+			if hex.EncodeToString(h[:]) != source.SHA256 {
+				panic("source hash " + source.File)
+			}
 		}
 	}
 	var out bytes.Buffer
@@ -167,6 +172,12 @@ func writeMap(out *bytes.Buffer, name string, m map[rune]string) {
 func write(p string, b []byte) {
 	b, e := format.Source(b)
 	must(e)
+	if *check {
+		if !bytes.Equal(read(p), b) {
+			panic("generated table differs: " + p)
+		}
+		return
+	}
 	must(os.MkdirAll(filepath.Dir(p), 0755))
 	must(os.WriteFile(p, b, 0644))
 }

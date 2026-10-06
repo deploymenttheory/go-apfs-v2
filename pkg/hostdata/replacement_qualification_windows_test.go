@@ -208,7 +208,7 @@ func replacementTestStage(t *testing.T) (*os.Root, *os.Root, string) {
 }
 
 func TestReplacementWindowsCopyCallbacks(t *testing.T) {
-	for _, name := range []string{"success", "empty", "cancel-first", "cancel-after-copy", "cancel-after-copy-restrictive", "omitted-callback", "wrong-source", "ancestor-rename", "posix-ancestor-rename", "source-rebind", "dangling-leaf"} {
+	for _, name := range []string{"success", "empty", "cancel-first", "cancel-after-copy", "cancel-after-copy-restrictive", "omitted-callback", "wrong-source", "ancestor-rename", "posix-ancestor-rename", "source-rebind", "source-missing", "stage-closed-after-copy", "anchor-cleanup-failure", "dangling-leaf"} {
 		t.Run(name, func(t *testing.T) {
 			root, stage, parent := replacementTestStage(t)
 			sourcePath := filepath.Join(t.TempDir(), "source")
@@ -283,12 +283,14 @@ func TestReplacementWindowsCopyCallbacks(t *testing.T) {
 						t.Fatalf("POSIX ancestor containment: %v", e)
 					}
 				}
-				if name == "source-rebind" {
+				if name == "source-rebind" || name == "source-missing" {
 					if e := os.Rename(sourcePath, sourcePath+"-held"); e != nil {
 						t.Fatal(e)
 					}
-					if e := os.WriteFile(sourcePath, []byte("wrong source"), 0600); e != nil {
-						t.Fatal(e)
+					if name == "source-rebind" {
+						if e := os.WriteFile(sourcePath, []byte("wrong source"), 0600); e != nil {
+							t.Fatal(e)
+						}
 					}
 				}
 				if name == "dangling-leaf" {
@@ -304,12 +306,28 @@ func TestReplacementWindowsCopyCallbacks(t *testing.T) {
 					return nil
 				}
 				e := runReplacementCopy(from, to, state)
+				if name == "stage-closed-after-copy" {
+					if e != nil {
+						t.Fatalf("native copy control: %v", e)
+					}
+					if closeErr := stage.Close(); closeErr != nil {
+						t.Fatal(closeErr)
+					}
+				}
+				if name == "anchor-cleanup-failure" {
+					if e != nil {
+						t.Fatalf("native copy control: %v", e)
+					}
+					if attributeErr := stage.Chmod("anchor", 0400); attributeErr != nil {
+						t.Fatal(attributeErr)
+					}
+				}
 				if name == "cancel-after-copy" || name == "cancel-after-copy-restrictive" {
 					cancel()
 				}
 				return e
 			})
-			wantError := name == "cancel-first" || (name == "cancel-after-copy" || name == "cancel-after-copy-restrictive") || name == "omitted-callback" || name == "wrong-source" || name == "source-rebind" || name == "dangling-leaf"
+			wantError := name == "cancel-first" || (name == "cancel-after-copy" || name == "cancel-after-copy-restrictive") || name == "omitted-callback" || name == "wrong-source" || name == "source-rebind" || name == "source-missing" || name == "stage-closed-after-copy" || name == "anchor-cleanup-failure" || name == "dangling-leaf"
 			if wantError {
 				if err == nil || copied != nil {
 					t.Fatalf("unsafe copy accepted: %v", err)
@@ -328,6 +346,36 @@ func TestReplacementWindowsCopyCallbacks(t *testing.T) {
 			if name == "cancel-first" || (name == "cancel-after-copy" || name == "cancel-after-copy-restrictive") {
 				if !errors.Is(err, context.Canceled) {
 					t.Fatalf("cancellation lost: %v", err)
+				}
+			}
+			if name == "source-missing" && !errors.Is(err, errReplacementSourcePathMissing) {
+				t.Fatalf("lost missing-source classification: %v", err)
+			}
+			if name == "stage-closed-after-copy" || name == "anchor-cleanup-failure" {
+				wantCause := error(os.ErrClosed)
+				if name == "anchor-cleanup-failure" {
+					wantCause = windows.ERROR_ACCESS_DENIED
+					if e := stage.Chmod("anchor", 0600); e != nil {
+						t.Fatal(e)
+					}
+					if e := stage.Remove("anchor"); e != nil {
+						t.Fatal(e)
+					}
+				}
+				if seen == 0 || !errors.Is(err, wantCause) {
+					t.Fatalf("late root loss: callbacks=%d error=%v", seen, err)
+				}
+				pointer, e := windows.UTF16PtrFromString(filepath.Join(parent, "private", "replacement"))
+				if e != nil {
+					t.Fatal(e)
+				}
+				// An exclusive data open fails if any acquired copy capability leaked.
+				handle, e := windows.CreateFile(pointer, windows.GENERIC_READ|windows.GENERIC_WRITE, 0, nil, windows.OPEN_EXISTING, 0, 0)
+				if e != nil {
+					t.Fatalf("late root failure leaked destination handle: %v", e)
+				}
+				if e = windows.CloseHandle(handle); e != nil {
+					t.Fatal(e)
 				}
 			}
 			if name == "cancel-after-copy-restrictive" {

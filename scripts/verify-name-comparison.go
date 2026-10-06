@@ -42,8 +42,8 @@ func run() error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Minute)
 	defer cancel()
-	packages := "./pkg/apfs,./pkg/hfsplus,./internal/nameunicode"
-	commands := [][]string{{"test", "-count=1", "-json", "-covermode=atomic", "-coverpkg=" + packages, "-coverprofile=" + filepath.Join(out, "unit.coverage.out"), "./pkg/apfs", "./pkg/hfsplus", "./internal/nameunicode"}, {"test", "-count=1", "-json", "-covermode=atomic", "-coverpkg=" + packages, "-coverprofile=" + filepath.Join(out, "images.coverage.out"), "scripts/capture-name-collation.go", "scripts/verify-name-comparison_test.go"}}
+	packages := "./pkg/apfs,./pkg/apfswrite,./pkg/hfsplus,./internal/nameunicode"
+	commands := [][]string{{"test", "-count=1", "-json", "-covermode=atomic", "-coverpkg=" + packages, "-coverprofile=" + filepath.Join(out, "unit.coverage.out"), "./pkg/apfs", "./pkg/apfswrite", "./pkg/hfsplus", "./internal/nameunicode"}, {"test", "-count=1", "-json", "-covermode=atomic", "-coverpkg=" + packages, "-coverprofile=" + filepath.Join(out, "images.coverage.out"), "scripts/capture-name-collation.go", "scripts/verify-name-comparison_test.go"}}
 	var logs []string
 	for i, args := range commands {
 		path := filepath.Join(out, []string{"unit-tests.jsonl", "image-tests.jsonl"}[i])
@@ -66,7 +66,7 @@ func run() error {
 	if e != nil {
 		return e
 	}
-	required := []string{"TestCanonicalPipelines", "TestCompleteNativeScalarAdmission", "TestCreateNameTargetAdmission", "TestHFSEscapedByteConversion", "TestNameCollationNativeEvidence", "TestNameCollationNativeEvidence/15", "TestNameCollationNativeEvidence/26", "TestNameCollationNativeEvidence/27", "TestNameHashInputBoundaries", "TestNameEncodingComparison", "TestSharedNameComparison", "TestLookupNameValidation", "TestIllegalUTF8CatalogAliases", "TestNativeNameImageReaders"}
+	required := []string{"TestCanonicalPipelines", "TestCompleteNativeScalarAdmission", "TestCreateNameTargetAdmission", "TestHFSEscapedByteConversion", "TestNameCollationNativeEvidence", "TestNameCollationNativeEvidence/15", "TestNameCollationNativeEvidence/26", "TestNameCollationNativeEvidence/27", "TestNameHashInputBoundaries", "TestNameEncodingComparison", "TestSharedNameComparison", "TestLookupNameValidation", "TestIllegalUTF8CatalogAliases", "TestNativeNameImageReaders", "TestDirectoryLookupValidatesBeforeReading", "TestNativeNormalizedComponentReader", "TestCreationNamesBeforeOutput", "TestCreationNamePreflight"}
 	for _, major := range []string{"15", "26", "27"} {
 		for _, kind := range []string{"APFS", "APFSX", "HFS+", "HFSX"} {
 			required = append(required, "TestNativeNameImageReaders/"+major+"/"+kind)
@@ -83,7 +83,7 @@ func run() error {
 	}
 	selected := map[string][2]int64{}
 	var total count
-	for _, p := range []string{"internal/nameunicode/normalize.go", "internal/nameunicode/admission.go", "pkg/apfs/name_hash.go", "pkg/apfs/name_lookup.go", "pkg/apfs/name_create.go", "pkg/hfsplus/name_compare.go", "pkg/hfsplus/name_lookup.go", "pkg/hfsplus/normalize.go", "pkg/hfsplus/casefold_table.go", "pkg/hfsplus/volume.go"} {
+	for _, p := range []string{"internal/nameunicode/normalize.go", "internal/nameunicode/admission.go", "pkg/apfs/file_system_btree.go", "pkg/apfswrite/writer.go", "pkg/apfswrite/name_admission.go", "pkg/apfs/name_hash.go", "pkg/apfs/name_lookup.go", "pkg/apfs/name_create.go", "pkg/hfsplus/name_create.go", "pkg/hfsplus/writer.go", "pkg/hfsplus/name_compare.go", "pkg/hfsplus/name_lookup.go", "pkg/hfsplus/normalize.go", "pkg/hfsplus/casefold_table.go", "pkg/hfsplus/volume.go"} {
 		c := totals[p]
 		selected[p] = [2]int64{c.Covered, c.Statements}
 		total.Covered += c.Covered
@@ -100,10 +100,12 @@ func run() error {
 		x.Statements += c.Statements
 		packageTotals[pkg] = x
 	}
-	if c := packageTotals["internal/nameunicode"]; c.Statements == 0 || c.Covered*100 <= c.Statements*95 {
-		return fmt.Errorf("whole nameunicode must exceed95%%: %+v", c)
+	for _, pkg := range []string{"internal/nameunicode", "pkg/apfswrite"} {
+		if c := packageTotals[pkg]; c.Statements == 0 || c.Covered*100 <= c.Statements*95 {
+			return fmt.Errorf("whole %s must exceed 95%%: %+v", pkg, c)
+		}
 	}
-	sources, e := evidenceaudit.SourceHashes(os.DirFS("."), []string{"internal/nameunicode/*.go", "pkg/apfs/*.go", "pkg/hfsplus/*.go", "scripts/*name*", "testdata/appledouble/native/name-*.c", "testdata/appledouble/native/name-*.json.gz", "testdata/appledouble/native/name-collation-source/*", "testdata/appledouble/native/name-comparison-source/*", ".github/workflows/name-comparison.yml", "go.mod", "go.sum"})
+	sources, e := evidenceaudit.SourceHashes(os.DirFS("."), []string{"internal/nameunicode/*.go", "pkg/apfs/*.go", "pkg/apfswrite/*.go", "pkg/hfsplus/*.go", "scripts/*name*", "testdata/appledouble/native/name-*.c", "testdata/appledouble/native/name-*.json.gz", "testdata/appledouble/native/name-collation-source/*", "testdata/appledouble/native/name-comparison-source/*", ".github/workflows/name-comparison.yml", "go.mod", "go.sum"})
 	if e != nil {
 		return e
 	}

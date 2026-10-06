@@ -13,7 +13,7 @@ that restart. This supports the macOS 15 route that discards a caller's terminal
 slash after following the final symlink; a slash inside the link target is parsed
 again. Genuine macOS 26/27 captures instead require a directory for the original
 terminal slash. The version routing is established by native results; this older
-source is not presented as the implementation of an unreleased kernel source tree.
+source is not presented as the implementation of macOS 26/27.
 
 Run from the repository root:
 

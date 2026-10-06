@@ -42,6 +42,15 @@ func readComparisonCapture(t *testing.T, path string) capture {
 }
 
 func TestNativeNameImageReaders(t *testing.T) {
+	original, e := os.Getwd()
+	if e != nil {
+		t.Fatal(e)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(original); err != nil {
+			t.Error(err)
+		}
+	})
 	root, e := filepath.Abs("..")
 	if e != nil {
 		t.Fatal(e)

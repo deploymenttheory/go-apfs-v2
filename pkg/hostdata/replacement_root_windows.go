@@ -196,7 +196,7 @@ func (b *replacementBackup) close() error {
 func copyReplacementStreamsContext(ctx context.Context, source, target *os.File) (err error) {
 	input, err := reopenReplacementFile(source, windows.GENERIC_READ)
 	if err != nil {
-		return err
+		return fmt.Errorf("reopen held replacement stream source: %w", err)
 	}
 	defer func() { err = errors.Join(err, input.Close()) }()
 	r := &replacementBackup{file: input, call: replacementBackupRead}

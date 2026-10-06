@@ -13,12 +13,19 @@ import (
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/osversion"
 )
 
 // CreateOptions configures CreateContainer. The zero value is valid: it formats
 // a 4096-byte-block, normalization-sensitive-by-default, case-insensitive
 // volume named "untitled" with deterministic default UUIDs.
 type CreateOptions struct {
+	// TargetVersion selects native filename creation admission. Zero means the
+	// documented macOS27 profile on every host; it never inspects the receiver.
+	// Explicit macOS15/26/27 targets are supported. Existing-image readers do not
+	// apply this creation policy to on-disk keys.
+	TargetVersion osversion.Version
+
 	// BlockSize is the container block size in bytes. Zero means 4096, and 4096
 	// is the only accepted value.
 	//
@@ -359,6 +366,9 @@ func CreateContainer(w io.WriterAt, sizeBytes int64, opts *CreateOptions) error 
 
 	specs, err := volumeSpecs(opts)
 	if err != nil {
+		return err
+	}
+	if err := validateCreationNames(opts.TargetVersion, specs); err != nil {
 		return err
 	}
 	if err := b.setVolumes(specs); err != nil {

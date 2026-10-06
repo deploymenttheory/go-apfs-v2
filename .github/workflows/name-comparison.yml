@@ -53,6 +53,12 @@ jobs:
         with:
           pattern: name-collation-*
           path: artifacts/native-images
+      - name: Verify reproducible native-qualified tables
+        run: |
+          go run scripts/generate-name-tables.go -check
+          go run scripts/generate-name-admission.go -check
+      - name: Verify strict harness rejection tests
+        run: go test scripts/verify-name-comparison.go scripts/verify-name-comparison_gate_test.go
       - name: Verify all native image lookups and production coverage
         shell: bash
         run: |

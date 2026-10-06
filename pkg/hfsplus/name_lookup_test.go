@@ -1,7 +1,9 @@
 package hfsplus
 
 import (
+	"bytes"
 	"errors"
+	"io/fs"
 	"strings"
 	"syscall"
 	"testing"
@@ -27,5 +29,34 @@ func TestIllegalUTF8CatalogAliases(t *testing.T) {
 				t.Fatal("invalidbytes aliased replacementscalar")
 			}
 		}
+	}
+}
+
+func TestNativeNormalizedComponentReader(t *testing.T) {
+	image := &memWriterAt{}
+	root := &Entry{Children: []*Entry{{Name: "x%80y", Data: []byte("native percent alias")}}}
+	if err := CreateImage(image, 0, "Names", root, nil); err != nil {
+		t.Fatal(err)
+	}
+	volume, err := New(bytes.NewReader(image.b))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = volume.lookup("x\x80y"); err != nil {
+		t.Fatal("low-level native percent alias", err)
+	}
+	if _, err = volume.ReadFile("x\x80y"); !errors.Is(err, fs.ErrInvalid) {
+		t.Fatal("io/fs raw invalidUTF8 contract", err)
+	}
+	name, err := NormalizeLookupName("x\x80y")
+	if err != nil || name != "x%80y" {
+		t.Fatal(name, err)
+	}
+	data, err := volume.ReadFile(name)
+	if err != nil || string(data) != "native percent alias" {
+		t.Fatal(string(data), err)
+	}
+	if _, err = volume.lookup(strings.Repeat("a", 256)); !errors.Is(err, syscall.ENAMETOOLONG) {
+		t.Fatal("low-level component length", err)
 	}
 }

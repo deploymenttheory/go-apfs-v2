@@ -17,3 +17,20 @@ func TestLookupNameValidation(t *testing.T) {
 		}
 	}
 }
+
+type unexpectedNameRead struct{}
+
+func (unexpectedNameRead) ReadAt([]byte, int64) (int, error) {
+	panic("invalid component reached image reader")
+}
+func TestDirectoryLookupValidatesBeforeReading(t *testing.T) {
+	tree := &FileSystemBTree{}
+	for _, c := range []struct {
+		name string
+		want error
+	}{{"x\x80y", syscall.ENOENT}, {strings.Repeat("a", 256), syscall.ENAMETOOLONG}, {"a\x00b", syscall.EINVAL}, {"a/b", syscall.EINVAL}} {
+		if _, err := tree.DirectoryEntryRecordByUTF8Name(unexpectedNameRead{}, 2, c.name, 0); !errors.Is(err, c.want) {
+			t.Fatal(c.name, err, c.want)
+		}
+	}
+}

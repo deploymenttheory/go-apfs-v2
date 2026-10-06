@@ -322,6 +322,22 @@ func TestReplacementWindowsNativeFailures(t *testing.T) {
 			}
 		})
 	}
+	t.Run("copy closed root", func(t *testing.T) {
+		file, e := copyReplacementWindows(t.Context(), live, root, runReplacementCopy)
+		if e == nil || file != nil {
+			t.Fatalf("closed stage admitted copy: %v %v", file, e)
+		}
+	})
+	t.Run("copy closed source", func(t *testing.T) {
+		_, stage, _ := replacementTestStage(t)
+		file, e := copyReplacementWindows(t.Context(), closed, stage, runReplacementCopy)
+		if e == nil || file != nil {
+			t.Fatalf("closed source admitted copy: %v %v", file, e)
+		}
+		if _, e = stage.Stat("anchor"); !errors.Is(e, os.ErrNotExist) {
+			t.Fatalf("source admission failure retained anchor: %v", e)
+		}
+	})
 	if replacementCopyProgress(0, 0, 0, 0) != 1 {
 		t.Fatal("unknown callback capability accepted")
 	}
@@ -710,6 +726,21 @@ func TestReplacementWindowsHeldUnlinkedSource(t *testing.T) {
 		if _, err = source.ReadAt(got, 0); err != nil || !bytes.Equal(got, payload) {
 			t.Fatalf("native held read control: %q %v", got, err)
 		}
+		var nativeInfo windows.ByHandleFileInformation
+		infoErr := windows.GetFileInformationByHandle(handle, &nativeInfo)
+		finalName, nameErr := replacementFinalPath(t.Context(), source)
+		reopened, reopenErr := reopenReplacementFile(source, windows.GENERIC_READ)
+		if reopened != nil {
+			reopenErr = errors.Join(reopenErr, reopened.Close())
+		}
+		t.Logf("nameless native controls: links=%d info_error=%v final_name=%q path_error=%v reopen_error=%v", nativeInfo.NumberOfLinks, infoErr, finalName, nameErr, reopenErr)
+		backup := &replacementBackup{file: source, call: replacementBackupRead}
+		_, backupErr := io.Copy(io.Discard, backup)
+		backupErr = errors.Join(backupErr, backup.close())
+		if _, seekErr := source.Seek(7, io.SeekStart); seekErr != nil {
+			t.Fatal(seekErr)
+		}
+		t.Logf("nameless native held BackupRead control: %v", backupErr)
 		parent := t.TempDir()
 		replacement, err := prepare(source, parent)
 		if err != nil {

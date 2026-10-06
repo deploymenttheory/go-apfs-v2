@@ -1,7 +1,6 @@
 name: Native existing-name lookup
 
 on:
-  pull_request:
   workflow_call:
   workflow_dispatch:
 

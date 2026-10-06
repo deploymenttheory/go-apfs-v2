@@ -21,6 +21,15 @@ func TestNativeCrossVersionNameImages(t *testing.T) {
 	if runtime.GOOS != "darwin" {
 		t.Fatal("native cross-version qualification requires Darwin")
 	}
+	original, e := os.Getwd()
+	if e != nil {
+		t.Fatal(e)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(original); err != nil {
+			t.Error(err)
+		}
+	})
 	root, e := filepath.Abs("..")
 	if e != nil {
 		t.Fatal(e)
@@ -89,18 +98,26 @@ func TestNativeCrossVersionNameImages(t *testing.T) {
 		t.Fatal(e)
 	}
 	hashes["native-binary"] = sum(b)
+	inputs := map[string]string{}
 	checked := 0
 	for _, p := range []struct {
 		major    int
 		artifact string
 	}{{15, "name-collation-macos-15"}, {26, "name-collation-macos-latest"}, {27, "name-collation-xcode-27"}} {
 		dir := filepath.Join(base, p.artifact)
-		fresh := readComparisonCapture(t, filepath.Join(dir, "native.json.gz"))
+		capturePath := filepath.Join(dir, "native.json.gz")
+		input, err := os.ReadFile(capturePath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		inputs[p.artifact+"/native.json.gz"] = sum(input)
+		fresh := readComparisonCapture(t, capturePath)
 		prior := readComparisonCapture(t, fmt.Sprintf("testdata/appledouble/native/name-collation-macos%d.json.gz", p.major))
 		if e = compareStable(prior, fresh); e != nil {
 			t.Fatal(e)
 		}
 		for _, v := range fresh.Volumes {
+			inputs[p.artifact+"/"+strings.ReplaceAll(v.Kind, "+", "plus")+".dmg"] = v.ImageSHA256
 			t.Run(fmt.Sprintf("%d/%s", p.major, v.Kind), func(t *testing.T) {
 				nativeImageReadback(t, ctx, out, dir, binary, p.major, v)
 				checked += len(v.Native.Cases) * 2
@@ -122,7 +139,22 @@ func TestNativeCrossVersionNameImages(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	report := map[string]any{"schema": 1, "host": string(host), "compiler": string(compiler), "sdk": string(sdk), "revision": strings.TrimSpace(string(revision)), "source_sha256": hashes, "observations": checked, "producer_profiles": 3, "volumes": 12}
+	rawEvidence := map[string]string{}
+	entries, err := os.ReadDir(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || entry.Name() == "report.json" {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(out, entry.Name()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		rawEvidence[entry.Name()] = sum(data)
+	}
+	report := map[string]any{"schema": 1, "host": string(host), "compiler": string(compiler), "sdk": string(sdk), "revision": strings.TrimSpace(string(revision)), "source_sha256": hashes, "input_sha256": inputs, "evidence_sha256": rawEvidence, "observations": checked, "producer_profiles": 3, "volumes": 12}
 	b, e = json.MarshalIndent(report, "", "  ")
 	if e != nil {
 		t.Fatal(e)
@@ -168,6 +200,9 @@ func nativeImageReadback(t *testing.T, ctx context.Context, out, dir, binary str
 			attempts = append(attempts, map[string]any{"device": device, "exit_code": code, "output": string(b)})
 			return code, e
 		})
+		if e == nil {
+			e = os.Remove(mount)
+		}
 		b, j := json.Marshal(attempts)
 		if err := errors.Join(e, j, os.WriteFile(filepath.Join(out, stem+"-detach.json"), b, 0644)); err != nil {
 			t.Error(err)

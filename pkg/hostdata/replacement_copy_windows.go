@@ -267,14 +267,14 @@ func copyReplacementWindows(ctx context.Context, source *os.File, stage *os.Root
 	}()
 	sourceID, err := replacementHeldIdentity(source)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("query held replacement source identity: %w", err)
 	}
 	from, err := replacementFinalPath(ctx, source)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, errors.Join(errReplacementSourcePathMissing, err)
 		}
-		return nil, err
+		return nil, fmt.Errorf("resolve held replacement source path: %w", err)
 	}
 	anchored, err := replacementFinalPath(ctx, anchor)
 	if err != nil {

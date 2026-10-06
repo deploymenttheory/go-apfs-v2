@@ -361,10 +361,14 @@ func (v *Volume) lookup(name string) (*entry, error) {
 		// Stored names are decomposed, so a caller passing a precomposed one --
 		// which is what a Go string literal or a path from most systems holds --
 		// would not match without this.
-		next := findChild(current, normalizeName(catalogName(part)), v.caseSensitive)
+		normalized, err := NormalizeLookupName(part)
+		if err != nil {
+			return nil, fmt.Errorf("component %q: %w", part, err)
+		}
+		next := findChild(current, catalogName(normalized), v.caseSensitive)
 		if next == nil && part != catalogName(part) {
 			// A volume written by something that stored the colon verbatim.
-			next = findChild(current, normalizeName(part), v.caseSensitive)
+			next = findChild(current, normalized, v.caseSensitive)
 		}
 		if next == nil {
 			return nil, fmt.Errorf("no such file or directory: %q", part)

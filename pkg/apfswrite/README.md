@@ -101,3 +101,23 @@ ownership, permissions and selected BSD flags into target and its hard-link
 aliases. Destination `Times` must be explicit. Inspect `Applied` and executor
 diagnostics before serializing. HFS+ exposes the same API; see
 [image stat staging](../../docs/appledouble-image-stat.md).
+
+### Filename policy
+
+`CreateOptions.TargetVersion` selects the macOS creation policy for ordinary
+filesystem entries. Set `osversion.Version{Major: 15}`, `26`, or `27` explicitly
+when targeting that version. The zero value selects macOS 27 on every host;
+it never queries the operating system running the writer.
+
+The writer validates all volume trees before writing image bytes. It rejects
+names that the selected native profile cannot create, overlong components,
+malformed UTF-8, and equivalent siblings under the volume's case policy.
+Case-insensitive APFS uses canonical decomposition and full default case folding;
+case-sensitive APFS still treats canonical equivalents as the same name.
+Volume labels and snapshot names retain their separate validation contracts.
+
+Creation admission is separate from reading existing images. An older filesystem
+may contain names that a selected newer or older creation profile would reject;
+readers compare the stored keys without applying a new-creation policy. See
+[filename compatibility](../../docs/filename-compatibility.md) for the native
+fixtures, raw-pathname boundary, and qualification commands.

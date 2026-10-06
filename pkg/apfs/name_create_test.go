@@ -14,7 +14,7 @@ func TestCreateNameTargetAdmission(t *testing.T) {
 		for _, c := range []struct {
 			name string
 			want error
-		}{{"plain", nil}, {"", syscall.EINVAL}, {"a/b", syscall.EINVAL}, {"a\x00b", syscall.EINVAL}, {"x\x80y", syscall.EILSEQ}, {"x\u0378y", syscall.EILSEQ}, {"x\uffffy", syscall.EILSEQ}, {strings.Repeat("é", 255), nil}, {strings.Repeat("a", 256), syscall.ENAMETOOLONG}, {"�", nil}} {
+		}{{"plain", nil}, {".", syscall.EEXIST}, {"..", syscall.EEXIST}, {"\u0378" + strings.Repeat("a", 254), syscall.EILSEQ}, {strings.Repeat("a", 254) + "\u0378", syscall.EILSEQ}, {"\u0378" + strings.Repeat("a", 255), syscall.ENAMETOOLONG}, {strings.Repeat("a", 255) + "\u0378", syscall.ENAMETOOLONG}, {"\x80" + strings.Repeat("a", 255), syscall.EILSEQ}, {"", syscall.EINVAL}, {"a/b", syscall.EINVAL}, {"a\x00b", syscall.EINVAL}, {"x\x80y", syscall.EILSEQ}, {"x\u0378y", syscall.EILSEQ}, {"x\uffffy", syscall.EILSEQ}, {strings.Repeat("é", 255), nil}, {strings.Repeat("a", 256), syscall.ENAMETOOLONG}, {"�", nil}} {
 			if e := ValidateCreateName(c.name, target); !errors.Is(e, c.want) {
 				t.Fatalf("macOS%d %q:%v want%v", major, c.name, e, c.want)
 			}
