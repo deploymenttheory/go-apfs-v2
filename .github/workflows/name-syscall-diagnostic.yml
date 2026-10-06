@@ -66,7 +66,7 @@ jobs:
           set -euo pipefail
           go test -c -o "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/boundary.test" scripts/capture-name-collation.go scripts/verify-name-comparison_test.go scripts/verify-name-native_readback_test.go scripts/verify-name-native_commands_test.go scripts/verify-name-native_diagnostic_test.go scripts/verify-name-native_boundary_test.go scripts/verify-name-native_syscall_test.go 2>&1 | tee artifacts/name-native-diagnostic/build.log
           cd scripts
-          go tool test2json -t -p command-line-arguments "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/boundary.test" -test.v=test2json -test.timeout=3m -test.run='^(TestSingleNameDiagnostic.*|TestSingleNameSyscallTraceValidation|TestPrepareNativeSingleNameImageDiagnostic|TestPrepareNativeSyscallTrace)$' | tee "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/prepare-tests.jsonl"
+          go tool test2json -t -p command-line-arguments "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/boundary.test" -test.v=test2json -test.timeout=3m -test.run='^(TestSingleNameDiagnostic.*|TestSingleNameSyscallTraceValidation|TestSingleNameSyscallReference|TestPrepareNativeSingleNameImageDiagnostic|TestPrepareNativeSyscallTrace)$' | tee "$GITHUB_WORKSPACE/artifacts/name-native-diagnostic/prepare-tests.jsonl"
       - name: Upload durable checkpoint before identity
         if: always()
         uses: actions/upload-artifact@v7

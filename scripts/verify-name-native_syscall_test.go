@@ -347,17 +347,7 @@ func TestNativeSyscallTraceSummary(t *testing.T) {
 			t.Fatal(e)
 		}
 		results = append(results, r)
-		good := r.Attempted && !r.Interrupted && r.Errno == 0 && r.Result == 0
-		if step == 1 || step == 2 || step == 3 || step == 4 || step == 8 {
-			good = r.Attempted && !r.Interrupted && r.Errno == 0 && r.Result >= 0
-		}
-		if step == 5 || step == 9 {
-			inode := c.ReferenceNative.Inode
-			if step == 9 {
-				inode = c.ReferenceNative.QueriedInode
-			}
-			good = good && r.Inode == inode && r.Size == 0 && r.Device != 0 && r.Mode&syscall.S_IFMT == syscall.S_IFREG
-		}
+		good := traceMatchesReference(r, *c.ReferenceNative, step)
 		if !good {
 			differences = append(differences, fmt.Sprintf("%s: result%d errno%d attempted%t inode%d", r.Operation, r.Result, r.Errno, r.Attempted, r.Inode))
 		}
@@ -557,5 +547,86 @@ func TestNativeSyscallTraceHostLog(t *testing.T) {
 	_, err = commands.run(ctx, "/usr/bin/log", "show", "--last", "1m", "--style", "compact", "--predicate", `process == "kernel" AND eventMessage CONTAINS[c] "apfs"`)
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+func traceMatchesReference(r syscallTraceResult, reference nativeCase, step int) bool {
+	if r.Interrupted || step < 1 || step > 14 {
+		return false
+	}
+	if step >= 4 && step <= 11 {
+		expectedErrno := reference.LookupErrno
+		inode := reference.QueriedInode
+		openStep := 8
+		if step < 8 {
+			openStep = 4
+			inode = reference.Inode
+			if reference.CreateErrno == 0 {
+				expectedErrno = 0
+			}
+		}
+		if step == openStep {
+			if expectedErrno != 0 {
+				return r.Attempted && r.Result == -1 && r.Errno == expectedErrno
+			}
+			return r.Attempted && r.Result >= 0 && r.Errno == 0
+		}
+		if expectedErrno != 0 {
+			return !r.Attempted && r.Result == 0 && r.Errno == 0 && r.Inode == 0 && r.Device == 0 && r.Size == 0 && r.Mode == 0
+		}
+		if !r.Attempted || r.Result != 0 || r.Errno != 0 {
+			return false
+		}
+		if step == 5 || step == 9 {
+			return r.Inode == inode && r.Size == 0 && r.Device != 0 && r.Mode&syscall.S_IFMT == syscall.S_IFREG
+		}
+		return true
+	}
+	if step <= 3 {
+		return r.Attempted && r.Result >= 0 && r.Errno == 0
+	}
+	return r.Attempted && r.Result == 0 && r.Errno == 0
+}
+func TestSingleNameSyscallReference(t *testing.T) {
+	reference := nativeCase{CreateErrno: 0, LookupErrno: 2, Inode: 6511}
+	if !traceMatchesReference(syscallTraceResult{Attempted: true, Result: 6}, reference, 4) {
+		t.Fatal("successful created open rejected")
+	}
+	if !traceMatchesReference(syscallTraceResult{Attempted: true, Result: -1, Errno: 2}, reference, 8) {
+		t.Fatal("expected APFSX query ENOENT rejected")
+	}
+	for _, step := range []int{9, 10, 11} {
+		if !traceMatchesReference(syscallTraceResult{}, reference, step) {
+			t.Fatal("expected unattempted followup rejected", step)
+		}
+		if traceMatchesReference(syscallTraceResult{Attempted: true}, reference, step) {
+			t.Fatal("accepted operation after failed open", step)
+		}
+	}
+	if traceMatchesReference(syscallTraceResult{Attempted: true, Result: -1, Errno: 22}, reference, 4) {
+		t.Fatal("accepted genuine created-open difference")
+	}
+	if traceMatchesReference(syscallTraceResult{Attempted: true, Result: -1, Errno: 22}, reference, 8) {
+		t.Fatal("accepted wrong query errno")
+	}
+	reference.LookupErrno = 0
+	reference.QueriedInode = 6511
+	if !traceMatchesReference(syscallTraceResult{Attempted: true, Result: 6}, reference, 8) {
+		t.Fatal("successful query rejected")
+	}
+	if !traceMatchesReference(syscallTraceResult{Attempted: true, Inode: 6511, Device: 1, Mode: syscall.S_IFREG}, reference, 9) {
+		t.Fatal("successful query stat rejected")
+	}
+	if traceMatchesReference(syscallTraceResult{}, reference, 9) {
+		t.Fatal("accepted omitted successful query stat")
+	}
+	reference.CreateErrno = 92
+	reference.LookupErrno = 2
+	reference.Inode = 0
+	if !traceMatchesReference(syscallTraceResult{Attempted: true, Result: -1, Errno: 2}, reference, 4) {
+		t.Fatal("failed creation must use observed lookup errno")
+	}
+	if traceMatchesReference(syscallTraceResult{Attempted: true, Result: -1, Errno: 2, Interrupted: true}, reference, 4) {
+		t.Fatal("accepted interrupted operation")
 	}
 }
