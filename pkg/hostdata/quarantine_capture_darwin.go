@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 	"runtime"
-	"strings"
 	"syscall"
 	"unsafe"
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/darwinabi"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/osversion"
 	"golang.org/x/sys/unix"
 )
 
@@ -53,10 +53,18 @@ var loadQuarantineCapture = func() (*quarantineCaptureABI, error) {
 }
 
 func nativeQuarantineProfile(release string) (appledouble.QuarantineProfile, error) {
-	switch strings.SplitN(release, ".", 2)[0] {
-	case "26":
+	version, err := osversion.Parse(release)
+	if err != nil {
+		return 0, errors.Join(errors.ErrUnsupported, err)
+	}
+	profile, err := osversion.ProfileForMacOS(version)
+	if err != nil {
+		return 0, errors.Join(errors.ErrUnsupported, err)
+	}
+	switch profile {
+	case osversion.MacOS26:
 		return appledouble.QuarantineMacOS26, nil
-	case "27":
+	case osversion.MacOS27:
 		return appledouble.QuarantineMacOS27, nil
 	default:
 		return 0, errors.ErrUnsupported

@@ -18,6 +18,8 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/diskimage"
 )
 
 type trial struct {
@@ -101,7 +103,7 @@ func run(out string, check bool) (result error) {
 	digest := func(b []byte) string { return fmt.Sprintf("%x", sha256.Sum256(b)) }
 	const source = "testdata/appledouble/native/compression-lifecycle.c"
 	const interposer = "testdata/appledouble/native/compression-lifecycle-interpose.c"
-	for _, path := range []string{source, interposer, "testdata/appledouble/native/compression-policy.c", "scripts/capture-compression-lifecycle.go", "go.mod", "go.sum"} {
+	for _, path := range []string{source, interposer, "testdata/appledouble/native/compression-policy.c", "scripts/capture-compression-lifecycle.go", "internal/testutil/diskimage/attachment.go", "internal/testutil/diskimage/detach.go", "go.mod", "go.sum"} {
 		b, e := os.ReadFile(path)
 		if e != nil {
 			return e
@@ -174,10 +176,49 @@ func run(out string, check bool) (result error) {
 				if _, e := command("hdiutil", "create", "-size", "256m", "-fs", filesystem, "-volname", "CompressionLifecycle", image); e != nil {
 					return e
 				}
-				if _, e := command("hdiutil", "attach", "-nobrowse", "-owners", "on", "-mountpoint", mount, image); e != nil {
+				attached, e := command("hdiutil", "attach", "-plist", "-nobrowse", "-owners", "on", "-mountpoint", mount, image)
+				if e != nil {
 					return e
 				}
-				defer func() { _, e := command("hdiutil", "detach", mount); result = errors.Join(result, e) }()
+				// A busy detach can already unmount the volume. Retain its backing
+				// device so every subsequent ordinary detach addresses the image.
+				device := mount
+				defer func() {
+					var attempts []map[string]any
+					detachErr := diskimage.RetryDetach(context.Background(), func() (int, error) {
+						ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+						defer cancel()
+						var stdout, stderr bytes.Buffer
+						cmd := exec.CommandContext(ctx, "hdiutil", "detach", device)
+						cmd.Stdout, cmd.Stderr = &stdout, &stderr
+						err := cmd.Run()
+						code := 0
+						if err != nil {
+							code = -1
+							var exit *exec.ExitError
+							if errors.As(err, &exit) {
+								code = exit.ExitCode()
+							}
+						}
+						attempt := map[string]any{"device": device, "stdout": stdout.String(), "stderr": stderr.String(), "exit": code}
+						if err != nil {
+							attempt["error"] = err.Error()
+							err = fmt.Errorf("hdiutil detach %s: %w: %s", device, err, stderr.String())
+						}
+						attempts = append(attempts, attempt)
+						return code, err
+					})
+					b, encodeErr := json.MarshalIndent(attempts, "", "  ")
+					result = errors.Join(result, detachErr, encodeErr, os.WriteFile(filepath.Join(artifact, filesystem+"-detach.json"), append(b, '\n'), 0600))
+				}()
+				backing, e := diskimage.AttachmentDevice(attached)
+				if e != nil {
+					return e
+				}
+				device = backing
+				if e = os.WriteFile(filepath.Join(artifact, filesystem+"-attach.plist"), attached, 0600); e != nil {
+					return e
+				}
 			}
 			var cases []trial
 			for _, scenario := range []string{"ordinary", "mode-000", "mode-200", "mode-400", "mode-444", "mode-600", "mode-755", "directory", "fifo", "hardlink", "symlink", "fork", "empty-fork", "stale-attribute", "immutable", "append", "hidden", "deny-write", "deny-read", "deny-writeattr", "deny-writexattr", "deny-readxattr", "appledouble-name"} {

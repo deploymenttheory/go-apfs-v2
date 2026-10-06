@@ -45,6 +45,7 @@ jobs:
           - { pkg: ./pkg/hostdata, target: FuzzSecurityCopy }
           - { pkg: ./pkg/hostdata, target: FuzzPathLifecycle }
           - { pkg: ./pkg/metatransport, target: FuzzCarrierManifest }
+          - { pkg: ./pkg/osversion, target: FuzzVersion }
           - { pkg: ./pkg/hostdata, target: FuzzImageSecurity }
           - { pkg: ./pkg/appledouble, target: FuzzQuarantine }
           - { pkg: ./pkg/appledouble, target: FuzzQuarantineXattr }

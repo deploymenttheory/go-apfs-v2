@@ -157,3 +157,36 @@ func TestTypedProtectedOpenNative(t *testing.T) {
 		})
 	}
 }
+
+func TestTypedHeldPath(t *testing.T) {
+	file, err := os.CreateTemp(t.TempDir(), "held-path")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	var path [unix.PathMax]byte
+	if n, err := FcntlGetPath(int32(file.Fd()), &path); n != 0 || err != nil {
+		t.Fatal(n, err)
+	}
+	before, err := file.Stat()
+	if err != nil {
+		t.Fatal(err)
+	}
+	actual, err := os.Stat(unix.ByteSliceToString(path[:]))
+	if err != nil || !os.SameFile(before, actual) {
+		t.Fatal("held path identity", err)
+	}
+	if err = os.Rename(file.Name(), file.Name()+".moved"); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := FcntlGetPath(int32(file.Fd()), &path); n != 0 || err != nil {
+		t.Fatal(n, err)
+	}
+	actual, err = os.Stat(unix.ByteSliceToString(path[:]))
+	if err != nil || !os.SameFile(before, actual) {
+		t.Fatal("renamed held path identity", err)
+	}
+	if n, err := FcntlGetPath(-1, &path); n != -1 || !errors.Is(err, syscall.EBADF) {
+		t.Fatal(n, err)
+	}
+}

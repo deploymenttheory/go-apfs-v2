@@ -10,11 +10,16 @@ import (
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
 )
 
-// OpenResourceFork opens a Darwin regular file's resource fork relative to its
+// OpenResourceFork opens a Darwin regular file resource fork associated with its
 // held descriptor. The returned descriptor has an independent position and is
 // caller-owned. Writable opens create a missing fork but do not truncate it.
-// No mutable pathname or 32-bit xattr position is used. The data file remains
-// caller-owned; closing it after a successful open does not close the fork.
+// The data file remains caller-owned; closing it does not close the fork.
+//
+// macOS 26/27 use descriptor-relative acquisition. macOS 15 resolves the held
+// descriptor current path and verifies the opened inode before any writes.
+// That older kernel route cannot reopen unlinked forks and is not an atomic
+// namespace snapshot; callers must exclude unrelated namespace edits. Neither
+// route uses a 32-bit xattr position for resource-fork data.
 //
 // Other native hosts and object kinds return errors.ErrUnsupported; their complete
 // logical resource forks are preserved through image/AppleDouble/carrier Values.

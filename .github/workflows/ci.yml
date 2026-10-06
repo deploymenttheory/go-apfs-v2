@@ -148,6 +148,17 @@ jobs:
 
       - name: Vet
         run: go vet ./...
+      - name: Explicit OS version profiles above 95% coverage
+        env:
+          CGO_ENABLED: "0"
+        run: go run scripts/verify-osversion.go
+      - name: Upload OS version profile coverage
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: osversion-coverage-${{ matrix.os }}
+          path: artifacts/osversion-coverage/
+          if-no-files-found: error
       - name: Replacement fallback coverage above 95%
         env:
           CGO_ENABLED: "0"

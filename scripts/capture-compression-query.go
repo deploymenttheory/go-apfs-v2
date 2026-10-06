@@ -21,6 +21,8 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/diskimage"
 )
 
 type queryRecord struct {
@@ -134,7 +136,7 @@ func run(out string, check bool) (result error) {
 		return nil
 	}
 	const source = "testdata/appledouble/native/compression-query.c"
-	for _, p := range []string{source, "testdata/appledouble/native/compression-policy.c", "scripts/capture-compression-query.go", "go.mod", "go.sum"} {
+	for _, p := range []string{source, "testdata/appledouble/native/compression-policy.c", "scripts/capture-compression-query.go", "internal/testutil/diskimage/attachment.go", "internal/testutil/diskimage/detach.go", "go.mod", "go.sum"} {
 		if err = hashFile(p); err != nil {
 			return err
 		}
@@ -222,10 +224,25 @@ func run(out string, check bool) (result error) {
 			if _, e := command("hdiutil", "create", "-size", "128m", "-fs", filesystem, "-volname", "CompressionQuery", image); e != nil {
 				return e
 			}
-			if _, e := command("hdiutil", "attach", "-nobrowse", "-owners", "on", "-mountpoint", mount, image); e != nil {
+			attached, e := command("hdiutil", "attach", "-plist", "-nobrowse", "-owners", "on", "-mountpoint", mount, image)
+			if e != nil {
 				return e
 			}
-			defer func() { _, e := command("hdiutil", "detach", mount); result = errors.Join(result, e) }()
+			// Retain the backing device: a busy detach may already have unmounted
+			// the volume, making the mount path invalid for the next attempt.
+			device := mount
+			defer func() {
+				result = errors.Join(result, detachQueryImage(context.Background(), device,
+					filepath.Join(artifact, filesystem+"-detach.json"), queryDetachCommand))
+			}()
+			backing, e := diskimage.AttachmentDevice(attached)
+			if e != nil {
+				return e
+			}
+			device = backing
+			if e = os.WriteFile(filepath.Join(artifact, filesystem+"-attach.plist"), attached, 0600); e != nil {
+				return e
+			}
 			for _, original := range cases {
 				for _, flags := range []uint32{0, 32} {
 					s := original
@@ -317,4 +334,51 @@ func run(out string, check bool) (result error) {
 	}
 	fmt.Printf("Native compression query: %d cases across APFS/HFS+, guarded held/path metadata queries\n", len(c.Cases))
 	return nil
+}
+
+// Detach evidence survives both successful retries and persistent failures.
+// The shared policy retries only resource-busy status 16, never forces ejection,
+// and requires successful ordinary detach before capture can succeed.
+type queryDetachAttempt struct {
+	Device string `json:"device"`
+	Stdout string `json:"stdout"`
+	Stderr string `json:"stderr"`
+	Exit   int    `json:"exit"`
+	Error  string `json:"error,omitempty"`
+}
+
+type queryDetachRunner func(context.Context, string) ([]byte, []byte, int, error)
+
+func detachQueryImage(ctx context.Context, device, logPath string, command queryDetachRunner) error {
+	attempts := []queryDetachAttempt{}
+	detachErr := diskimage.RetryDetach(ctx, func() (int, error) {
+		stdout, stderr, code, err := command(ctx, device)
+		attempt := queryDetachAttempt{Device: device, Stdout: string(stdout), Stderr: string(stderr), Exit: code}
+		if err != nil {
+			attempt.Error = err.Error()
+		}
+		attempts = append(attempts, attempt)
+		return code, err
+	})
+	b, encodeErr := json.MarshalIndent(attempts, "", "  ")
+	return errors.Join(detachErr, encodeErr, os.WriteFile(logPath, append(b, '\n'), 0600))
+}
+
+func queryDetachCommand(ctx context.Context, device string) ([]byte, []byte, int, error) {
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+	var stdout, stderr bytes.Buffer
+	cmd := exec.CommandContext(ctx, "hdiutil", "detach", device)
+	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	err := cmd.Run()
+	code := 0
+	if err != nil {
+		code = -1
+		var exit *exec.ExitError
+		if errors.As(err, &exit) {
+			code = exit.ExitCode()
+		}
+		err = fmt.Errorf("hdiutil detach %s: %w\n%s", device, err, stderr.Bytes())
+	}
+	return stdout.Bytes(), stderr.Bytes(), code, err
 }

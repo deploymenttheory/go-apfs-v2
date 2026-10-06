@@ -35,10 +35,17 @@ jobs:
         run: go run scripts/capture-compression-lz4.go -check
       - name: Recapture guarded native compression queries
         if: ${{ !cancelled() }}
-        run: go run scripts/capture-compression-query.go -check
+        run: |
+          go test scripts/capture-compression-query.go scripts/capture-compression-query_test.go
+          go run scripts/capture-compression-query.go -check
       - name: Recapture compression installation and partial failures
         if: ${{ !cancelled() }}
         run: go run scripts/capture-compression-lifecycle.go -check
+      - name: Recapture native acquisition, read failures and surviving states
+        if: ${{ !cancelled() }}
+        run: |
+          go run scripts/capture-compression-operation.go -check
+          go test scripts/capture-compression-operation.go scripts/capture-compression-operation_test.go
       - name: Qualify complete quarantine contexts and destination outcomes
         if: ${{ !cancelled() }}
         run: |
@@ -48,6 +55,9 @@ jobs:
       - name: Qualify every effective quarantine process flag independently
         if: ${{ !cancelled() }}
         run: go run scripts/verify-appledouble-quarantine-runtime.go -raw-processes
+      - name: Recapture resource-fork opening and inode association
+        if: ${{ !cancelled() }}
+        run: go run scripts/capture-resource-fork-open.go -check
       - name: Verify held Go installation on host, APFS and HFS+
         if: ${{ !cancelled() }}
         run: go run scripts/verify-compression-installation-native.go
@@ -65,6 +75,8 @@ jobs:
           path: |
             artifacts/compression-lz4/
             artifacts/compression-query/
+            artifacts/compression-operation/
+            artifacts/resource-fork-open/
             artifacts/compression-lifecycle/
             artifacts/compression-lifecycle-coverage/
             artifacts/compression-installation-native/
@@ -73,4 +85,38 @@ jobs:
             artifacts/appledouble-quarantine-runtime-existing/
             artifacts/appledouble-quarantine-runtime-destinations/
             artifacts/decmpfs-formats-coverage/
+          if-no-files-found: error
+
+  macos15:
+    name: Native compression compatibility (macos-15)
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Qualify native version detection and explicit targets above 95%
+        run: go run scripts/verify-osversion.go
+      - name: Recapture complete acquisition, read failures and surviving states
+        if: ${{ !cancelled() }}
+        run: |
+          go run scripts/capture-compression-operation.go -check
+          go test scripts/capture-compression-operation.go scripts/capture-compression-operation_test.go
+      - name: Recapture resource-fork opening and inode association
+        if: ${{ !cancelled() }}
+        run: go run scripts/capture-resource-fork-open.go -check
+      - name: Verify held Go installation on host, APFS and HFS+
+        if: ${{ !cancelled() }}
+        run: go run scripts/verify-compression-installation-native.go
+      - name: Retain macOS 15 version and compression evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: compression-native-macos-15
+          path: |
+            artifacts/osversion-coverage/
+            artifacts/compression-operation/
+            artifacts/resource-fork-open/
+            artifacts/compression-installation-native/
           if-no-files-found: error

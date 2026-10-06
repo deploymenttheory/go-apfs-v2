@@ -53,7 +53,7 @@ func TestQueryNativeMetadata(t *testing.T) {
 	if corpus.Schema != 1 || len(corpus.Cases) != 676 {
 		t.Fatal("incomplete native query corpus")
 	}
-	for _, path := range []string{"scripts/capture-compression-query.go", "testdata/appledouble/native/compression-query.c", "testdata/appledouble/native/compression-policy.c", "go.mod", "go.sum"} {
+	for _, path := range []string{"scripts/capture-compression-query.go", "internal/testutil/diskimage/attachment.go", "internal/testutil/diskimage/detach.go", "testdata/appledouble/native/compression-query.c", "testdata/appledouble/native/compression-policy.c", "go.mod", "go.sum"} {
 		b, err := os.ReadFile("../../../" + path)
 		if err != nil {
 			t.Fatal(err)

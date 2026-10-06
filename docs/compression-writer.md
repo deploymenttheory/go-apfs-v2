@@ -310,3 +310,6 @@ The compression lifecycle gate requires every new production file above 95%
 coverage and separately runs the complete hostdata package above 95%. Its focused
 transcript permits no skipped cases. The evidence audit inventory includes this
 gate alongside all 24 pre-existing portable reports.
+
+See [recompression operations](compression-operation.md) for acquisition, queue
+admission, private staging and complete native cleanup behavior.

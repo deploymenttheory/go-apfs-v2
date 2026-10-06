@@ -17,6 +17,7 @@ import (
 type binding struct {
 	name, symbol, params, args, result, library string
 	inode                                       bool
+	threeArgs                                   bool
 }
 
 func main() {
@@ -26,6 +27,7 @@ func main() {
 	const quarantine = "/usr/lib/system/libquarantine.dylib"
 	const xpc = "/usr/lib/system/libxpc.dylib"
 	entries := []binding{
+		{name: "FcntlGetPath", symbol: "fcntl", params: "fd int32, path *[unix.PathMax]byte", args: "uintptr(fd), uintptr(unix.F_GETPATH), uintptr(unsafe.Pointer(path))", result: "int", threeArgs: true},
 		{name: "Getattrlistat", symbol: "getattrlistat", params: "fd int32, path *byte, attributes *unix.Attrlist, data unsafe.Pointer, size uintptr, options uint64", args: "uintptr(fd), uintptr(unsafe.Pointer(path)), uintptr(unsafe.Pointer(attributes)), uintptr(data), size, uintptr(options)", result: "int"},
 		{name: "Listxattr", symbol: "listxattr", params: "path, data *byte, size uintptr, options int32", args: "uintptr(unsafe.Pointer(path)), uintptr(unsafe.Pointer(data)), size, uintptr(options)", result: "size"},
 		{name: "Getxattr", symbol: "getxattr", params: "path, name, data *byte, size uintptr, position uint32, options int32", args: "uintptr(unsafe.Pointer(path)), uintptr(unsafe.Pointer(name)), uintptr(unsafe.Pointer(data)), size, uintptr(position), uintptr(options)", result: "size"},
@@ -74,11 +76,18 @@ func main() {
 			if item.args != "" {
 				args = strings.Split(item.args, ", ")
 			}
-			for len(args) < 6 {
+			width := 6
+			if item.threeArgs {
+				width = 3
+			}
+			for len(args) < width {
 				args = append(args, "0")
 			}
 			ret := "(int32,error)"
 			mode := "syscall6"
+			if item.threeArgs {
+				mode = "syscall3"
+			}
 			body := "if e != 0 { return int32(r), e }; return int32(r), nil"
 			switch item.result {
 			case "size":
