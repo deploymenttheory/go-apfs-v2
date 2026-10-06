@@ -31,7 +31,7 @@ func boundaryResult(t *testing.T, out, phase string, value any) {
 	}
 }
 func boundaryMount(out string, c singleNameCheckpoint) string {
-	return filepath.Join(out, fmt.Sprintf("%d-%s-mount", c.Profile, strings.ReplaceAll(c.Filesystem, "+", "plus")))
+	return filepath.Join(filepath.Dir(out), "name-native-boundary-mounts", fmt.Sprintf("%d-%s-mount", c.Profile, strings.ReplaceAll(c.Filesystem, "+", "plus")))
 }
 func boundaryAttached(t *testing.T, out, mount string) string {
 	t.Helper()
@@ -81,6 +81,9 @@ func TestNativeNameBoundaryAttach(t *testing.T) {
 		t.Fatal(err)
 	}
 	mount := boundaryMount(out, c)
+	if err := os.MkdirAll(filepath.Dir(mount), 0700); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.Mkdir(mount, 0700); err != nil {
 		t.Fatal(err)
 	}
@@ -159,11 +162,25 @@ func TestNativeNameBoundaryDetach(t *testing.T) {
 	})
 	// Remove only the owned empty mount directory; os.Remove never recursively
 	// removes mounted content, even when attachment/detachment failed.
-	detachErr = errors.Join(detachErr, os.Remove(mount))
+	detachErr = errors.Join(detachErr, os.Remove(mount), os.Remove(filepath.Dir(mount)))
 	writeErr := os.WriteFile(filepath.Join(out, "boundary-detach.stdout"), detached, 0644)
 	err = errors.Join(readErr, parseErr, detachErr, writeErr)
 	boundaryResult(t, out, "detach", map[string]any{"diagnostic_only": true, "device": device, "mount": mount, "error": fmt.Sprint(err)})
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestSingleNameDiagnosticMountOutsideArtifact(t *testing.T) {
+	out := filepath.Join(t.TempDir(), "artifacts", "name-native-diagnostic")
+	for _, kind := range []string{"APFS", "APFSX", "HFS+", "HFSX"} {
+		mount := boundaryMount(out, singleNameCheckpoint{Profile: 26, Filesystem: kind})
+		relative, err := filepath.Rel(out, mount)
+		if err != nil || !strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+			t.Fatalf("live mount must never be inside uploaded diagnostic directory: %s (%v)", mount, err)
+		}
+		if filepath.Base(filepath.Dir(mount)) != "name-native-boundary-mounts" {
+			t.Fatal("mount must use its dedicated owned sibling", mount)
+		}
 	}
 }
