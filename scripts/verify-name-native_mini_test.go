@@ -66,13 +66,16 @@ func miniRoot(t *testing.T) string {
 }
 func miniCases(t *testing.T, mode string) []nameCase {
 	t.Helper()
-	if mode != "ascii" && mode != "ascii-a7ce" {
+	if mode != "ascii" && mode != "ascii-a7ce" && mode != "ascii-pair" {
 		t.Fatal("explicit minimal mode required")
 	}
 	reference := readComparisonCapture(t, "testdata/appledouble/native/name-collation-macos26.json.gz", 26)
 	want := []string{"ascii"}
 	if mode == "ascii-a7ce" {
 		want = append(want, "fold-A7CE")
+	}
+	if mode == "ascii-pair" {
+		want = append(want, "fold-0042")
 	}
 	var selected []nameCase
 	for _, id := range want {
@@ -373,7 +376,13 @@ func TestProduceMinimalNativeImages(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	for _, mode := range []string{"ascii", "ascii-a7ce"} {
+	modes := []string{"ascii", "ascii-a7ce"}
+	if matched := os.Getenv("APFS_NAME_MINI_MATCHED_ONLY"); matched == "true" {
+		modes = []string{"ascii-pair"}
+	} else if matched != "" && matched != "false" {
+		t.Fatal("invalid matched-control selector")
+	}
+	for _, mode := range modes {
 		for _, kind := range []string{"APFS", "APFSX"} {
 			t.Run(mode+"-"+kind, func(t *testing.T) {
 				cases := miniCases(t, mode)
@@ -469,7 +478,7 @@ func TestProduceMinimalNativeImages(t *testing.T) {
 func miniSelection(t *testing.T) (string, string) {
 	t.Helper()
 	mode, kind := os.Getenv("APFS_NAME_MINI_MODE"), os.Getenv("APFS_NAME_DIAGNOSTIC_FILESYSTEM")
-	if mode != "ascii" && mode != "ascii-a7ce" {
+	if mode != "ascii" && mode != "ascii-a7ce" && mode != "ascii-pair" {
 		t.Fatal("explicit minimal mode required")
 	}
 	if kind != "APFS" && kind != "APFSX" {
@@ -862,6 +871,10 @@ func TestCompareMinimalNativeReceiver(t *testing.T) {
 
 func TestMinimalNativeValidation(t *testing.T) {
 	miniRoot(t)
+	pair := miniCases(t, "ascii-pair")
+	if len(pair) != 2 || pair[0].ID != "ascii" || pair[1].ID != "fold-0042" || pair[1].Created != "784279" || pair[1].Queried != "786279" {
+		t.Fatal("matched ASCII control inventory")
+	}
 	cases := miniCases(t, "ascii-a7ce")
 	for _, kind := range []string{"APFS", "APFSX"} {
 		sensitive := kind == "APFSX"

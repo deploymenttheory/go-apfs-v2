@@ -1,10 +1,14 @@
 name: Supplemental minimal native filename layouts
 on:
   workflow_call:
+    inputs:
+      matched_only:
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
-  group: name-mini-diagnostic-${{ github.ref }}
+  group: name-mini-diagnostic-${{ github.ref }}-${{ inputs.matched_only }}
   cancel-in-progress: false
 env:
   CGO_ENABLED: "0"
@@ -16,6 +20,7 @@ jobs:
     timeout-minutes: 15
     env:
       APFS_NAME_MINI_PRODUCER_HOST: "26"
+      APFS_NAME_MINI_MATCHED_ONLY: ${{ inputs.matched_only }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
@@ -28,7 +33,7 @@ jobs:
           set -euo pipefail
           mkdir -p artifacts/name-mini-producer
           go test -c -o artifacts/mini.test scripts/capture-name-collation.go scripts/verify-name-comparison_test.go scripts/verify-name-native_readback_test.go scripts/verify-name-native_commands_test.go scripts/verify-name-native_diagnostic_test.go scripts/verify-name-native_boundary_test.go scripts/verify-name-native_syscall_test.go scripts/verify-name-native_raw_test.go scripts/verify-name-native_mini_test.go 2>&1 | tee artifacts/name-mini-producer/build.log
-      - name: Capture exactly four minimal native images
+      - name: Capture exact selected minimal native images
         timeout-minutes: 8
         shell: bash
         working-directory: scripts
@@ -50,7 +55,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        mode: [ascii, ascii-a7ce]
+        mode: ${{ fromJSON(inputs.matched_only && '["ascii-pair"]' || '["ascii", "ascii-a7ce"]') }}
         filesystem: [APFS, APFSX]
     env:
       APFS_NAME_MINI_MODE: ${{ matrix.mode }}

@@ -31,7 +31,7 @@ on:
         type: boolean
         default: false
       diagnostic_case:
-        description: Exact retained boundary case ID; minimal-layout selects separate supplemental image controls
+        description: Exact retained boundary case ID; minimal-layout or minimal-ascii-pair selects supplemental image controls
         type: string
         default: ""
       diagnostic_profile:
@@ -77,7 +77,7 @@ jobs:
       filesystem: ${{ inputs.diagnostic_filesystem }}
       case_id: ${{ inputs.diagnostic_case }}
   raw-diagnostic:
-    if: github.event_name == 'workflow_dispatch' && inputs.diagnostic_only && inputs.raw_trace && inputs.diagnostic_case != 'minimal-layout'
+    if: github.event_name == 'workflow_dispatch' && inputs.diagnostic_only && inputs.raw_trace && inputs.diagnostic_case != 'minimal-layout' && inputs.diagnostic_case != 'minimal-ascii-pair'
     uses: ./.github/workflows/name-raw-diagnostic.yml
     with:
       runner: ${{ inputs.diagnostic_runner }}
@@ -85,8 +85,10 @@ jobs:
       profile: ${{ inputs.diagnostic_profile }}
       filesystem: ${{ inputs.diagnostic_filesystem }}
   minimal-diagnostic:
-    if: github.event_name == 'workflow_dispatch' && inputs.diagnostic_only && inputs.raw_trace && inputs.diagnostic_case == 'minimal-layout'
+    if: github.event_name == 'workflow_dispatch' && inputs.diagnostic_only && inputs.raw_trace && (inputs.diagnostic_case == 'minimal-layout' || inputs.diagnostic_case == 'minimal-ascii-pair')
     uses: ./.github/workflows/name-mini-diagnostic.yml
+    with:
+      matched_only: ${{ inputs.diagnostic_case == 'minimal-ascii-pair' }}
   native-images:
     if: inputs.diagnostic_only != true
     name: Comparison images (${{ matrix.os }})
