@@ -219,6 +219,13 @@ kern_credential.c; add lookup_authorize_search/namei/lookup and vn_open_auth bod
 from vfs_lookup.c/vfs_vnops.c. Source release evidence does not substitute for
 actual macOS 15/26/27 observations.
 
+Qualify the pathname-cache restart separately: retain five complete cache/state
+functions from pinned `vfs_cache.c`, with both architectures and optional branches
+parsed through the existing AST validator. Preserve the earlier corpus provenance.
+Version the observed final-symlink/trailing-slash difference (15 versus 26/27),
+including slashes inside link targets and parent-search denial ordering.
+
+
 ### Publication and hard-link composition
 
 Reuse PR #207's Store.Publish rather than introducing another transaction layer.

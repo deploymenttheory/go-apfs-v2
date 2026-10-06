@@ -1,0 +1,35 @@
+name: Native pathname cache source
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: name-cache-ast-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  native:
+    name: Complete pathname cache bodies (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, macos-latest, xcode-27]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Parse unchanged source bodies and reject tampered ranges
+        env:
+          CGO_ENABLED: "0"
+        run: go test -count=1 -v scripts/capture-pathname-authorization-ast.go scripts/capture-name-cache-ast_test.go
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: name-cache-ast-${{ matrix.os }}
+          path: artifacts/name-cache-ast/
+          if-no-files-found: error

@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"unsafe"
 )
 
 func TestReplacementWindowsHeldStreams(t *testing.T) {
@@ -659,6 +660,193 @@ func TestReplacementWindowsPrivateFailures(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err = replacementFinalPath(t.Context(), (*os.File)(nil)); !errors.Is(err, os.ErrInvalid) {
+		t.Fatal(err)
+	}
+}
+
+func TestReplacementWindowsHeldUnlinkedSource(t *testing.T) {
+	replacementVariants(t, func(t *testing.T, prepare func(*os.File, string) (*testedReplacement, error)) {
+		name := filepath.Join(t.TempDir(), "source")
+		payload, stream := []byte("held data remains readable after namespace removal"), []byte("held alternate metadata")
+		if err := os.WriteFile(name, payload, 0600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(name+":metadata", stream, 0600); err != nil {
+			t.Fatal(err)
+		}
+		pointer, err := windows.UTF16PtrFromString(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		handle, err := windows.CreateFile(pointer, windows.GENERIC_READ|windows.DELETE, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, nil, windows.OPEN_EXISTING, 0, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		source := os.NewFile(uintptr(handle), name)
+		defer source.Close()
+		if _, err = source.Seek(7, io.SeekStart); err != nil {
+			t.Fatal(err)
+		}
+		flags := uint32(windows.FILE_DISPOSITION_DELETE | windows.FILE_DISPOSITION_POSIX_SEMANTICS)
+		var iosb windows.IO_STATUS_BLOCK
+		if err = windows.NtSetInformationFile(handle, &iosb, (*byte)(unsafe.Pointer(&flags)), 4, windows.FileDispositionInformationEx); err != nil {
+			t.Fatalf("required POSIX unlink control: %v", err)
+		}
+		if _, err = os.Stat(name); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("source name survived native unlink: %v", err)
+		}
+		got := make([]byte, len(payload))
+		if _, err = source.ReadAt(got, 0); err != nil || !bytes.Equal(got, payload) {
+			t.Fatalf("native held read control: %q %v", got, err)
+		}
+		parent := t.TempDir()
+		replacement, err := prepare(source, parent)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer replacement.Close()
+		if position, e := source.Seek(0, io.SeekCurrent); e != nil || position != 7 {
+			t.Fatalf("caller source position changed: %d %v", position, e)
+		}
+		entries, err := os.ReadDir(parent)
+		if err != nil || len(entries) != 1 {
+			t.Fatal(entries, err)
+		}
+		got, err = os.ReadFile(filepath.Join(parent, entries[0].Name(), "replacement") + ":metadata")
+		if err != nil || !bytes.Equal(got, stream) {
+			t.Fatalf("unlinked source metadata lost: %q %v", got, err)
+		}
+		if _, err = replacement.File.WriteAt([]byte("new bytes"), 0); err != nil {
+			t.Fatal(err)
+		}
+		if err = replacement.RestoreMetadata(); err != nil {
+			t.Fatal(err)
+		}
+		if err = replacement.Close(); err != nil {
+			t.Fatal(err)
+		}
+		entries, err = os.ReadDir(parent)
+		if err != nil || len(entries) != 0 {
+			t.Fatal(entries, err)
+		}
+	})
+}
+
+func TestReplacementWindowsReparseAndTransferFailures(t *testing.T) {
+	root, err := os.OpenRoot(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	source, err := os.CreateTemp(t.TempDir(), "source")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer source.Close()
+	info, err := source.Stat()
+	if err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(t.TempDir(), "link")
+	if err = os.Symlink(source.Name(), link); err != nil {
+		t.Fatal(err)
+	}
+	pointer, err := windows.UTF16PtrFromString(link)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h, err := windows.CreateFile(pointer, windows.FILE_READ_ATTRIBUTES, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, nil, windows.OPEN_EXISTING, windows.FILE_FLAG_OPEN_REPARSE_POINT|windows.FILE_FLAG_BACKUP_SEMANTICS, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	held := os.NewFile(uintptr(h), link)
+	defer held.Close()
+	if _, err = prepareReplacementAtContext(t.Context(), held, root, info); !errors.Is(err, ErrUnsupportedReplacement) {
+		t.Fatal(err)
+	}
+	if _, err = prepareReplacementStreamsAtContext(t.Context(), held, root, info); !errors.Is(err, ErrUnsupportedReplacement) {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(source.Name()+":metadata", []byte("must reach backup writer"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	target, err := os.CreateTemp(t.TempDir(), "closed-target")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = target.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err = copyReplacementStreamsContext(t.Context(), source, target); err == nil {
+		t.Fatal("closed native backup destination accepted")
+	}
+}
+
+func TestReplacementWindowsStreamReadDenial(t *testing.T) {
+	source, err := os.CreateTemp(t.TempDir(), "source")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer source.Close()
+	pointer, err := windows.UTF16PtrFromString(source.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+	guard, err := windows.CreateFile(pointer, windows.READ_CONTROL|windows.WRITE_DAC, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, nil, windows.OPEN_EXISTING, 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	original, err := windows.GetSecurityInfo(guard, windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION)
+	if err != nil {
+		t.Fatal(err)
+	}
+	originalACL, _, err := original.DACL()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if e := windows.SetSecurityInfo(guard, windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION|windows.PROTECTED_DACL_SECURITY_INFORMATION, nil, nil, originalACL, nil); e != nil {
+			t.Error(e)
+		}
+		if e := windows.CloseHandle(guard); e != nil {
+			t.Error(e)
+		}
+	}()
+	user, err := windows.GetCurrentThreadEffectiveToken().GetTokenUser()
+	if err != nil {
+		t.Fatal(err)
+	}
+	denied, err := windows.SecurityDescriptorFromString("D:P(D;;0x1;;;WD)(A;;FA;;;" + user.User.Sid.String() + ")")
+	if err != nil {
+		t.Fatal(err)
+	}
+	acl, _, err := denied.DACL()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = windows.SetSecurityInfo(guard, windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION|windows.PROTECTED_DACL_SECURITY_INFORMATION, nil, nil, acl, nil); err != nil {
+		t.Fatal(err)
+	}
+	info, err := source.Stat()
+	if err != nil {
+		t.Fatal(err)
+	}
+	root, err := os.OpenRoot(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	file, err := prepareReplacementStreamsAtContext(t.Context(), source, root, info)
+	if file != nil {
+		_ = file.Close()
+		t.Fatal("failed native transfer returned staging capability")
+	}
+	if !errors.Is(err, windows.ERROR_ACCESS_DENIED) {
+		t.Fatalf("source-read ACL control: %v", err)
+	}
+	// Failed transfer closes its staged data handle; the public owner can discard
+	// the private entry immediately without a sharing conflict.
+	if err = root.Remove("replacement"); err != nil {
 		t.Fatal(err)
 	}
 }
