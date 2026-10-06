@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -22,6 +23,7 @@ import (
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/captureprovenance"
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/diskimage"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/osversion"
 )
 
@@ -200,6 +202,7 @@ func runNativeNameImages(t *testing.T, reference, prepare bool) {
 	hashes["native-binary"] = sum(b)
 	inputs := map[string]string{}
 	checked := 0
+	incompatible := 0
 	volumes := 0
 	profiles := 0
 	for _, p := range []struct {
@@ -240,6 +243,18 @@ func runNativeNameImages(t *testing.T, reference, prepare bool) {
 				}
 				continue
 			}
+			cell := nativeNameCell{Producer: p.major, Receiver: int(version.Major), Filesystem: v.Kind}
+			record, err := nativeForwardIncompatible(string(host), cell, v, base, dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if record != nil {
+				t.Run(fmt.Sprintf("%d/%s", p.major, v.Kind), func(t *testing.T) {
+					nativeImageForwardIncompatible(t, out, record, reference)
+					incompatible++
+				})
+				continue
+			}
 			t.Run(fmt.Sprintf("%d/%s", p.major, v.Kind), func(t *testing.T) {
 				nativeImageReadback(t, ctx, commands, out, dir, binary, string(host), p.major, v, reference)
 				checked += len(v.Native.Cases) * 2
@@ -250,8 +265,8 @@ func runNativeNameImages(t *testing.T, reference, prepare bool) {
 	if selection.Producer != 0 {
 		wantProfiles, wantVolumes, wantChecked = 1, 1, 7506
 	}
-	if (!prepare && checked != wantChecked) || profiles != wantProfiles || volumes != wantVolumes || t.Failed() {
-		t.Fatalf("incomplete native qualification: observations %d/%d profiles %d/%d volumes %d/%d", checked, wantChecked, profiles, wantProfiles, volumes, wantVolumes)
+	if (!prepare && checked+incompatible*casesPerVolume*2 != wantChecked) || profiles != wantProfiles || volumes != wantVolumes || t.Failed() {
+		t.Fatalf("incomplete native qualification: observations %d/%d forward-incompatible volumes %d profiles %d/%d volumes %d/%d", checked, wantChecked, incompatible, profiles, wantProfiles, volumes, wantVolumes)
 	}
 	compiler, e := commands.run(ctx, "xcrun", "clang", "--version")
 	if e != nil {
@@ -288,7 +303,7 @@ func runNativeNameImages(t *testing.T, reference, prepare bool) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	report := map[string]any{"schema": 3, "reference": reference, "preparation": prepare, "selection": selection, "host": string(host), "compiler": string(compiler), "sdk": string(sdk), "revision": strings.TrimSpace(string(revision)), "source_sha256": hashes, "input_sha256": inputs, "evidence_sha256": rawEvidence, "observations": checked, "producer_profiles": profiles, "volumes": volumes}
+	report := map[string]any{"schema": 3, "reference": reference, "preparation": prepare, "selection": selection, "host": string(host), "compiler": string(compiler), "sdk": string(sdk), "revision": strings.TrimSpace(string(revision)), "source_sha256": hashes, "input_sha256": inputs, "evidence_sha256": rawEvidence, "observations": checked, "forward_incompatible": incompatible, "producer_profiles": profiles, "volumes": volumes}
 	b, e = json.MarshalIndent(report, "", "  ")
 	if e != nil {
 		t.Fatal(e)
@@ -314,9 +329,13 @@ func nativeImageReadback(t *testing.T, ctx context.Context, commands *nativeComm
 		}
 		cell.Receiver = int(version.Major)
 		refDir := filepath.Join(filepath.Dir(out), "name-native-reference")
-		want, err = loadNativeReceiverReference(refDir, cell, host, v, dir)
+		var record *nativeForwardIncompatibility
+		want, record, err = loadNativeReceiverReference(refDir, cell, host, v, dir)
 		if err != nil {
 			t.Fatal(err)
+		}
+		if record != nil {
+			t.Fatal("receiver reference recorded a forward-incompatible volume for a mountable image")
 		}
 	}
 	// Never place a live mount under an uploaded artifact directory: an upload
@@ -412,8 +431,19 @@ type nativeNameMatrixReport struct {
 	Inputs       map[string]string `json:"input_sha256"`
 	Evidence     map[string]string `json:"evidence_sha256"`
 	Observations int               `json:"observations"`
+	Incompatible int               `json:"forward_incompatible"`
 	Profiles     int               `json:"producer_profiles"`
 	Volumes      int               `json:"volumes"`
+}
+
+// nativeReportComplete reports whether a receiver report accounts for every
+// observation of its selection, either as a native lookup result or as a
+// recorded forward-incompatible volume that the receiver must not mount.
+func nativeReportComplete(r nativeNameMatrixReport, selection nativeNameCell) bool {
+	if selection == (nativeNameCell{}) {
+		return r.Observations+r.Incompatible*casesPerVolume*2 == 90072 && r.Profiles == 3 && r.Volumes == 12
+	}
+	return r.Observations+r.Incompatible*casesPerVolume*2 == casesPerVolume*2 && r.Profiles == 1 && r.Volumes == 1
 }
 
 func decodeNativeJSON(raw []byte, value any) error {
@@ -524,73 +554,247 @@ func parseNativeReceiver(raw []byte, expected []nativeCase) ([]byte, error) {
 	return encoded, err
 }
 
-func loadNativeReceiverReference(out string, cell nativeNameCell, host string, v volumeCapture, input string) ([]byte, error) {
+// loadNativeReceiverReference validates a receiver reference directory and
+// returns either the normalized observations for a mounted volume or the
+// forward-incompatibility record of a volume the receiver must not mount.
+// Exactly one of the two is non-nil on success. The record is re-derived from
+// the producer image and the receiver's own image, never trusted as written.
+func loadNativeReceiverReference(out string, cell nativeNameCell, host string, v volumeCapture, input string) ([]byte, *nativeForwardIncompatibility, error) {
 	raw, err := os.ReadFile(filepath.Join(out, "report.json"))
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	var report nativeNameMatrixReport
 	// Reports also retain compiler/SDK strings; decode through their full shape.
 	if err = decodeNativeJSON(raw, &report); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	if report.Schema != 3 || report.Preparation || !report.Reference || report.Host != host || (!((report.Selection == cell && report.Observations == 7506 && report.Profiles == 1 && report.Volumes == 1) || (report.Selection == (nativeNameCell{}) && report.Observations == 90072 && report.Profiles == 3 && report.Volumes == 12))) || len(v.Native.Cases) != 3753 {
-		return nil, errors.New("receiver reference context/inventory mismatch")
+	if report.Schema != 3 || report.Preparation || !report.Reference || report.Host != host || (report.Selection != cell && report.Selection != (nativeNameCell{})) || !nativeReportComplete(report, report.Selection) || len(v.Native.Cases) != casesPerVolume {
+		return nil, nil, errors.New("receiver reference context/inventory mismatch")
 	}
 	if err = verifyNativeNameEvidence(out, report.Evidence); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	sources, err := nativeNameSourceInventory(out)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if !reflect.DeepEqual(sources, report.Sources) {
-		return nil, errors.New("receiver reference sources changed")
+		return nil, nil, errors.New("receiver reference sources changed")
 	}
 	for _, name := range []string{"native.json.gz", "cases.tsv", strings.ReplaceAll(v.Kind, "+", "plus") + ".dmg"} {
 		b, err := os.ReadFile(filepath.Join(input, name))
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		if report.Inputs[filepath.Base(input)+"/"+name] != sum(b) {
-			return nil, errors.New("receiver reference input changed")
+			return nil, nil, errors.New("receiver reference input changed")
 		}
 	}
 	if len(report.Inputs) != report.Profiles*2+report.Volumes {
-		return nil, errors.New("receiver reference input inventory")
+		return nil, nil, errors.New("receiver reference input inventory")
 	}
 	producer := readReceiverProducerRevision(input)
 	if len(report.Revision) != 40 || report.Revision != producer {
-		return nil, errors.New("receiver reference revision mismatch")
+		return nil, nil, errors.New("receiver reference revision mismatch")
 	}
 	stem := fmt.Sprintf("%d-%s", cell.Producer, strings.ReplaceAll(cell.Filesystem, "+", "plus"))
+	expected, err := nativeForwardIncompatible(host, cell, v, filepath.Dir(input), input)
+	if err != nil {
+		return nil, nil, err
+	}
+	recorded, err := os.ReadFile(filepath.Join(out, stem+"-forward-incompatible.json"))
+	if expected != nil || err == nil {
+		if err != nil {
+			return nil, nil, fmt.Errorf("receiver reference omits the forward-incompatible record: %w", err)
+		}
+		var got nativeForwardIncompatibility
+		if err = decodeNativeJSON(recorded, &got); err != nil {
+			return nil, nil, err
+		}
+		if expected == nil || !reflect.DeepEqual(got, *expected) {
+			return nil, nil, errors.New("receiver forward-incompatible record differs from the images")
+		}
+		for _, suffix := range []string{"-attach.plist", "-detach.json", "-readback.json", "-observations.json"} {
+			if _, err := os.Stat(filepath.Join(out, stem+suffix)); err == nil {
+				return nil, nil, errors.New("forward-incompatible volume carries mount evidence")
+			}
+		}
+		return nil, expected, nil
+	}
 	attached, err := os.ReadFile(filepath.Join(out, stem+"-attach.plist"))
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	detached, err := os.ReadFile(filepath.Join(out, stem+"-detach.json"))
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if err = validateNativeReceiverLifecycle(attached, detached); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	stream, err := os.ReadFile(filepath.Join(out, stem+"-readback.json"))
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	normalized, err := parseNativeReceiver(stream, v.Native.Cases)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	stored, err := os.ReadFile(filepath.Join(out, stem+"-observations.json"))
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if !bytes.Equal(normalized, stored) {
-		return nil, errors.New("receiver observations differ from raw stream")
+		return nil, nil, errors.New("receiver observations differ from raw stream")
 	}
-	return stored, nil
+	return stored, nil, nil
+}
+
+// Forward-incompatible APFS: the macOS 15 APFS driver line (23xx) deadlocks the
+// receiving kernel while mounting, or shortly after mounting, a container that
+// a macOS 26 or newer APFS line (26xx and above) formatted. The deadlock is
+// nondeterministic, survives every userland deadline and leaves no CI log, so
+// the receiver never attempts that mount. It records both version lines from
+// the image bytes themselves and from an image its own kernel wrote in the
+// same run, and the replay and aggregate stages re-derive the same record.
+type nativeForwardIncompatibility struct {
+	Schema           int    `json:"schema"`
+	Outcome          string `json:"outcome"`
+	Producer         int    `json:"producer"`
+	Receiver         int    `json:"receiver"`
+	Filesystem       string `json:"filesystem"`
+	Host             string `json:"host"`
+	ImageSHA256      string `json:"image_sha256"`
+	ImageFormattedBy string `json:"image_formatted_by"`
+	ImageModifiedBy  string `json:"image_last_modified_by"`
+	ImageLine        int    `json:"image_apfs_line"`
+	ReceiverImage    string `json:"receiver_image_sha256"`
+	ReceiverKext     string `json:"receiver_apfs_kext"`
+	ReceiverLine     int    `json:"receiver_apfs_line"`
+	Rule             string `json:"rule"`
+}
+
+const (
+	nativeForwardIncompatibleOutcome = "forward-incompatible-apfs"
+	nativeForwardIncompatibleRule    = "receiver APFS line below 2600 (macOS 15) must not mount a container formatted by APFS line 2600 or newer (macOS 26 and later): the mount deadlocks the receiving kernel"
+	// The first macOS 26 APFS line is 2632; macOS 15 ships 2313 to 2332.
+	nativeAPFSMacOS26Line = 2600
+)
+
+var apfsVersionLinePattern = regexp.MustCompile(`^[a-z_]+ \((\d+)(?:\.\d+)*\)$`)
+
+// apfsVersionLine extracts the leading APFS release line from an on-disk
+// apfs_modified_by identifier such as "newfs_apfs (2811.160.7.0.4)".
+func apfsVersionLine(id string) (int, error) {
+	m := apfsVersionLinePattern.FindStringSubmatch(id)
+	if m == nil {
+		return 0, fmt.Errorf("unrecognized APFS version identifier %q", id)
+	}
+	return strconv.Atoi(m[1])
+}
+
+func forwardIncompatibleAPFS(receiverLine, imageLine int) bool {
+	return receiverLine < nativeAPFSMacOS26Line && imageLine >= nativeAPFSMacOS26Line
+}
+
+// apfsVolumeVersions reads the formatter and most recent read-write mounter
+// recorded in the single volume of an image, using the portable reader only.
+func apfsVolumeVersions(image string) (formattedBy, modifiedBy string, err error) {
+	container, closer, err := apfs.OpenImage(image, nil)
+	if err != nil {
+		return "", "", err
+	}
+	defer func() { err = errors.Join(err, closer.Close()) }()
+	volumes, err := container.Volumes()
+	if err != nil {
+		return "", "", err
+	}
+	if len(volumes) != 1 || volumes[0].Superblock == nil {
+		return "", "", errors.New("unexpected APFS volume inventory")
+	}
+	sb := volumes[0].Superblock
+	id := func(b [32]byte) string { return strings.TrimRight(string(b[:]), "\x00") }
+	return id(sb.FormattedBy.ID), id(sb.ModifiedBy[0].ID), nil
+}
+
+// readAPFSVolumeVersions is replaced by unit tests that have no real images.
+var readAPFSVolumeVersions = apfsVolumeVersions
+
+func receiverProducerArtifact(major int) string {
+	return map[int]string{15: "name-collation-macos-15", 26: "name-collation-macos-latest", 27: "name-collation-xcode-27"}[major]
+}
+
+// nativeForwardIncompatible returns the record for an APFS image the receiver
+// must not mount, or nil when the receiver may mount it. The receiver's own
+// APFS line comes from the same-filesystem image its kernel wrote in this run.
+func nativeForwardIncompatible(host string, cell nativeNameCell, v volumeCapture, artifacts, input string) (*nativeForwardIncompatibility, error) {
+	if v.Kind != "APFS" && v.Kind != "APFSX" {
+		return nil, nil
+	}
+	name := strings.ReplaceAll(v.Kind, "+", "plus") + ".dmg"
+	image := filepath.Join(input, name)
+	b, err := os.ReadFile(image)
+	if err != nil || sum(b) != v.ImageSHA256 {
+		return nil, errors.Join(err, errors.New("forward-compatibility check requires the genuine producer image"))
+	}
+	formattedBy, modifiedBy, err := readAPFSVolumeVersions(image)
+	if err != nil {
+		return nil, err
+	}
+	imageLine, err := apfsVersionLine(formattedBy)
+	if err != nil {
+		return nil, err
+	}
+	receiverArtifact := receiverProducerArtifact(cell.Receiver)
+	if receiverArtifact == "" {
+		return nil, fmt.Errorf("no receiver producer artifact for macOS %d", cell.Receiver)
+	}
+	receiverImage := filepath.Join(artifacts, receiverArtifact, name)
+	rb, err := os.ReadFile(receiverImage)
+	if err != nil {
+		return nil, err
+	}
+	_, receiverKext, err := readAPFSVolumeVersions(receiverImage)
+	if err != nil {
+		return nil, err
+	}
+	if !strings.HasPrefix(receiverKext, "apfs_kext (") {
+		return nil, fmt.Errorf("receiver image was last modified by %q, not the receiver kernel", receiverKext)
+	}
+	receiverLine, err := apfsVersionLine(receiverKext)
+	if err != nil {
+		return nil, err
+	}
+	if !forwardIncompatibleAPFS(receiverLine, imageLine) {
+		return nil, nil
+	}
+	return &nativeForwardIncompatibility{Schema: 1, Outcome: nativeForwardIncompatibleOutcome, Producer: cell.Producer, Receiver: cell.Receiver, Filesystem: v.Kind, Host: host, ImageSHA256: v.ImageSHA256, ImageFormattedBy: formattedBy, ImageModifiedBy: modifiedBy, ImageLine: imageLine, ReceiverImage: sum(rb), ReceiverKext: receiverKext, ReceiverLine: receiverLine, Rule: nativeForwardIncompatibleRule}, nil
+}
+
+// The reference stage writes the record; the replay stage requires the
+// reference to hold the identical re-derived record before writing its own.
+func nativeImageForwardIncompatible(t *testing.T, out string, record *nativeForwardIncompatibility, reference bool) {
+	t.Helper()
+	stem := fmt.Sprintf("%d-%s", record.Producer, strings.ReplaceAll(record.Filesystem, "+", "plus"))
+	data, err := json.MarshalIndent(record, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	data = append(data, '\n')
+	if !reference {
+		prior, err := os.ReadFile(filepath.Join(filepath.Dir(out), "name-native-reference", stem+"-forward-incompatible.json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(prior, data) {
+			t.Fatalf("receiver reference forward-incompatible record differs:\n%s\nreplay:\n%s", prior, data)
+		}
+	}
+	if err = os.WriteFile(filepath.Join(out, stem+"-forward-incompatible.json"), data, 0644); err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("%s: %s formatted by %s; receiver %s: native mount not attempted", stem, record.Filesystem, record.ImageFormattedBy, record.ReceiverKext)
 }
 
 func readReceiverProducerRevision(input string) string {

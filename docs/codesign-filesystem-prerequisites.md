@@ -70,10 +70,21 @@ The remaining acceptance work is:
   successful transcripts and complete source-bound evidence are required. The
   producer's creation admission and lookup errno do not supply the receiver's
   expectations. Exact stored identity, empty content and cleanup remain required.
-  Native macOS 15 readback of newer APFS names remains unqualified until all four
-  previously stalled cells complete. Neither a timeout nor a partial capture
-  supplies an expected errno. The historical two-case macOS 15 APFS reproduction
-  is retained only as a regression fixture, not as a blanket filename policy.
+  The four previously stalled cells are producer 26/27 APFS and APFSX images on
+  the macOS 15 receiver. Live CI output showed the macOS 15 kernel (APFS line
+  2332) freezing all disk I/O while mounting, or within about two seconds of
+  sustained access after mounting, a container formatted by APFS 2811 or 3288;
+  `fsck_apfs` reports that container as "mounted by APFS version 3288.1.3, which
+  is newer than 2332.140.13.702.2". The freeze is nondeterministic, is not tied
+  to any filename, survives every userland deadline and leaves no retained log.
+  The receiver therefore never mounts an APFS image whose formatter line is 2600
+  or newer when its own kernel line is below 2600. It records a
+  forward-incompatible outcome from the image bytes and from the image its own
+  kernel wrote in the same run; the replay stage and the aggregate gate re-derive
+  that record. Neither a timeout nor a partial capture supplies an expected errno,
+  and no lookup expectation is inferred for those cells. The historical two-case
+  macOS 15 APFS reproduction is retained only as a regression fixture, not as a
+  blanket filename policy.
   Portable raw image readers must continue to expose valid stored names;
   explicit target-version operational pathname policy needs separate native
   qualification, including writable opens.

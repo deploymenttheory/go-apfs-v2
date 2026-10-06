@@ -159,6 +159,15 @@ separate stages; the aggregate requires successful capture and replay transcript
 and verifies the nested reference evidence again. Missing or partial references
 fail instead of falling back to producer results.
 
+A receiver whose APFS line is below 2600 (macOS 15) does not mount an APFS image
+formatted by line 2600 or newer (macOS 26 and later): that mount deadlocks the
+receiving kernel. The reference stage reads both lines with the portable reader,
+from the producer image and from the same-filesystem image the receiver's own
+kernel wrote in this run, and writes `<producer>-<filesystem>-forward-incompatible.json`
+instead of mounting. The replay stage and the aggregate matrix re-derive the
+record from the same images and reject a cell that carries both the record and
+mount evidence, or claims observations for a volume it did not mount.
+
 `APFS_NAME_OUTPUT_ROOT` selects a fresh artifact parent for local investigation;
 the default remains `artifacts`. Existing output directories are rejected. Run
 `TestCaptureNativeNameReceiver` before `TestNativeCrossVersionNameImages` with
