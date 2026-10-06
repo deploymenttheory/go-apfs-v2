@@ -11,6 +11,10 @@ on:
         description: Supplemental single-image host, attach, readback and detach checkpoints
         type: boolean
         default: false
+      syscall_boundaries:
+        description: Supplemental held-descriptor syscall checkpoints; never qualifies the full matrix
+        type: boolean
+        default: false
       diagnostic_case:
         description: Exact retained case ID for supplemental boundary diagnostics; empty means all cases
         type: string
@@ -36,13 +40,21 @@ env:
   GOTOOLCHAIN: local
 jobs:
   supplemental-diagnostic:
-    if: github.event_name == 'workflow_dispatch' && inputs.diagnostic_only && !inputs.command_boundaries
+    if: github.event_name == 'workflow_dispatch' && inputs.diagnostic_only && !inputs.command_boundaries && !inputs.syscall_boundaries
     uses: ./.github/workflows/name-image-diagnostic.yml
     with:
       producer_run: ${{ inputs.producer_run }}
   boundary-diagnostic:
-    if: github.event_name == 'workflow_dispatch' && inputs.diagnostic_only && inputs.command_boundaries
+    if: github.event_name == 'workflow_dispatch' && inputs.diagnostic_only && inputs.command_boundaries && !inputs.syscall_boundaries
     uses: ./.github/workflows/name-image-boundary-diagnostic.yml
+    with:
+      producer_run: ${{ inputs.producer_run }}
+      profile: ${{ inputs.diagnostic_profile }}
+      filesystem: ${{ inputs.diagnostic_filesystem }}
+      case_id: ${{ inputs.diagnostic_case }}
+  syscall-diagnostic:
+    if: github.event_name == 'workflow_dispatch' && inputs.diagnostic_only && inputs.syscall_boundaries
+    uses: ./.github/workflows/name-syscall-diagnostic.yml
     with:
       producer_run: ${{ inputs.producer_run }}
       profile: ${{ inputs.diagnostic_profile }}
@@ -185,6 +197,42 @@ jobs:
           path: artifacts/name-native-build/
           compression-level: 9
           if-no-files-found: error
+      - name: Prepare source-bound receiver checkpoint without mounting images
+        timeout-minutes: 2
+        shell: bash
+        run: |
+          set -euo pipefail
+          export APFS_NAME_IMAGE_ARTIFACTS="$GITHUB_WORKSPACE/artifacts/native-images"
+          cd scripts
+          apfs-ci-runner --suite name-comparison/native-readers/prepare --timeout 90s -- go tool test2json -t -p command-line-arguments "$GITHUB_WORKSPACE/artifacts/name-native-build/native-readback.test" -test.v=test2json -test.count=1 -test.timeout=1m -test.run='^TestPrepareNativeNameReceiver$'
+      - name: Preserve host and input checkpoint before native execution
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: name-native-preparation-${{ matrix.producer }}-${{ matrix.receiver.version }}-${{ matrix.filesystem }}
+          path: artifacts/name-native-preparation/
+          compression-level: 9
+          if-no-files-found: error
+      - name: Capture independent native receiver expectations
+        timeout-minutes: 5
+        shell: bash
+        run: |
+          set -euo pipefail
+          export APFS_NAME_IMAGE_ARTIFACTS="$GITHUB_WORKSPACE/artifacts/native-images"
+          cd scripts
+          apfs-ci-runner --suite name-comparison/native-readers/reference --timeout 4m -- go tool test2json -t -p command-line-arguments "$GITHUB_WORKSPACE/artifacts/name-native-build/native-readback.test" -test.v=test2json -test.count=1 -test.timeout=3m -test.run='^TestCaptureNativeNameReceiver$' | tee "$GITHUB_WORKSPACE/artifacts/name-native-reference-tests.jsonl"
+      - name: Preserve receiver reference before independent replay
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: name-native-reference-${{ matrix.producer }}-${{ matrix.receiver.version }}-${{ matrix.filesystem }}
+          path: |
+            artifacts/name-native-reference/
+            artifacts/name-native-reference-tests.jsonl
+          compression-level: 9
+          if-no-files-found: error
       - name: Read every case in this producer image on the actual receiver
         timeout-minutes: 7
         shell: bash
@@ -201,6 +249,7 @@ jobs:
           path: |
             artifacts/name-native-readback/
             artifacts/name-native-readback-tests.jsonl
+            artifacts/name-native-reference-tests.jsonl
           compression-level: 9
           if-no-files-found: error
       - name: Retain complete CI command diagnostics
@@ -219,21 +268,25 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Require all producer and reader jobs to succeed
-        env:
-          PRODUCERS: ${{ needs.native-images.result }}
-          PORTABLE_READERS: ${{ needs.readers.result }}
-          NATIVE_READERS: ${{ needs.native-readers.result }}
-        run: |
-          test "$PRODUCERS" = success
-          test "$PORTABLE_READERS" = success
-          test "$NATIVE_READERS" = success
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - name: Set up shared CI reporting
         uses: ./.github/actions/setup-ci-runner
+      - name: Require all producer and reader jobs to succeed
+        env:
+          PRODUCERS: ${{ needs.native-images.result }}
+          PORTABLE_READERS: ${{ needs.readers.result }}
+          NATIVE_READERS: ${{ needs.native-readers.result }}
+        run: |
+          apfs-ci-runner --suite name-comparison/qualify-matrix/prerequisites --timeout 30s -- bash -s <<'CHECK'
+          set -euo pipefail
+          printf 'producers=%s portable_readers=%s native_readers=%s\n' "$PRODUCERS" "$PORTABLE_READERS" "$NATIVE_READERS"
+          test "$PRODUCERS" = success
+          test "$PORTABLE_READERS" = success
+          test "$NATIVE_READERS" = success
+          CHECK
       - uses: actions/download-artifact@v8
         with:
           pattern: name-native-cell-*

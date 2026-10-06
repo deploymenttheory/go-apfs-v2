@@ -4,12 +4,12 @@ package main
 
 import (
 	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/captureprovenance"
 	"io"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -19,19 +19,6 @@ import (
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/osversion"
 )
-
-type nativeNameMatrixReport struct {
-	Schema       int               `json:"schema"`
-	Selection    nativeNameCell    `json:"selection"`
-	Host         string            `json:"host"`
-	Revision     string            `json:"revision"`
-	Sources      map[string]string `json:"source_sha256"`
-	Inputs       map[string]string `json:"input_sha256"`
-	Evidence     map[string]string `json:"evidence_sha256"`
-	Observations int               `json:"observations"`
-	Profiles     int               `json:"producer_profiles"`
-	Volumes      int               `json:"volumes"`
-}
 
 func requiredNativeNameCells() []nativeNameCell {
 	var cells []nativeNameCell
@@ -50,7 +37,7 @@ func nativeNameCellArtifact(c nativeNameCell) string {
 }
 
 func validateNativeNameCellReport(r nativeNameMatrixReport, cell nativeNameCell, revision string) error {
-	if r.Schema != 2 || r.Selection != cell || r.Observations != 7506 || r.Profiles != 1 || r.Volumes != 1 || len(revision) != 40 || r.Revision != revision {
+	if r.Schema != 3 || r.Reference || r.Preparation || r.Selection != cell || r.Observations != 7506 || r.Profiles != 1 || r.Volumes != 1 || len(revision) != 40 || r.Revision != revision {
 		return errors.New("incomplete, mismatched or stale native matrix report")
 	}
 	v, err := osversion.ParseProductVersion(r.Host)
@@ -80,10 +67,14 @@ func validateNativeNameCellInventory(names []string) error {
 // Both the requested image subtest and its enclosing test/package must finish.
 // A report alone cannot establish successful process completion.
 func validateNativeNameCellTranscript(raw []byte, cell nativeNameCell) error {
+	return validateNativeNameTranscript(raw, cell, "TestNativeCrossVersionNameImages")
+}
+func validateNativeNameTranscript(raw []byte, cell nativeNameCell, test string) error {
+
 	want := map[string]bool{
-		"":                                 false,
-		"TestNativeCrossVersionNameImages": false,
-		fmt.Sprintf("TestNativeCrossVersionNameImages/%d/%s", cell.Producer, cell.Filesystem): false,
+		"":   false,
+		test: false,
+		fmt.Sprintf("%s/%d/%s", test, cell.Producer, cell.Filesystem): false,
 	}
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	for {
@@ -112,46 +103,6 @@ func validateNativeNameCellTranscript(raw []byte, cell nativeNameCell) error {
 		}
 	}
 	return nil
-}
-
-func verifyNativeNameEvidence(dir string, hashes map[string]string) error {
-	if len(hashes) == 0 {
-		return errors.New("missing raw native evidence")
-	}
-	for name, hash := range hashes {
-		if !fs.ValidPath(name) || strings.Contains(name, "\\") || name == "report.json" {
-			return fmt.Errorf("invalid evidence path %q", name)
-		}
-		data, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(name)))
-		if err != nil {
-			return err
-		}
-		if sum(data) != hash {
-			return fmt.Errorf("native evidence hash mismatch: %s", name)
-		}
-	}
-	return filepath.WalkDir(dir, func(path string, entry fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if entry.Type()&os.ModeSymlink != 0 {
-			return errors.New("symlink in native evidence")
-		}
-		if entry.IsDir() {
-			return nil
-		}
-		relative, err := filepath.Rel(dir, path)
-		if err != nil {
-			return err
-		}
-		if relative == "report.json" {
-			return nil
-		}
-		if _, ok := hashes[filepath.ToSlash(relative)]; !ok {
-			return fmt.Errorf("unhashed native evidence: %s", relative)
-		}
-		return nil
-	})
 }
 
 func TestQualifyNativeNameMatrix(t *testing.T) {
@@ -197,6 +148,9 @@ func TestQualifyNativeNameMatrix(t *testing.T) {
 			if err := validateNativeNameCellTranscript(read(filepath.Join(dir, "name-native-readback-tests.jsonl")), cell); err != nil {
 				t.Fatal(err)
 			}
+			if err := validateNativeNameTranscript(read(filepath.Join(dir, "name-native-reference-tests.jsonl")), cell, "TestCaptureNativeNameReceiver"); err != nil {
+				t.Fatal(err)
+			}
 			if err := verifyNativeNameEvidence(out, report.Evidence); err != nil {
 				t.Fatal(err)
 			}
@@ -238,7 +192,23 @@ func TestQualifyNativeNameMatrix(t *testing.T) {
 					if volume.ImageSHA256 != expectedInputs[artifact+"/"+image] {
 						t.Fatal("producer image hash mismatch")
 					}
-					validateNativeNameReadback(t, read(filepath.Join(out, stem+"-readback.json")), volume)
+					original, err := os.Getwd()
+					if err != nil {
+						t.Fatal(err)
+					}
+					if err = os.Chdir(".."); err != nil {
+						t.Fatal(err)
+					}
+					want, referenceErr := loadNativeReceiverReference(filepath.Join(out, "reference"), cell, report.Host, volume, producerDir)
+					if err = os.Chdir(original); err != nil {
+						t.Fatal(err)
+					}
+					if referenceErr != nil {
+						t.Fatal(referenceErr)
+					}
+					if err = compareNativeReceiver(read(filepath.Join(out, stem+"-readback.json")), want, volume.Native.Cases); err != nil {
+						t.Fatal(err)
+					}
 				}
 			}
 			if matched != 1 {
@@ -295,12 +265,14 @@ func TestNativeNameMatrixInventory(t *testing.T) {
 func TestNativeNameMatrixReport(t *testing.T) {
 	cell := nativeNameCell{26, 15, "APFS"}
 	revision := strings.Repeat("a", 40)
-	valid := nativeNameMatrixReport{Schema: 2, Selection: cell, Host: "ProductVersion: 15.7.9", Revision: revision, Observations: 7506, Profiles: 1, Volumes: 1}
+	valid := nativeNameMatrixReport{Schema: 3, Selection: cell, Host: "ProductVersion: 15.7.9", Revision: revision, Observations: 7506, Profiles: 1, Volumes: 1}
 	if err := validateNativeNameCellReport(valid, cell, revision); err != nil {
 		t.Fatal(err)
 	}
 	for _, mutate := range []func(*nativeNameMatrixReport){
 		func(r *nativeNameMatrixReport) { r.Schema = 1 },
+		func(r *nativeNameMatrixReport) { r.Reference = true },
+		func(r *nativeNameMatrixReport) { r.Preparation = true },
 		func(r *nativeNameMatrixReport) { r.Selection.Producer = 15 },
 		func(r *nativeNameMatrixReport) { r.Selection.Receiver = 27 },
 		func(r *nativeNameMatrixReport) { r.Selection.Filesystem = "HFSX" },
@@ -357,5 +329,317 @@ func TestNativeNameMatrixEvidence(t *testing.T) {
 	}
 	if err := verifyNativeNameEvidence(dir, valid); err == nil {
 		t.Fatal("accepted unlisted evidence")
+	}
+}
+
+func TestNativeNameMatrixReceiverResults(t *testing.T) {
+	producer := []nativeCase{{ID: "fold-A7CE", Inode: 42, QueriedInode: 42}}
+	// Historical native macOS15 outcome on the specific macOS26 diagnostic
+	// image. This is not an error policy for any other filename or image.
+	stream := []byte("fold-A7CE\t0\t22\t0\t0\t-1\tclosed\nfold-A7CE\t1\t2\t0\t0\t-1\tclosed\ncomplete\t1\n")
+	reference, err := parseNativeReceiver(stream, producer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = compareNativeReceiver(reference, reference, producer); err != nil {
+		t.Fatal(err)
+	}
+	if err = compareNativeReceiver(bytes.Replace(reference, []byte(`"errno":22`), []byte(`"errno":0`), 1), reference, producer); err == nil {
+		t.Fatal("accepted changed receiver outcome")
+	}
+	good := []byte(`{"count":1,"cases":[{"id":"fold-A7CE","results":[{"errno":0,"inode":42,"size":0,"read":0},{"errno":0,"inode":42,"size":0,"read":0}]}]}`)
+	if _, err = validateNativeObservations(good, producer, 1); err != nil {
+		t.Fatal(err)
+	}
+	for name, bad := range map[string][]byte{
+		"missing-case": []byte(`{"count":1,"cases":[]}`), "malformed": []byte("{"), "trailing": append(append([]byte{}, good...), []byte(` {}`)...),
+		"unknown":      bytes.Replace(good, []byte(`"count":1`), []byte(`"count":1,"unexpected":true`), 1),
+		"count":        bytes.Replace(good, []byte(`"count":1`), []byte(`"count":2`), 1),
+		"identity":     bytes.Replace(good, []byte(`"inode":42`), []byte(`"inode":43`), 1),
+		"nonempty":     bytes.Replace(good, []byte(`"size":0`), []byte(`"size":1`), 1),
+		"read":         bytes.Replace(good, []byte(`"read":0`), []byte(`"read":1`), 1),
+		"case":         bytes.Replace(good, []byte(`fold-A7CE`), []byte(`other`), 1),
+		"negative":     bytes.Replace(reference, []byte(`"errno":22`), []byte(`"errno":-1`), 1),
+		"failed-inode": bytes.Replace(reference, []byte(`"inode":0`), []byte(`"inode":42`), 1),
+		"failed-size":  bytes.Replace(reference, []byte(`"size":0`), []byte(`"size":1`), 1),
+		"failed-read":  bytes.Replace(reference, []byte(`"read":-1`), []byte(`"read":0`), 1),
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := validateNativeObservations(bad, producer, 1); err == nil {
+				t.Fatal("accepted invalid native observations")
+			}
+		})
+	}
+	for _, bad := range [][]byte{nil, stream[:len(stream)-1], append(append([]byte{}, stream...), []byte("extra\n")...), bytes.Replace(stream, []byte("complete\t1"), []byte("complete\t0"), 1), bytes.Replace(stream, []byte("\tclosed"), []byte("\topen"), 1), bytes.Replace(stream, []byte("\t22\t"), []byte("\tx\t"), 1), bytes.Replace(stream, []byte("fold-A7CE\t1"), []byte("fold-A7CE\t0"), 1), bytes.Replace(stream, []byte("\t0\t0\t-1"), []byte("\tx\t0\t-1"), 1)} {
+		if _, err := parseNativeReceiver(bad, producer); err == nil {
+			t.Fatal("accepted incomplete reference stream")
+		}
+	}
+	if _, err := validateNativeObservations(good, nil, 0); err == nil {
+		t.Fatal("accepted empty expected inventory")
+	}
+	if err := compareNativeReceiver(good, nil, producer); err == nil {
+		t.Fatal("accepted missing reference")
+	}
+	if err := compareNativeReceiver(good, reference, producer); err == nil {
+		t.Fatal("accepted producer success in place of receiver error")
+	}
+	duplicate := []nativeCase{producer[0], producer[0]}
+	var value nativeNameReadback
+	if err := json.Unmarshal(good, &value); err != nil {
+		t.Fatal(err)
+	}
+	value.Count = 2
+	value.Cases = append(value.Cases, value.Cases[0])
+	raw, _ := json.Marshal(value)
+	if _, err := validateNativeObservations(raw, duplicate, 2); err == nil {
+		t.Fatal("accepted duplicate case IDs")
+	}
+	producer[0].CreateErrno = 92
+	if _, err := validateNativeObservations(good, producer, 1); err == nil {
+		t.Fatal("accepted nonexistent producer object")
+	}
+}
+
+func TestNativeNameMatrixReceiverLifecycle(t *testing.T) {
+	attached := []byte(`<?xml version="1.0"?><plist version="1.0"><dict><key>system-entities</key><array><dict><key>dev-entry</key><string>/dev/disk6</string></dict></array></dict></plist>`)
+	detached := []byte(`[{"device":"/dev/disk6","exit_code":0,"output":"detached"}]`)
+	if err := validateNativeReceiverLifecycle(attached, detached); err != nil {
+		t.Fatal(err)
+	}
+	for _, bad := range []string{"", "null", "[]", `[{"device":"/dev/disk6","exit_code":1}]`, `[{"device":"/dev/disk7","exit_code":0}]`, `[{"device":"/dev/disk6","exit_code":0},{"device":"/dev/disk6","exit_code":0}]`} {
+		if err := validateNativeReceiverLifecycle(attached, []byte(bad)); err == nil {
+			t.Fatal("accepted missing/invalid detach", bad)
+		}
+	}
+	if err := validateNativeReceiverLifecycle(nil, detached); err == nil {
+		t.Fatal("accepted missing attachment")
+	}
+	if err := validateNativeReceiverLifecycle(attached, []byte(`[{"device":"/dev/disk6","exit_code":1},{"device":"/dev/disk6","exit_code":0}]`)); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestNativeNameMatrixHistoricalReceiverEvidence(t *testing.T) {
+	dir := "../testdata/appledouble/native/name-receiver-macos15-a7ce"
+	read := func(name string) []byte {
+		t.Helper()
+		b, err := os.ReadFile(filepath.Join(dir, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return b
+	}
+	var metadata struct{ Host, Revision string }
+	if err := json.Unmarshal(read("metadata.json"), &metadata); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(metadata.Host, "15.7.9") || metadata.Revision != "7e6554ac8f41a62af1f8cffe6950aa06c400e86f" {
+		t.Fatal("historical provenance changed")
+	}
+	var completion struct {
+		Exit         int  `json:"exit_code"`
+		Full         bool `json:"qualifies_full_gate"`
+		Diagnostic   bool `json:"diagnostic_only"`
+		Observations int  `json:"observations"`
+	}
+	if err := json.Unmarshal(read("raw-completion.json"), &completion); err != nil {
+		t.Fatal(err)
+	}
+	if completion.Exit != 0 || completion.Full || !completion.Diagnostic || completion.Observations != 4 {
+		t.Fatal("invalid historical completion")
+	}
+	var observed nativeNameReadback
+	finished := false
+	for _, line := range bytes.Split(bytes.TrimSpace(read("raw-native.jsonl")), []byte("\n")) {
+		var r struct {
+			Type, ID             string
+			Results              []nativeNameResult
+			Count, Error         int
+			Cleanup              int `json:"cleanup_errno"`
+			Stopped, Interrupted bool
+		}
+		if err := json.Unmarshal(line, &r); err != nil {
+			t.Fatal(err)
+		}
+		if r.Type == "case" {
+			if r.Interrupted {
+				t.Fatal("interrupted evidence")
+			}
+			observed.Cases = append(observed.Cases, nativeNameObservation{r.ID, r.Results})
+		}
+		if r.Type == "finished" {
+			if r.Error != 0 || r.Cleanup != 0 || r.Stopped || r.Count != 2 {
+				t.Fatal("incomplete historical process")
+			}
+			finished = true
+			observed.Count = r.Count
+		}
+	}
+	if !finished || len(observed.Cases) != 2 || observed.Cases[1].ID != "fold-A7CE" {
+		t.Fatal("missing genuine native case")
+	}
+	if observed.Cases[1].Results[0] != (nativeNameResult{22, 0, 0, -1}) || observed.Cases[1].Results[1] != (nativeNameResult{2, 0, 0, -1}) {
+		t.Fatal("historical errno changed")
+	}
+	raw, _ := json.Marshal(observed)
+	producer := []nativeCase{{ID: "ascii", Inode: 18, QueriedInode: 18}, {ID: "fold-A7CE", Inode: 19, QueriedInode: 19}}
+	if _, err := validateNativeObservations(raw, producer, 2); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestNativeNameMatrixReceiverReference(t *testing.T) {
+	t.Chdir("..")
+	cell := nativeNameCell{27, 27, "APFS"}
+	host := "ProductVersion: 27.0.1"
+	for _, mutation := range []string{"valid", "missing-report", "schema", "preparation", "not-reference", "host", "selection", "inventory", "revision", "sources", "inputs", "extra-input", "hash", "missing-raw", "truncated-raw", "changed-observations", "missing-detach", "failed-detach"} {
+		t.Run(mutation, func(t *testing.T) {
+			base := t.TempDir()
+			out := filepath.Join(base, "reference")
+			input := filepath.Join(base, "name-collation-xcode-27")
+			write := func(path string, b []byte) {
+				t.Helper()
+				if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(path, b, 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			revision := strings.Repeat("a", 40)
+			var compressed bytes.Buffer
+			z := gzip.NewWriter(&compressed)
+			if err := json.NewEncoder(z).Encode(map[string]string{"Revision": revision}); err != nil {
+				t.Fatal(err)
+			}
+			if err := z.Close(); err != nil {
+				t.Fatal(err)
+			}
+			write(filepath.Join(input, "native.json.gz"), compressed.Bytes())
+			write(filepath.Join(input, "cases.tsv"), []byte("producer manifest"))
+			write(filepath.Join(input, "APFS.dmg"), []byte("producer image"))
+			for _, name := range []string{"arm64.ast.json", "x86_64.ast.json", "SDK/sys/stat.h", "SDK/sys/fcntl.h", "SDK/unistd.h", "SDK/sys/errno.h", "probe"} {
+				write(filepath.Join(out, name), []byte(name))
+			}
+			sources, err := nativeNameSourceInventory(out)
+			if err != nil {
+				t.Fatal(err)
+			}
+			v := volumeCapture{Kind: "APFS", ImageSHA256: sum([]byte("producer image"))}
+			var stream strings.Builder
+			for i := 0; i < 3753; i++ {
+				id := fmt.Sprintf("case-%d", i)
+				v.Native.Cases = append(v.Native.Cases, nativeCase{ID: id, Inode: uint64(i + 1)})
+				for j := 0; j < 2; j++ {
+					fmt.Fprintf(&stream, "%s\t%d\t0\t%d\t0\t0\tclosed\n", id, j, i+1)
+				}
+			}
+			stream.WriteString("complete\t3753\n")
+			normalized, err := parseNativeReceiver([]byte(stream.String()), v.Native.Cases)
+			if err != nil {
+				t.Fatal(err)
+			}
+			write(filepath.Join(out, "27-APFS-readback.json"), []byte(stream.String()))
+			write(filepath.Join(out, "27-APFS-observations.json"), normalized)
+			write(filepath.Join(out, "27-APFS-attach.plist"), []byte(`<?xml version="1.0"?><plist version="1.0"><dict><key>system-entities</key><array><dict><key>dev-entry</key><string>/dev/disk6</string></dict></array></dict></plist>`))
+			write(filepath.Join(out, "27-APFS-detach.json"), []byte(`[{"device":"/dev/disk6","exit_code":0,"output":"detached"}]`))
+			r := nativeNameMatrixReport{Schema: 3, Reference: true, Selection: cell, Host: host, Revision: revision, Sources: sources, Inputs: map[string]string{}, Evidence: map[string]string{}, Observations: 7506, Profiles: 1, Volumes: 1}
+			for _, name := range []string{"native.json.gz", "cases.tsv", "APFS.dmg"} {
+				b, err := os.ReadFile(filepath.Join(input, name))
+				if err != nil {
+					t.Fatal(err)
+				}
+				r.Inputs[filepath.Base(input)+"/"+name] = sum(b)
+			}
+			switch mutation {
+			case "schema":
+				r.Schema = 2
+			case "preparation":
+				r.Preparation = true
+			case "not-reference":
+				r.Reference = false
+			case "host":
+				r.Host = "ProductVersion: 15.7.9"
+			case "selection":
+				r.Selection.Producer = 26
+			case "inventory":
+				r.Observations--
+			case "revision":
+				r.Revision = strings.Repeat("b", 40)
+			case "sources":
+				r.Sources["native-binary"] = "changed"
+			case "inputs":
+				r.Inputs[filepath.Base(input)+"/APFS.dmg"] = "changed"
+			case "extra-input":
+				r.Inputs["unexpected"] = "extra"
+			case "missing-raw":
+				if err := os.Remove(filepath.Join(out, "27-APFS-readback.json")); err != nil {
+					t.Fatal(err)
+				}
+			case "truncated-raw":
+				write(filepath.Join(out, "27-APFS-readback.json"), []byte("incomplete"))
+			case "changed-observations":
+				write(filepath.Join(out, "27-APFS-observations.json"), []byte("{}"))
+			case "missing-detach":
+				if err := os.Remove(filepath.Join(out, "27-APFS-detach.json")); err != nil {
+					t.Fatal(err)
+				}
+			case "failed-detach":
+				write(filepath.Join(out, "27-APFS-detach.json"), []byte(`[{"device":"/dev/disk6","exit_code":1}]`))
+			}
+			if err := filepath.WalkDir(out, func(path string, entry os.DirEntry, err error) error {
+				if err != nil {
+					return err
+				}
+				if entry.IsDir() {
+					return nil
+				}
+				b, err := os.ReadFile(path)
+				if err != nil {
+					return err
+				}
+				name, err := filepath.Rel(out, path)
+				if err != nil {
+					return err
+				}
+				r.Evidence[filepath.ToSlash(name)] = sum(b)
+				return nil
+			}); err != nil {
+				t.Fatal(err)
+			}
+			if mutation == "hash" {
+				r.Evidence["probe"] = "wrong"
+			}
+			encoded, err := json.Marshal(r)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if mutation != "missing-report" {
+				write(filepath.Join(out, "report.json"), encoded)
+			}
+			got, err := loadNativeReceiverReference(out, cell, host, v, input)
+			if mutation == "valid" {
+				if err != nil || !bytes.Equal(got, normalized) {
+					t.Fatal("valid reference rejected", err)
+				}
+			} else if err == nil {
+				t.Fatal("accepted invalid receiver reference", mutation)
+			}
+		})
+	}
+}
+
+func TestNativeNameMatrixReferenceTranscript(t *testing.T) {
+	cell := nativeNameCell{26, 15, "APFS"}
+	raw := []byte("{\"Action\":\"pass\",\"Test\":\"TestCaptureNativeNameReceiver/26/APFS\"}\n{\"Action\":\"pass\",\"Test\":\"TestCaptureNativeNameReceiver\"}\n{\"Action\":\"pass\"}\n")
+	if err := validateNativeNameTranscript(raw, cell, "TestCaptureNativeNameReceiver"); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateNativeNameCellTranscript(raw, cell); err == nil {
+		t.Fatal("capture transcript accepted as independent replay")
+	}
+	if err := validateNativeNameTranscript(bytes.ReplaceAll(raw, []byte("TestCaptureNativeNameReceiver"), []byte("TestPrepareNativeNameReceiver")), cell, "TestCaptureNativeNameReceiver"); err == nil {
+		t.Fatal("preparation accepted as complete reference")
 	}
 }

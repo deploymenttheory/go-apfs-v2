@@ -5,6 +5,7 @@ package main
 import (
 	"bytes"
 	"errors"
+	"go.yaml.in/yaml/v3"
 	"io"
 	"io/fs"
 	"os"
@@ -289,5 +290,45 @@ func TestReportingCLI(t *testing.T) {
 	output.Reset()
 	if err := runReportingAudit([]string{"-root", root}, &output); err == nil || !strings.Contains(output.String(), "raw os/exec") {
 		t.Fatal("audit failure not retained", err)
+	}
+}
+
+func TestNameMatrixPrerequisiteReporting(t *testing.T) {
+	b, err := os.ReadFile("../.github/workflows/name-comparison.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var workflow struct {
+		Jobs map[string]struct {
+			Steps []struct {
+				Name, Uses, Run, If string
+				With                map[string]string
+			}
+		}
+	}
+	if err = yaml.Unmarshal(b, &workflow); err != nil {
+		t.Fatal(err)
+	}
+	job, ok := workflow.Jobs["qualify-matrix"]
+	if !ok {
+		t.Fatal("missing full matrix gate")
+	}
+	setup, guard, upload := -1, -1, -1
+	for i, s := range job.Steps {
+		if s.Uses == "./.github/actions/setup-ci-runner" {
+			setup = i
+		}
+		if strings.Contains(s.Run, "$NATIVE_READERS") {
+			guard = i
+			if !strings.Contains(s.Run, "apfs-ci-runner --suite name-comparison/qualify-matrix/prerequisites") || !strings.Contains(s.Run, `test "$PRODUCERS" = success`) || !strings.Contains(s.Run, `test "$PORTABLE_READERS" = success`) || !strings.Contains(s.Run, `test "$NATIVE_READERS" = success`) {
+				t.Fatal("dependency failures must remain strict and reported")
+			}
+		}
+		if strings.HasPrefix(s.Uses, "actions/upload-artifact@") && s.With["path"] == "artifacts/ci-observability/" && s.If == "always()" && s.With["if-no-files-found"] == "error" {
+			upload = i
+		}
+	}
+	if setup < 0 || guard <= setup || upload <= guard {
+		t.Fatal("prerequisite failure bypasses retained reporting", setup, guard, upload)
 	}
 }

@@ -139,3 +139,41 @@ workflow audit rejects owned evidence uploads without this setting. For a
 focused regeneration, `capture_recipe` accepts an exact recipe from the chosen
 capture phase. Invalid recipe/phase combinations fail; this optional selection
 only affects supplemental capture jobs, never the normal qualification matrix.
+
+## Native filename receiver references
+
+The native filename matrix separates image production from receiving-kernel
+lookup. Each cell first retains a source-bound preparation checkpoint without
+mounting the image. A separate C reference probe (`name-receiver.c`) then captures
+both spelling results for every case. Its TSV completion record is emitted only
+after closing the file and directory descriptors. A fresh `name-readback.c`
+process remounts the same immutable image and independently replays all cases.
+
+The reference includes actual receiver build, producer/image/manifest identity,
+current source hashes, SDK headers, both Clang ASTs, compiled probe identity,
+raw results and attach/detach evidence. Successful lookups must match the exact
+stored inode and empty-file content. Failed lookups must have no inode/content
+and an unperformed read. Neither creation admission nor the producer's lookup
+errno supplies receiver expectations. Preparation, capture and replay are
+separate stages; the aggregate requires successful capture and replay transcripts
+and verifies the nested reference evidence again. Missing or partial references
+fail instead of falling back to producer results.
+
+`APFS_NAME_OUTPUT_ROOT` selects a fresh artifact parent for local investigation;
+the default remains `artifacts`. Existing output directories are rejected. Run
+`TestCaptureNativeNameReceiver` before `TestNativeCrossVersionNameImages` with
+the same explicit producer/receiver/filesystem selection and producer inputs.
+
+For a native operation that does not return, the supplemental held-syscall route
+preserves descriptor state between workflow steps and uploads a checkpoint before
+each operation. Dispatch `name-comparison.yml` with `diagnostic_only=true`,
+`syscall_boundaries=true`, an exact retained `diagnostic_case`, producer profile,
+filesystem and completed producer run. Its observations and cleanup are checked,
+but it cannot qualify the full matrix. Receiver errors are observations, while
+missing results, interrupted calls and failed cleanup remain failures.
+
+The aggregate job initializes reporting before testing upstream job results, so
+a cancelled dependency produces a retained command failure instead of preventing
+the diagnostics directory from being created. This does not convert cancellation
+into success. Native kernel or runner nontermination can still prevent later
+uploads; pre-execution checkpoints survive independently of those later steps.

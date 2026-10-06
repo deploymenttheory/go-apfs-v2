@@ -281,7 +281,7 @@ func TestNativeSingleNameImageDiagnostic(t *testing.T) {
 	if err != nil || strings.TrimSpace(string(actualRevision)) != checkpoint.ConsumerRevision {
 		t.Fatal("consumer revision changed after checkpoint", err)
 	}
-	nativeImageReadback(t, ctx, commands, out, dir, binary, checkpoint.Profile, volume)
+	nativeImageReadback(t, ctx, commands, out, dir, binary, checkpoint.Host, checkpoint.Profile, volume, false, true)
 	report := struct {
 		DiagnosticOnly bool   `json:"diagnostic_only"`
 		Qualification  bool   `json:"qualifies_full_gate"`

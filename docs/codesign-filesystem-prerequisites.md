@@ -65,12 +65,16 @@ The remaining acceptance work is:
   inputs and retained source/raw-evidence hashes. Linux and Windows continue
   reading all twelve genuine images through the portable implementation, as do
   all three macOS portable readers. A failing cell cannot cancel another cell.
-  Correct the native cross-version expectation model using complete receiver
-  observations: existing-file lookup can differ from the producing OS, and
-  creation admission is not an existing-file lookup oracle. Native macOS 15
-  readback of newer APFS names currently remains unqualified, including stalled
-  native probes. Neither a timeout nor a partial capture supplies an expected
-  errno. Portable raw image readers must continue to expose valid stored names;
+  The native cross-version expectation model now uses a separate C receiver
+  capture followed by an independent readback on the same immutable image. Both
+  successful transcripts and complete source-bound evidence are required. The
+  producer's creation admission and lookup errno do not supply the receiver's
+  expectations. Exact stored identity, empty content and cleanup remain required.
+  Native macOS 15 readback of newer APFS names remains unqualified until all four
+  previously stalled cells complete. Neither a timeout nor a partial capture
+  supplies an expected errno. The historical two-case macOS 15 APFS reproduction
+  is retained only as a regression fixture, not as a blanket filename policy.
+  Portable raw image readers must continue to expose valid stored names;
   explicit target-version operational pathname policy needs separate native
   qualification, including writable opens.
   The native C reader flushes START/END records for each filesystem operation,
