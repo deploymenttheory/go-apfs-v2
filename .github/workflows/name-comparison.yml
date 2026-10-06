@@ -3,6 +3,13 @@ on:
   workflow_call:
   workflow_dispatch:
     inputs:
+      diagnostic_runner:
+        description: Standard macOS 15 runner for supplemental raw observations only
+        type: choice
+        options:
+          - macos-15
+          - macos-15-intel
+        default: macos-15
       diagnostic_only:
         description: Run supplemental per-image macOS 15 diagnostics; cannot qualify the full gate
         type: boolean
@@ -38,7 +45,7 @@ on:
         type: string
         default: "37433253504"
 concurrency:
-  group: name-comparison-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}${{ inputs.raw_trace && format('-raw-{0}-{1}', inputs.diagnostic_profile, inputs.diagnostic_filesystem) || inputs.syscall_trace && format('-syscalls-{0}-{1}-{2}-{3}', inputs.diagnostic_profile, inputs.diagnostic_filesystem, inputs.diagnostic_case, inputs.continuous_trace) || inputs.command_boundaries && format('-boundary-{0}-{1}-{2}', inputs.diagnostic_profile, inputs.diagnostic_filesystem, inputs.diagnostic_case || 'all') || (inputs.diagnostic_only && '-diagnostic' || '') }}
+  group: name-comparison-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}${{ inputs.raw_trace && format('-raw-{0}-{1}-{2}', inputs.diagnostic_profile, inputs.diagnostic_filesystem, inputs.diagnostic_runner) || inputs.syscall_trace && format('-syscalls-{0}-{1}-{2}-{3}', inputs.diagnostic_profile, inputs.diagnostic_filesystem, inputs.diagnostic_case, inputs.continuous_trace) || inputs.command_boundaries && format('-boundary-{0}-{1}-{2}', inputs.diagnostic_profile, inputs.diagnostic_filesystem, inputs.diagnostic_case || 'all') || (inputs.diagnostic_only && '-diagnostic' || '') }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 permissions:
   contents: read
@@ -73,6 +80,7 @@ jobs:
     if: github.event_name == 'workflow_dispatch' && inputs.diagnostic_only && inputs.raw_trace
     uses: ./.github/workflows/name-raw-diagnostic.yml
     with:
+      runner: ${{ inputs.diagnostic_runner }}
       producer_run: ${{ inputs.producer_run }}
       profile: ${{ inputs.diagnostic_profile }}
       filesystem: ${{ inputs.diagnostic_filesystem }}

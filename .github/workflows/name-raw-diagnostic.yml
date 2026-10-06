@@ -2,6 +2,9 @@ name: Supplemental complete raw native image observations
 on:
   workflow_call:
     inputs:
+      runner:
+        type: string
+        default: macos-15
       producer_run:
         type: string
         required: true
@@ -18,7 +21,7 @@ permissions:
   contents: read
   actions: read
 concurrency:
-  group: name-raw-diagnostic-${{ github.ref }}-${{ inputs.profile }}-${{ inputs.filesystem }}-${{ inputs.case_id || 'all' }}
+  group: name-raw-diagnostic-${{ github.ref }}-${{ inputs.profile }}-${{ inputs.filesystem }}-${{ inputs.case_id || 'all' }}-${{ inputs.runner }}
   cancel-in-progress: false
 env:
   CGO_ENABLED: "0"
@@ -26,7 +29,9 @@ env:
 jobs:
   boundary:
     name: Raw image observations (${{ inputs.profile }}, ${{ inputs.filesystem }}, ${{ inputs.case_id || 'all' }})
-    runs-on: macos-15
+    # Only these two standard labels can ever be scheduled. Invalid input is
+    # rejected explicitly below, before checkout or native observation.
+    runs-on: ${{ inputs.runner == 'macos-15-intel' && 'macos-15-intel' || 'macos-15' }}
     timeout-minutes: 10
     env:
       APFS_NAME_DIAGNOSTIC_PROFILE: ${{ inputs.profile }}
@@ -37,6 +42,16 @@ jobs:
       APFS_NAME_IMAGE_ARTIFACTS: ${{ github.workspace }}/artifacts/native-images
       APFS_NAME_DIAGNOSTIC_RUN_MANIFEST: ${{ github.workspace }}/artifacts/name-native-diagnostic/source-run.json
     steps:
+      - name: Validate supplemental native runner
+        shell: bash
+        env:
+          REQUESTED_RUNNER: ${{ inputs.runner }}
+        run: |
+          set -euo pipefail
+          case "$REQUESTED_RUNNER" in
+            macos-15|macos-15-intel) ;;
+            *) echo "Unsupported supplemental runner: $REQUESTED_RUNNER" >&2; exit 1 ;;
+          esac
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:
