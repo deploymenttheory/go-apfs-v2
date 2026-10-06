@@ -107,8 +107,26 @@
   "macos": "ProductName:\t\tmacOS\nProductVersion:\t\t27.0.1\nBuildVersion:\t\t26A434\n",
   "schema": 1,
   "source_sha256": {
-    "internal/testutil/entrytype/fixture_darwin.go": "3c0ce7f9baca902842cf19a8ba6d5c78fd9af4d219e3166101d7ea31a32edee8",
-    "scripts/capture-entry-type.go": "7e7fcdeae06ae69797dfc606704aaa723969273aa4c31d6b92014dcf4ada47fb",
+    ".github/actions/setup-ci-runner/action.yml": "228d422c9c21968f47e283e5d203a233b7909c9187685b5a47b288585af27672",
+    "internal/evidenceaudit/harness_source_hashes.go": "bad291b4fc7002962343292bfa01b3af92f90954be3afcd114a8501571642d95",
+    "internal/evidenceaudit/source_hashes.go": "64f7f4767f9e91ed433e6e0198a5653c2e65fbf12432924e7ca4a245db1792d1",
+    "internal/testutil/captureprovenance/provenance.go": "f2975ce45d8b2be43d07a8d32975eb8accd01960f4bb387ac3db5a24b6e9895a",
+    "internal/testutil/cirunner/command.go": "84b3d46cd036fa334604d4b9cbc66aa42aaaf76e38de94797154814a74c3f71c",
+    "internal/testutil/cirunner/command_test.go": "1c2ff0fd8cce8442cd8688fa682a2c923dd120c575de7df2a616c76885fb0e94",
+    "internal/testutil/cirunner/forward.go": "ae674e64b6cb19a182e9b669422c43f1f0178d8b420e216a919744f55f25bcd6",
+    "internal/testutil/cirunner/forward_test.go": "3ce6973008d52773fd311ea727a6bfa3db4b32716f89414c532aaf93d566f1f8",
+    "internal/testutil/cirunner/observe_file_other.go": "106e271e46e1d6adf058db66d6d32ead6d294e632ff9e30c31822bb95987145e",
+    "internal/testutil/cirunner/observe_file_other_test.go": "575fb08d2bf8da064f9bbec826666fcde292195a581ade0b62abcc9360b4a1c2",
+    "internal/testutil/cirunner/observe_file_test.go": "93cc83ba3d98fb8b2be471de93222cc0aa72509385741ce9c8c8aa7eb9769f39",
+    "internal/testutil/cirunner/observe_file_windows.go": "95e0f751849e4fac8d667e8c4b72191b4d19793d159c72f79090ac5296b1c479",
+    "internal/testutil/cirunner/observe_file_windows_test.go": "070b668e24292ba7cc2170b3661605615b595329804acad396cb5bab87311b33",
+    "internal/testutil/cirunner/progress.go": "9b59d55b8f904dae114b35b2fde1cfdca7f0c2f59cc702a929b1c609879a2e1e",
+    "internal/testutil/cirunner/progress_test.go": "7f981eb2cadcd9a1ac30496086ba4d991f2303a99436cced6ef0bd8d98963ef4",
+    "internal/testutil/cirunner/reporter.go": "2766c23545a90659e59577bb60991d7bacfdeff91a074b4c9c87c2095b6740b5",
+    "internal/testutil/cirunner/reporter_test.go": "6a648bfb0bda212cf47dc4d7b5a0eb9587ec177ddfc3d4df4808ca23e70d025d",
+    "internal/testutil/entrytype/fixture_darwin.go": "0618fba2b375daec8b2ed795e76cac533c245b2116c9fe9c800ded574aa80c1d",
+    "scripts/capture-entry-type.go": "cc1ff97411a87d8c04efeee0dfb161aac6fa00e57ad3df80dc53c0c803340125",
+    "scripts/ci-run.go": "6cb03c24b3b0e821f7ab5ef74db3084267efc0978b43feba98e4bc0bd01060f7",
     "testdata/appledouble/native/entry-type.c": "7790af7496dfa0a708883d91268ef54cb2bc639903068cbb4784df13ca96d57c"
   }
 }
