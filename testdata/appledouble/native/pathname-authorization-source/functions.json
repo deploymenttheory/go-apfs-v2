@@ -193,12 +193,60 @@
       "start": 64259
     },
     {
+      "brace": 72248,
+      "end": 72442,
+      "file": "kern_resource.c",
+      "name": "set_thread_support_long_paths",
+      "sha256": "e3caf93599d133899654ecc72904d804609ec2fbc68b226968a528aa8404d861",
+      "start": 72167
+    },
+    {
+      "brace": 72512,
+      "end": 72669,
+      "file": "kern_resource.c",
+      "name": "get_thread_support_long_paths",
+      "sha256": "e516eda8e487b01a2802fb65e11da40585d711f38f1b09d68423fd0678f591fe",
+      "start": 72444
+    },
+    {
+      "brace": 72746,
+      "end": 72976,
+      "file": "kern_resource.c",
+      "name": "set_proc_support_long_paths",
+      "sha256": "7c6ec689dbdafa87c307c33e240bce7dec7068b6a64925220fff901ea58f05cd",
+      "start": 72671
+    },
+    {
+      "brace": 73040,
+      "end": 73215,
+      "file": "kern_resource.c",
+      "name": "get_proc_support_long_paths",
+      "sha256": "9c08a3508a350ffa4955be9d6ceec60f985903725d35d67dd6736e473de95d43",
+      "start": 72978
+    },
+    {
+      "brace": 73435,
+      "end": 74552,
+      "file": "kern_resource.c",
+      "name": "iopolicysys_vfs_support_long_paths",
+      "sha256": "348744f2fe6c42270fea5006f8d4e3232f474daff2b7e8c0d77000990035ef67",
+      "start": 73303
+    },
+    {
       "brace": 65851,
       "end": 65948,
       "file": "kern_proc.c",
       "name": "proc_ignores_node_permissions",
       "sha256": "2467772d064170cf729422b05036fdda09ae3f964fa2f92eb9bacc97c7abe424",
       "start": 65806
+    },
+    {
+      "brace": 66733,
+      "end": 67171,
+      "file": "kern_proc.c",
+      "name": "proc_support_long_paths",
+      "sha256": "ebbcb8d181d3ae067846baa85f6d41215fbfcade441d29168acbdda9d88567a1",
+      "start": 66694
     }
   ],
   "release": "xnu-11417.140.69",

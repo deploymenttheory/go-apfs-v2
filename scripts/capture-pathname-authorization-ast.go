@@ -268,12 +268,12 @@ func capture(out string) error {
 	if err = os.WriteFile(filepath.Join(out, "capture.json"), append(b, '\n'), 0644); err != nil {
 		return err
 	}
-	fmt.Printf("24 complete pinned XNU bodies, two configurations, two architectures; %d bound source inputs\n", len(sources))
+	fmt.Printf("30 complete pinned XNU bodies, two configurations, two architectures; %d bound source inputs\n", len(sources))
 	return nil
 }
 func digest(b []byte) string { sum := sha256.Sum256(b); return hex.EncodeToString(sum[:]) }
 func translationUnit(m functionManifest, sources map[string][]byte) ([]byte, map[string]bodyRange, error) {
-	if m.Schema != 1 || m.Release != "xnu-11417.140.69" || len(m.Entries) != 25 {
+	if m.Schema != 1 || m.Release != "xnu-11417.140.69" || len(m.Entries) != 31 {
 		return nil, nil, errors.New("incomplete function manifest")
 	}
 	var declarations, bodies bytes.Buffer
@@ -309,7 +309,7 @@ func translationUnit(m functionManifest, sources map[string][]byte) ([]byte, map
 		ranges[f.Name] = bodyRange{start + (f.Brace - f.Start), bodies.Len() - 1}
 		bodies.WriteByte('\n')
 	}
-	if len(ranges) != 24 || !seen["vauth_ctx"] {
+	if len(ranges) != 30 || !seen["vauth_ctx"] {
 		return nil, nil, errors.New("incomplete policy body inventory")
 	}
 	offset := declarations.Len()

@@ -109,3 +109,15 @@ func replacementCleanupMetadata(stage *os.Root, held *os.File) error {
 	}
 	return replacementClearReadonly(context.Background(), held)
 }
+
+func restorePrivateReplacementContext(ctx context.Context, r *Replacement) error {
+	return r.rooted.RestoreMetadataContext(ctx)
+}
+func closePrivateReplacement(r *Replacement) error {
+	err := r.rooted.Close()
+	if r.ownedRoot != nil {
+		err = errors.Join(err, r.ownedRoot.Close())
+		r.ownedRoot = nil
+	}
+	return err
+}

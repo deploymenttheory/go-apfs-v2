@@ -135,11 +135,11 @@ func (r *RootReplacement) Close() error {
 	if r.cleanup != nil {
 		closeErr = errors.Join(closeErr, r.cleanup.Close())
 	}
-	if errors.Is(chmodErr, os.ErrNotExist) {
+	if os.IsNotExist(chmodErr) {
 		chmodErr = nil
 	}
 	removeErr := r.staging.Remove("replacement")
-	if errors.Is(removeErr, os.ErrNotExist) {
+	if os.IsNotExist(removeErr) {
 		removeErr = nil
 	}
 	return errors.Join(closeErr, chmodErr, removeErr, r.staging.Close(), r.root.Remove(r.dir))

@@ -361,7 +361,7 @@ int vfs_getrealpath(const char *,char *,size_t,vfs_context_t);
 #define ARG_UPATH1 0x0000000002000000ULL
 #define ARG_UPATH2 0x0000000004000000ULL
 struct kaudit_record;
-struct uthread {vnode_t uu_cdir; struct kaudit_record *uu_ar;};
+struct uthread {int uu_flag; vnode_t uu_cdir; struct kaudit_record *uu_ar;};
 typedef struct uthread *uthread_t;
 uthread_t current_uthread(void);
 extern int audit_syscalls;
@@ -379,3 +379,12 @@ errno_t vnode_makenamedstream(vnode_t,vnode_t *,const char *,int,vfs_context_t);
 #define FSE_ARG_DONE 0xb33f
 int need_fsevent(int,vnode_t);
 int add_fsevent(int,vfs_context_t,...);
+
+/* Pinned resource_private.h, proc_internal.h and user.h long-path policy. */
+#define P_VFS_IOPOLICY_SUPPORT_LONG_PATHS 0x1000
+#define UT_SUPPORT_LONG_PATHS 0x00100000
+#define IOPOL_VFS_SUPPORT_LONG_PATHS_DEFAULT 0
+#define IOPOL_VFS_SUPPORT_LONG_PATHS_ON 1
+#define SUPPORT_LONG_PATHS_ENTITLEMENT "com.apple.private.vfs.support-long-paths"
+thread_t current_thread(void);
+void *get_bsdthread_info(thread_t);

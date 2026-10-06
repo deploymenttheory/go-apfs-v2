@@ -261,35 +261,6 @@ func TestReplacementEveryCancellationCheckpoint(t *testing.T) {
 	}
 }
 
-func TestReplacementRootDelegation(t *testing.T) {
-	source, err := os.CreateTemp(t.TempDir(), "source")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer source.Close()
-	root, err := os.OpenRoot(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	staged, err := PrepareReplacementAtContext(t.Context(), source, root, ".")
-	if err != nil {
-		t.Fatal(err)
-	}
-	r := &Replacement{File: staged.File, rooted: staged, ownedRoot: root}
-	if err = r.RestoreMetadataContext(t.Context()); err != nil {
-		t.Fatal(err)
-	}
-	if err = r.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if err = r.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if _, err = root.Stat("."); !errors.Is(err, os.ErrClosed) {
-		t.Fatalf("parent ownership leaked: %v", err)
-	}
-}
-
 func TestReplacementCopyCancellationAndCleanup(t *testing.T) {
 	fault, cleanup := errors.New("transfer failure"), errors.New("fork cleanup failure")
 	ctx, cancel := context.WithCancel(t.Context())

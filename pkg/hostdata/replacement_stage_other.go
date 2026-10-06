@@ -42,3 +42,26 @@ func replacementCleanupCapability(_ *os.File) (*os.File, error) { return nil, ni
 func replacementCleanupMetadata(stage *os.Root, _ *os.File) error {
 	return stage.Chmod("replacement", 0600)
 }
+
+func restorePrivateReplacementContext(ctx context.Context, r *Replacement) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	current, err := replacementValue(ctx, r.source.Stat)
+	if err != nil {
+		return err
+	}
+	if !os.SameFile(r.info, current) {
+		return fmt.Errorf("replacement source changed")
+	}
+	return restoreReplacementMetadataContext(ctx, r.source, r.File, r.info)
+}
+
+func closePrivateReplacement(r *Replacement) error {
+	err := r.File.Close()
+	if errors.Is(err, os.ErrClosed) {
+		err = nil
+	}
+	return errors.Join(err, cleanupReplacement(
+		func() error { return os.Chmod(filepath.Join(r.dir, "replacement"), 0600) }, func() error { return os.RemoveAll(r.dir) }))
+}

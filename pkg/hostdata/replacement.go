@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 )
 
 // Replacement is a private, writable file prepared from an existing regular
@@ -77,40 +76,12 @@ func (r *Replacement) RestoreMetadata() error {
 // RestoreMetadataContext restores metadata with cancellation checkpoints.
 // Any error requires discarding the uncommitted replacement.
 func (r *Replacement) RestoreMetadataContext(ctx context.Context) error {
-	if r.rooted != nil {
-		return r.rooted.RestoreMetadataContext(ctx)
-	}
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	current, err := replacementValue(ctx, r.source.Stat)
-	if err != nil {
-		return err
-	}
-	if !os.SameFile(r.info, current) {
-		return fmt.Errorf("replacement source changed")
-	}
-	return restoreReplacementMetadataContext(ctx, r.source, r.File, r.info)
+	return restorePrivateReplacementContext(ctx, r)
 }
 
 // Close closes File if necessary and removes the private staging directory.
 // It is safe after the caller closes or renames File. It never closes source.
-func (r *Replacement) Close() error {
-	if r.rooted != nil {
-		err := r.rooted.Close()
-		if r.ownedRoot != nil {
-			err = errors.Join(err, r.ownedRoot.Close())
-			r.ownedRoot = nil
-		}
-		return err
-	}
-	err := r.File.Close()
-	if errors.Is(err, os.ErrClosed) {
-		err = nil
-	}
-	return errors.Join(err, cleanupReplacement(
-		func() error { return os.Chmod(filepath.Join(r.dir, "replacement"), 0600) }, func() error { return os.RemoveAll(r.dir) }))
-}
+func (r *Replacement) Close() error { return closePrivateReplacement(r) }
 
 // ErrUnsupportedReplacement identifies file types, metadata or filesystems
 // whose replacement metadata this package cannot safely preserve.

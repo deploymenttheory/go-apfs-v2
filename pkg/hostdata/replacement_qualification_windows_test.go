@@ -443,12 +443,16 @@ func TestReplacementWindowsHeldRenamedSource(t *testing.T) {
 	})
 }
 
-func replacementPOSIXRename(handle windows.Handle, name string) error {
-	utf16, err := windows.UTF16FromString(name)
+func replacementPOSIXRename(handle windows.Handle, name string) (err error) {
+	parent, err := os.Open(filepath.Dir(name))
 	if err != nil {
 		return err
 	}
-	utf16 = utf16[:len(utf16)-1]
+	defer func() { err = errors.Join(err, parent.Close()) }()
+	utf16, err := windows.UTF16FromString(filepath.Base(name))
+	if err != nil {
+		return err
+	}
 	var header struct {
 		Flags  uint32
 		Root   windows.Handle
@@ -458,7 +462,13 @@ func replacementPOSIXRename(handle windows.Handle, name string) error {
 	offset := int(unsafe.Offsetof(header.Name))
 	value := make([]byte, offset+2*len(utf16))
 	binary.LittleEndian.PutUint32(value, windows.FILE_RENAME_POSIX_SEMANTICS|windows.FILE_RENAME_REPLACE_IF_EXISTS)
-	binary.LittleEndian.PutUint32(value[int(unsafe.Offsetof(header.Length)):], uint32(len(utf16)*2))
+	rootOffset := int(unsafe.Offsetof(header.Root))
+	if unsafe.Sizeof(header.Root) == 8 {
+		binary.LittleEndian.PutUint64(value[rootOffset:], uint64(parent.Fd()))
+	} else {
+		binary.LittleEndian.PutUint32(value[rootOffset:], uint32(parent.Fd()))
+	}
+	binary.LittleEndian.PutUint32(value[int(unsafe.Offsetof(header.Length)):], uint32((len(utf16)-1)*2))
 	for i, c := range utf16 {
 		binary.LittleEndian.PutUint16(value[offset+2*i:], c)
 	}
@@ -513,30 +523,30 @@ func replacementResetTestFile(t *testing.T, path string) {
 	t.Helper()
 	name, err := windows.UTF16PtrFromString(path)
 	if err != nil {
-		t.Error(err)
+		t.Errorf("reset step 1 %q: %v", path, err)
 		return
 	}
 	h, err := windows.CreateFile(name, windows.WRITE_DAC, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, nil, windows.OPEN_EXISTING, 0, 0)
 	if err != nil {
-		t.Error(err)
+		t.Errorf("reset step 2 %q: %v", path, err)
 		return
 	}
 	user, err := windows.GetCurrentThreadEffectiveToken().GetTokenUser()
 	if err != nil {
 		_ = windows.CloseHandle(h)
-		t.Error(err)
+		t.Errorf("reset step 3 %q: %v", path, err)
 		return
 	}
 	sd, err := windows.SecurityDescriptorFromString("D:P(A;;FA;;;" + user.User.Sid.String() + ")")
 	if err != nil {
 		_ = windows.CloseHandle(h)
-		t.Error(err)
+		t.Errorf("reset step 4 %q: %v", path, err)
 		return
 	}
 	acl, _, err := sd.DACL()
 	if err != nil {
 		_ = windows.CloseHandle(h)
-		t.Error(err)
+		t.Errorf("reset step 5 %q: %v", path, err)
 		return
 	}
 	err = errors.Join(windows.SetSecurityInfo(h, windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION|windows.PROTECTED_DACL_SECURITY_INFORMATION, nil, nil, acl, nil), windows.CloseHandle(h))
@@ -544,7 +554,7 @@ func replacementResetTestFile(t *testing.T, path string) {
 		err = windows.SetFileAttributes(name, windows.FILE_ATTRIBUTE_NORMAL)
 	}
 	if err != nil {
-		t.Error(err)
+		t.Errorf("reset step 6 %q: %v", path, err)
 	}
 }
 

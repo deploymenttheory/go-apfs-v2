@@ -57,7 +57,7 @@ func TestPinnedPolicyBodies(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(ranges) != 24 {
+	if len(ranges) != 30 {
 		t.Fatal(len(ranges))
 	}
 	for _, f := range m.Entries {
@@ -78,7 +78,7 @@ func TestPinnedPolicyBodies(t *testing.T) {
 	}{
 		{"schema", func(m *functionManifest) { m.Schema = 2 }},
 		{"release", func(m *functionManifest) { m.Release = "other" }},
-		{"missing", func(m *functionManifest) { m.Entries = m.Entries[:24] }},
+		{"missing", func(m *functionManifest) { m.Entries = m.Entries[:30] }},
 		{"duplicate", func(m *functionManifest) { m.Entries[1] = m.Entries[0] }},
 		{"empty name", func(m *functionManifest) { m.Entries[1].Name = "" }},
 		{"negative", func(m *functionManifest) { m.Entries[1].Start = -1 }},

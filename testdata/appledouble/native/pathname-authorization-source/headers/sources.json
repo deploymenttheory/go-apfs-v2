@@ -105,6 +105,11 @@
       "file": "zalloc.h.gz",
       "sha256": "4df946375dba8281e960aece57578b628096e295497bf918f9fa7ffe9690995d",
       "url": "https://raw.githubusercontent.com/apple-oss-distributions/xnu/xnu-11417.140.69/osfmk/kern/zalloc.h"
+    },
+    {
+      "file": "user.h.gz",
+      "sha256": "076d3c8a9d9f04855eb4d57fa3f66b0b8c1c75673ffe7521eaffcc4a24ad704d",
+      "url": "https://raw.githubusercontent.com/apple-oss-distributions/xnu/xnu-11417.140.69/bsd/sys/user.h"
     }
   ]
 }

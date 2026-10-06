@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -139,7 +140,7 @@ func restoreReplacementMetadataAtContext(ctx context.Context, source, target *os
 
 type replacementBackup struct {
 	file  *os.File
-	proc  *windows.LazyProc
+	call  func(*os.File, []byte, bool, *uintptr) (uint32, error)
 	state uintptr
 }
 
@@ -147,9 +148,8 @@ func (b *replacementBackup) transfer(p []byte) (int, error) {
 	if len(p) == 0 {
 		return 0, nil
 	}
-	var n uint32
-	ok, _, err := b.proc.Call(b.file.Fd(), uintptr(unsafe.Pointer(&p[0])), uintptr(len(p)), uintptr(unsafe.Pointer(&n)), 0, 0, uintptr(unsafe.Pointer(&b.state)))
-	if ok == 0 {
+	n, err := b.call(b.file, p, false, &b.state)
+	if err != nil {
 		return 0, err
 	}
 	if n > uint32(len(p)) {
@@ -178,11 +178,8 @@ func (b *replacementBackup) close() error {
 	if b.state == 0 {
 		return nil
 	}
-	ok, _, err := b.proc.Call(0, 0, 0, 0, 1, 0, uintptr(unsafe.Pointer(&b.state)))
-	if ok == 0 {
-		return err
-	}
-	return nil
+	_, err := b.call(b.file, nil, true, &b.state)
+	return err
 }
 
 // WIN32_STREAM_ID is a 20-byte wire header followed by a UTF-16 stream name
@@ -195,8 +192,8 @@ func copyReplacementStreamsContext(ctx context.Context, source, target *os.File)
 		return err
 	}
 	defer func() { err = errors.Join(err, input.Close()) }()
-	r := &replacementBackup{file: input, proc: backupRead}
-	w := &replacementBackup{file: target, proc: backupWrite}
+	r := &replacementBackup{file: input, call: replacementBackupRead}
+	w := &replacementBackup{file: target, call: replacementBackupWrite}
 	defer func() { err = errors.Join(err, r.close(), w.close()) }()
 	return filterReplacementStreamsContext(ctx, r, w)
 }
@@ -222,4 +219,29 @@ func copyReplacementCompression(ctx context.Context, source, target *os.File) er
 	return replacementStep(ctx, func() error {
 		return windows.DeviceIoControl(windows.Handle(target.Fd()), windows.FSCTL_SET_COMPRESSION, (*byte)(unsafe.Pointer(&state)), 2, nil, 0, &returned, nil)
 	})
+}
+
+func replacementBackupRead(file *os.File, p []byte, abort bool, state *uintptr) (uint32, error) {
+	return replacementBackupNative(backupRead, file, p, abort, state)
+}
+func replacementBackupWrite(file *os.File, p []byte, abort bool, state *uintptr) (uint32, error) {
+	return replacementBackupNative(backupWrite, file, p, abort, state)
+}
+func replacementBackupNative(proc *windows.LazyProc, file *os.File, p []byte, abort bool, state *uintptr) (uint32, error) {
+	var n uint32
+	var ok uintptr
+	var err error
+	if abort {
+		ok, _, err = proc.Call(0, 0, 0, 0, 1, 0, uintptr(unsafe.Pointer(state)))
+	} else {
+		ok, _, err = proc.Call(file.Fd(), uintptr(unsafe.Pointer(&p[0])), uintptr(len(p)), uintptr(unsafe.Pointer(&n)), 0, 0, uintptr(unsafe.Pointer(state)))
+	}
+	runtime.KeepAlive(file)
+	runtime.KeepAlive(p)
+	runtime.KeepAlive(state)
+
+	if ok == 0 {
+		return 0, err
+	}
+	return n, nil
 }

@@ -349,13 +349,36 @@ func openReplacementStageMetadata(stage *os.Root) (file *os.File, err error) {
 		return nil, err
 	}
 	defer func() {
-		err = errors.Join(err, directory.Close())
+		if closeErr := directory.Close(); closeErr != nil {
+			err = errors.Join(err, closeErr)
+		}
 		if err != nil && file != nil {
 			err = errors.Join(err, file.Close())
 			file = nil
 		}
 	}()
-	return openWindowsMetadataRights(directory, "replacement", windows.SYNCHRONIZE|windows.FILE_READ_ATTRIBUTES)
+	file, err = openWindowsMetadataRights(directory, "replacement", windows.SYNCHRONIZE|windows.FILE_READ_ATTRIBUTES)
+	return file, replacementWindowsError(err)
+}
+
+// Normalize each native cause independently. A sole missing name may be ignored
+// during private cleanup, but a simultaneous handle/close failure must survive.
+func replacementWindowsError(err error) error {
+	if status, ok := err.(windows.NTStatus); ok {
+		return status.Errno()
+	}
+	if joined, ok := err.(interface{ Unwrap() []error }); ok {
+		causes := joined.Unwrap()
+		if len(causes) == 1 {
+			return replacementWindowsError(causes[0])
+		}
+		normalized := make([]error, len(causes))
+		for i, cause := range causes {
+			normalized[i] = replacementWindowsError(cause)
+		}
+		return errors.Join(normalized...)
+	}
+	return err
 }
 
 func replacementPrivateFileAccess(file *os.File) error {
