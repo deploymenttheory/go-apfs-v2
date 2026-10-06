@@ -277,8 +277,8 @@ func copyReplacementWindows(ctx context.Context, source *os.File, stage *os.Root
 	}
 	if sourceInfo.NumberOfLinks == 0 {
 		// A POSIX-unlinked NTFS handle can report an internal $Deleted path.
-		// Its zero held link count, not a pathname permission error, admits the
-		// unencrypted held-stream fallback. CopyFileEx cannot open that name.
+		// Its zero held link count, not a pathname permission error, establishes
+		// that EFS copying has no usable source name. Prepare before unlinking.
 		return nil, errors.Join(errReplacementSourcePathMissing, ctx.Err())
 	}
 	from, err := replacementFinalPath(ctx, source)

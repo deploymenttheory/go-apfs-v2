@@ -867,9 +867,15 @@ func TestReplacementWindowsHeldUnlinkedSource(t *testing.T) {
 			_, backupErr := io.Copy(io.Discard, backup)
 			backupErr = errors.Join(backupErr, backup.close())
 			t.Logf("nameless native reopened BackupRead control: %v", backupErr)
+			if !errors.Is(backupErr, windows.ERROR_SHARING_VIOLATION) {
+				t.Fatalf("native reopened late acquisition boundary: %v", backupErr)
+			}
 			reopenErr = errors.Join(reopenErr, reopened.Close())
 		}
 		t.Logf("nameless native controls: links=%d info_error=%v final_name=%q path_error=%v reopen_error=%v", nativeInfo.NumberOfLinks, infoErr, finalName, nameErr, reopenErr)
+		if infoErr != nil || nativeInfo.NumberOfLinks != 0 || nameErr != nil || reopenErr != nil {
+			t.Fatalf("native held identity/reopen controls failed: %v %v %v links=%d", infoErr, nameErr, reopenErr, nativeInfo.NumberOfLinks)
+		}
 		backup := &replacementBackup{file: source, call: replacementBackupRead}
 		_, backupErr := io.Copy(io.Discard, backup)
 		backupErr = errors.Join(backupErr, backup.close())
@@ -877,9 +883,22 @@ func TestReplacementWindowsHeldUnlinkedSource(t *testing.T) {
 			t.Fatal(seekErr)
 		}
 		t.Logf("nameless native held BackupRead control: %v", backupErr)
+		if !errors.Is(backupErr, windows.ERROR_SHARING_VIOLATION) {
+			t.Fatalf("native held late acquisition boundary: %v", backupErr)
+		}
 		var streamInfo [4096]byte
 		streamErr := windows.GetFileInformationByHandleEx(handle, windows.FileStreamInfo, &streamInfo[0], uint32(len(streamInfo)))
 		t.Logf("nameless native stream enumeration: error=%v first128=%x", streamErr, streamInfo[:128])
+		if streamErr != nil {
+			t.Fatal(streamErr)
+		}
+		streamNameBytes := make([]byte, 0, 30)
+		for _, c := range ":metadata:$DATA" {
+			streamNameBytes = append(streamNameBytes, byte(c), 0)
+		}
+		if !bytes.Contains(streamInfo[:], streamNameBytes) {
+			t.Fatal("native held stream enumeration lost metadata ADS")
+		}
 		for _, rootKind := range []string{"original", "reopened"} {
 			streamRoot := source
 			if rootKind == "reopened" {
@@ -897,6 +916,9 @@ func TestReplacementWindowsHeldUnlinkedSource(t *testing.T) {
 			}
 			standardErr := windows.GetFileInformationByHandleEx(windows.Handle(streamRoot.Fd()), windows.FileStandardInfo, (*byte)(unsafe.Pointer(&standard)), uint32(unsafe.Sizeof(standard)))
 			t.Logf("nameless native %s standard info: %+v error=%v", rootKind, standard, standardErr)
+			if standardErr != nil || standard.NumberOfLinks != 0 || standard.DeletePending != 1 {
+				t.Fatalf("native delete-pending control: %+v %v", standard, standardErr)
+			}
 			for _, streamName := range []string{":metadata", ":metadata:$DATA"} {
 				unicodeName, unicodeErr := windows.NewNTUnicodeString(streamName)
 				if unicodeErr != nil {
@@ -906,45 +928,34 @@ func TestReplacementWindowsHeldUnlinkedSource(t *testing.T) {
 				var streamHandle windows.Handle
 				var streamStatus windows.IO_STATUS_BLOCK
 				openErr := windows.NtCreateFile(&streamHandle, windows.GENERIC_READ|windows.SYNCHRONIZE, &attributes, &streamStatus, nil, 0, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, windows.FILE_OPEN, windows.FILE_NON_DIRECTORY_FILE|windows.FILE_SYNCHRONOUS_IO_NONALERT, 0, 0)
-				if openErr != nil {
-					t.Logf("nameless native %s relative stream %q: %v", rootKind, streamName, openErr)
-					continue
+				if openErr == nil {
+					_ = windows.CloseHandle(streamHandle)
 				}
-				named := os.NewFile(uintptr(streamHandle), streamName)
-				streamBytes, readErr := io.ReadAll(named)
-				readErr = errors.Join(readErr, named.Close())
-				t.Logf("nameless native %s relative stream %q: data=%x error=%v", rootKind, streamName, streamBytes, readErr)
+				t.Logf("nameless native %s relative stream %q: %v", rootKind, streamName, openErr)
+				if !errors.Is(openErr, windows.STATUS_DELETE_PENDING) {
+					t.Fatalf("native relative ADS acquisition boundary: %v", openErr)
+				}
+
 			}
 		}
 		parent := t.TempDir()
 		replacement, err := prepare(source, parent)
-		if err != nil {
-			t.Fatal(err)
+		if replacement != nil {
+			_ = replacement.Close()
+			t.Fatal("late acquisition returned partial replacement")
 		}
-		defer replacement.Close()
+		if !errors.Is(err, windows.ERROR_SHARING_VIOLATION) {
+			t.Fatalf("late acquisition must preserve native BackupRead denial: %v", err)
+		}
 		if position, e := source.Seek(0, io.SeekCurrent); e != nil || position != 7 {
 			t.Fatalf("caller source position changed: %d %v", position, e)
 		}
 		entries, err := os.ReadDir(parent)
-		if err != nil || len(entries) != 1 {
-			t.Fatal(entries, err)
-		}
-		got, err = os.ReadFile(filepath.Join(parent, entries[0].Name(), "replacement") + ":metadata")
-		if err != nil || !bytes.Equal(got, stream) {
-			t.Fatalf("unlinked source metadata lost: %q %v", got, err)
-		}
-		if _, err = replacement.File.WriteAt([]byte("new bytes"), 0); err != nil {
-			t.Fatal(err)
-		}
-		if err = replacement.RestoreMetadata(); err != nil {
-			t.Fatal(err)
-		}
-		if err = replacement.Close(); err != nil {
-			t.Fatal(err)
-		}
-		entries, err = os.ReadDir(parent)
 		if err != nil || len(entries) != 0 {
-			t.Fatal(entries, err)
+			t.Fatalf("failed late acquisition leaked stage: %v %v", entries, err)
+		}
+		if _, err = source.ReadAt(got, 0); err != nil || !bytes.Equal(got, payload) {
+			t.Fatalf("late acquisition altered held source: %q %v", got, err)
 		}
 	})
 }

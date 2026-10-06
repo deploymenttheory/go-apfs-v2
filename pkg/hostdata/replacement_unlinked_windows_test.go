@@ -421,3 +421,83 @@ func replacementUnlinkedRenameControl(t *testing.T, rooted bool, kind string, so
 	}
 	return after.FileAttributes
 }
+
+func TestReplacementWindowsEncryptedLateUnlink(t *testing.T) {
+	replacementVariants(t, func(t *testing.T, prepare func(*os.File, string) (*testedReplacement, error)) {
+		name := filepath.Join(t.TempDir(), "encrypted")
+		payload := []byte("held encrypted data")
+		if err := os.WriteFile(name, payload, 0600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(name+":metadata", []byte("encrypted ADS"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		replacementEncrypt(t, name)
+		source, err := os.Open(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer source.Close()
+		pointer, err := windows.UTF16PtrFromString(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		h, err := windows.CreateFile(pointer, windows.DELETE, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, nil, windows.OPEN_EXISTING, 0, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		flags := uint32(windows.FILE_DISPOSITION_DELETE | windows.FILE_DISPOSITION_POSIX_SEMANTICS)
+		err = windows.NtSetInformationFile(h, &windows.IO_STATUS_BLOCK{}, (*byte)(unsafe.Pointer(&flags)), 4, windows.FileDispositionInformationEx)
+		if err = errors.Join(err, windows.CloseHandle(h)); err != nil {
+			t.Fatal(err)
+		}
+		if _, err = os.Stat(name); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("native encrypted unlink: %v", err)
+		}
+		held := replacementNativeSnapshot(t, source)
+		if held.NumberOfLinks != 0 || held.FileAttributes&windows.FILE_ATTRIBUTE_ENCRYPTED == 0 {
+			t.Fatalf("held encrypted zero-link control: %#v", held)
+		}
+		got := make([]byte, len(payload))
+		if _, err = source.ReadAt(got, 0); err != nil || !bytes.Equal(got, payload) {
+			t.Fatalf("native encrypted held read: %q %v", got, err)
+		}
+		finalName, err := replacementFinalPath(t.Context(), source)
+		if err != nil {
+			t.Fatal(err)
+		}
+		from, err := windows.UTF16PtrFromString(finalName)
+		if err != nil {
+			t.Fatal(err)
+		}
+		nativeOutput := filepath.Join(t.TempDir(), "native-copy")
+		to, err := windows.UTF16PtrFromString(nativeOutput)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ok, _, nativeErr := copyFileExW.Call(uintptr(unsafe.Pointer(from)), uintptr(unsafe.Pointer(to)), 0, 0, 0, 0x801)
+		t.Logf("native encrypted zero-link CopyFileEx: name=%q result=%d error=%v", finalName, ok, nativeErr)
+		if ok != 0 || !errors.Is(nativeErr, windows.ERROR_ACCESS_DENIED) {
+			t.Fatalf("native encrypted late acquisition boundary: result=%d error=%v", ok, nativeErr)
+		}
+		if _, err = os.Stat(nativeOutput); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("native denied copy created output: %v", err)
+		}
+		parent := t.TempDir()
+		replacement, err := prepare(source, parent)
+		if replacement != nil {
+			_ = replacement.Close()
+			t.Fatal("late encrypted acquisition returned partial replacement")
+		}
+		if !errors.Is(err, errReplacementSourcePathMissing) {
+			t.Fatalf("encrypted zero-link rejection: %v", err)
+		}
+		entries, err := os.ReadDir(parent)
+		if err != nil || len(entries) != 0 {
+			t.Fatalf("encrypted late acquisition leaked stage: %v %v", entries, err)
+		}
+		if _, err = source.ReadAt(got, 0); err != nil || !bytes.Equal(got, payload) {
+			t.Fatalf("late encrypted acquisition altered source: %q %v", got, err)
+		}
+	})
+}
