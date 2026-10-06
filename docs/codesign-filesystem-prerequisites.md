@@ -187,6 +187,21 @@ Require explicit captured case sensitivity, deep-copy its policy, and reject
 ambiguous equivalent sibling entries deterministically rather than selecting by
 map iteration or preferring an exact spelling in a conflicting carrier.
 
+Expose creation validation with an explicit macOS target using the full measured
+scalar-admission tables. Bind APFS image writing to a documented constant macOS 27
+default, with explicit 15/26 support; never infer the target from the host. Validate
+all volume trees and equivalent sibling collisions before the first output write.
+Keep snapshot labels and volume labels on their separately qualified contracts.
+Require Linux/Windows-produced images to pass matching-profile native mounted
+readback, including original/query spellings and rejected creation controls.
+
+Preserve the public Go io/fs adapter's valid-path contract. Raw native pathname
+normalization and low-level lookup must have explicit APIs and tests, including HFS
+percent-escaped malformed bytes; do not silently broaden fs.ValidPath or discard
+raw native behavior. Retain corruption and provider-failure tests for image readers,
+including proof that a failed HFS overflow load cannot publish a partial cache.
+
+
 Search, create, delete and rename require distinct authorization operations.
 Capture per-directory SEARCH before lookup; ADD_FILE/ADD_SUBDIRECTORY for creation;
 leaf DELETE versus parent DELETE_CHILD, POSIX/sticky fallback and immutable/append

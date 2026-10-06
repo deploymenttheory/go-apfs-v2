@@ -678,7 +678,7 @@ func TestReplacementWindowsHeldUnlinkedSource(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		handle, err := windows.CreateFile(pointer, windows.GENERIC_READ|windows.DELETE, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, nil, windows.OPEN_EXISTING, 0, 0)
+		handle, err := windows.CreateFile(pointer, windows.GENERIC_READ, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, nil, windows.OPEN_EXISTING, 0, 0)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -687,13 +687,24 @@ func TestReplacementWindowsHeldUnlinkedSource(t *testing.T) {
 		if _, err = source.Seek(7, io.SeekStart); err != nil {
 			t.Fatal(err)
 		}
+		// POSIX disposition removes the link when its DELETE handle closes;
+		// keep a separate read capability alive to qualify truly nameless input.
+		deleteHandle, err := windows.CreateFile(pointer, windows.DELETE, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, nil, windows.OPEN_EXISTING, 0, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
 		flags := uint32(windows.FILE_DISPOSITION_DELETE | windows.FILE_DISPOSITION_POSIX_SEMANTICS)
 		var iosb windows.IO_STATUS_BLOCK
-		if err = windows.NtSetInformationFile(handle, &iosb, (*byte)(unsafe.Pointer(&flags)), 4, windows.FileDispositionInformationEx); err != nil {
+		err = windows.NtSetInformationFile(deleteHandle, &iosb, (*byte)(unsafe.Pointer(&flags)), 4, windows.FileDispositionInformationEx)
+		if err = errors.Join(err, windows.CloseHandle(deleteHandle)); err != nil {
 			t.Fatalf("required POSIX unlink control: %v", err)
 		}
 		if _, err = os.Stat(name); !errors.Is(err, os.ErrNotExist) {
 			t.Fatalf("source name survived native unlink: %v", err)
+		}
+		names, err := os.ReadDir(filepath.Dir(name))
+		if err != nil || len(names) != 0 {
+			t.Fatalf("native unlink directory control: %v %v", names, err)
 		}
 		got := make([]byte, len(payload))
 		if _, err = source.ReadAt(got, 0); err != nil || !bytes.Equal(got, payload) {

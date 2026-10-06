@@ -113,7 +113,9 @@ func replacementEFSKeysEqual(a, b *replacementEFSList) bool {
 // selected file. Resolve its path after acquiring that handle, never from Name.
 func replacementPinEFS(ctx context.Context, file *os.File) (pin *os.File, err error) {
 	pin, err = replacementValue(ctx, func() (*os.File, error) {
-		return reopenReplacementFileSharing(file, windows.FILE_READ_ATTRIBUTES, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE)
+		// Attribute-only opens do not participate in Windows sharing checks.
+		// FILE_READ_DATA makes the no-delete-share capability an effective pin.
+		return reopenReplacementFileSharing(file, windows.FILE_READ_DATA|windows.FILE_READ_ATTRIBUTES, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE)
 	})
 	if err != nil && pin != nil {
 		err = errors.Join(err, pin.Close())
