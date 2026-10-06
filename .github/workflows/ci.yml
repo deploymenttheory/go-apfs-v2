@@ -15,6 +15,9 @@ permissions:
   contents: read
 
 jobs:
+  name-comparison:
+    uses: ./.github/workflows/name-comparison.yml
+
   name-writer:
     uses: ./.github/workflows/name-writer.yml
 
@@ -141,6 +144,7 @@ jobs:
 
   test:
     name: Test (${{ matrix.os }})
+    needs: name-comparison
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -763,6 +767,14 @@ jobs:
           name: carrier-recompression-portable-${{ matrix.os }}
           path: artifacts/carrier-recompression-portable/
           if-no-files-found: error
+      # This reusable matrix runs in the same workflow and checkout revision.
+      # Import its OS-matched raw profile/transcript/report; the auditor still
+      # validates revision, OS, source hashes, test inventory and coverage.
+      - name: Download same-revision filename comparison evidence
+        uses: actions/download-artifact@v8
+        with:
+          name: name-comparison-${{ matrix.os }}
+          path: artifacts
       - name: Audit portable AppleDouble qualification evidence
         env:
           CGO_ENABLED: "0"
