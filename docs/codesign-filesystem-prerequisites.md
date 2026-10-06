@@ -178,8 +178,11 @@ leaf DELETE versus parent DELETE_CHILD, POSIX/sticky fallback and immutable/appe
 conditions for removal; source deletion, destination addition and overwritten-leaf
 deletion for rename. Account for ordered ACL grants/denials, identity/group lookup,
 root boundaries and mount/process context. Capture process/thread ignore-permissions
-policy explicitly and qualify source-backed owner overrides; an omitted policy
-must not silently become an ordinary-process observation. Consumer policy selects when to invoke
+policy explicitly and qualify source-backed owner overrides. Capture process and
+thread long-path policy separately, including admission to enable it: an ordinary
+process's path limit does not define the enabled-policy limit. Retain pre-search
+input-length checks, per-component checks after search and symlink expansion/error
+ordering. An omitted policy must not silently become an ordinary-process observation. Consumer policy selects when to invoke
 these operations; APFS supplies the qualified reusable filesystem rules.
 
 Qualify read-only mount rejection independently of the file's access bits and

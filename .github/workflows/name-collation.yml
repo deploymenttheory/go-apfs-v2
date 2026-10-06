@@ -1,0 +1,40 @@
+name: Native filename collation
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+concurrency:
+  group: name-collation-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+permissions:
+  contents: read
+env:
+  CGO_ENABLED: "0"
+  GOTOOLCHAIN: local
+jobs:
+  native:
+    name: Native filename collation (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, macos-latest, xcode-27]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Reject incomplete or changed native evidence
+        run: go test scripts/capture-name-collation.go scripts/capture-name-collation_test.go
+      - name: Capture all 15012 observed lookups and native directory records
+        run: go run scripts/capture-name-collation.go -out artifacts/name-collation -check
+      - name: Retain source provenance both ASTs all native images and exact record bytes
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: name-collation-${{ matrix.os }}
+          path: artifacts/name-collation/
+          compression-level: 9
+          if-no-files-found: error
