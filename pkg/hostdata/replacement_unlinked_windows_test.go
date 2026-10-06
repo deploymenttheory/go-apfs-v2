@@ -214,16 +214,29 @@ func TestReplacementWindowsPreparedUnlinkedSource(t *testing.T) {
 					if err = restore(t.Context()); err != nil {
 						t.Fatalf("restore from held zero-link source: %v", err)
 					}
-					t.Logf("target after restore before close: %#v", replacementNativeSnapshot(t, file))
+					restored := replacementNativeSnapshot(t, file)
+					t.Logf("target after restore before close: %#v", restored)
+					if restored.FileAttributes != before.FileAttributes || restored.CreationTime != before.CreationTime {
+						t.Fatalf("restored source metadata: %#v want %#v", restored, before)
+					}
+					expectedAttributes := replacementUnlinkedRenameControl(t, rooted, kind, before)
 					if err = file.Close(); err != nil {
 						t.Fatal(err)
 					}
-					t.Logf("target after close before rename: %#v", replacementUnlinkedPathSnapshot(t, file.Name()))
+					closed := replacementUnlinkedPathSnapshot(t, file.Name())
+					t.Logf("target after close before rename: %#v", closed)
+					if closed.FileAttributes != before.FileAttributes || closed.CreationTime != before.CreationTime {
+						t.Fatalf("closed source metadata: %#v want %#v", closed, before)
+					}
 					if err = publish(); err != nil {
 						t.Fatal(err)
 					}
 					t.Cleanup(func() { replacementResetTestFile(t, output) })
-					t.Logf("target after rename before cleanup: %#v", replacementUnlinkedPathSnapshot(t, output))
+					published := replacementUnlinkedPathSnapshot(t, output)
+					t.Logf("target after rename before cleanup: %#v", published)
+					if published.FileAttributes != expectedAttributes || published.CreationTime != before.CreationTime {
+						t.Fatalf("native publication transition: %#v want attributes=%#x creation=%#v", published, expectedAttributes, before.CreationTime)
+					}
 					if err = closeStage(); err != nil {
 						t.Fatal(err)
 					}
@@ -233,8 +246,8 @@ func TestReplacementWindowsPreparedUnlinkedSource(t *testing.T) {
 					}
 					defer result.Close()
 					actual := replacementNativeSnapshot(t, result)
-					if actual.FileAttributes != before.FileAttributes || actual.CreationTime != before.CreationTime {
-						t.Fatalf("published source metadata: %#v want %#v", actual, before)
+					if actual.FileAttributes != published.FileAttributes || actual.CreationTime != published.CreationTime {
+						t.Fatalf("publication cleanup changed metadata: %#v want %#v", actual, published)
 					}
 					copiedSecurity, err := windows.GetSecurityInfo(windows.Handle(result.Fd()), windows.SE_FILE_OBJECT, securityFlags)
 					if err != nil {
@@ -330,4 +343,81 @@ func replacementUnlinkedPathSnapshot(t *testing.T, name string) windows.ByHandle
 	file := os.NewFile(uintptr(handle), name)
 	defer file.Close()
 	return replacementNativeSnapshot(t, file)
+}
+
+// This independent control uses only native file setup and the caller's actual
+// publication operation. Windows may change ARCHIVE during rename; compare the
+// complete resulting attributes, never a masked subset of the original flags.
+func replacementUnlinkedRenameControl(t *testing.T, rooted bool, kind string, source windows.ByHandleFileInformation) uint32 {
+	t.Helper()
+	parent := t.TempDir()
+	stage := filepath.Join(parent, "stage")
+	if err := os.Mkdir(stage, 0700); err != nil {
+		t.Fatal(err)
+	}
+	name := filepath.Join(stage, "data")
+	output := filepath.Join(parent, "published")
+	if err := os.WriteFile(name, []byte("replacement main bytes"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	switch kind {
+	case "encrypted":
+		replacementEncrypt(t, name)
+	case "compressed":
+		replacementCompress(t, name)
+	case "sparse":
+		f, err := os.OpenFile(name, os.O_RDWR, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = errors.Join(replacementSparse(f), f.Close()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	pointer, err := windows.UTF16PtrFromString(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h, err := windows.CreateFile(pointer, windows.FILE_WRITE_ATTRIBUTES, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, nil, windows.OPEN_EXISTING, 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = errors.Join(windows.SetFileTime(h, &source.CreationTime, nil, nil), windows.CloseHandle(h)); err != nil {
+		t.Fatal(err)
+	}
+	if err = windows.SetFileAttributes(pointer, source.FileAttributes); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		for _, path := range []string{name, output} {
+			if _, e := os.Stat(path); e == nil {
+				replacementResetTestFile(t, path)
+			}
+		}
+	})
+	if kind == "deny-write" {
+		replacementDenyWrites(t, name)
+	}
+	before := replacementUnlinkedPathSnapshot(t, name)
+	if before.FileAttributes != source.FileAttributes || before.CreationTime != source.CreationTime {
+		t.Fatalf("native rename setup differs: %#v want %#v", before, source)
+	}
+	if rooted {
+		root, e := os.OpenRoot(parent)
+		if e != nil {
+			t.Fatal(e)
+		}
+		err = errors.Join(root.Rename(filepath.Join("stage", "data"), "published"), root.Close())
+	} else {
+		err = os.Rename(name, output)
+	}
+	if err != nil {
+		t.Fatalf("independent native rename: %v", err)
+	}
+	after := replacementUnlinkedPathSnapshot(t, output)
+	t.Logf("independent native rename rooted=%v kind=%s before=%#v after=%#v", rooted, kind, before, after)
+	if after.CreationTime != before.CreationTime {
+		t.Fatalf("native rename changed creation time: %#v %#v", before, after)
+	}
+	return after.FileAttributes
 }

@@ -69,6 +69,9 @@ func prepareReplacementAtContext(ctx context.Context, source *os.File, stage *os
 	if err != nil {
 		return file, err
 	}
+	if err = copyReplacementEAs(ctx, source, file); err != nil {
+		return nil, errors.Join(err, file.Close())
+	}
 	if err = initializeReplacementData(ctx, source, file, basic); err != nil {
 		return nil, errors.Join(err, file.Close())
 	}

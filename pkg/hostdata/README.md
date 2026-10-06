@@ -371,8 +371,11 @@ closes a caller-owned source or root.
   with an 8 MiB bound for the name list and each individual value. Values are
   transferred separately, without a cumulative attribute-byte limit. Inherited staging
   ACLs are removed first. Linux inode flags and birth time are not preserved.
-- Windows uses `CopyFileEx` inside an atomically secured private directory, with
-  held namespace pins. A path obtained from the source handle is a lookup hint:
+- Windows transfers unencrypted files through held `BackupRead`/`BackupWrite`
+  handles, preserving sparse alternate streams without materializing their holes.
+  EFS uses `CopyFileEx` inside an atomically secured private directory, with
+  held namespace pins and a separate raw EA transfer because native encrypted
+  copying omits those attributes. A path obtained from the source handle is a lookup hint:
   the callback must observe the same source identity and a destination beneath
   the held stage. Empty files also require this identity observation. A native
   copy handle is duplicated without increasing its rights; separate held
@@ -441,22 +444,37 @@ or closes those caller-owned objects and is not safe for concurrent method calls
 Darwin clones or exclusively creates relative to the opened staging directory and uses the held
 directory's `/dev/fd/N` name with the supported `Setattrlist` wrapper to clear
 inherited ACLs. Linux creates through the root and copies metadata by descriptor.
-Windows uses the same identity-checked native copy as the path API. Its private
+Windows uses the same held-stream and EFS routes as the path API. Its private
 DACL is supplied to the root-relative `NtCreateFile(FILE_CREATE)` operation,
 avoiding a create-then-chmod permission window. Held directory/anchor capabilities
-remain live through copy and final identity checks. The destination copy flags
+remain live through copy and final identity checks. EFS destination copy flags
 reject existing links, including dangling symlinks. Callback identity validation
 is additional protection; it does not substitute for contained creation.
 
-When an unencrypted source no longer has a usable name, a fully held
-`ReOpenFile` plus `BackupRead`/`BackupWrite` route preserves its supported metadata.
-It streams EAs and alternate data, excluding main-data and backup identity/link
-records. It preserves NTFS compression through held filesystem controls. Stream
-payloads, sparse extents and record counts have no arbitrary aggregate limit;
-fixed transfer buffers and checked signed offsets bound resource use. Reparse
-sources remain unsupported. Encrypted files never use BackupRead or a plaintext
-fallback: unavailable EFS names/keys return an error. Permission, identity and
-storage failures do not silently select another copy algorithm.
+Unencrypted sources use `ReOpenFile` plus `BackupRead`/`BackupWrite` throughout.
+The transfer streams EAs and alternate data, excluding main-data and backup
+identity/link records. It preserves NTFS compression through held filesystem
+controls. Stream payloads, sparse extents and record counts have no arbitrary
+aggregate limit; fixed transfer buffers and checked signed offsets bound resource
+use. Reparse sources remain unsupported. Encrypted files never use BackupRead or
+a plaintext fallback: unavailable EFS names/keys return an error. EFS attributes
+transfer as raw native EA records to preserve their flags, names and values.
+Permission, identity and storage failures do not silently select another algorithm.
+
+Prepare the replacement before unlinking the source. Windows can retain readable
+main data on a zero-link, delete-pending handle while rejecting both backup-stream
+reads and new alternate-stream opens. Such a handle does not by itself retain all
+metadata capabilities. Late preparation must fail and remove the private stage
+when complete capture is impossible. The prepared stage retains the transferred
+streams for writing and publication; keep the source open through restoration.
+Both Windows runner versions must qualify this lifecycle for ordinary, compressed,
+sparse, encrypted, deny-write and read-only inputs, including cancellation cleanup.
+
+`RestoreMetadata` restores source attributes before publication. A subsequent
+native rename may change attributes, including setting the archive flag. The
+caller owns that rename; cleanup does not rewrite the published target. Acceptance
+compares exact attributes before publication and independently checks the native
+rename transition.
 
 Cleanup retains attribute rights acquired before restrictive source ACLs are
 restored. It clears readonly only after verifying the held file still has its

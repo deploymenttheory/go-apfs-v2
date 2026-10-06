@@ -625,10 +625,36 @@ jobs:
           name: compression-lifecycle-coverage-${{ matrix.os }}
           path: artifacts/compression-lifecycle-coverage/
           if-no-files-found: error
+      # Match the dedicated owned-compression workflow: ext4's combined xattr
+      # block cannot reliably hold the complete existing 4 KB-plus-companions
+      # fixture. Keep that fixture and the no-skip gate; scope tmpfs to this gate.
+      - name: Provide native Linux storage for the complete attribute fixture
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/compression-owned-coverage "$RUNNER_TEMP/owned-compression"
+          sudo -n mount -t tmpfs -o size=2G,mode=1777 tmpfs "$RUNNER_TEMP/owned-compression"
+          findmnt --target "$RUNNER_TEMP/owned-compression" > artifacts/compression-owned-coverage/test-filesystem.txt
       - name: Owned native bindings and complete hostdata above 95 percent coverage
         env:
           CGO_ENABLED: "0"
-        run: go run scripts/verify-compression-owned.go
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$RUNNER_OS" = Linux ]; then
+            TMPDIR="$RUNNER_TEMP/owned-compression" go run scripts/verify-compression-owned.go
+          else
+            go run scripts/verify-compression-owned.go
+          fi
+      - name: Release Linux owned-binding qualification filesystem
+        if: always() && runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if mountpoint -q "$RUNNER_TEMP/owned-compression"; then
+            sudo -n umount "$RUNNER_TEMP/owned-compression"
+          fi
       - name: Upload owned compression coverage and exact evidence
         if: always()
         uses: actions/upload-artifact@v7

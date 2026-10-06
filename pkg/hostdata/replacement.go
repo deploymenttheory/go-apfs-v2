@@ -32,10 +32,14 @@ type Replacement struct {
 // is preserved. RestoreMetadata keeps the target's own compression state.
 // Recompression policy belongs to the caller. On Linux
 // ownership, mode and readable extended attributes (including POSIX ACLs) are
-// restored. On Windows a contained CopyFileEx transfer validates actual source and target
-// handle identities and preserves streams, compression and encryption. EFS
-// recipient and recovery keys must match; the owner, group and DACL are restored
-// explicitly. A nameless unencrypted source uses a held streaming fallback. Linux bounds the xattr name list and each individual
+// restored. On Windows unencrypted sources use held BackupRead/BackupWrite
+// transfers to preserve ordinary and sparse alternate streams, EAs and NTFS
+// compression. EFS uses contained, identity-checked CopyFileEx plus explicit EA
+// transfer; recipient and recovery keys must match. The owner, group and DACL
+// are restored explicitly. Prepare before unlinking the source: a held main-data
+// handle alone cannot acquire its alternate streams once Windows marks it for
+// deletion. Preparation fails if complete metadata cannot be read.
+// Linux bounds the xattr name list and each individual
 // value to 8 MiB; values transfer separately without a cumulative byte limit. Darwin's copying fallback bounds names to 1 MiB and
 // ordinary values to 8 MiB in aggregate; resource forks stream in 64 KiB chunks
 // without that value limit. Modification/access timestamps and Linux inode flags

@@ -98,7 +98,7 @@ func verify() error {
 		}
 	}
 	if runtime.GOOS == "windows" {
-		for _, name := range []string{"TestRootReplacementWindowsSparse", "TestRootReplacementWindowsLargeStream", "TestReplacementWindowsNativeCapabilities", "TestReplacementWindowsCopyCallbacks", "TestReplacementWindowsEFSKeyComparison", "TestReplacementWindowsHeldRenamedSource", "TestReplacementWindowsPrivateCleanupCapability", "TestReplacementWindowsHeldStreams", "TestReplacementWindowsBackupAdapterFailures", "TestReplacementWindowsMissingAndCloseFailure", "TestReplacementWindowsSecurityDescriptorFidelity", "TestReplacementWindowsNativeFailures", "TestReplacementWindowsEFSKeyValidation", "TestReplacementWindowsFinalPathProvider", "TestReplacementWindowsSecurityValidation", "TestReplacementWindowsEFSEveryCancellationCheckpoint", "TestReplacementWindowsPrivateFailures", "TestReplacementWindowsHeldUnlinkedSource", "TestReplacementWindowsPreparedUnlinkedSource", "TestReplacementWindowsReparseAndTransferFailures", "TestReplacementWindowsStreamReadDenial"} {
+		for _, name := range []string{"TestRootReplacementWindowsSparse", "TestRootReplacementWindowsLargeStream", "TestReplacementWindowsNativeCapabilities", "TestReplacementWindowsCopyCallbacks", "TestReplacementWindowsEFSKeyComparison", "TestReplacementWindowsHeldRenamedSource", "TestReplacementWindowsPrivateCleanupCapability", "TestReplacementWindowsHeldStreams", "TestReplacementWindowsBackupAdapterFailures", "TestReplacementWindowsMissingAndCloseFailure", "TestReplacementWindowsSecurityDescriptorFidelity", "TestReplacementWindowsNativeFailures", "TestReplacementWindowsEFSKeyValidation", "TestReplacementWindowsFinalPathProvider", "TestReplacementWindowsSecurityValidation", "TestReplacementWindowsEFSEveryCancellationCheckpoint", "TestReplacementWindowsPrivateFailures", "TestReplacementWindowsHeldUnlinkedSource", "TestReplacementWindowsPreparedUnlinkedSource", "TestReplacementWindowsEARecords", "TestReplacementWindowsEACopyNative", "TestReplacementWindowsReparseAndTransferFailures", "TestReplacementWindowsStreamReadDenial"} {
 			if !passedNames[name] {
 				return fmt.Errorf("required Windows replacement suite missing: %s", name)
 			}
@@ -126,7 +126,7 @@ func verify() error {
 		coverageFiles["pkg/hostdata/"+name] = [2]int{}
 	}
 	if runtime.GOOS == "windows" {
-		for _, name := range []string{"replacement_windows.go", "replacement_root_windows.go", "replacement_copy_windows.go", "replacement_efs_windows.go", "replacement_stage_windows.go"} {
+		for _, name := range []string{"replacement_windows.go", "replacement_root_windows.go", "replacement_copy_windows.go", "replacement_efs_windows.go", "replacement_ea_windows.go", "replacement_stage_windows.go"} {
 			coverageFiles["pkg/hostdata/"+name] = [2]int{}
 		}
 		if runtime.GOARCH == "386" || runtime.GOARCH == "arm" {

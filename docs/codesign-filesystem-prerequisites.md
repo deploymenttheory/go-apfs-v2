@@ -36,9 +36,13 @@ The remaining acceptance work is:
 
 - Complete Windows 2022/2025 replacement qualification after correcting sparse
   alternate-stream transfer. Unencrypted files use held BackupRead/BackupWrite;
-  EFS retains contained, identity-checked CopyFileEx. Require the 24-case
+  EFS retains contained, identity-checked CopyFileEx with explicit raw EA transfer. Require the 24-case
   prepare-before-unlink matrix, exact stream allocation, EAs, encryption keys,
   security, creation time, attributes, publication and cancellation cleanup.
+  Compare exact prepublication attributes and an independent native rename
+  transition; do not mask attribute differences.
+  Provision the complete Linux xattr fixture for the strict owned-binding gate
+  in both its dedicated workflow and main CI, retaining the no-skip rule.
   Separately qualify late acquisition: native zero-link/delete-pending handles
   can retain readable main data while refusing new alternate-stream opens. Keep
   exact native controls and reject incomplete output rather than losing streams.
