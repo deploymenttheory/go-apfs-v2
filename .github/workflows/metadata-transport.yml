@@ -41,6 +41,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: metadata-transport-${{ matrix.artifact }}
           path: artifacts/metadata-transport/
           if-no-files-found: error
@@ -49,6 +50,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: ci-observability-metadata-transport-transport-${{ strategy.job-index || 0 }}-${{ github.run_attempt }}
           path: artifacts/ci-observability/
           compression-level: 9
@@ -88,6 +90,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: metadata-transport-foreign-native-${{ matrix.os }}
           path: |
             artifacts/metadata-transport-linux-native/
@@ -98,6 +101,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: ci-observability-metadata-transport-native-foreign-${{ strategy.job-index || 0 }}-${{ github.run_attempt }}
           path: artifacts/ci-observability/
           compression-level: 9

@@ -323,6 +323,15 @@ func auditReportingWorkflow(name string, b []byte, result *reportingAudit) error
 			if uses != "" && !strings.HasPrefix(uses, "./") {
 				result.ExternalActions = append(result.ExternalActions, reportingBoundary{name, jobName, uses, step.Line})
 			}
+			if strings.HasPrefix(uses, "actions/upload-artifact@") {
+				with := yamlField(step, "with")
+				for _, p := range strings.Fields(yamlValue(with, "path")) {
+					if strings.HasPrefix(p, "artifacts/") && yamlValue(with, "include-hidden-files") != "true" {
+						result.Findings = append(result.Findings, reportingFinding{name, step.Line, "owned evidence upload must retain hidden provenance sources"})
+						break
+					}
+				}
+			}
 			if strings.HasPrefix(uses, "actions/upload-artifact@") && alwaysReporting(yamlValue(step, "if")) && slices.Contains([]string{"", "false"}, yamlValue(step, "continue-on-error")) {
 				with := yamlField(step, "with")
 				for _, p := range strings.Fields(yamlValue(with, "path")) {

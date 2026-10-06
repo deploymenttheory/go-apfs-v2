@@ -82,6 +82,7 @@ jobs:
         with:
           path: artifacts/ci-observability/
           if-no-files-found: error
+          include-hidden-files: true
   external:
     uses: example/repo/.github/workflows/job.yml@v1
   local:
@@ -99,6 +100,8 @@ func TestReportingWorkflowBoundaries(t *testing.T) {
 		{"conditional_setup", "uses: ./.github/actions/setup-ci-runner", "uses: ./.github/actions/setup-ci-runner\n        if: runner.os == 'macOS'", 1},
 		{"ignored_setup_failure", "uses: ./.github/actions/setup-ci-runner", "uses: ./.github/actions/setup-ci-runner\n        continue-on-error: true", 1},
 		{"conditional_upload", "if: always()", "if: always() && runner.os == 'macOS'", 1},
+		{"hidden_sources_omitted", "include-hidden-files: true", "include-hidden-files: false", 1},
+		{"hidden_sources_default", "include-hidden-files: true", "", 1},
 		{"missing_artifact_accepted", "if-no-files-found: error", "if-no-files-found: warn", 1},
 		{"ignored_upload_failure", "if: always()", "if: always()\n        continue-on-error: '${{ true }}'", 1},
 		{"wrong_artifact", "path: artifacts/ci-observability/", "path: artifacts/other/", 1},
@@ -133,7 +136,7 @@ func TestReportingWorkflowBoundaries(t *testing.T) {
       - uses: ./.github/actions/setup-ci-runner
       - uses: actions/upload-artifact@v7
         if: always()
-        with: {path: artifacts/ci-observability, if-no-files-found: error}
+        with: {path: artifacts/ci-observability, if-no-files-found: error, include-hidden-files: true}
       - run: apfs-ci-runner --suite unit -- go test ./...
   empty: {}
 `

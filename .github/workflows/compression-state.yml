@@ -44,6 +44,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: compression-state-${{ matrix.artifact }}
           path: artifacts/compression-state-portable/
           if-no-files-found: error
@@ -52,6 +53,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: ci-observability-compression-state-portable-${{ strategy.job-index || 0 }}-${{ github.run_attempt }}
           path: artifacts/ci-observability/
           compression-level: 9
@@ -92,6 +94,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: compression-state-native-${{ matrix.os }}
           path: |
             artifacts/compression-state/
@@ -105,6 +108,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: ci-observability-compression-state-native-${{ strategy.job-index || 0 }}-${{ github.run_attempt }}
           path: artifacts/ci-observability/
           compression-level: 9

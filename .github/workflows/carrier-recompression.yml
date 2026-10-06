@@ -43,6 +43,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: carrier-recompression-${{ matrix.artifact }}
           path: artifacts/carrier-recompression-portable/
           if-no-files-found: error
@@ -51,6 +52,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: ci-observability-carrier-recompression-portable-${{ strategy.job-index || 0 }}-${{ github.run_attempt }}
           path: artifacts/ci-observability/
           compression-level: 9
@@ -86,6 +88,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: carrier-recompression-native-${{ matrix.os }}
           path: artifacts/carrier-recompression-foreign/**/native-readback/
           if-no-files-found: error
@@ -94,6 +97,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: ci-observability-carrier-recompression-native-${{ strategy.job-index || 0 }}-${{ github.run_attempt }}
           path: artifacts/ci-observability/
           compression-level: 9
@@ -129,6 +133,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: recompression-access-${{ matrix.os }}
           path: artifacts/recompression-access/
           if-no-files-found: error
@@ -137,6 +142,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: ci-observability-carrier-recompression-access-${{ strategy.job-index || 0 }}-${{ github.run_attempt }}
           path: artifacts/ci-observability/
           compression-level: 9

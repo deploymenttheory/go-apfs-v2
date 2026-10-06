@@ -53,6 +53,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: pathname-authorization-${{ matrix.os }}
           path: artifacts/pathname-authorization/
           if-no-files-found: error
@@ -60,6 +61,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: pathname-authorization-ast-${{ matrix.os }}
           path: artifacts/pathname-authorization-ast/
           if-no-files-found: error
@@ -67,6 +69,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: pathname-mounts-${{ matrix.os }}
           path: artifacts/pathname-mounts/
           if-no-files-found: error
@@ -75,6 +78,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: ci-observability-pathname-authorization-native-${{ strategy.job-index || 0 }}-${{ github.run_attempt }}
           path: artifacts/ci-observability/
           compression-level: 9
@@ -120,6 +124,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: pathname-portable-${{ matrix.os }}
           path: artifacts/replay/
           if-no-files-found: error
@@ -128,6 +133,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: ci-observability-pathname-authorization-portable-${{ strategy.job-index || 0 }}-${{ github.run_attempt }}
           path: artifacts/ci-observability/
           compression-level: 9

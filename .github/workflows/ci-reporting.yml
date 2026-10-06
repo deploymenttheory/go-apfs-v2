@@ -47,6 +47,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: ci-observability-ci-reporting-${{ matrix.os }}-${{ github.run_attempt }}
           path: artifacts/ci-observability/
           compression-level: 9
@@ -55,6 +56,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: ci-reporting-qualification-${{ matrix.os }}-${{ github.run_attempt }}
           path: |
             artifacts/ci-reporting-coverage/

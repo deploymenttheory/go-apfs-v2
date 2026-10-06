@@ -73,6 +73,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: diagnostic-checkpoint-${{ matrix.profile }}-${{ matrix.filesystem }}
           path: artifacts/name-native-diagnostic/
           compression-level: 9
@@ -90,6 +91,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: diagnostic-outcome-${{ matrix.profile }}-${{ matrix.filesystem }}
           path: artifacts/name-native-diagnostic/
           compression-level: 9
@@ -99,6 +101,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: ci-observability-name-image-diagnostic-diagnostic-${{ strategy.job-index || 0 }}-${{ github.run_attempt }}
           path: artifacts/ci-observability/
           compression-level: 9

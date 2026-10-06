@@ -70,6 +70,7 @@ jobs:
       - uses: actions/upload-artifact@v7
         if: always()
         with:
+          include-hidden-files: true
           name: name-collation-${{ matrix.os }}
           path: artifacts/name-collation/
           compression-level: 9
@@ -78,6 +79,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: ci-observability-name-comparison-native-images-${{ strategy.job-index || 0 }}-${{ github.run_attempt }}
           path: artifacts/ci-observability/
           compression-level: 9
@@ -124,6 +126,7 @@ jobs:
       - uses: actions/upload-artifact@v7
         if: always()
         with:
+          include-hidden-files: true
           name: name-comparison-${{ matrix.os }}
           path: artifacts/name-comparison-coverage/
           compression-level: 9
@@ -132,6 +135,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: ci-observability-name-comparison-readers-${{ strategy.job-index || 0 }}-${{ github.run_attempt }}
           path: artifacts/ci-observability/
           compression-level: 9
@@ -176,6 +180,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: name-native-build-${{ matrix.producer }}-${{ matrix.receiver.version }}-${{ matrix.filesystem }}
           path: artifacts/name-native-build/
           compression-level: 9
@@ -191,6 +196,7 @@ jobs:
       - uses: actions/upload-artifact@v7
         if: always()
         with:
+          include-hidden-files: true
           name: name-native-cell-${{ matrix.producer }}-${{ matrix.receiver.version }}-${{ matrix.filesystem }}
           path: |
             artifacts/name-native-readback/
@@ -201,6 +207,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: ci-observability-name-comparison-native-readers-${{ strategy.job-index || 0 }}-${{ github.run_attempt }}
           path: artifacts/ci-observability/
           compression-level: 9
@@ -246,6 +253,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: ci-observability-name-comparison-qualify-matrix-${{ strategy.job-index || 0 }}-${{ github.run_attempt }}
           path: artifacts/ci-observability/
           compression-level: 9

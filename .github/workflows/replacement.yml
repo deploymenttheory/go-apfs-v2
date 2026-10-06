@@ -50,6 +50,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: replacement-qualification-${{ matrix.os }}
           path: artifacts/replacement-coverage/
           if-no-files-found: error
@@ -58,6 +59,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: ci-observability-replacement-qualification-${{ strategy.job-index || 0 }}-${{ github.run_attempt }}
           path: artifacts/ci-observability/
           compression-level: 9

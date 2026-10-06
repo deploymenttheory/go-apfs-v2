@@ -121,3 +121,10 @@ keep the existing qualification jobs. Capture jobs assert the actual host
 version and unchanged tracked files before and after execution. These jobs
 write artifact destinations only; they neither rewrite retained baselines nor
 satisfy the normal acceptance gates.
+
+Evidence uploads explicitly include hidden files: the bound setup action lives
+under `.github`, and omitting it would leave an incomplete source archive. The
+workflow audit rejects owned evidence uploads without this setting. For a
+focused regeneration, `capture_recipe` accepts an exact recipe from the chosen
+capture phase. Invalid recipe/phase combinations fail; this optional selection
+only affects supplemental capture jobs, never the normal qualification matrix.

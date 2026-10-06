@@ -63,6 +63,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: ci-observability-ci-build-${{ strategy.job-index || 0 }}-${{ github.run_attempt }}
           path: artifacts/ci-observability/
           compression-level: 9
@@ -118,6 +119,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-boundary
           path: artifacts/native-bindings/
           if-no-files-found: error
@@ -126,6 +128,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: ci-observability-ci-native-boundary-${{ strategy.job-index || 0 }}-${{ github.run_attempt }}
           path: artifacts/ci-observability/
           compression-level: 9
@@ -169,6 +172,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: race-results
           path: artifacts/race/
           if-no-files-found: error
@@ -177,6 +181,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: ci-observability-ci-race-${{ strategy.job-index || 0 }}-${{ github.run_attempt }}
           path: artifacts/ci-observability/
           compression-level: 9
@@ -213,6 +218,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: ci-reporting-coverage-${{ matrix.os }}
           path: artifacts/ci-reporting-coverage/
           if-no-files-found: error
@@ -225,6 +231,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: osversion-coverage-${{ matrix.os }}
           path: artifacts/osversion-coverage/
           if-no-files-found: error
@@ -237,6 +244,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: replacement-coverage-${{ matrix.os }}
           path: artifacts/replacement-coverage/
           if-no-files-found: error
@@ -250,6 +258,7 @@ jobs:
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: replacement-native
           path: artifacts/replacement-native/
           if-no-files-found: error
@@ -262,6 +271,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: held-metadata-${{ matrix.os }}
           path: artifacts/held-metadata/
           if-no-files-found: error
@@ -274,6 +284,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: strict-xattrs-${{ matrix.os }}
           path: artifacts/strict-xattrs/
           if-no-files-found: error
@@ -285,6 +296,7 @@ jobs:
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: held-xattr-write
           path: artifacts/held-xattr-write/
           if-no-files-found: error
@@ -296,6 +308,7 @@ jobs:
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7.0.1
         with:
+          include-hidden-files: true
           name: held-xattr-list
           path: artifacts/held-xattr-list/
           if-no-files-found: error
@@ -314,6 +327,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: acl-restore-${{ matrix.os }}
           path: artifacts/acl-restore/
           if-no-files-found: error
@@ -326,6 +340,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: image-security-coverage-${{ matrix.os }}
           path: artifacts/image-security-coverage/
           if-no-files-found: error
@@ -343,6 +358,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: root-layout-${{ matrix.os }}
           path: artifacts/root-layout/
           if-no-files-found: error
@@ -350,6 +366,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: root-security-coverage-${{ matrix.os }}
           path: artifacts/root-security-coverage/
           if-no-files-found: error
@@ -362,6 +379,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: mode-security-coverage-${{ matrix.os }}
           path: artifacts/mode-security-coverage/
           if-no-files-found: error
@@ -374,6 +392,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: image-acl-coverage-${{ matrix.os }}
           path: artifacts/image-acl-coverage/
           if-no-files-found: error
@@ -386,6 +405,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: image-copy-coverage-${{ matrix.os }}
           path: artifacts/image-copy-coverage/
           if-no-files-found: error
@@ -398,6 +418,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: security-volume-coverage-${{ matrix.os }}
           path: artifacts/security-volume-coverage/
           if-no-files-found: error
@@ -410,6 +431,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: security-source-coverage-${{ matrix.os }}
           path: artifacts/security-source-coverage/
           if-no-files-found: error
@@ -422,6 +444,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: image-times-coverage-${{ matrix.os }}
           path: artifacts/image-times-coverage/
           if-no-files-found: error
@@ -434,6 +457,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: image-flags-coverage-${{ matrix.os }}
           path: artifacts/image-flags-coverage/
           if-no-files-found: error
@@ -446,6 +470,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: image-stat-coverage-${{ matrix.os }}
           path: artifacts/image-stat-coverage/
           if-no-files-found: error
@@ -458,6 +483,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: xattr-restore-coverage-${{ matrix.os }}
           path: artifacts/xattr-restore-coverage/
           if-no-files-found: error
@@ -470,6 +496,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: unpack-restore-coverage-${{ matrix.os }}
           path: artifacts/unpack-restore-coverage/
           if-no-files-found: error
@@ -482,6 +509,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: copy-pipeline-coverage-${{ matrix.os }}
           path: artifacts/copy-pipeline-coverage/
           if-no-files-found: error
@@ -494,6 +522,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: stat-copy-coverage-${{ matrix.os }}
           path: artifacts/stat-copy-coverage/
           if-no-files-found: error
@@ -506,6 +535,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: appledouble-stream-${{ matrix.os }}
           path: artifacts/appledouble-stream/
           if-no-files-found: error
@@ -519,6 +549,7 @@ jobs:
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: unpack-sequential
           path: artifacts/unpack-sequential/
           if-no-files-found: error
@@ -531,6 +562,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: metadata-transport-coverage-${{ matrix.os }}
           path: artifacts/metadata-transport-coverage/
           if-no-files-found: error
@@ -543,6 +575,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: path-lifecycle-coverage-${{ matrix.os }}
           path: artifacts/path-lifecycle-coverage/
           if-no-files-found: error
@@ -556,6 +589,7 @@ jobs:
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: path-lifecycle-source
           path: artifacts/path-lifecycle-source/
           if-no-files-found: error
@@ -569,6 +603,7 @@ jobs:
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: path-copyfile-native
           path: artifacts/path-copyfile-native/
           if-no-files-found: error
@@ -582,6 +617,7 @@ jobs:
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: path-security-native
           path: artifacts/path-security-native/
           if-no-files-found: error
@@ -595,6 +631,7 @@ jobs:
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: xattr-remove-effects-native
           path: artifacts/xattr-remove-effects-native/
           if-no-files-found: error
@@ -608,6 +645,7 @@ jobs:
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: appledouble-object-native
           path: artifacts/appledouble-object-native/
           if-no-files-found: error
@@ -621,6 +659,7 @@ jobs:
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: appledouble-object-authorization
           path: artifacts/appledouble-object-authorization/
           if-no-files-found: error
@@ -634,6 +673,7 @@ jobs:
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: xattr-intent
           path: artifacts/xattr-intent/
           if-no-files-found: error
@@ -647,6 +687,7 @@ jobs:
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: path-fork-native
           path: artifacts/path-fork-native/
           if-no-files-found: error
@@ -660,6 +701,7 @@ jobs:
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: appledouble-object-sandbox
           path: artifacts/appledouble-object-sandbox/
           if-no-files-found: error
@@ -672,6 +714,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: appledouble-pack-coverage-${{ matrix.os }}
           path: artifacts/appledouble-pack-coverage/
           if-no-files-found: error
@@ -685,6 +728,7 @@ jobs:
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: appledouble-pack
           path: artifacts/appledouble-pack/
           if-no-files-found: error
@@ -696,6 +740,7 @@ jobs:
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: darwin-wrappers
           path: artifacts/darwin-wrappers/
           if-no-files-found: error
@@ -708,6 +753,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: decmpfs-formats-coverage-${{ matrix.os }}
           path: artifacts/decmpfs-formats-coverage/
           if-no-files-found: error
@@ -720,6 +766,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: compression-lifecycle-coverage-${{ matrix.os }}
           path: artifacts/compression-lifecycle-coverage/
           if-no-files-found: error
@@ -757,6 +804,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: compression-owned-coverage-${{ matrix.os }}
           path: artifacts/compression-owned-coverage/
           if-no-files-found: error
@@ -769,6 +817,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: compression-state-coverage-${{ matrix.os }}
           path: artifacts/compression-state-portable/
           if-no-files-found: error
@@ -781,6 +830,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: large-compression-portable-${{ matrix.os }}
           path: artifacts/large-compression-portable/
           if-no-files-found: error
@@ -798,6 +848,7 @@ jobs:
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: held-metadata-projection-native
           path: |
             artifacts/held-metadata-native/
@@ -816,6 +867,7 @@ jobs:
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: decmpfs-formats-native
           path: artifacts/decmpfs-formats/
           if-no-files-found: error
@@ -829,6 +881,7 @@ jobs:
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: large-compression-native
           path: artifacts/large-compression/
           if-no-files-found: error
@@ -847,6 +900,7 @@ jobs:
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: compression-encoder-native
           path: |
             artifacts/compression-blocks/
@@ -863,6 +917,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: carrier-recompression-portable-${{ matrix.os }}
           path: artifacts/carrier-recompression-portable/
           if-no-files-found: error
@@ -883,6 +938,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: evidence-audit-${{ matrix.os }}
           path: artifacts/evidence-audit/
           if-no-files-found: error
@@ -897,6 +953,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: appledouble-${{ matrix.os }}
           path: artifacts/appledouble/
           if-no-files-found: error
@@ -910,6 +967,7 @@ jobs:
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: appledouble-native
           path: artifacts/appledouble-native/
           if-no-files-found: error
@@ -923,6 +981,7 @@ jobs:
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: appledouble-acl
           path: artifacts/appledouble-acl/
           if-no-files-found: error
@@ -936,6 +995,7 @@ jobs:
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: appledouble-acl-inherit
           path: artifacts/appledouble-acl-inherit/
           if-no-files-found: error
@@ -949,6 +1009,7 @@ jobs:
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: appledouble-acl-copy
           path: artifacts/appledouble-acl-copy/
           if-no-files-found: error
@@ -962,6 +1023,7 @@ jobs:
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: security-copy
           path: artifacts/security-copy/
           if-no-files-found: error
@@ -975,6 +1037,7 @@ jobs:
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: security-copy-volume
           path: artifacts/security-copy-volume/
           if-no-files-found: error
@@ -988,6 +1051,7 @@ jobs:
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: security-source
           path: artifacts/security-source/
           if-no-files-found: error
@@ -1001,6 +1065,7 @@ jobs:
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: xattr-restore
           path: artifacts/xattr-restore/
           if-no-files-found: error
@@ -1014,6 +1079,7 @@ jobs:
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: unpack-restore
           path: artifacts/unpack-restore/
           if-no-files-found: error
@@ -1027,6 +1093,7 @@ jobs:
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: copy-pipeline
           path: artifacts/copy-pipeline/
           if-no-files-found: error
@@ -1040,6 +1107,7 @@ jobs:
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: stat-copy
           path: artifacts/stat-copy/
           if-no-files-found: error
@@ -1053,6 +1121,7 @@ jobs:
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: image-security
           path: artifacts/image-security/
           if-no-files-found: error
@@ -1066,6 +1135,7 @@ jobs:
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: image-root-security
           path: artifacts/image-root-security/
           if-no-files-found: error
@@ -1079,6 +1149,7 @@ jobs:
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: image-mode-security
           path: artifacts/image-mode-security/
           if-no-files-found: error
@@ -1092,6 +1163,7 @@ jobs:
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: image-times
           path: artifacts/image-times/
           if-no-files-found: error
@@ -1105,6 +1177,7 @@ jobs:
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: image-flags
           path: artifacts/image-flags/
           if-no-files-found: error
@@ -1118,6 +1191,7 @@ jobs:
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: image-stat
           path: artifacts/image-stat/
           if-no-files-found: error
@@ -1131,6 +1205,7 @@ jobs:
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: image-acl-restore
           path: artifacts/image-acl-restore/
           if-no-files-found: error
@@ -1144,6 +1219,7 @@ jobs:
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: image-security-copy
           path: artifacts/image-security-copy/
           if-no-files-found: error
@@ -1157,6 +1233,7 @@ jobs:
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: appledouble-filesec
           path: artifacts/appledouble-filesec/
           if-no-files-found: error
@@ -1170,6 +1247,7 @@ jobs:
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: appledouble-quarantine
           path: artifacts/appledouble-quarantine/
           if-no-files-found: error
@@ -1183,6 +1261,7 @@ jobs:
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: appledouble-quarantine-runtime
           path: artifacts/appledouble-quarantine-runtime/
           if-no-files-found: error
@@ -1196,6 +1275,7 @@ jobs:
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: appledouble-quarantine-normalization
           path: artifacts/appledouble-quarantine-runtime-normalization/
           if-no-files-found: error
@@ -1209,6 +1289,7 @@ jobs:
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: appledouble-quarantine-processes
           path: artifacts/appledouble-quarantine-runtime-processes/
           if-no-files-found: error
@@ -1222,6 +1303,7 @@ jobs:
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: appledouble-quarantine-existing
           path: artifacts/appledouble-quarantine-runtime-existing/
           if-no-files-found: error
@@ -1235,6 +1317,7 @@ jobs:
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: appledouble-quarantine-contexts
           path: artifacts/appledouble-quarantine-runtime-contexts/
           if-no-files-found: error
@@ -1248,6 +1331,7 @@ jobs:
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: appledouble-quarantine-destinations
           path: artifacts/appledouble-quarantine-runtime-destinations/
           if-no-files-found: error
@@ -1357,6 +1441,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: vendor-dmg-${{ matrix.os }}
           path: artifacts/vendor-dmg/
           if-no-files-found: error
@@ -1365,6 +1450,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: ci-observability-ci-test-${{ strategy.job-index || 0 }}-${{ github.run_attempt }}
           path: artifacts/ci-observability/
           compression-level: 9

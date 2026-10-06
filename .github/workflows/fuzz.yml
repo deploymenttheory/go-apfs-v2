@@ -87,6 +87,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v7.0.1
         with:
+          include-hidden-files: true
           name: crasher-${{ matrix.target }}
           path: ${{ matrix.pkg }}/testdata/fuzz/${{ matrix.target }}/
 
@@ -94,6 +95,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: ci-observability-fuzz-fuzz-${{ strategy.job-index || 0 }}-${{ github.run_attempt }}
           path: artifacts/ci-observability/
           compression-level: 9

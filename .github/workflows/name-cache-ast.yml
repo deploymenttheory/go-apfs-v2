@@ -33,6 +33,7 @@ jobs:
       - uses: actions/upload-artifact@v7
         if: always()
         with:
+          include-hidden-files: true
           name: name-cache-ast-${{ matrix.os }}
           path: artifacts/name-cache-ast/
           if-no-files-found: error
@@ -41,6 +42,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: ci-observability-name-cache-ast-native-${{ strategy.job-index || 0 }}-${{ github.run_attempt }}
           path: artifacts/ci-observability/
           compression-level: 9

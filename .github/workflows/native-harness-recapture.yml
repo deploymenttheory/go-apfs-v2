@@ -12,18 +12,26 @@ on:
         options: [base, dependent]
         default: base
         required: true
+      recipe:
+        description: Optional exact capture recipe; empty collects the complete phase
+        type: string
+        default: ""
   workflow_call:
     inputs:
       phase:
         description: base or dependent
         type: string
         required: true
+      recipe:
+        description: Optional exact capture recipe
+        type: string
+        default: ""
 
 permissions:
   contents: read
 
 concurrency:
-  group: native-harness-recapture-${{ github.ref }}-${{ inputs.phase }}
+  group: native-harness-recapture-${{ github.ref }}-${{ inputs.phase }}-${{ inputs.recipe || 'all' }}
   cancel-in-progress: false
 
 env:
@@ -38,17 +46,64 @@ jobs:
         shell: bash
         env:
           CAPTURE_PHASE: ${{ inputs.phase }}
+          CAPTURE_RECIPE: ${{ inputs.recipe }}
         run: |
           set -euo pipefail
           case "$CAPTURE_PHASE" in
             base|dependent) ;;
             *) echo 'Expected base or dependent capture phase' >&2; exit 1 ;;
           esac
+          case "$CAPTURE_PHASE:$CAPTURE_RECIPE" in
+            base:|dependent:) ;;
+            base:compression-blocks-27) ;;
+            base:compression-lifecycle-27) ;;
+            base:compression-lz4-26) ;;
+            base:compression-lz4-27) ;;
+            base:compression-operation-15) ;;
+            base:compression-operation-26) ;;
+            base:compression-operation-27) ;;
+            base:compression-owned-15) ;;
+            base:compression-owned-26) ;;
+            base:compression-owned-27) ;;
+            base:compression-policy-27) ;;
+            base:compression-query-26) ;;
+            base:compression-query-27) ;;
+            dependent:compression-state-27) ;;
+            base:compression-writer-27) ;;
+            dependent:compression-zlib-source-27) ;;
+            base:content-open-27) ;;
+            base:entry-type-27) ;;
+            dependent:hfs-finderinfo-27) ;;
+            base:hfs-special-names-15) ;;
+            base:hfs-special-names-26) ;;
+            base:hfs-special-names-27) ;;
+            base:large-compression-27) ;;
+            base:name-admission-15) ;;
+            base:name-admission-26) ;;
+            base:name-admission-27) ;;
+            base:name-collation-15) ;;
+            base:name-collation-26) ;;
+            base:name-collation-27) ;;
+            base:name-lookup-15) ;;
+            base:name-lookup-26) ;;
+            base:name-lookup-27) ;;
+            base:pathname-limits-15) ;;
+            base:pathname-limits-26) ;;
+            base:pathname-limits-27) ;;
+            dependent:recompression-access-15) ;;
+            dependent:recompression-access-26) ;;
+            dependent:recompression-access-27) ;;
+            base:replacement-27) ;;
+            base:resource-fork-open-15) ;;
+            base:resource-fork-open-26) ;;
+            base:resource-fork-open-27) ;;
+            *) echo 'Recipe does not belong to the requested capture phase' >&2; exit 1 ;;
+          esac
 
   compression-blocks-27:
     name: Capture only - compression-blocks-27
     needs: validate-phase
-    if: inputs.phase == 'base'
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'compression-blocks-27')
     runs-on: xcode-27
     timeout-minutes: 60
     steps:
@@ -107,6 +162,7 @@ jobs:
         if: always() && steps.capture-unmounted.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-compression-blocks-27-${{ github.run_attempt }}
           path: |
             artifacts/compression-blocks/
@@ -116,6 +172,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-compression-blocks-27-diagnostics-${{ github.run_attempt }}
           path: |
             artifacts/native-recapture/
@@ -126,7 +183,7 @@ jobs:
   compression-lifecycle-27:
     name: Capture only - compression-lifecycle-27
     needs: validate-phase
-    if: inputs.phase == 'base'
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'compression-lifecycle-27')
     runs-on: xcode-27
     timeout-minutes: 60
     steps:
@@ -185,6 +242,7 @@ jobs:
         if: always() && steps.capture-unmounted.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-compression-lifecycle-27-${{ github.run_attempt }}
           path: |
             artifacts/compression-lifecycle/
@@ -194,6 +252,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-compression-lifecycle-27-diagnostics-${{ github.run_attempt }}
           path: |
             artifacts/native-recapture/
@@ -204,7 +263,7 @@ jobs:
   compression-lz4-26:
     name: Capture only - compression-lz4-26
     needs: validate-phase
-    if: inputs.phase == 'base'
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'compression-lz4-26')
     runs-on: macos-latest
     timeout-minutes: 60
     steps:
@@ -263,6 +322,7 @@ jobs:
         if: always() && steps.capture-unmounted.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-compression-lz4-26-${{ github.run_attempt }}
           path: |
             artifacts/compression-lz4/
@@ -272,6 +332,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-compression-lz4-26-diagnostics-${{ github.run_attempt }}
           path: |
             artifacts/native-recapture/
@@ -282,7 +343,7 @@ jobs:
   compression-lz4-27:
     name: Capture only - compression-lz4-27
     needs: validate-phase
-    if: inputs.phase == 'base'
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'compression-lz4-27')
     runs-on: xcode-27
     timeout-minutes: 60
     steps:
@@ -341,6 +402,7 @@ jobs:
         if: always() && steps.capture-unmounted.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-compression-lz4-27-${{ github.run_attempt }}
           path: |
             artifacts/compression-lz4/
@@ -350,6 +412,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-compression-lz4-27-diagnostics-${{ github.run_attempt }}
           path: |
             artifacts/native-recapture/
@@ -360,7 +423,7 @@ jobs:
   compression-operation-15:
     name: Capture only - compression-operation-15
     needs: validate-phase
-    if: inputs.phase == 'base'
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'compression-operation-15')
     runs-on: macos-15
     timeout-minutes: 60
     steps:
@@ -419,6 +482,7 @@ jobs:
         if: always() && steps.capture-unmounted.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-compression-operation-15-${{ github.run_attempt }}
           path: |
             artifacts/compression-operation/
@@ -428,6 +492,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-compression-operation-15-diagnostics-${{ github.run_attempt }}
           path: |
             artifacts/native-recapture/
@@ -438,7 +503,7 @@ jobs:
   compression-operation-26:
     name: Capture only - compression-operation-26
     needs: validate-phase
-    if: inputs.phase == 'base'
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'compression-operation-26')
     runs-on: macos-latest
     timeout-minutes: 60
     steps:
@@ -497,6 +562,7 @@ jobs:
         if: always() && steps.capture-unmounted.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-compression-operation-26-${{ github.run_attempt }}
           path: |
             artifacts/compression-operation/
@@ -506,6 +572,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-compression-operation-26-diagnostics-${{ github.run_attempt }}
           path: |
             artifacts/native-recapture/
@@ -516,7 +583,7 @@ jobs:
   compression-operation-27:
     name: Capture only - compression-operation-27
     needs: validate-phase
-    if: inputs.phase == 'base'
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'compression-operation-27')
     runs-on: xcode-27
     timeout-minutes: 60
     steps:
@@ -575,6 +642,7 @@ jobs:
         if: always() && steps.capture-unmounted.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-compression-operation-27-${{ github.run_attempt }}
           path: |
             artifacts/compression-operation/
@@ -584,6 +652,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-compression-operation-27-diagnostics-${{ github.run_attempt }}
           path: |
             artifacts/native-recapture/
@@ -594,7 +663,7 @@ jobs:
   compression-owned-15:
     name: Capture only - compression-owned-15
     needs: validate-phase
-    if: inputs.phase == 'base'
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'compression-owned-15')
     runs-on: macos-15
     timeout-minutes: 60
     steps:
@@ -653,6 +722,7 @@ jobs:
         if: always() && steps.capture-unmounted.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-compression-owned-15-${{ github.run_attempt }}
           path: |
             artifacts/compression-owned/
@@ -662,6 +732,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-compression-owned-15-diagnostics-${{ github.run_attempt }}
           path: |
             artifacts/native-recapture/
@@ -672,7 +743,7 @@ jobs:
   compression-owned-26:
     name: Capture only - compression-owned-26
     needs: validate-phase
-    if: inputs.phase == 'base'
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'compression-owned-26')
     runs-on: macos-latest
     timeout-minutes: 60
     steps:
@@ -731,6 +802,7 @@ jobs:
         if: always() && steps.capture-unmounted.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-compression-owned-26-${{ github.run_attempt }}
           path: |
             artifacts/compression-owned/
@@ -740,6 +812,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-compression-owned-26-diagnostics-${{ github.run_attempt }}
           path: |
             artifacts/native-recapture/
@@ -750,7 +823,7 @@ jobs:
   compression-owned-27:
     name: Capture only - compression-owned-27
     needs: validate-phase
-    if: inputs.phase == 'base'
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'compression-owned-27')
     runs-on: xcode-27
     timeout-minutes: 60
     steps:
@@ -809,6 +882,7 @@ jobs:
         if: always() && steps.capture-unmounted.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-compression-owned-27-${{ github.run_attempt }}
           path: |
             artifacts/compression-owned/
@@ -818,6 +892,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-compression-owned-27-diagnostics-${{ github.run_attempt }}
           path: |
             artifacts/native-recapture/
@@ -828,7 +903,7 @@ jobs:
   compression-policy-27:
     name: Capture only - compression-policy-27
     needs: validate-phase
-    if: inputs.phase == 'base'
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'compression-policy-27')
     runs-on: xcode-27
     timeout-minutes: 60
     steps:
@@ -887,6 +962,7 @@ jobs:
         if: always() && steps.capture-unmounted.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-compression-policy-27-${{ github.run_attempt }}
           path: |
             artifacts/compression-policy/
@@ -896,6 +972,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-compression-policy-27-diagnostics-${{ github.run_attempt }}
           path: |
             artifacts/native-recapture/
@@ -906,7 +983,7 @@ jobs:
   compression-query-26:
     name: Capture only - compression-query-26
     needs: validate-phase
-    if: inputs.phase == 'base'
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'compression-query-26')
     runs-on: macos-latest
     timeout-minutes: 60
     steps:
@@ -965,6 +1042,7 @@ jobs:
         if: always() && steps.capture-unmounted.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-compression-query-26-${{ github.run_attempt }}
           path: |
             artifacts/compression-query/
@@ -974,6 +1052,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-compression-query-26-diagnostics-${{ github.run_attempt }}
           path: |
             artifacts/native-recapture/
@@ -984,7 +1063,7 @@ jobs:
   compression-query-27:
     name: Capture only - compression-query-27
     needs: validate-phase
-    if: inputs.phase == 'base'
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'compression-query-27')
     runs-on: xcode-27
     timeout-minutes: 60
     steps:
@@ -1043,6 +1122,7 @@ jobs:
         if: always() && steps.capture-unmounted.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-compression-query-27-${{ github.run_attempt }}
           path: |
             artifacts/compression-query/
@@ -1052,6 +1132,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-compression-query-27-diagnostics-${{ github.run_attempt }}
           path: |
             artifacts/native-recapture/
@@ -1062,7 +1143,7 @@ jobs:
   compression-state-27:
     name: Capture only - compression-state-27
     needs: validate-phase
-    if: inputs.phase == 'dependent'
+    if: inputs.phase == 'dependent' && (inputs.recipe == '' || inputs.recipe == 'compression-state-27')
     runs-on: xcode-27
     timeout-minutes: 60
     steps:
@@ -1121,6 +1202,7 @@ jobs:
         if: always() && steps.capture-unmounted.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-compression-state-27-${{ github.run_attempt }}
           path: |
             artifacts/compression-state/
@@ -1130,6 +1212,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-compression-state-27-diagnostics-${{ github.run_attempt }}
           path: |
             artifacts/native-recapture/
@@ -1140,7 +1223,7 @@ jobs:
   compression-writer-27:
     name: Capture only - compression-writer-27
     needs: validate-phase
-    if: inputs.phase == 'base'
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'compression-writer-27')
     runs-on: xcode-27
     timeout-minutes: 60
     steps:
@@ -1199,6 +1282,7 @@ jobs:
         if: always() && steps.capture-unmounted.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-compression-writer-27-${{ github.run_attempt }}
           path: |
             artifacts/compression-writer/
@@ -1208,6 +1292,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-compression-writer-27-diagnostics-${{ github.run_attempt }}
           path: |
             artifacts/native-recapture/
@@ -1218,7 +1303,7 @@ jobs:
   compression-zlib-source-27:
     name: Capture only - compression-zlib-source-27
     needs: validate-phase
-    if: inputs.phase == 'dependent'
+    if: inputs.phase == 'dependent' && (inputs.recipe == '' || inputs.recipe == 'compression-zlib-source-27')
     runs-on: xcode-27
     timeout-minutes: 60
     steps:
@@ -1277,6 +1362,7 @@ jobs:
         if: always() && steps.capture-unmounted.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-compression-zlib-source-27-${{ github.run_attempt }}
           path: |
             artifacts/compression-zlib-source/
@@ -1286,6 +1372,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-compression-zlib-source-27-diagnostics-${{ github.run_attempt }}
           path: |
             artifacts/native-recapture/
@@ -1296,7 +1383,7 @@ jobs:
   content-open-27:
     name: Capture only - content-open-27
     needs: validate-phase
-    if: inputs.phase == 'base'
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'content-open-27')
     runs-on: xcode-27
     timeout-minutes: 60
     steps:
@@ -1355,6 +1442,7 @@ jobs:
         if: always() && steps.capture-unmounted.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-content-open-27-${{ github.run_attempt }}
           path: |
             artifacts/content-open/
@@ -1364,6 +1452,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-content-open-27-diagnostics-${{ github.run_attempt }}
           path: |
             artifacts/native-recapture/
@@ -1374,7 +1463,7 @@ jobs:
   entry-type-27:
     name: Capture only - entry-type-27
     needs: validate-phase
-    if: inputs.phase == 'base'
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'entry-type-27')
     runs-on: xcode-27
     timeout-minutes: 60
     steps:
@@ -1433,6 +1522,7 @@ jobs:
         if: always() && steps.capture-unmounted.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-entry-type-27-${{ github.run_attempt }}
           path: |
             artifacts/entry-type/
@@ -1442,6 +1532,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-entry-type-27-diagnostics-${{ github.run_attempt }}
           path: |
             artifacts/native-recapture/
@@ -1452,7 +1543,7 @@ jobs:
   hfs-finderinfo-27:
     name: Capture only - hfs-finderinfo-27
     needs: validate-phase
-    if: inputs.phase == 'dependent'
+    if: inputs.phase == 'dependent' && (inputs.recipe == '' || inputs.recipe == 'hfs-finderinfo-27')
     runs-on: xcode-27
     timeout-minutes: 60
     steps:
@@ -1511,6 +1602,7 @@ jobs:
         if: always() && steps.capture-unmounted.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-hfs-finderinfo-27-${{ github.run_attempt }}
           path: |
             artifacts/metadata-transport/
@@ -1520,6 +1612,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-hfs-finderinfo-27-diagnostics-${{ github.run_attempt }}
           path: |
             artifacts/native-recapture/
@@ -1530,7 +1623,7 @@ jobs:
   hfs-special-names-15:
     name: Capture only - hfs-special-names-15
     needs: validate-phase
-    if: inputs.phase == 'base'
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'hfs-special-names-15')
     runs-on: macos-15
     timeout-minutes: 60
     steps:
@@ -1589,6 +1682,7 @@ jobs:
         if: always() && steps.capture-unmounted.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-hfs-special-names-15-${{ github.run_attempt }}
           path: |
             artifacts/hfs-special-names/
@@ -1598,6 +1692,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-hfs-special-names-15-diagnostics-${{ github.run_attempt }}
           path: |
             artifacts/native-recapture/
@@ -1608,7 +1703,7 @@ jobs:
   hfs-special-names-26:
     name: Capture only - hfs-special-names-26
     needs: validate-phase
-    if: inputs.phase == 'base'
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'hfs-special-names-26')
     runs-on: macos-latest
     timeout-minutes: 60
     steps:
@@ -1667,6 +1762,7 @@ jobs:
         if: always() && steps.capture-unmounted.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-hfs-special-names-26-${{ github.run_attempt }}
           path: |
             artifacts/hfs-special-names/
@@ -1676,6 +1772,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-hfs-special-names-26-diagnostics-${{ github.run_attempt }}
           path: |
             artifacts/native-recapture/
@@ -1686,7 +1783,7 @@ jobs:
   hfs-special-names-27:
     name: Capture only - hfs-special-names-27
     needs: validate-phase
-    if: inputs.phase == 'base'
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'hfs-special-names-27')
     runs-on: xcode-27
     timeout-minutes: 60
     steps:
@@ -1745,6 +1842,7 @@ jobs:
         if: always() && steps.capture-unmounted.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-hfs-special-names-27-${{ github.run_attempt }}
           path: |
             artifacts/hfs-special-names/
@@ -1754,6 +1852,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-hfs-special-names-27-diagnostics-${{ github.run_attempt }}
           path: |
             artifacts/native-recapture/
@@ -1764,7 +1863,7 @@ jobs:
   large-compression-27:
     name: Capture only - large-compression-27
     needs: validate-phase
-    if: inputs.phase == 'base'
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'large-compression-27')
     runs-on: xcode-27
     timeout-minutes: 60
     steps:
@@ -1823,6 +1922,7 @@ jobs:
         if: always() && steps.capture-unmounted.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-large-compression-27-${{ github.run_attempt }}
           path: |
             artifacts/large-compression/
@@ -1832,6 +1932,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-large-compression-27-diagnostics-${{ github.run_attempt }}
           path: |
             artifacts/native-recapture/
@@ -1842,7 +1943,7 @@ jobs:
   name-admission-15:
     name: Capture only - name-admission-15
     needs: validate-phase
-    if: inputs.phase == 'base'
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'name-admission-15')
     runs-on: macos-15
     timeout-minutes: 60
     steps:
@@ -1901,6 +2002,7 @@ jobs:
         if: always() && steps.capture-unmounted.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-name-admission-15-${{ github.run_attempt }}
           path: |
             artifacts/name-admission/
@@ -1910,6 +2012,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-name-admission-15-diagnostics-${{ github.run_attempt }}
           path: |
             artifacts/native-recapture/
@@ -1920,7 +2023,7 @@ jobs:
   name-admission-26:
     name: Capture only - name-admission-26
     needs: validate-phase
-    if: inputs.phase == 'base'
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'name-admission-26')
     runs-on: macos-latest
     timeout-minutes: 60
     steps:
@@ -1979,6 +2082,7 @@ jobs:
         if: always() && steps.capture-unmounted.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-name-admission-26-${{ github.run_attempt }}
           path: |
             artifacts/name-admission/
@@ -1988,6 +2092,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-name-admission-26-diagnostics-${{ github.run_attempt }}
           path: |
             artifacts/native-recapture/
@@ -1998,7 +2103,7 @@ jobs:
   name-admission-27:
     name: Capture only - name-admission-27
     needs: validate-phase
-    if: inputs.phase == 'base'
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'name-admission-27')
     runs-on: xcode-27
     timeout-minutes: 60
     steps:
@@ -2057,6 +2162,7 @@ jobs:
         if: always() && steps.capture-unmounted.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-name-admission-27-${{ github.run_attempt }}
           path: |
             artifacts/name-admission/
@@ -2066,6 +2172,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-name-admission-27-diagnostics-${{ github.run_attempt }}
           path: |
             artifacts/native-recapture/
@@ -2076,7 +2183,7 @@ jobs:
   name-collation-15:
     name: Capture only - name-collation-15
     needs: validate-phase
-    if: inputs.phase == 'base'
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'name-collation-15')
     runs-on: macos-15
     timeout-minutes: 60
     steps:
@@ -2135,6 +2242,7 @@ jobs:
         if: always() && steps.capture-unmounted.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-name-collation-15-${{ github.run_attempt }}
           path: |
             artifacts/name-collation/
@@ -2144,6 +2252,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-name-collation-15-diagnostics-${{ github.run_attempt }}
           path: |
             artifacts/native-recapture/
@@ -2154,7 +2263,7 @@ jobs:
   name-collation-26:
     name: Capture only - name-collation-26
     needs: validate-phase
-    if: inputs.phase == 'base'
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'name-collation-26')
     runs-on: macos-latest
     timeout-minutes: 60
     steps:
@@ -2213,6 +2322,7 @@ jobs:
         if: always() && steps.capture-unmounted.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-name-collation-26-${{ github.run_attempt }}
           path: |
             artifacts/name-collation/
@@ -2222,6 +2332,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-name-collation-26-diagnostics-${{ github.run_attempt }}
           path: |
             artifacts/native-recapture/
@@ -2232,7 +2343,7 @@ jobs:
   name-collation-27:
     name: Capture only - name-collation-27
     needs: validate-phase
-    if: inputs.phase == 'base'
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'name-collation-27')
     runs-on: xcode-27
     timeout-minutes: 60
     steps:
@@ -2291,6 +2402,7 @@ jobs:
         if: always() && steps.capture-unmounted.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-name-collation-27-${{ github.run_attempt }}
           path: |
             artifacts/name-collation/
@@ -2300,6 +2412,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-name-collation-27-diagnostics-${{ github.run_attempt }}
           path: |
             artifacts/native-recapture/
@@ -2310,7 +2423,7 @@ jobs:
   name-lookup-15:
     name: Capture only - name-lookup-15
     needs: validate-phase
-    if: inputs.phase == 'base'
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'name-lookup-15')
     runs-on: macos-15
     timeout-minutes: 60
     steps:
@@ -2369,6 +2482,7 @@ jobs:
         if: always() && steps.capture-unmounted.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-name-lookup-15-${{ github.run_attempt }}
           path: |
             artifacts/name-lookup/
@@ -2378,6 +2492,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-name-lookup-15-diagnostics-${{ github.run_attempt }}
           path: |
             artifacts/native-recapture/
@@ -2388,7 +2503,7 @@ jobs:
   name-lookup-26:
     name: Capture only - name-lookup-26
     needs: validate-phase
-    if: inputs.phase == 'base'
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'name-lookup-26')
     runs-on: macos-latest
     timeout-minutes: 60
     steps:
@@ -2447,6 +2562,7 @@ jobs:
         if: always() && steps.capture-unmounted.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-name-lookup-26-${{ github.run_attempt }}
           path: |
             artifacts/name-lookup/
@@ -2456,6 +2572,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-name-lookup-26-diagnostics-${{ github.run_attempt }}
           path: |
             artifacts/native-recapture/
@@ -2466,7 +2583,7 @@ jobs:
   name-lookup-27:
     name: Capture only - name-lookup-27
     needs: validate-phase
-    if: inputs.phase == 'base'
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'name-lookup-27')
     runs-on: xcode-27
     timeout-minutes: 60
     steps:
@@ -2525,6 +2642,7 @@ jobs:
         if: always() && steps.capture-unmounted.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-name-lookup-27-${{ github.run_attempt }}
           path: |
             artifacts/name-lookup/
@@ -2534,6 +2652,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-name-lookup-27-diagnostics-${{ github.run_attempt }}
           path: |
             artifacts/native-recapture/
@@ -2544,7 +2663,7 @@ jobs:
   pathname-limits-15:
     name: Capture only - pathname-limits-15
     needs: validate-phase
-    if: inputs.phase == 'base'
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'pathname-limits-15')
     runs-on: macos-15
     timeout-minutes: 60
     steps:
@@ -2603,6 +2722,7 @@ jobs:
         if: always() && steps.capture-unmounted.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-pathname-limits-15-${{ github.run_attempt }}
           path: |
             artifacts/pathname-limits/
@@ -2612,6 +2732,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-pathname-limits-15-diagnostics-${{ github.run_attempt }}
           path: |
             artifacts/native-recapture/
@@ -2622,7 +2743,7 @@ jobs:
   pathname-limits-26:
     name: Capture only - pathname-limits-26
     needs: validate-phase
-    if: inputs.phase == 'base'
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'pathname-limits-26')
     runs-on: macos-latest
     timeout-minutes: 60
     steps:
@@ -2681,6 +2802,7 @@ jobs:
         if: always() && steps.capture-unmounted.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-pathname-limits-26-${{ github.run_attempt }}
           path: |
             artifacts/pathname-limits/
@@ -2690,6 +2812,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-pathname-limits-26-diagnostics-${{ github.run_attempt }}
           path: |
             artifacts/native-recapture/
@@ -2700,7 +2823,7 @@ jobs:
   pathname-limits-27:
     name: Capture only - pathname-limits-27
     needs: validate-phase
-    if: inputs.phase == 'base'
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'pathname-limits-27')
     runs-on: xcode-27
     timeout-minutes: 60
     steps:
@@ -2759,6 +2882,7 @@ jobs:
         if: always() && steps.capture-unmounted.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-pathname-limits-27-${{ github.run_attempt }}
           path: |
             artifacts/pathname-limits/
@@ -2768,6 +2892,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-pathname-limits-27-diagnostics-${{ github.run_attempt }}
           path: |
             artifacts/native-recapture/
@@ -2778,7 +2903,7 @@ jobs:
   recompression-access-15:
     name: Capture only - recompression-access-15
     needs: validate-phase
-    if: inputs.phase == 'dependent'
+    if: inputs.phase == 'dependent' && (inputs.recipe == '' || inputs.recipe == 'recompression-access-15')
     runs-on: macos-15
     timeout-minutes: 60
     steps:
@@ -2837,6 +2962,7 @@ jobs:
         if: always() && steps.capture-unmounted.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-recompression-access-15-${{ github.run_attempt }}
           path: |
             artifacts/recompression-access/
@@ -2846,6 +2972,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-recompression-access-15-diagnostics-${{ github.run_attempt }}
           path: |
             artifacts/native-recapture/
@@ -2856,7 +2983,7 @@ jobs:
   recompression-access-26:
     name: Capture only - recompression-access-26
     needs: validate-phase
-    if: inputs.phase == 'dependent'
+    if: inputs.phase == 'dependent' && (inputs.recipe == '' || inputs.recipe == 'recompression-access-26')
     runs-on: macos-latest
     timeout-minutes: 60
     steps:
@@ -2915,6 +3042,7 @@ jobs:
         if: always() && steps.capture-unmounted.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-recompression-access-26-${{ github.run_attempt }}
           path: |
             artifacts/recompression-access/
@@ -2924,6 +3052,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-recompression-access-26-diagnostics-${{ github.run_attempt }}
           path: |
             artifacts/native-recapture/
@@ -2934,7 +3063,7 @@ jobs:
   recompression-access-27:
     name: Capture only - recompression-access-27
     needs: validate-phase
-    if: inputs.phase == 'dependent'
+    if: inputs.phase == 'dependent' && (inputs.recipe == '' || inputs.recipe == 'recompression-access-27')
     runs-on: xcode-27
     timeout-minutes: 60
     steps:
@@ -2993,6 +3122,7 @@ jobs:
         if: always() && steps.capture-unmounted.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-recompression-access-27-${{ github.run_attempt }}
           path: |
             artifacts/recompression-access/
@@ -3002,6 +3132,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-recompression-access-27-diagnostics-${{ github.run_attempt }}
           path: |
             artifacts/native-recapture/
@@ -3012,7 +3143,7 @@ jobs:
   replacement-27:
     name: Capture only - replacement-27
     needs: validate-phase
-    if: inputs.phase == 'base'
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'replacement-27')
     runs-on: xcode-27
     timeout-minutes: 60
     steps:
@@ -3071,6 +3202,7 @@ jobs:
         if: always() && steps.capture-unmounted.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-replacement-27-${{ github.run_attempt }}
           path: |
             artifacts/replacement-native/
@@ -3080,6 +3212,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-replacement-27-diagnostics-${{ github.run_attempt }}
           path: |
             artifacts/native-recapture/
@@ -3090,7 +3223,7 @@ jobs:
   resource-fork-open-15:
     name: Capture only - resource-fork-open-15
     needs: validate-phase
-    if: inputs.phase == 'base'
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'resource-fork-open-15')
     runs-on: macos-15
     timeout-minutes: 60
     steps:
@@ -3149,6 +3282,7 @@ jobs:
         if: always() && steps.capture-unmounted.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-resource-fork-open-15-${{ github.run_attempt }}
           path: |
             artifacts/resource-fork-open/
@@ -3158,6 +3292,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-resource-fork-open-15-diagnostics-${{ github.run_attempt }}
           path: |
             artifacts/native-recapture/
@@ -3168,7 +3303,7 @@ jobs:
   resource-fork-open-26:
     name: Capture only - resource-fork-open-26
     needs: validate-phase
-    if: inputs.phase == 'base'
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'resource-fork-open-26')
     runs-on: macos-latest
     timeout-minutes: 60
     steps:
@@ -3227,6 +3362,7 @@ jobs:
         if: always() && steps.capture-unmounted.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-resource-fork-open-26-${{ github.run_attempt }}
           path: |
             artifacts/resource-fork-open/
@@ -3236,6 +3372,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-resource-fork-open-26-diagnostics-${{ github.run_attempt }}
           path: |
             artifacts/native-recapture/
@@ -3246,7 +3383,7 @@ jobs:
   resource-fork-open-27:
     name: Capture only - resource-fork-open-27
     needs: validate-phase
-    if: inputs.phase == 'base'
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'resource-fork-open-27')
     runs-on: xcode-27
     timeout-minutes: 60
     steps:
@@ -3305,6 +3442,7 @@ jobs:
         if: always() && steps.capture-unmounted.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-resource-fork-open-27-${{ github.run_attempt }}
           path: |
             artifacts/resource-fork-open/
@@ -3314,6 +3452,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: native-harness-recapture-resource-fork-open-27-diagnostics-${{ github.run_attempt }}
           path: |
             artifacts/native-recapture/

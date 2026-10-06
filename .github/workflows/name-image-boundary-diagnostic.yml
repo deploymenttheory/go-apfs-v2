@@ -70,6 +70,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: boundary-before-identity
           path: artifacts/name-native-diagnostic/
           compression-level: 9
@@ -85,6 +86,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: boundary-before-attach
           path: artifacts/name-native-diagnostic/
           compression-level: 9
@@ -100,6 +102,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: boundary-before-readback
           path: artifacts/name-native-diagnostic/
           compression-level: 9
@@ -115,6 +118,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: boundary-before-detach
           path: artifacts/name-native-diagnostic/
           compression-level: 9
@@ -131,6 +135,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: boundary-outcome
           path: artifacts/name-native-diagnostic/
           compression-level: 9
@@ -140,6 +145,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
+          include-hidden-files: true
           name: ci-observability-name-image-boundary-diagnostic-boundary-${{ strategy.job-index || 0 }}-${{ github.run_attempt }}
           path: artifacts/ci-observability/
           compression-level: 9
