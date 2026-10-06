@@ -3,12 +3,14 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -223,7 +225,36 @@ func qualifyNativeNameWriters(t *testing.T, producers []string) {
 	if observedImages != 4*len(producers) || observedNames != 4*len(producers)*casesPerVolume*2 {
 		t.Fatal("native writer readback inventory incomplete", observedImages, observedNames)
 	}
-	summary := map[string]any{"schema": 1, "host": string(host), "revision": strings.TrimSpace(string(revision)), "target": target, "producers": producers, "images": observedImages, "name_lookups": observedNames, "exclusive_create_controls": observedChecks, "readback_provenance": provenance, "preflight_provenance": preflightProvenance, "all_images_unchanged": true, "all_mounts_detached": true}
+	evidence := map[string]string{}
+	if err = filepath.WalkDir(out, func(path string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		relative, err := filepath.Rel(out, path)
+		if err != nil {
+			return err
+		}
+		evidence[filepath.ToSlash(relative)] = sum(raw)
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	manifests := map[string]string{}
+	for _, producer := range producers {
+		raw, err := os.ReadFile(filepath.Join(base, "name-writer-"+producer, "manifest.json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		manifests[producer] = sum(raw)
+	}
+	summary := map[string]any{"evidence_sha256": evidence, "producer_manifests": manifests, "schema": 1, "host": string(host), "revision": strings.TrimSpace(string(revision)), "target": target, "producers": producers, "images": observedImages, "name_lookups": observedNames, "exclusive_create_controls": observedChecks, "readback_provenance": provenance, "preflight_provenance": preflightProvenance, "all_images_unchanged": true, "all_mounts_detached": true}
 	raw, err := json.MarshalIndent(summary, "", "  ")
 	if err != nil {
 		t.Fatal(err)
@@ -334,9 +365,7 @@ func validateWriterReadback(t *testing.T, raw []byte, image nameWriterImage) {
 			}
 		}
 	}
-	if err := json.Unmarshal(raw, &result); err != nil {
-		t.Fatal(err)
-	}
+	decodeWriterNative(t, raw, &result)
 	if result.Count != casesPerVolume || len(result.Cases) != casesPerVolume {
 		t.Fatal("incomplete native readback")
 	}
@@ -373,6 +402,8 @@ func validateWriterPreflight(t *testing.T, raw []byte, kind string, checks []nam
 	t.Helper()
 	var result struct {
 		Filesystem string
+		GID        uint32
+		MountFlags uint32 `json:"mount_flags"`
 		UID        uint32
 		Sensitive  bool `json:"case_sensitive"`
 		Valid      bool `json:"capability_valid"`
@@ -386,20 +417,21 @@ func validateWriterPreflight(t *testing.T, raw []byte, kind string, checks []nam
 			SecondCreated bool `json:"second_created"`
 		}
 	}
-	if err := json.Unmarshal(raw, &result); err != nil {
-		t.Fatal(err)
-	}
+	decodeWriterNative(t, raw, &result)
 	filesystem := "apfs"
 	if strings.HasPrefix(kind, "HFS") {
 		filesystem = "hfs"
 	}
-	if result.Filesystem != filesystem || result.UID == 0 || !result.Valid || result.Sensitive != strings.HasSuffix(kind, "X") || !result.Cleanup || result.Count != len(checks) || len(result.Cases) != len(checks) {
+	if result.Filesystem != filesystem || result.UID == 0 || result.MountFlags&1 != 0 || !result.Valid || result.Sensitive != strings.HasSuffix(kind, "X") || !result.Cleanup || result.Count != len(checks) || len(result.Cases) != len(checks) {
 		t.Fatal("incomplete native create context", kind)
 	}
 	for i, actual := range result.Cases {
 		want := checks[i]
 		if actual.ID != want.ID || actual.Kind != want.Kind {
 			t.Fatal("native create input inventory differs")
+		}
+		if want.Kind != "collision" && want.Kind != "rejected" {
+			t.Fatal("unqualified native create operation", want.Kind)
 		}
 		code := actual.FirstErr
 		if want.Kind == "collision" {
@@ -534,4 +566,16 @@ func mountedWriterVolume(t *testing.T, ctx context.Context, out, stem, image str
 		t.Fatal(err)
 	}
 	operation(mount)
+}
+
+func decodeWriterNative(t *testing.T, raw []byte, destination any) {
+	t.Helper()
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(destination); err != nil {
+		t.Fatal(err)
+	}
+	if err := decoder.Decode(new(any)); err != io.EOF {
+		t.Fatal("trailing native evidence", err)
+	}
 }

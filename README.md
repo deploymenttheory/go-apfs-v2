@@ -63,6 +63,12 @@ over the output mean something. `--source-date-epoch` (or the standard
 times to it; `--uuid` pins the volume identity. See
 [docs/reproducible-output.md](docs/reproducible-output.md).
 
+Filesystem name compatibility is shared by image readers, writers and foreign
+pathname authorization. APFS image creation defaults to macOS 27 on every host;
+library callers can select macOS 15 or 26 explicitly. See
+[filename compatibility](docs/filename-compatibility.md) for creation versus
+lookup rules, HFS conversion, native evidence and the acceptance harness.
+
 **Image formats read:** UDIF DMGs compressed with zlib (UDZO), bzip2 (UDBZ),
 ADC, LZFSE (ULFO) or LZMA (ULMO); GPT-partitioned and Apple-Partition-Map
 layouts; and raw file system images. Images are detected by content, not by

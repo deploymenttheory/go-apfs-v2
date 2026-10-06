@@ -66,8 +66,9 @@ func run() error {
 	if e != nil {
 		return e
 	}
-	required := []string{"TestCanonicalPipelines", "TestCompleteNativeScalarAdmission", "TestCreateNameTargetAdmission", "TestHFSEscapedByteConversion", "TestNameCollationNativeEvidence", "TestNameCollationNativeEvidence/15", "TestNameCollationNativeEvidence/26", "TestNameCollationNativeEvidence/27", "TestNameHashInputBoundaries", "TestNameEncodingComparison", "TestSharedNameComparison", "TestLookupNameValidation", "TestIllegalUTF8CatalogAliases", "TestNativeNameImageReaders", "TestDirectoryLookupValidatesBeforeReading", "TestNativeNormalizedComponentReader", "TestCreationNamesBeforeOutput", "TestCreationNamePreflight"}
+	required := []string{"TestCanonicalPipelines", "TestCompleteNativeScalarAdmission", "TestCreateNameTargetAdmission", "TestHFSEscapedByteConversion", "TestNameCollationNativeEvidence", "TestNameCollationNativeEvidence/15", "TestNameCollationNativeEvidence/26", "TestNameCollationNativeEvidence/27", "TestNameHashInputBoundaries", "TestNameEncodingComparison", "TestSharedNameComparison", "TestLookupNameValidation", "TestIllegalUTF8CatalogAliases", "TestNativeNameImageReaders", "TestDirectoryLookupValidatesBeforeReading", "TestNativeNormalizedComponentReader", "TestCreationNamesBeforeOutput", "TestCreationNamePreflight", "TestHFSSpecialNativeEvidence", "TestHFSSpecialNativeEnvelopeRejectsCorruption"}
 	for _, major := range []string{"15", "26", "27"} {
+		required = append(required, "TestHFSSpecialNativeEvidence/hfs-special-names-macos"+major+".json.gz")
 		for _, kind := range []string{"APFS", "APFSX", "HFS+", "HFSX"} {
 			required = append(required, "TestNativeNameImageReaders/"+major+"/"+kind)
 		}
@@ -105,7 +106,7 @@ func run() error {
 			return fmt.Errorf("whole %s must exceed 95%%: %+v", pkg, c)
 		}
 	}
-	sources, e := evidenceaudit.SourceHashes(os.DirFS("."), []string{"internal/nameunicode/*.go", "pkg/apfs/*.go", "pkg/apfswrite/*.go", "pkg/hfsplus/*.go", "scripts/*name*", "testdata/appledouble/native/name-*.c", "testdata/appledouble/native/name-*.json.gz", "testdata/appledouble/native/name-collation-source/*", "testdata/appledouble/native/name-comparison-source/*", ".github/workflows/name-comparison.yml", "go.mod", "go.sum"})
+	sources, e := evidenceaudit.SourceHashes(os.DirFS("."), []string{"internal/nameunicode/*.go", "pkg/apfs/*.go", "pkg/apfswrite/*.go", "pkg/hfsplus/*.go", "scripts/*name*", "testdata/appledouble/native/hfs-special-names.c", "testdata/appledouble/native/hfs-special-names-macos*.json.gz", "testdata/appledouble/native/name-*.c", "testdata/appledouble/native/name-*.json.gz", "testdata/appledouble/native/name-collation-source/*", "testdata/appledouble/native/name-comparison-source/*", ".github/workflows/name-comparison.yml", "go.mod", "go.sum"})
 	if e != nil {
 		return e
 	}

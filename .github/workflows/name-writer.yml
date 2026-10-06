@@ -72,6 +72,11 @@ jobs:
         env:
           FILESYSTEM_NAME_WRITER_ARTIFACTS: ${{ github.workspace }}/artifacts/portable-name-writers
         run: go test scripts/capture-name-collation.go scripts/verify-name-comparison_test.go scripts/verify-name-writer_test.go scripts/verify-name-writer-native_test.go -run '^TestNativeNameWriterReadback$' -count=1 -timeout 35m -v
+      - name: Reject incomplete or contradictory native readback and create evidence
+        env:
+          FILESYSTEM_NAME_WRITER_ARTIFACTS: ${{ github.workspace }}/artifacts/portable-name-writers
+          FILESYSTEM_NAME_WRITER_NATIVE_OUTPUT: ${{ github.workspace }}/artifacts/name-writer-native
+        run: go test scripts/capture-name-collation.go scripts/verify-name-comparison_test.go scripts/verify-name-writer_test.go scripts/verify-name-writer-native_test.go scripts/verify-name-writer-native-validation_test.go -run '^TestWriterNativeGuards$' -count=1 -v
       - name: Retain full native output, source and both AST targets, image integrity and mount cleanup
         if: always()
         uses: actions/upload-artifact@v7

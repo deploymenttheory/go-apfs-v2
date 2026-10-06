@@ -10,8 +10,8 @@ Implementation starts from main commit `3aa2026`, which includes the qualified
 recompression package separation in [PR #207](https://github.com/deploymenttheory/go-apfs-v2/pull/207).
 Preserve the existing APIs and every qualification gate. Keep the upstream release
 batched; this work does not authorize a release. This document records outstanding
-requirements, not a claim that the APIs or proposed Windows mechanisms below are
-already implemented or qualified.
+requirements. The APIs and mechanisms below are implemented in the draft, but
+remain subject to complete qualification on every supported platform.
 
 ## Completion gates
 
@@ -27,6 +27,44 @@ already implemented or qualified.
 
 Check an item only after its implementation and required acceptance pass at the
 same PR head. Local probes and successful compilation do not close a platform gate.
+
+## Qualification still required
+
+The implementation is in draft PR #208. The requirements below remain the review
+contract; implementation presence and local evidence do not close the checklist.
+The remaining acceptance work is:
+
+- Complete real Windows 2022/2025 qualification of a source whose link count is
+  zero. NTFS can return an internal deleted-file pathname even though native
+  pathname copy cannot open it. Select the unencrypted held-stream route using
+  held link metadata; never reinterpret an ordinary access denial as a missing
+  path. Qualify independent offsets, compressed streams, cancellation, cleanup
+  failures and every selected production file above 95%.
+- Retain and replay the separate HFS special-name corpus on 15/26/27, including
+  POSIX U+2400 to catalog NUL conversion, exact dot entries, ignored-character
+  variants and raw catalog bytes. Add these cases without rewriting earlier
+  collation fixtures or substituting inferred observations.
+- Complete the portable writer matrix: each Linux, Windows and Darwin producer
+  writes twelve images covering all three target versions and four filesystem
+  variants. Each native version reads its matching images from all three
+  producers and independently checks exclusive-create error ordering. Require
+  source/revision binding, complete image inventories, hash integrity, mount
+  cleanup and corruption controls for retained manifests and native reports.
+- Require the full reader comparison matrix, all owned compression and replacement
+  gates, pathname authority/limits/lookup, carrier composition, coverage, build,
+  lint, race/fuzz, large-fork and commercial-image gates at one final revision.
+  Existing genuine lookup baselines cover all 3,360 cases and pathname-limit
+  baselines cover all 390 cases across the three native versions.
+- Reconcile public contracts with final evidence, then consume the qualified
+  merged revision in codesign. Codesign's own remaining Phase 2 integration and
+  measurement gates, followed by the eventual batch-release dependency pin,
+  remain downstream work.
+
+The owned-compression Linux CI suite uses native tmpfs so its unchanged 4 KB
+attribute plus companion attributes fit without relying on ext4's combined
+per-inode attribute block. It records the filesystem and requires cleanup. The
+separate Linux replacement gate continues to run on the runner filesystem;
+neither gate gains a skip allowance or a smaller fixture.
 
 ## Required changes
 
@@ -96,9 +134,9 @@ attributes, cancellation accompanying harmless absence, and final mode restorati
 
 ### Windows held identity and full metadata capability
 
-The current nonrooted CopyFileW path uses source.Name and can copy a replacement
-directory entry instead of the held source. The rooted stream route avoids that
-lookup but currently rejects compression/encryption and imposes 8 MiB stream limits.
+The pre-change nonrooted CopyFileW path used source.Name and could copy a replacement
+directory entry instead of the held source. The pre-change rooted stream route avoided that
+lookup but rejected compression/encryption and imposed 8 MiB stream limits.
 A shared correction must preserve existing capability, including EFS, compression,
 sparse and ordinary alternate streams, extended attributes, security, creation
 time and relevant file attributes.
