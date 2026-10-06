@@ -195,6 +195,16 @@ func nativeImageReadback(t *testing.T, ctx context.Context, commands *nativeComm
 	if e != nil {
 		t.Fatal(e)
 	}
+	validateNativeNameReadback(t, raw, v)
+	after, e := os.ReadFile(image)
+	if e != nil || sum(after) != v.ImageSHA256 {
+		t.Fatal("read-only verification changed native image", e)
+	}
+}
+
+// Shared without changing the native oracle's required inventory or assertions.
+func validateNativeNameReadback(t *testing.T, raw []byte, v volumeCapture) {
+	t.Helper()
 	var observed struct {
 		Count int
 		Cases []struct {
@@ -206,7 +216,7 @@ func nativeImageReadback(t *testing.T, ctx context.Context, commands *nativeComm
 			}
 		}
 	}
-	if e = json.Unmarshal(raw, &observed); e != nil {
+	if e := json.Unmarshal(raw, &observed); e != nil {
 		t.Fatal(e)
 	}
 	if observed.Count != 3753 || len(observed.Cases) != 3753 {
@@ -237,9 +247,5 @@ func nativeImageReadback(t *testing.T, ctx context.Context, commands *nativeComm
 				t.Fatalf("%s unexpected failed-read identity", c.ID)
 			}
 		}
-	}
-	after, e := os.ReadFile(image)
-	if e != nil || sum(after) != v.ImageSHA256 {
-		t.Fatal("read-only verification changed native image", e)
 	}
 }

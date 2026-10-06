@@ -164,7 +164,7 @@ func singleNameInput(t *testing.T) (singleNameCheckpoint, string, string, volume
 		}
 		checkpoint.InputSHA256[name] = sum(b)
 	}
-	for _, name := range []string{"scripts/verify-name-native_diagnostic_test.go", "scripts/verify-name-native_readback_test.go", "scripts/verify-name-native_commands_test.go", "scripts/verify-name-comparison_test.go", "scripts/capture-name-collation.go", "testdata/appledouble/native/name-readback.c", "go.mod", "go.sum"} {
+	for _, name := range []string{"scripts/verify-name-native_diagnostic_test.go", "scripts/verify-name-native_boundary_test.go", ".github/workflows/name-image-boundary-diagnostic.yml", "scripts/verify-name-native_readback_test.go", "scripts/verify-name-native_commands_test.go", "scripts/verify-name-comparison_test.go", "scripts/capture-name-collation.go", "testdata/appledouble/native/name-readback.c", "go.mod", "go.sum"} {
 		b, e := os.ReadFile(name)
 		if e != nil {
 			t.Fatal(e)
@@ -236,37 +236,8 @@ func TestPrepareNativeSingleNameImageDiagnostic(t *testing.T) {
 }
 
 func TestNativeSingleNameImageDiagnostic(t *testing.T) {
-	expected, out, dir, volume := singleNameInput(t)
-	raw, err := os.ReadFile(filepath.Join(out, "pre-execution.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	var checkpoint singleNameCheckpoint
-	if err = json.Unmarshal(raw, &checkpoint); err != nil {
-		t.Fatal(err)
-	}
-	for _, name := range []string{"host.txt", "revision.txt", "compiler.txt", "sdk.txt"} {
-		b, e := os.ReadFile(filepath.Join(out, name))
-		if e != nil {
-			t.Fatal(e)
-		}
-		expected.SourceSHA256[name] = sum(b)
-		if name == "host.txt" {
-			expected.Host = string(b)
-		}
-		if name == "revision.txt" {
-			expected.ConsumerRevision = strings.TrimSpace(string(b))
-		}
-	}
+	checkpoint, out, dir, volume, raw := preparedSingleNameInput(t)
 	binary := filepath.Join(out, "native-probe")
-	b, err := os.ReadFile(binary)
-	if err != nil {
-		t.Fatal(err)
-	}
-	expected.BinarySHA256 = sum(b)
-	if err = matchSingleNameCheckpoint(raw, expected); err != nil {
-		t.Fatal(err)
-	}
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
 	defer cancel()
 	commands := &nativeCommandRunner{Directory: filepath.Join(out, "native-commands")}
@@ -285,7 +256,7 @@ func TestNativeSingleNameImageDiagnostic(t *testing.T) {
 		Observations   int    `json:"observations"`
 		Checkpoint     string `json:"checkpoint_sha256"`
 	}{true, false, 7506, sum(raw)}
-	b, err = json.MarshalIndent(report, "", "  ")
+	b, err := json.MarshalIndent(report, "", "  ")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -358,4 +329,40 @@ func TestSingleNameDiagnosticRunAndCheckpoint(t *testing.T) {
 	if matchSingleNameCheckpoint(append(raw, []byte("{}")...), expected) == nil {
 		t.Fatal("accepted trailing checkpoint JSON")
 	}
+}
+
+func preparedSingleNameInput(t *testing.T) (singleNameCheckpoint, string, string, volumeCapture, []byte) {
+	t.Helper()
+	expected, out, dir, volume := singleNameInput(t)
+	raw, err := os.ReadFile(filepath.Join(out, "pre-execution.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var checkpoint singleNameCheckpoint
+	if err = json.Unmarshal(raw, &checkpoint); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"host.txt", "revision.txt", "compiler.txt", "sdk.txt"} {
+		b, e := os.ReadFile(filepath.Join(out, name))
+		if e != nil {
+			t.Fatal(e)
+		}
+		expected.SourceSHA256[name] = sum(b)
+		if name == "host.txt" {
+			expected.Host = string(b)
+		}
+		if name == "revision.txt" {
+			expected.ConsumerRevision = strings.TrimSpace(string(b))
+		}
+	}
+	binary := filepath.Join(out, "native-probe")
+	b, err := os.ReadFile(binary)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected.BinarySHA256 = sum(b)
+	if err = matchSingleNameCheckpoint(raw, expected); err != nil {
+		t.Fatal(err)
+	}
+	return checkpoint, out, dir, volume, raw
 }

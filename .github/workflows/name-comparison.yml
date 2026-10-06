@@ -7,12 +7,22 @@ on:
         description: Run supplemental per-image macOS 15 diagnostics; cannot qualify the full gate
         type: boolean
         default: false
+      command_boundaries:
+        description: Supplemental single-image host, attach, readback and detach checkpoints
+        type: boolean
+        default: false
+      diagnostic_profile:
+        type: string
+        default: "26"
+      diagnostic_filesystem:
+        type: string
+        default: APFS
       producer_run:
         description: Completed genuine image producer run for supplemental diagnostics
         type: string
         default: "37433253504"
 concurrency:
-  group: name-comparison-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}${{ inputs.diagnostic_only && '-diagnostic' || '' }}
+  group: name-comparison-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}${{ inputs.command_boundaries && '-boundary' || (inputs.diagnostic_only && '-diagnostic' || '') }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 permissions:
   contents: read
@@ -22,10 +32,17 @@ env:
   GOTOOLCHAIN: local
 jobs:
   supplemental-diagnostic:
-    if: github.event_name == 'workflow_dispatch' && inputs.diagnostic_only
+    if: github.event_name == 'workflow_dispatch' && inputs.diagnostic_only && !inputs.command_boundaries
     uses: ./.github/workflows/name-image-diagnostic.yml
     with:
       producer_run: ${{ inputs.producer_run }}
+  boundary-diagnostic:
+    if: github.event_name == 'workflow_dispatch' && inputs.diagnostic_only && inputs.command_boundaries
+    uses: ./.github/workflows/name-image-boundary-diagnostic.yml
+    with:
+      producer_run: ${{ inputs.producer_run }}
+      profile: ${{ inputs.diagnostic_profile }}
+      filesystem: ${{ inputs.diagnostic_filesystem }}
   native-images:
     if: inputs.diagnostic_only != true
     name: Comparison images (${{ matrix.os }})
