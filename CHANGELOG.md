@@ -43,6 +43,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   preserving supported metadata using opened roots and handles. Tests cover both
   preparation APIs, containment, renamed roots, Windows streams and cleanup.
 
+## [0.18.0](https://github.com/deploymenttheory/go-apfs-v2/compare/v0.17.2...v0.18.0) (2026-10-07)
+
+
+### Features
+
+* add held filesystem and pathname prerequisites ([#208](https://github.com/deploymenttheory/go-apfs-v2/issues/208)) ([2369b7c](https://github.com/deploymenttheory/go-apfs-v2/commit/2369b7c390ae9a9e88d8356db6f07ff683580c1d))
+* add pkg/apfsversion and refuse native mounts by filename content ([#210](https://github.com/deploymenttheory/go-apfs-v2/issues/210)) ([65cd796](https://github.com/deploymenttheory/go-apfs-v2/commit/65cd796a03d47ce9708824c5ffba4785cfa6cab7))
+* add portable compression policy and native LZ4 reads ([6fdb0b4](https://github.com/deploymenttheory/go-apfs-v2/commit/6fdb0b43e2c412a822539f184a7016f0a0a67ab1))
+* complete compression metadata and installation lifecycle ([1bc1cf8](https://github.com/deploymenttheory/go-apfs-v2/commit/1bc1cf8db6f66d08417b93f8a02f167af62c0525))
+* compose recompression acquisition and staged installation ([#206](https://github.com/deploymenttheory/go-apfs-v2/issues/206)) ([9764869](https://github.com/deploymenttheory/go-apfs-v2/commit/9764869bf139eb1ef70b3037eaa4b9c739e04de1))
+* encode native compression resource forks in Go ([#202](https://github.com/deploymenttheory/go-apfs-v2/issues/202)) ([bc102d6](https://github.com/deploymenttheory/go-apfs-v2/commit/bc102d67852a38fa41f4d9f6351106e555ed88c3))
+* expose borrowed replacement attribute policy ([#211](https://github.com/deploymenttheory/go-apfs-v2/issues/211)) ([4187f27](https://github.com/deploymenttheory/go-apfs-v2/commit/4187f2721b94f2e5f49ec26dbd155e4fc1b30cc3))
+* query native compression without opening file content ([#212](https://github.com/deploymenttheory/go-apfs-v2/issues/212)) ([6829b60](https://github.com/deploymenttheory/go-apfs-v2/commit/6829b607475e82f8ececc42775f212278da7b9c0))
+* separate and qualify foreign-file recompression ([3aa2026](https://github.com/deploymenttheory/go-apfs-v2/commit/3aa202673a8fdec5c7ded2c09487fd887c58b87b))
+
+
+### Bug Fixes
+
+* honor compression activation state in APFS and HFS images ([#205](https://github.com/deploymenttheory/go-apfs-v2/issues/205)) ([dba8f58](https://github.com/deploymenttheory/go-apfs-v2/commit/dba8f588d77debb9876e56ccd0a25f517b164c0d))
+* normalize Windows replacement creation errors ([#209](https://github.com/deploymenttheory/go-apfs-v2/issues/209)) ([674c2a3](https://github.com/deploymenttheory/go-apfs-v2/commit/674c2a3a815b05fc6ce34d9931291ff6a86bd62f))
+* qualify native replacement timestamp clamping ([#201](https://github.com/deploymenttheory/go-apfs-v2/issues/201)) ([1886560](https://github.com/deploymenttheory/go-apfs-v2/commit/188656054b5938aa0c461ad5a957aa16caa0b566))
+* stream large compression indexes and preserve read progress ([45fe038](https://github.com/deploymenttheory/go-apfs-v2/commit/45fe038d5fa885ddef8e82080be52df24819b51b))
+* support compressed Darwin replacement sources ([#198](https://github.com/deploymenttheory/go-apfs-v2/issues/198)) ([8821862](https://github.com/deploymenttheory/go-apfs-v2/commit/8821862a12deeb1b7976e00c5edcc548cdef120e))
+
 ## [0.17.2](https://github.com/deploymenttheory/go-apfs-v2/compare/v0.17.1...v0.17.2) (2026-10-04)
 
 
