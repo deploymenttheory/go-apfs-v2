@@ -54,8 +54,14 @@ func must(err error) {
 		panic(err)
 	}
 }
+
+// run returns only stdout: the supervisor is this same program, and its shared
+// command reporter writes its own journal to stderr, which must not be parsed
+// as the JSON result. Child stderr streams through to the CI log instead.
 func run(args ...string) []byte {
-	b, e := cirunner.Command(args[0], args[1:]...).CombinedOutput()
+	cmd := cirunner.Command(args[0], args[1:]...)
+	cmd.Stderr = os.Stderr
+	b, e := cmd.Output()
 	if e != nil {
 		panic(fmt.Sprintf("%s: %v: %s", args[0], e, b))
 	}
@@ -168,7 +174,8 @@ func invoke(binary string, args []string, uid, gid uint32, source, target *os.Fi
 	command := cirunner.Command(binary, args...)
 	command.ExtraFiles = []*os.File{source, target}
 	command.SysProcAttr = &syscall.SysProcAttr{Credential: &syscall.Credential{Uid: uid, Gid: gid, Groups: []uint32{}}}
-	b, e := command.CombinedOutput()
+	command.Stderr = os.Stderr
+	b, e := command.Output()
 	if e != nil {
 		panic(fmt.Sprintf("credential child uid=%d: %v: %s", uid, e, b))
 	}

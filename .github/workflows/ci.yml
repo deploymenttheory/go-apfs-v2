@@ -778,17 +778,22 @@ jobs:
           mkdir -p artifacts/compression-owned-coverage "$RUNNER_TEMP/owned-compression"
           sudo -n mount -t tmpfs -o size=2G,mode=1777 tmpfs "$RUNNER_TEMP/owned-compression"
           findmnt --target "$RUNNER_TEMP/owned-compression" > artifacts/compression-owned-coverage/test-filesystem.txt
-      - name: Owned native bindings and complete hostdata above 95 percent coverage
+      - name: Owned native bindings and complete hostdata above 95 percent coverage (Linux tmpfs)
+        if: runner.os == 'Linux'
         env:
           CGO_ENABLED: "0"
-        shell: bash
+          TMPDIR: ${{ runner.temp }}/owned-compression
         run: |
-          set -euo pipefail
-          if [ "$RUNNER_OS" = Linux ]; then
-            TMPDIR="$RUNNER_TEMP/owned-compression" apfs-ci-runner --suite ci/test/step89 --timeout 60m -- go run scripts/verify-compression-owned.go
-          else
-            apfs-ci-runner --suite ci/test/step89 --timeout 60m -- go run scripts/verify-compression-owned.go
-          fi
+          apfs-ci-runner --suite ci/test/step89 --timeout 60m -- go run scripts/verify-compression-owned.go
+      # Not Git bash on Windows: its MSYS runtime enables backup and restore
+      # privileges in the token it hands to children, which lets every open with
+      # backup semantics bypass the DACL denials the hostdata suite asserts.
+      - name: Owned native bindings and complete hostdata above 95 percent coverage
+        if: runner.os != 'Linux'
+        env:
+          CGO_ENABLED: "0"
+        run: |
+          apfs-ci-runner --suite ci/test/step89 --timeout 60m -- go run scripts/verify-compression-owned.go
       - name: Release Linux owned-binding qualification filesystem
         if: always() && runner.os == 'Linux'
         shell: bash
