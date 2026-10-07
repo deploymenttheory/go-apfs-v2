@@ -101,6 +101,12 @@ jobs:
           set -euo pipefail
           mkdir -p artifacts/compression-owned
           apfs-ci-runner --suite compression-owned/native/step4 --timeout 29m -- go test -count=1 -json ./pkg/hostdata -run '^TestCompressionOwnedNativeEvidence$' > artifacts/compression-owned/evidence-replay.jsonl
+      - name: Qualify pathname compression queries with denied content access
+        if: ${{ !cancelled() }}
+        env:
+          APFS_COMPRESSION_PATH_EVIDENCE: ${{ github.workspace }}/artifacts/compression-owned/path-query
+        run: |
+          apfs-ci-runner --suite compression-owned/native/path-query --timeout 29m -- go test -count=1 -json ./pkg/hostdata -run '^TestCompressionPath' > artifacts/compression-owned/path-query-tests.jsonl
       - name: Retain native bytes source provenance both ASTs and mount cleanup
         if: always()
         uses: actions/upload-artifact@v7

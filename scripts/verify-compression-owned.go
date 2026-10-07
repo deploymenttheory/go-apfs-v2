@@ -37,6 +37,10 @@ func run() error {
 	if e := os.MkdirAll(dir, 0755); e != nil {
 		return e
 	}
+	pathEvidence, e := filepath.Abs(filepath.Join(dir, "path-query"))
+	if e != nil {
+		return e
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
 	defer cancel()
 	transcript, e := os.Create(filepath.Join(dir, "full-tests.jsonl"))
@@ -44,7 +48,7 @@ func run() error {
 		return e
 	}
 	command := cirunner.CommandContext(ctx, "go", "test", "-count=1", "-json", "-covermode=atomic", "-coverprofile="+filepath.Join(dir, "coverage.out"), "./pkg/hostdata")
-	command.Env = append(os.Environ(), "CGO_ENABLED=0")
+	command.Env = append(os.Environ(), "CGO_ENABLED=0", "APFS_COMPRESSION_PATH_EVIDENCE="+pathEvidence)
 	command.Stdout = transcript
 	command.Stderr = os.Stderr
 	runErr := command.Run()
@@ -56,19 +60,19 @@ func run() error {
 	if e != nil {
 		return e
 	}
-	required := []string{"TestNativeCompressionOwnedValidation", "TestCompressionVolumeObservation", "TestResourceForkContextOwnership", "TestCompressionOwnedNativeEvidence", "TestCompressionOwnedNativeEvidence/compression-owned-macos15.json.gz", "TestCompressionOwnedNativeEvidence/compression-owned-macos26.json.gz", "TestCompressionOwnedNativeEvidence/compression-owned-macos27.json.gz"}
+	required := []string{"TestCompressionPathObservation", "TestNativeCompressionOwnedValidation", "TestCompressionVolumeObservation", "TestResourceForkContextOwnership", "TestCompressionOwnedNativeEvidence", "TestCompressionOwnedNativeEvidence/compression-owned-macos15.json.gz", "TestCompressionOwnedNativeEvidence/compression-owned-macos26.json.gz", "TestCompressionOwnedNativeEvidence/compression-owned-macos27.json.gz"}
 	if runtime.GOOS == "darwin" {
-		required = append(required, "TestNativeCompressionOwnedHeldAcquisition", "TestNativeCompressionOwnedNoAcquisitionCalls", "TestNativeCompressionOwnedReadOnlyAdmission", "TestNativeCompressionOwnedMounted", "TestNativeCompressionAcquisitionCancellationOwnership", "TestResourceForkContextVersionRouting", "TestResourceForkLegacyContextCheckpoints", "TestResourceForkNativeLateCancellationCloses", "TestResourceForkLegacyContextNativeBinding")
+		required = append(required, "TestCompressionPathDeniedContent", "TestNativeCompressionOwnedHeldAcquisition", "TestNativeCompressionOwnedNoAcquisitionCalls", "TestNativeCompressionOwnedReadOnlyAdmission", "TestNativeCompressionOwnedMounted", "TestNativeCompressionAcquisitionCancellationOwnership", "TestResourceForkContextVersionRouting", "TestResourceForkLegacyContextCheckpoints", "TestResourceForkNativeLateCancellationCloses", "TestResourceForkLegacyContextNativeBinding")
 	} else {
-		required = append(required, "TestNativeCompressionOwnedForeignHost")
+		required = append(required, "TestCompressionPathForeignNativeView", "TestNativeCompressionOwnedForeignHost")
 	}
 	focused, e := os.Create(filepath.Join(dir, "tests.jsonl"))
 	if e != nil {
 		return e
 	}
-	args := []string{"test", "-count=1", "-json", "-run=^Test(NativeCompressionOwned|NativeCompressionAcquisitionCancellationOwnership|CompressionVolumeObservation|CompressionOwnedNativeEvidence|ResourceForkContext|ResourceForkLegacyContext|ResourceForkNativeLateCancellationCloses)", "./pkg/hostdata"}
+	args := []string{"test", "-count=1", "-json", "-run=^Test(CompressionPath|NativeCompressionOwned|NativeCompressionAcquisitionCancellationOwnership|CompressionVolumeObservation|CompressionOwnedNativeEvidence|ResourceForkContext|ResourceForkLegacyContext|ResourceForkNativeLateCancellationCloses)", "./pkg/hostdata"}
 	command = cirunner.CommandContext(ctx, "go", args...)
-	command.Env = append(os.Environ(), "CGO_ENABLED=0")
+	command.Env = append(os.Environ(), "CGO_ENABLED=0", "APFS_COMPRESSION_PATH_EVIDENCE="+pathEvidence)
 	command.Stdout = focused
 	command.Stderr = os.Stderr
 	runErr = command.Run()
@@ -117,11 +121,11 @@ func run() error {
 	if e = scan.Err(); e != nil {
 		return e
 	}
-	names := []string{"compression_operation_native.go", "compression_volume.go", "resource_fork.go"}
+	names := []string{"compression_path.go", "compression_operation_native.go", "compression_volume.go", "resource_fork.go"}
 	if runtime.GOOS == "darwin" {
-		names = append(names, "compression_operation_darwin.go", "compression_metadata_darwin.go", "resource_fork_darwin.go", "resource_fork_legacy_darwin.go")
+		names = append(names, "compression_path_darwin.go", "compression_operation_darwin.go", "compression_metadata_darwin.go", "resource_fork_darwin.go", "resource_fork_legacy_darwin.go")
 	} else {
-		names = append(names, "compression_operation_other.go", "compression_metadata_other.go", "resource_fork_other.go")
+		names = append(names, "compression_path_other.go", "compression_operation_other.go", "compression_metadata_other.go", "resource_fork_other.go")
 	}
 	if total.Statements == 0 || total.Covered*100 <= total.Statements*95 {
 		return fmt.Errorf("hostdata coverage must exceed95%%: %d/%d", total.Covered, total.Statements)
@@ -137,7 +141,7 @@ func run() error {
 		focusedTotal.Covered += value.Covered
 		focusedTotal.Statements += value.Statements
 	}
-	hashes, e := evidenceaudit.HarnessSourceHashes(os.DirFS("."), []string{"pkg/hostdata/*.go", "pkg/osversion/*.go", "pkg/appledouble/*.go", "pkg/compression/decmpfs/*.go", "internal/decmpfs/*.go", "internal/hostwalk/*.go", "internal/evidenceaudit/*.go", "scripts/verify-compression-owned.go", "scripts/capture-compression-owned.go", "testdata/appledouble/native/compression-owned*", ".github/workflows/compression-owned.yml", "go.mod", "go.sum"})
+	hashes, e := evidenceaudit.HarnessSourceHashes(os.DirFS("."), []string{"pkg/hostdata/*.go", "pkg/osversion/*.go", "pkg/appledouble/*.go", "pkg/compression/decmpfs/*.go", "internal/decmpfs/*.go", "internal/hostwalk/*.go", "internal/evidenceaudit/*.go", "scripts/verify-compression-owned.go", "scripts/capture-compression-owned.go", "testdata/appledouble/native/compression-owned*", "testdata/appledouble/native/compression-path-query.c", "testdata/appledouble/native/compression-policy.c", ".github/workflows/compression-owned.yml", "go.mod", "go.sum"})
 	if e != nil {
 		return e
 	}
