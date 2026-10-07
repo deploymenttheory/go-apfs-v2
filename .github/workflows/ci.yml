@@ -1353,8 +1353,11 @@ jobs:
         env:
           CGO_ENABLED: "0"
         # Everything except the acceptance suite, which runs separately below.
+        # Full native image replay exceeds Go's implicit ten-minute package
+        # deadline on Windows. Keep every case and the outer 60-minute bound;
+        # use the same explicit package budget as the complete race replay.
         run: |
-          apfs-ci-runner --suite ci/test/step166 --timeout 60m -- go test -json ./pkg/... ./internal/...
+          apfs-ci-runner --suite ci/test/step166 --timeout 60m -- go test -timeout 30m -json ./pkg/... ./internal/...
       - name: Name hash first-use race regression (Linux)
         if: runner.os == 'Linux'
         run: |
