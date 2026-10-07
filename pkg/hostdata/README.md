@@ -693,3 +693,32 @@ is never used as replacement content.
 The portable filter has a strict coverage gate above 95%; Windows CI also
 exercises a source above 4 GiB with populated regions, sparse/ordinary named
 streams, hard-link neighbours, commit, discard and staging cleanup.
+
+### Compression observation before a write
+
+`QueryCompressionNoFollow(ctx, path, expected, attributeBytes)` reads native
+Darwin compression metadata without opening file contents. This matters when a
+resource envelope permits writing and metadata reads but denies data reads:
+opening it for reading fails, while opening it for writing can decompress it
+before the original codec is observed. Call this query before opening the writer;
+use the returned compression description with the shared recompression policy.
+
+`expected` is the regular-file identity already observed by the caller. The
+query rejects observed identity, size or compression-flag changes and follows
+no final symlink. Its attribute buffer has an explicit budget; it measures a
+resource fork without loading its contents. Cancellation and metadata permission
+errors remain errors. Native pathname operations resolve independently, so the
+caller must exclude concurrent namespace/content changes, including an
+adversarial replace-and-restore race. This API does not claim rooted lookup or
+snapshot isolation. Prefer `QueryCompression` when a descriptor is already held.
+
+On Linux and Windows, captured Darwin metadata goes directly to
+`decmpfs.Query`; receiving-host flags do not represent Darwin compression.
+The native pathname provider reports an unsupported native view on those hosts,
+while the shared query/codec policy and foreign carrier operations remain portable.
+
+The owned-compression gate requires every new query file above 95% coverage on
+all three hosts. The macOS 15/26/27 jobs compile both Clang targets and compare
+query bytes, errors, canaries and unchanged metadata with Apple's framework
+under ordinary, deny-read, deny-read/write and deny-extended-attribute ACLs.
+Artifacts retain the C source hashes, SDK/compiler/host identity and both ASTs.
