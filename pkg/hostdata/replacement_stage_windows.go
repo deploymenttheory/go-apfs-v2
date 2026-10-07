@@ -58,7 +58,7 @@ func makeReplacementDirectoryAt(ctx context.Context, root *os.Root, name string)
 	})
 	runtime.KeepAlive(sd)
 	runtime.KeepAlive(object)
-	if err = errors.Join(control, native); err != nil {
+	if err = errors.Join(control, replacementWindowsError(native)); err != nil {
 		return nil, err
 	}
 	held := os.NewFile(uintptr(handle), name)
