@@ -418,12 +418,8 @@ func comparison(c trial) ([]byte, error) {
 		return nil, errors.New("missing volume context")
 	}
 	observation["volume_flags"] = uint32(flags) & 0x80
-	b, e := json.Marshal(observation)
-	if e != nil {
-		return nil, e
-	}
-	c.Observation = b
 	var trace strings.Builder
+	var events []map[string]any
 	for _, line := range strings.Split(strings.TrimSpace(c.Trace), "\n") {
 		if line == "" {
 			continue
@@ -443,9 +439,81 @@ func comparison(c trial) ([]byte, error) {
 		if e != nil {
 			return nil, e
 		}
+		events = append(events, event)
 		trace.Write(b)
 		trace.WriteByte('\n')
 	}
+	if err := compareAdmissionErrno(c, observation, events); err != nil {
+		return nil, err
+	}
+	b, e := json.Marshal(observation)
+	if e != nil {
+		return nil, e
+	}
+	c.Observation = b
 	c.Trace = trace.String()
 	return json.Marshal(c)
+}
+
+// CompressFile's boolean reports acquisition, not completion. On macOS 26 a
+// failed stream write may leave errno on the caller while admission remains
+// true; the retained macOS 27 capture returns zero for the same complete trace.
+// Qualify only the observed positive-short-write/EIO/ENOSPC cases. The raw errno
+// is retained in the capture; failed admission, every syscall errno, all trace
+// events and every resulting byte remain exact comparison inputs.
+func compareAdmissionErrno(c trial, observation map[string]any, events []map[string]any) error {
+	accepted, ok := observation["accepted"].(bool)
+	if !ok {
+		return errors.New("missing native admission result")
+	}
+	value, ok := observation["errno"].(float64)
+	if !ok {
+		return errors.New("missing native admission errno")
+	}
+	if !accepted || value == 0 {
+		return nil
+	}
+	if c.Scenario != "multi-block" || c.Inline != "no" || c.FaultCount != 1 || c.FaultSkip < 0 || c.FaultSkip > 2 {
+		return nil
+	}
+	expected := c.FaultErrno
+	switch c.Fault {
+	case "pwrite-short":
+		if c.FaultErrno != 0 {
+			return nil
+		}
+		expected = 28 // native WriteToStreamCompressor reports a short frame as ENOSPC
+	case "pwrite":
+		if expected != 5 && expected != 28 {
+			return nil
+		}
+	default:
+		return nil
+	}
+	if value != float64(expected) {
+		return nil
+	}
+	injected := 0
+	for _, event := range events {
+		if event["operation"] != "pwrite" || event["injected"] != true {
+			continue
+		}
+		injected++
+		result, ok := event["result"].(float64)
+		if !ok || event["fork"] != true {
+			return errors.New("invalid native fork-write failure")
+		}
+		if c.Fault == "pwrite-short" {
+			if result <= 0 || event["errno"] != float64(0) {
+				return errors.New("invalid native short-write result")
+			}
+		} else if result != -1 || event["errno"] != value {
+			return errors.New("native admission errno lacks matching write failure")
+		}
+	}
+	if injected != 1 {
+		return errors.New("native admission errno lacks exactly one injected write")
+	}
+	observation["errno"] = 0
+	return nil
 }

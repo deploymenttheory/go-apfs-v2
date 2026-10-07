@@ -61,6 +61,7 @@ jobs:
       - name: Recapture compression installation and partial failures
         if: ${{ !cancelled() }}
         run: |
+          apfs-ci-runner --suite compression-native/native/step5 --timeout 44m -- go test -json scripts/capture-compression-lifecycle.go scripts/capture-compression-lifecycle_test.go
           apfs-ci-runner --suite compression-native/native/step5 --timeout 44m -- go run scripts/capture-compression-lifecycle.go -check
       - name: Recapture native acquisition, read failures and surviving states
         if: ${{ !cancelled() }}

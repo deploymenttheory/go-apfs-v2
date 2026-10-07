@@ -758,6 +758,7 @@ jobs:
         env:
           CGO_ENABLED: "0"
         run: |
+          apfs-ci-runner --suite ci/test/step86 --timeout 60m -- go test -json scripts/capture-compression-lifecycle.go scripts/capture-compression-lifecycle_test.go
           apfs-ci-runner --suite ci/test/step86 --timeout 60m -- go run scripts/verify-compression-lifecycle.go
       - name: Upload compression lifecycle coverage
         if: always()

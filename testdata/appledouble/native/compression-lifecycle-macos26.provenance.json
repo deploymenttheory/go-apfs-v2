@@ -1,0 +1,9 @@
+{
+  "source": "https://github.com/deploymenttheory/go-apfs-v2/actions/runs/37608170531/job/112748665269",
+  "artifact_id": 11477551369,
+  "artifact_name": "compression-native-macos-latest",
+  "artifact_path": "compression-lifecycle/native.json.gz",
+  "revision": "ff25c5cb315987a6830a535d35aa699f9295f09e",
+  "sha256": "79c7f3009f5d749d31f96bd04bbda1061b5857211cbd1a8383c8ae21024dc26c",
+  "scope": "Unmodified 591-case native macOS 26.6.2 capture. Source hashes within the capture identify the historical driver, C probes, SDK and Clang ASTs. Retained to qualify admission errno independently from operation traces and final storage; not relabeled as a current-harness capture."
+}
