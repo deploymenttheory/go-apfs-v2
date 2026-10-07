@@ -175,7 +175,7 @@ func verify() error {
 	if packageTotal == 0 || packageCovered*100 <= packageTotal*95 {
 		return fmt.Errorf("complete hostdata package coverage must exceed 95%%: %d/%d", packageCovered, packageTotal)
 	}
-	hashes, e := evidenceaudit.HarnessSourceHashes(os.DirFS("."), []string{"pkg/hostdata/compression_*.go", "pkg/hostdata/resource_fork*.go", "pkg/hostdata/appledouble_path_fork*.go", "internal/darwinabi/*.go", "internal/darwinabi/*.s", "pkg/osversion/*.go", "scripts/verify-compression-lifecycle.go", "scripts/capture-compression-lifecycle.go", "testdata/appledouble/native/compression-lifecycle*", "testdata/appledouble/native/compression-operation*", "testdata/appledouble/native/resource-fork-open*", "scripts/capture-resource-fork-open.go", "scripts/capture-compression-operation*.go", "testdata/appledouble/native/compression-policy.c", "testdata/appledouble/native/compression-query.json.gz", "go.mod", "go.sum"})
+	hashes, e := evidenceaudit.HarnessSourceHashes(os.DirFS("."), []string{"pkg/hostdata/compression_*.go", "pkg/hostdata/resource_fork*.go", "pkg/hostdata/appledouble_path_fork*.go", "internal/darwinabi/*.go", "internal/darwinabi/*.s", "pkg/osversion/*.go", "scripts/verify-compression-lifecycle.go", "scripts/capture-compression-lifecycle.go", "scripts/capture-compression-lifecycle_test.go", "testdata/appledouble/native/compression-lifecycle*", "testdata/appledouble/native/compression-operation*", "testdata/appledouble/native/resource-fork-open*", "scripts/capture-resource-fork-open.go", "scripts/capture-compression-operation*.go", "testdata/appledouble/native/compression-policy.c", "testdata/appledouble/native/compression-query.json.gz", "go.mod", "go.sum"})
 	if e != nil {
 		return e
 	}

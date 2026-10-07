@@ -85,7 +85,7 @@ func verify(capture, compressedCapture string) (result error) {
 		hashes[path] = hex.EncodeToString(sum[:])
 		return nil
 	}
-	for _, p := range []string{source, "testdata/appledouble/native/quarantine-process-capture.h", "scripts/verify-replacement-native.go", "pkg/hostdata/replacement_copy_darwin_test.go", "pkg/hostdata/replacement_copy.go", "pkg/hostdata/replacement_copy_darwin.go", "pkg/hostdata/replacement_darwin.go", "pkg/hostdata/replacement_root_darwin.go", "testdata/appledouble/native/replacement-compressed.c", "testdata/appledouble/native/decmpfs-formats.c", "testdata/appledouble/native/decmpfs-formats.json.gz", "pkg/hostdata/replacement_compressed_darwin_test.go", "go.mod", "go.sum"} {
+	for _, p := range []string{source, "testdata/appledouble/native/quarantine-process-capture.h", "scripts/verify-replacement-native.go", "pkg/hostdata/replacement_copy_darwin_test.go", "pkg/hostdata/replacement_copy.go", "pkg/hostdata/replacement_values.go", "pkg/hostdata/replacement_values_test.go", "pkg/hostdata/replacement_copy_darwin.go", "pkg/hostdata/replacement_darwin.go", "pkg/hostdata/replacement_root_darwin.go", "testdata/appledouble/native/replacement-compressed.c", "testdata/appledouble/native/decmpfs-formats.c", "testdata/appledouble/native/decmpfs-formats.json.gz", "pkg/hostdata/replacement_compressed_darwin_test.go", "go.mod", "go.sum"} {
 		if err := hashFile(p); err != nil {
 			return err
 		}

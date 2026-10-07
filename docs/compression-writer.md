@@ -121,6 +121,25 @@ truncation, flag, synchronization, close and timestamp errors retain actual nati
 outcomes. Test-only interposition is confined to the disposable target inode.
 The production implementation does not load the native framework or interposer.
 
+The macOS 26 CI capture `compression-lifecycle-macos26.json.gz` retains all 591
+cases unchanged, with its original source hashes and a companion artifact
+provenance record. Nine accepted multi-block write-failure cases left EIO or
+ENOSPC in the caller's `errno`; the corresponding macOS 27 cases returned zero.
+The complete operation traces, metadata and storage bytes agree. `CompressFile`
+returns whether acquisition succeeded, and later stream failure does not change
+that boolean. Its captured framework body retains that return value through the
+write-failure path. Apple's [errno documentation](https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man2/intro.2.html)
+requires interpreting `errno` after a failure indication.
+
+The checker therefore compares successful admission independently of the
+qualified residual errno: only a recorded positive short fork write or an
+injected EIO/ENOSPC fork write, with one matching fault in the complete trace,
+permits this difference. Rejected admission still compares errno exactly.
+Every trace event, syscall error, partial byte and metadata observation remains
+required, and the raw admission errno remains in the evidence. Mutation tests
+prove that missing faults, changed bytes, changed metadata and unqualified
+errors still fail. No native case or coverage threshold is removed.
+
 `hostdata.InstallCompressionFork` installs staged fork bytes with native write
 boundaries: the full index, each encoded block, then the zlib resource map. It
 retains partial writes, declines fork output when an independent fork exists,

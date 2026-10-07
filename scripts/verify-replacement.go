@@ -87,7 +87,7 @@ func verify() error {
 			passedNames[event.Test] = true
 		}
 	}
-	for _, name := range []string{"TestReplacementNativeTimestampOracle", "TestReplacementCompressedMetadata", "TestReplacementCompressedMetadataFailures", "TestReplacementCompressedNativeFixture", "TestReplacementCopyStrategy", "TestReplacementCopyMetadata", "TestReplacementCopyNativeFixture", "TestReplacementCopyLargeFork", "TestReplacementBackupSparseStreams", "TestReplacementBackupMalformed", "TestReplacementBackupWriteFailures", "TestReplacementContextCancellation", "TestReplacementCleanupErrors", "TestReplacementContextSteps", "TestReplacementBackupBeyondLegacyLimits"} {
+	for _, name := range []string{"TestReplacementBorrowedAttributes", "TestReplacementBorrowedAttributeFailures", "TestReplacementNativeTimestampOracle", "TestReplacementCompressedMetadata", "TestReplacementCompressedMetadataFailures", "TestReplacementCompressedNativeFixture", "TestReplacementCopyStrategy", "TestReplacementCopyMetadata", "TestReplacementCopyNativeFixture", "TestReplacementCopyLargeFork", "TestReplacementBackupSparseStreams", "TestReplacementBackupMalformed", "TestReplacementBackupWriteFailures", "TestReplacementContextCancellation", "TestReplacementCleanupErrors", "TestReplacementContextSteps", "TestReplacementBackupBeyondLegacyLimits"} {
 		if !passedNames[name] {
 			return fmt.Errorf("required replacement suite missing: %s", name)
 		}
@@ -124,7 +124,7 @@ func verify() error {
 	}
 	covered, total := 0, 0
 	coverageFiles := map[string][2]int{"pkg/hostdata/replacement_copy.go": {}, "pkg/hostdata/replacement_backup.go": {}}
-	for _, name := range []string{"replacement.go", "replacement_root.go", "replacement_context.go"} {
+	for _, name := range []string{"replacement.go", "replacement_root.go", "replacement_context.go", "replacement_values.go"} {
 		coverageFiles["pkg/hostdata/"+name] = [2]int{}
 	}
 	if runtime.GOOS == "windows" {
