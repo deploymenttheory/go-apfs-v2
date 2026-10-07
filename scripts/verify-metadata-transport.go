@@ -18,7 +18,7 @@ import (
 	"io/fs"
 	"maps"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -37,6 +37,8 @@ import (
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/hfsplus"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 type volume interface {
@@ -100,7 +102,7 @@ func writeJSON(name string, v any) {
 	must(os.WriteFile(name, append(b, '\n'), 0600))
 }
 func run(args ...string) []byte {
-	cmd := exec.Command(args[0], args[1:]...)
+	cmd := cirunner.Command(args[0], args[1:]...)
 	b, e := cmd.CombinedOutput()
 	evidence.Commands = append(evidence.Commands, command{args, string(b)})
 	if e != nil {
@@ -115,7 +117,7 @@ func detach(target string) {
 	// finish while retaining evidence and failing if the volume stays busy.
 	must(diskimage.RetryDetach(context.Background(), func() (int, error) {
 		args := []string{"hdiutil", "detach", target}
-		cmd := exec.Command(args[0], args[1:]...)
+		cmd := cirunner.Command(args[0], args[1:]...)
 		var stdout, stderr bytes.Buffer
 		cmd.Stdout, cmd.Stderr = &stdout, &stderr
 		err := cmd.Run()
@@ -457,7 +459,7 @@ func native(image, kind string, want map[string]entry) {
 			must(err)
 			defer detach(device)
 			args := []string{"/sbin/fsck_hfs", "-n", device}
-			b, err := exec.Command(args[0], args[1:]...).CombinedOutput()
+			b, err := cirunner.Command(args[0], args[1:]...).CombinedOutput()
 			evidence.Commands = append(evidence.Commands, command{args, fmt.Sprintf("%s\nexit: %v", b, err)})
 			// Match the established HFS gate: ordinary users can receive an
 			// extra raw-device error after the complete block-device clean verdict.
@@ -490,7 +492,7 @@ func native(image, kind string, want map[string]entry) {
 			if attr == hostdata.SecurityName {
 				args = []string{oracle, "--security", p}
 			}
-			cmd := exec.Command(args[0], args[1:]...)
+			cmd := cirunner.Command(args[0], args[1:]...)
 			var stderr bytes.Buffer
 			cmd.Stderr = &stderr
 			b, e := cmd.Output()
@@ -533,6 +535,7 @@ func main() {
 	reference := flag.String("reference", "", "matching native Mac report directory for foreign image hashes")
 	foreignOS := flag.String("foreign-goos", "", "required foreign operating system")
 	captureFinder := flag.Bool("capture-finder", false, "retain the independently observed HFS FinderInfo portable fixture")
+	flag.String("capture-output", "testdata/appledouble/native/hfs-finderinfo.json.gz", "explicit output file for -capture-finder")
 	flag.Parse()
 	var e error
 	outputRoot, e = filepath.Abs(*root)
@@ -541,7 +544,7 @@ func main() {
 	evidence = report{Revision: strings.TrimSpace(string(run("git", "rev-parse", "HEAD"))), GOOS: runtime.GOOS, GOARCH: runtime.GOARCH, Go: runtime.Version(), SourceSHA256: map[string]string{}}
 	files := []string{"scripts/verify-metadata-transport.go", "testdata/appledouble/native/metadata-transport.c", "testdata/appledouble/native/decmpfs-formats.json.gz", "go.mod", "go.sum"}
 	files = append(files, "testdata/appledouble/native/compression-lz4-storage.c", "testdata/appledouble/native/compression-lz4-macos26.json.gz", "testdata/appledouble/native/compression-lz4.json.gz", "pkg/compression/lz4/*.go", "internal/evidenceaudit/*.go", "internal/testutil/diskimage/*.go", "internal/tools/extract*.go", "internal/hostwalk/*.go", "internal/decmpfs/*.go", "internal/bsdflags/*.go", "pkg/metatransport/*.go", "pkg/hostdata/*.go", "pkg/hostdata/*/*.go", "internal/hosttime/*.go", "internal/testutil/heldfixture/*.go", "pkg/apfs/*.go", "pkg/apfswrite/*.go", "pkg/hfsplus/*.go")
-	evidence.SourceSHA256, e = evidenceaudit.SourceHashes(os.DirFS("."), files)
+	evidence.SourceSHA256, e = evidenceaudit.HarnessSourceHashes(os.DirFS("."), files)
 	must(e)
 	defer func() { writeJSON(filepath.Join(outputRoot, "report.json"), evidence) }()
 	if runtime.GOOS == "darwin" {
@@ -835,7 +838,9 @@ func qualifyFinderInfo() {
 	if flag.Lookup("capture-finder").Value.String() == "true" {
 		b, err := json.MarshalIndent(map[string]any{"host": evidence.Host, "compiler": evidence.Compiler, "sdk": evidence.SDK, "revision": evidence.Revision, "source_sha256": evidence.SourceSHA256, "hfs_source": json.RawMessage(read(filepath.Join(outputRoot, "hfs-source-provenance.json"))), "cases": probes}, "", "  ")
 		must(err)
-		f, err := os.Create("testdata/appledouble/native/hfs-finderinfo.json.gz")
+		captureOutput := flag.Lookup("capture-output").Value.String()
+		must(os.MkdirAll(filepath.Dir(captureOutput), 0755))
+		f, err := os.Create(captureOutput)
 		must(err)
 		z := gzip.NewWriter(f)
 		_, err = z.Write(b)

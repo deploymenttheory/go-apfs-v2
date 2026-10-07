@@ -1,6 +1,10 @@
 package hostdata
 
-import "context"
+import (
+	"context"
+	"io/fs"
+	"os"
+)
 
 // OpenNativeCompressionInput opens a native Darwin data file for read/write
 // compression acquisition. The returned input is owned by Recompress after a
@@ -16,4 +20,24 @@ func OpenNativeCompressionInput(ctx context.Context, name string) (CompressionIn
 		return nil, err
 	}
 	return openNativeCompressionInput(ctx, name)
+}
+
+// NewNativeCompressionInput transfers ownership of a freshly acquired O_RDWR
+// Darwin file to the native compression lifecycle. The caller can acquire it
+// through os.Root.OpenFile to preserve a namespace boundary. Successful native
+// acquisition may already have decompressed the file before this call.
+//
+// Binding performs no stat, open, duplication, seek or other native operation.
+// Admission and descriptor errors remain at Recompress's existing checkpoints.
+// On success Recompress owns and closes the input; on error the caller retains
+// the file. Context cancellation never rolls back effects of the preceding open.
+// Other hosts use explicit foreign metadata providers instead of this binding.
+func NewNativeCompressionInput(ctx context.Context, file *os.File) (CompressionInput, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if file == nil {
+		return nil, fs.ErrInvalid
+	}
+	return newNativeCompressionInput(ctx, file)
 }

@@ -10,13 +10,15 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/evidenceaudit"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 func main() {
@@ -37,7 +39,7 @@ func verify() error {
 	defer log.Close()
 	var transcript bytes.Buffer
 	profile := filepath.Join(dir, "coverage.out")
-	cmd := exec.Command("go", "test", "-count=1", "-json", "-run", "^(TestPath|TestAppleDoublePath|TestPreparePathSecurity|TestResetPathSecurity|TestDarwinCall)", "-covermode=atomic", "-coverprofile="+profile, "-coverpkg=./pkg/hostdata/...,./internal/testutil/pathnative,./internal/testutil/pathsecurity", "./pkg/hostdata", "./internal/testutil/pathnative", "./internal/testutil/pathsecurity")
+	cmd := cirunner.Command("go", "test", "-count=1", "-json", "-run", "^(TestPath|TestAppleDoublePath|TestPreparePathSecurity|TestResetPathSecurity|TestDarwinCall)", "-covermode=atomic", "-coverprofile="+profile, "-coverpkg=./pkg/hostdata/...,./internal/testutil/pathnative,./internal/testutil/pathsecurity", "./pkg/hostdata", "./internal/testutil/pathnative", "./internal/testutil/pathsecurity")
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 	cmd.Stdout = io.MultiWriter(os.Stdout, log, &transcript)
 	cmd.Stderr = io.MultiWriter(os.Stderr, log)
@@ -135,11 +137,11 @@ func verify() error {
 	}
 	files := []string{"scripts/verify-path-lifecycle-coverage.go", "go.mod", "go.sum", "pkg/hostdata/*.go", "pkg/hostdata/*/*.go", "internal/hosttime/*.go", "internal/testutil/heldfixture/*.go", "internal/evidenceaudit/*.go", "internal/testutil/pathnative/*.go", "internal/testutil/pathsecurity/*.go", "testdata/appledouble/native/path-*.c", "testdata/appledouble/native/path-*.json.gz", "testdata/appledouble/native/xattr-provider-context.h", "testdata/appledouble/native/xattr-remove-effects*"}
 	files = append(files, "internal/darwinabi/*", "scripts/generate-darwin-wrappers.go")
-	hashes, e := evidenceaudit.SourceHashes(os.DirFS("."), files)
+	hashes, e := evidenceaudit.HarnessSourceHashes(os.DirFS("."), files)
 	if e != nil {
 		return e
 	}
-	revision, e := exec.Command("git", "rev-parse", "HEAD").Output()
+	revision, e := cirunner.Command("git", "rev-parse", "HEAD").Output()
 	if e != nil {
 		return e
 	}

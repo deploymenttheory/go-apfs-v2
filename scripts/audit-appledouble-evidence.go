@@ -7,13 +7,15 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/evidenceaudit"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 func main() {
@@ -21,13 +23,13 @@ func main() {
 	revision := flag.String("revision", "", "tested revision; defaults to git HEAD")
 	goos := flag.String("goos", runtime.GOOS, "tested operating system")
 	flag.Parse()
-	status, err := exec.Command("git", "status", "--porcelain", "--untracked-files=normal").Output()
+	status, err := cirunner.Command("git", "status", "--porcelain", "--untracked-files=normal").Output()
 	if err != nil || len(status) != 0 {
 		fmt.Fprintf(os.Stderr, "evidence audit requires a clean committed checkout: %s%v\n", status, err)
 		os.Exit(1)
 	}
 	if *revision == "" {
-		b, err := exec.Command("git", "rev-parse", "HEAD").Output()
+		b, err := cirunner.Command("git", "rev-parse", "HEAD").Output()
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
@@ -42,7 +44,7 @@ func main() {
 		os.Exit(1)
 	}
 	profile := filepath.Join(selfDir, "coverage.out")
-	cmd := exec.Command("go", "test", "-count=1", "-json", "-covermode=atomic", "-coverprofile="+profile, "./internal/evidenceaudit")
+	cmd := cirunner.Command("go", "test", "-count=1", "-json", "-covermode=atomic", "-coverprofile="+profile, "./internal/evidenceaudit")
 	output, err := cmd.CombinedOutput()
 	if writeErr := os.WriteFile(filepath.Join(selfDir, "tests.jsonl"), output, 0600); writeErr != nil {
 		fmt.Fprintln(os.Stderr, writeErr)
@@ -52,7 +54,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "%s\n%v\n", output, err)
 		os.Exit(1)
 	}
-	output, err = exec.Command("go", "tool", "cover", "-func="+profile).Output()
+	output, err = cirunner.Command("go", "tool", "cover", "-func="+profile).Output()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

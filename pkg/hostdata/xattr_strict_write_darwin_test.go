@@ -3,11 +3,13 @@ package hostdata
 import (
 	"errors"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"testing"
 
 	"golang.org/x/sys/unix"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 func TestStrictXattrWriteDarwin(t *testing.T) {
@@ -50,10 +52,10 @@ func TestStrictXattrWriteDarwin(t *testing.T) {
 		t.Fatal(err)
 	}
 	strictWriteNativeRead(t, path, "user.write", nil)
-	if out, err := exec.Command("/bin/chmod", "+a", "everyone deny writeextattr", path).CombinedOutput(); err != nil {
+	if out, err := cirunner.Command("/bin/chmod", "+a", "everyone deny writeextattr", path).CombinedOutput(); err != nil {
 		t.Fatal(err, string(out))
 	}
-	defer exec.Command("/bin/chmod", "-N", path).Run()
+	defer cirunner.Command("/bin/chmod", "-N", path).Run()
 	if err := SetXattr(followed, "user.write", []byte("reject")); !errors.Is(err, unix.EACCES) && !errors.Is(err, unix.EPERM) {
 		t.Fatal("permission denial lost", err)
 	}

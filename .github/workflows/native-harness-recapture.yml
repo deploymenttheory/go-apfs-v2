@@ -1,0 +1,3461 @@
+# Producer-only evidence collection. These jobs do not replace any acceptance,
+# source-provenance, coverage, no-skip or native readback qualification gate.
+# Promote genuine archives only after review; historical fixtures are never edited.
+name: Capture native harness evidence
+
+on:
+  workflow_dispatch:
+    inputs:
+      phase:
+        description: Base captures first; dependent captures after reviewed prerequisite promotion
+        type: choice
+        options: [base, dependent]
+        default: base
+        required: true
+      recipe:
+        description: Optional exact capture recipe; empty collects the complete phase
+        type: string
+        default: ""
+  workflow_call:
+    inputs:
+      phase:
+        description: base or dependent
+        type: string
+        required: true
+      recipe:
+        description: Optional exact capture recipe
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-harness-recapture-${{ github.ref }}-${{ inputs.phase }}-${{ inputs.recipe || 'all' }}
+  cancel-in-progress: false
+
+env:
+  CGO_ENABLED: "0"
+
+jobs:
+  validate-phase:
+    name: Validate capture-only phase
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require an explicit supported phase
+        shell: bash
+        env:
+          CAPTURE_PHASE: ${{ inputs.phase }}
+          CAPTURE_RECIPE: ${{ inputs.recipe }}
+        run: |
+          set -euo pipefail
+          case "$CAPTURE_PHASE" in
+            base|dependent) ;;
+            *) echo 'Expected base or dependent capture phase' >&2; exit 1 ;;
+          esac
+          case "$CAPTURE_PHASE:$CAPTURE_RECIPE" in
+            base:|dependent:) ;;
+            base:compression-blocks-27) ;;
+            base:compression-lifecycle-27) ;;
+            base:compression-lz4-26) ;;
+            base:compression-lz4-27) ;;
+            base:compression-operation-15) ;;
+            base:compression-operation-26) ;;
+            base:compression-operation-27) ;;
+            base:compression-owned-15) ;;
+            base:compression-owned-26) ;;
+            base:compression-owned-27) ;;
+            base:compression-policy-27) ;;
+            base:compression-query-26) ;;
+            base:compression-query-27) ;;
+            dependent:compression-state-27) ;;
+            base:compression-writer-27) ;;
+            dependent:compression-zlib-source-27) ;;
+            base:content-open-27) ;;
+            base:entry-type-27) ;;
+            dependent:hfs-finderinfo-27) ;;
+            base:hfs-special-names-15) ;;
+            base:hfs-special-names-26) ;;
+            base:hfs-special-names-27) ;;
+            base:large-compression-27) ;;
+            base:name-admission-15) ;;
+            base:name-admission-26) ;;
+            base:name-admission-27) ;;
+            base:name-collation-15) ;;
+            base:name-collation-26) ;;
+            base:name-collation-27) ;;
+            base:name-lookup-15) ;;
+            base:name-lookup-26) ;;
+            base:name-lookup-27) ;;
+            base:pathname-limits-15) ;;
+            base:pathname-limits-26) ;;
+            base:pathname-limits-27) ;;
+            dependent:recompression-access-15) ;;
+            dependent:recompression-access-26) ;;
+            dependent:recompression-access-27) ;;
+            base:replacement-27) ;;
+            base:resource-fork-open-15) ;;
+            base:resource-fork-open-26) ;;
+            base:resource-fork-open-27) ;;
+            *) echo 'Recipe does not belong to the requested capture phase' >&2; exit 1 ;;
+          esac
+
+  compression-blocks-27:
+    name: Capture only - compression-blocks-27
+    needs: validate-phase
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'compression-blocks-27')
+    runs-on: xcode-27
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
+      - name: Bind native profile and untouched source revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          /usr/bin/sw_vers > artifacts/native-recapture/host.txt
+          version=$(/usr/bin/sw_vers -productVersion)
+          major="${version%%.*}"
+          if [ "$major" != '27' ]; then
+            echo 'Wrong actual macOS profile for this capture' >&2
+            exit 1
+          fi
+          git diff --exit-code
+          git diff --cached --exit-code
+          git rev-parse HEAD > artifacts/native-recapture/revision.txt
+          printf '%s\n' 'compression-blocks-27' > artifacts/native-recapture/recipe.txt
+      - name: Generate complete genuine native evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          apfs-ci-runner --suite native-recapture/compression-blocks-27 --timeout 55m -- go run scripts/capture-compression-blocks.go -out artifacts/compression-blocks/native.json.gz
+      - name: Confirm authoritative sources and fixtures remain unchanged
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code
+          git diff --cached --exit-code
+      - name: Verify capture artifacts contain no live mounts
+        id: capture-unmounted
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          apfs-ci-runner --suite native-recapture/mount-table --timeout 1m -- /sbin/mount > artifacts/native-recapture/mounts.txt
+          physical_root=$(pwd -P)
+          while IFS= read -r line; do
+            case "$line" in
+              *" on $physical_root/artifacts/"*|*" on $PWD/artifacts/"*)
+                printf 'Refusing recursive upload of a live mount: %s\n' "$line" >&2
+                exit 1
+                ;;
+            esac
+          done < artifacts/native-recapture/mounts.txt
+      - name: Retain complete unmounted capture
+        if: always() && steps.capture-unmounted.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-compression-blocks-27-${{ github.run_attempt }}
+          path: |
+            artifacts/compression-blocks/
+          compression-level: 9
+          if-no-files-found: error
+      - name: Retain command diagnostics even when capture cleanup fails
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-compression-blocks-27-diagnostics-${{ github.run_attempt }}
+          path: |
+            artifacts/native-recapture/
+            artifacts/ci-observability/
+          compression-level: 9
+          if-no-files-found: error
+
+  compression-lifecycle-27:
+    name: Capture only - compression-lifecycle-27
+    needs: validate-phase
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'compression-lifecycle-27')
+    runs-on: xcode-27
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
+      - name: Bind native profile and untouched source revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          /usr/bin/sw_vers > artifacts/native-recapture/host.txt
+          version=$(/usr/bin/sw_vers -productVersion)
+          major="${version%%.*}"
+          if [ "$major" != '27' ]; then
+            echo 'Wrong actual macOS profile for this capture' >&2
+            exit 1
+          fi
+          git diff --exit-code
+          git diff --cached --exit-code
+          git rev-parse HEAD > artifacts/native-recapture/revision.txt
+          printf '%s\n' 'compression-lifecycle-27' > artifacts/native-recapture/recipe.txt
+      - name: Generate complete genuine native evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          apfs-ci-runner --suite native-recapture/compression-lifecycle-27 --timeout 55m -- go run scripts/capture-compression-lifecycle.go -out artifacts/compression-lifecycle/native.json.gz
+      - name: Confirm authoritative sources and fixtures remain unchanged
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code
+          git diff --cached --exit-code
+      - name: Verify capture artifacts contain no live mounts
+        id: capture-unmounted
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          apfs-ci-runner --suite native-recapture/mount-table --timeout 1m -- /sbin/mount > artifacts/native-recapture/mounts.txt
+          physical_root=$(pwd -P)
+          while IFS= read -r line; do
+            case "$line" in
+              *" on $physical_root/artifacts/"*|*" on $PWD/artifacts/"*)
+                printf 'Refusing recursive upload of a live mount: %s\n' "$line" >&2
+                exit 1
+                ;;
+            esac
+          done < artifacts/native-recapture/mounts.txt
+      - name: Retain complete unmounted capture
+        if: always() && steps.capture-unmounted.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-compression-lifecycle-27-${{ github.run_attempt }}
+          path: |
+            artifacts/compression-lifecycle/
+          compression-level: 9
+          if-no-files-found: error
+      - name: Retain command diagnostics even when capture cleanup fails
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-compression-lifecycle-27-diagnostics-${{ github.run_attempt }}
+          path: |
+            artifacts/native-recapture/
+            artifacts/ci-observability/
+          compression-level: 9
+          if-no-files-found: error
+
+  compression-lz4-26:
+    name: Capture only - compression-lz4-26
+    needs: validate-phase
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'compression-lz4-26')
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
+      - name: Bind native profile and untouched source revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          /usr/bin/sw_vers > artifacts/native-recapture/host.txt
+          version=$(/usr/bin/sw_vers -productVersion)
+          major="${version%%.*}"
+          if [ "$major" != '26' ]; then
+            echo 'Wrong actual macOS profile for this capture' >&2
+            exit 1
+          fi
+          git diff --exit-code
+          git diff --cached --exit-code
+          git rev-parse HEAD > artifacts/native-recapture/revision.txt
+          printf '%s\n' 'compression-lz4-26' > artifacts/native-recapture/recipe.txt
+      - name: Generate complete genuine native evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          apfs-ci-runner --suite native-recapture/compression-lz4-26 --timeout 55m -- go run scripts/capture-compression-lz4.go -out artifacts/compression-lz4/native.json.gz
+      - name: Confirm authoritative sources and fixtures remain unchanged
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code
+          git diff --cached --exit-code
+      - name: Verify capture artifacts contain no live mounts
+        id: capture-unmounted
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          apfs-ci-runner --suite native-recapture/mount-table --timeout 1m -- /sbin/mount > artifacts/native-recapture/mounts.txt
+          physical_root=$(pwd -P)
+          while IFS= read -r line; do
+            case "$line" in
+              *" on $physical_root/artifacts/"*|*" on $PWD/artifacts/"*)
+                printf 'Refusing recursive upload of a live mount: %s\n' "$line" >&2
+                exit 1
+                ;;
+            esac
+          done < artifacts/native-recapture/mounts.txt
+      - name: Retain complete unmounted capture
+        if: always() && steps.capture-unmounted.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-compression-lz4-26-${{ github.run_attempt }}
+          path: |
+            artifacts/compression-lz4/
+          compression-level: 9
+          if-no-files-found: error
+      - name: Retain command diagnostics even when capture cleanup fails
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-compression-lz4-26-diagnostics-${{ github.run_attempt }}
+          path: |
+            artifacts/native-recapture/
+            artifacts/ci-observability/
+          compression-level: 9
+          if-no-files-found: error
+
+  compression-lz4-27:
+    name: Capture only - compression-lz4-27
+    needs: validate-phase
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'compression-lz4-27')
+    runs-on: xcode-27
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
+      - name: Bind native profile and untouched source revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          /usr/bin/sw_vers > artifacts/native-recapture/host.txt
+          version=$(/usr/bin/sw_vers -productVersion)
+          major="${version%%.*}"
+          if [ "$major" != '27' ]; then
+            echo 'Wrong actual macOS profile for this capture' >&2
+            exit 1
+          fi
+          git diff --exit-code
+          git diff --cached --exit-code
+          git rev-parse HEAD > artifacts/native-recapture/revision.txt
+          printf '%s\n' 'compression-lz4-27' > artifacts/native-recapture/recipe.txt
+      - name: Generate complete genuine native evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          apfs-ci-runner --suite native-recapture/compression-lz4-27 --timeout 55m -- go run scripts/capture-compression-lz4.go -out artifacts/compression-lz4/native.json.gz
+      - name: Confirm authoritative sources and fixtures remain unchanged
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code
+          git diff --cached --exit-code
+      - name: Verify capture artifacts contain no live mounts
+        id: capture-unmounted
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          apfs-ci-runner --suite native-recapture/mount-table --timeout 1m -- /sbin/mount > artifacts/native-recapture/mounts.txt
+          physical_root=$(pwd -P)
+          while IFS= read -r line; do
+            case "$line" in
+              *" on $physical_root/artifacts/"*|*" on $PWD/artifacts/"*)
+                printf 'Refusing recursive upload of a live mount: %s\n' "$line" >&2
+                exit 1
+                ;;
+            esac
+          done < artifacts/native-recapture/mounts.txt
+      - name: Retain complete unmounted capture
+        if: always() && steps.capture-unmounted.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-compression-lz4-27-${{ github.run_attempt }}
+          path: |
+            artifacts/compression-lz4/
+          compression-level: 9
+          if-no-files-found: error
+      - name: Retain command diagnostics even when capture cleanup fails
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-compression-lz4-27-diagnostics-${{ github.run_attempt }}
+          path: |
+            artifacts/native-recapture/
+            artifacts/ci-observability/
+          compression-level: 9
+          if-no-files-found: error
+
+  compression-operation-15:
+    name: Capture only - compression-operation-15
+    needs: validate-phase
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'compression-operation-15')
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
+      - name: Bind native profile and untouched source revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          /usr/bin/sw_vers > artifacts/native-recapture/host.txt
+          version=$(/usr/bin/sw_vers -productVersion)
+          major="${version%%.*}"
+          if [ "$major" != '15' ]; then
+            echo 'Wrong actual macOS profile for this capture' >&2
+            exit 1
+          fi
+          git diff --exit-code
+          git diff --cached --exit-code
+          git rev-parse HEAD > artifacts/native-recapture/revision.txt
+          printf '%s\n' 'compression-operation-15' > artifacts/native-recapture/recipe.txt
+      - name: Generate complete genuine native evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          apfs-ci-runner --suite native-recapture/compression-operation-15 --timeout 55m -- go run scripts/capture-compression-operation.go -out artifacts/compression-operation/native.json.gz
+      - name: Confirm authoritative sources and fixtures remain unchanged
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code
+          git diff --cached --exit-code
+      - name: Verify capture artifacts contain no live mounts
+        id: capture-unmounted
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          apfs-ci-runner --suite native-recapture/mount-table --timeout 1m -- /sbin/mount > artifacts/native-recapture/mounts.txt
+          physical_root=$(pwd -P)
+          while IFS= read -r line; do
+            case "$line" in
+              *" on $physical_root/artifacts/"*|*" on $PWD/artifacts/"*)
+                printf 'Refusing recursive upload of a live mount: %s\n' "$line" >&2
+                exit 1
+                ;;
+            esac
+          done < artifacts/native-recapture/mounts.txt
+      - name: Retain complete unmounted capture
+        if: always() && steps.capture-unmounted.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-compression-operation-15-${{ github.run_attempt }}
+          path: |
+            artifacts/compression-operation/
+          compression-level: 9
+          if-no-files-found: error
+      - name: Retain command diagnostics even when capture cleanup fails
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-compression-operation-15-diagnostics-${{ github.run_attempt }}
+          path: |
+            artifacts/native-recapture/
+            artifacts/ci-observability/
+          compression-level: 9
+          if-no-files-found: error
+
+  compression-operation-26:
+    name: Capture only - compression-operation-26
+    needs: validate-phase
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'compression-operation-26')
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
+      - name: Bind native profile and untouched source revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          /usr/bin/sw_vers > artifacts/native-recapture/host.txt
+          version=$(/usr/bin/sw_vers -productVersion)
+          major="${version%%.*}"
+          if [ "$major" != '26' ]; then
+            echo 'Wrong actual macOS profile for this capture' >&2
+            exit 1
+          fi
+          git diff --exit-code
+          git diff --cached --exit-code
+          git rev-parse HEAD > artifacts/native-recapture/revision.txt
+          printf '%s\n' 'compression-operation-26' > artifacts/native-recapture/recipe.txt
+      - name: Generate complete genuine native evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          apfs-ci-runner --suite native-recapture/compression-operation-26 --timeout 55m -- go run scripts/capture-compression-operation.go -out artifacts/compression-operation/native.json.gz
+      - name: Confirm authoritative sources and fixtures remain unchanged
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code
+          git diff --cached --exit-code
+      - name: Verify capture artifacts contain no live mounts
+        id: capture-unmounted
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          apfs-ci-runner --suite native-recapture/mount-table --timeout 1m -- /sbin/mount > artifacts/native-recapture/mounts.txt
+          physical_root=$(pwd -P)
+          while IFS= read -r line; do
+            case "$line" in
+              *" on $physical_root/artifacts/"*|*" on $PWD/artifacts/"*)
+                printf 'Refusing recursive upload of a live mount: %s\n' "$line" >&2
+                exit 1
+                ;;
+            esac
+          done < artifacts/native-recapture/mounts.txt
+      - name: Retain complete unmounted capture
+        if: always() && steps.capture-unmounted.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-compression-operation-26-${{ github.run_attempt }}
+          path: |
+            artifacts/compression-operation/
+          compression-level: 9
+          if-no-files-found: error
+      - name: Retain command diagnostics even when capture cleanup fails
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-compression-operation-26-diagnostics-${{ github.run_attempt }}
+          path: |
+            artifacts/native-recapture/
+            artifacts/ci-observability/
+          compression-level: 9
+          if-no-files-found: error
+
+  compression-operation-27:
+    name: Capture only - compression-operation-27
+    needs: validate-phase
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'compression-operation-27')
+    runs-on: xcode-27
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
+      - name: Bind native profile and untouched source revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          /usr/bin/sw_vers > artifacts/native-recapture/host.txt
+          version=$(/usr/bin/sw_vers -productVersion)
+          major="${version%%.*}"
+          if [ "$major" != '27' ]; then
+            echo 'Wrong actual macOS profile for this capture' >&2
+            exit 1
+          fi
+          git diff --exit-code
+          git diff --cached --exit-code
+          git rev-parse HEAD > artifacts/native-recapture/revision.txt
+          printf '%s\n' 'compression-operation-27' > artifacts/native-recapture/recipe.txt
+      - name: Generate complete genuine native evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          apfs-ci-runner --suite native-recapture/compression-operation-27 --timeout 55m -- go run scripts/capture-compression-operation.go -out artifacts/compression-operation/native.json.gz
+      - name: Confirm authoritative sources and fixtures remain unchanged
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code
+          git diff --cached --exit-code
+      - name: Verify capture artifacts contain no live mounts
+        id: capture-unmounted
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          apfs-ci-runner --suite native-recapture/mount-table --timeout 1m -- /sbin/mount > artifacts/native-recapture/mounts.txt
+          physical_root=$(pwd -P)
+          while IFS= read -r line; do
+            case "$line" in
+              *" on $physical_root/artifacts/"*|*" on $PWD/artifacts/"*)
+                printf 'Refusing recursive upload of a live mount: %s\n' "$line" >&2
+                exit 1
+                ;;
+            esac
+          done < artifacts/native-recapture/mounts.txt
+      - name: Retain complete unmounted capture
+        if: always() && steps.capture-unmounted.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-compression-operation-27-${{ github.run_attempt }}
+          path: |
+            artifacts/compression-operation/
+          compression-level: 9
+          if-no-files-found: error
+      - name: Retain command diagnostics even when capture cleanup fails
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-compression-operation-27-diagnostics-${{ github.run_attempt }}
+          path: |
+            artifacts/native-recapture/
+            artifacts/ci-observability/
+          compression-level: 9
+          if-no-files-found: error
+
+  compression-owned-15:
+    name: Capture only - compression-owned-15
+    needs: validate-phase
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'compression-owned-15')
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
+      - name: Bind native profile and untouched source revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          /usr/bin/sw_vers > artifacts/native-recapture/host.txt
+          version=$(/usr/bin/sw_vers -productVersion)
+          major="${version%%.*}"
+          if [ "$major" != '15' ]; then
+            echo 'Wrong actual macOS profile for this capture' >&2
+            exit 1
+          fi
+          git diff --exit-code
+          git diff --cached --exit-code
+          git rev-parse HEAD > artifacts/native-recapture/revision.txt
+          printf '%s\n' 'compression-owned-15' > artifacts/native-recapture/recipe.txt
+      - name: Generate complete genuine native evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          apfs-ci-runner --suite native-recapture/compression-owned-15 --timeout 55m -- go run scripts/capture-compression-owned.go -out artifacts/compression-owned/native.json.gz
+      - name: Confirm authoritative sources and fixtures remain unchanged
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code
+          git diff --cached --exit-code
+      - name: Verify capture artifacts contain no live mounts
+        id: capture-unmounted
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          apfs-ci-runner --suite native-recapture/mount-table --timeout 1m -- /sbin/mount > artifacts/native-recapture/mounts.txt
+          physical_root=$(pwd -P)
+          while IFS= read -r line; do
+            case "$line" in
+              *" on $physical_root/artifacts/"*|*" on $PWD/artifacts/"*)
+                printf 'Refusing recursive upload of a live mount: %s\n' "$line" >&2
+                exit 1
+                ;;
+            esac
+          done < artifacts/native-recapture/mounts.txt
+      - name: Retain complete unmounted capture
+        if: always() && steps.capture-unmounted.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-compression-owned-15-${{ github.run_attempt }}
+          path: |
+            artifacts/compression-owned/
+          compression-level: 9
+          if-no-files-found: error
+      - name: Retain command diagnostics even when capture cleanup fails
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-compression-owned-15-diagnostics-${{ github.run_attempt }}
+          path: |
+            artifacts/native-recapture/
+            artifacts/ci-observability/
+          compression-level: 9
+          if-no-files-found: error
+
+  compression-owned-26:
+    name: Capture only - compression-owned-26
+    needs: validate-phase
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'compression-owned-26')
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
+      - name: Bind native profile and untouched source revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          /usr/bin/sw_vers > artifacts/native-recapture/host.txt
+          version=$(/usr/bin/sw_vers -productVersion)
+          major="${version%%.*}"
+          if [ "$major" != '26' ]; then
+            echo 'Wrong actual macOS profile for this capture' >&2
+            exit 1
+          fi
+          git diff --exit-code
+          git diff --cached --exit-code
+          git rev-parse HEAD > artifacts/native-recapture/revision.txt
+          printf '%s\n' 'compression-owned-26' > artifacts/native-recapture/recipe.txt
+      - name: Generate complete genuine native evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          apfs-ci-runner --suite native-recapture/compression-owned-26 --timeout 55m -- go run scripts/capture-compression-owned.go -out artifacts/compression-owned/native.json.gz
+      - name: Confirm authoritative sources and fixtures remain unchanged
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code
+          git diff --cached --exit-code
+      - name: Verify capture artifacts contain no live mounts
+        id: capture-unmounted
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          apfs-ci-runner --suite native-recapture/mount-table --timeout 1m -- /sbin/mount > artifacts/native-recapture/mounts.txt
+          physical_root=$(pwd -P)
+          while IFS= read -r line; do
+            case "$line" in
+              *" on $physical_root/artifacts/"*|*" on $PWD/artifacts/"*)
+                printf 'Refusing recursive upload of a live mount: %s\n' "$line" >&2
+                exit 1
+                ;;
+            esac
+          done < artifacts/native-recapture/mounts.txt
+      - name: Retain complete unmounted capture
+        if: always() && steps.capture-unmounted.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-compression-owned-26-${{ github.run_attempt }}
+          path: |
+            artifacts/compression-owned/
+          compression-level: 9
+          if-no-files-found: error
+      - name: Retain command diagnostics even when capture cleanup fails
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-compression-owned-26-diagnostics-${{ github.run_attempt }}
+          path: |
+            artifacts/native-recapture/
+            artifacts/ci-observability/
+          compression-level: 9
+          if-no-files-found: error
+
+  compression-owned-27:
+    name: Capture only - compression-owned-27
+    needs: validate-phase
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'compression-owned-27')
+    runs-on: xcode-27
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
+      - name: Bind native profile and untouched source revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          /usr/bin/sw_vers > artifacts/native-recapture/host.txt
+          version=$(/usr/bin/sw_vers -productVersion)
+          major="${version%%.*}"
+          if [ "$major" != '27' ]; then
+            echo 'Wrong actual macOS profile for this capture' >&2
+            exit 1
+          fi
+          git diff --exit-code
+          git diff --cached --exit-code
+          git rev-parse HEAD > artifacts/native-recapture/revision.txt
+          printf '%s\n' 'compression-owned-27' > artifacts/native-recapture/recipe.txt
+      - name: Generate complete genuine native evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          apfs-ci-runner --suite native-recapture/compression-owned-27 --timeout 55m -- go run scripts/capture-compression-owned.go -out artifacts/compression-owned/native.json.gz
+      - name: Confirm authoritative sources and fixtures remain unchanged
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code
+          git diff --cached --exit-code
+      - name: Verify capture artifacts contain no live mounts
+        id: capture-unmounted
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          apfs-ci-runner --suite native-recapture/mount-table --timeout 1m -- /sbin/mount > artifacts/native-recapture/mounts.txt
+          physical_root=$(pwd -P)
+          while IFS= read -r line; do
+            case "$line" in
+              *" on $physical_root/artifacts/"*|*" on $PWD/artifacts/"*)
+                printf 'Refusing recursive upload of a live mount: %s\n' "$line" >&2
+                exit 1
+                ;;
+            esac
+          done < artifacts/native-recapture/mounts.txt
+      - name: Retain complete unmounted capture
+        if: always() && steps.capture-unmounted.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-compression-owned-27-${{ github.run_attempt }}
+          path: |
+            artifacts/compression-owned/
+          compression-level: 9
+          if-no-files-found: error
+      - name: Retain command diagnostics even when capture cleanup fails
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-compression-owned-27-diagnostics-${{ github.run_attempt }}
+          path: |
+            artifacts/native-recapture/
+            artifacts/ci-observability/
+          compression-level: 9
+          if-no-files-found: error
+
+  compression-policy-27:
+    name: Capture only - compression-policy-27
+    needs: validate-phase
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'compression-policy-27')
+    runs-on: xcode-27
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
+      - name: Bind native profile and untouched source revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          /usr/bin/sw_vers > artifacts/native-recapture/host.txt
+          version=$(/usr/bin/sw_vers -productVersion)
+          major="${version%%.*}"
+          if [ "$major" != '27' ]; then
+            echo 'Wrong actual macOS profile for this capture' >&2
+            exit 1
+          fi
+          git diff --exit-code
+          git diff --cached --exit-code
+          git rev-parse HEAD > artifacts/native-recapture/revision.txt
+          printf '%s\n' 'compression-policy-27' > artifacts/native-recapture/recipe.txt
+      - name: Generate complete genuine native evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          apfs-ci-runner --suite native-recapture/compression-policy-27 --timeout 55m -- go run scripts/capture-compression-policy.go -out artifacts/compression-policy/native.json.gz
+      - name: Confirm authoritative sources and fixtures remain unchanged
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code
+          git diff --cached --exit-code
+      - name: Verify capture artifacts contain no live mounts
+        id: capture-unmounted
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          apfs-ci-runner --suite native-recapture/mount-table --timeout 1m -- /sbin/mount > artifacts/native-recapture/mounts.txt
+          physical_root=$(pwd -P)
+          while IFS= read -r line; do
+            case "$line" in
+              *" on $physical_root/artifacts/"*|*" on $PWD/artifacts/"*)
+                printf 'Refusing recursive upload of a live mount: %s\n' "$line" >&2
+                exit 1
+                ;;
+            esac
+          done < artifacts/native-recapture/mounts.txt
+      - name: Retain complete unmounted capture
+        if: always() && steps.capture-unmounted.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-compression-policy-27-${{ github.run_attempt }}
+          path: |
+            artifacts/compression-policy/
+          compression-level: 9
+          if-no-files-found: error
+      - name: Retain command diagnostics even when capture cleanup fails
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-compression-policy-27-diagnostics-${{ github.run_attempt }}
+          path: |
+            artifacts/native-recapture/
+            artifacts/ci-observability/
+          compression-level: 9
+          if-no-files-found: error
+
+  compression-query-26:
+    name: Capture only - compression-query-26
+    needs: validate-phase
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'compression-query-26')
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
+      - name: Bind native profile and untouched source revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          /usr/bin/sw_vers > artifacts/native-recapture/host.txt
+          version=$(/usr/bin/sw_vers -productVersion)
+          major="${version%%.*}"
+          if [ "$major" != '26' ]; then
+            echo 'Wrong actual macOS profile for this capture' >&2
+            exit 1
+          fi
+          git diff --exit-code
+          git diff --cached --exit-code
+          git rev-parse HEAD > artifacts/native-recapture/revision.txt
+          printf '%s\n' 'compression-query-26' > artifacts/native-recapture/recipe.txt
+      - name: Generate complete genuine native evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          apfs-ci-runner --suite native-recapture/compression-query-26 --timeout 55m -- go run scripts/capture-compression-query.go -out artifacts/compression-query/native.json.gz
+      - name: Confirm authoritative sources and fixtures remain unchanged
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code
+          git diff --cached --exit-code
+      - name: Verify capture artifacts contain no live mounts
+        id: capture-unmounted
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          apfs-ci-runner --suite native-recapture/mount-table --timeout 1m -- /sbin/mount > artifacts/native-recapture/mounts.txt
+          physical_root=$(pwd -P)
+          while IFS= read -r line; do
+            case "$line" in
+              *" on $physical_root/artifacts/"*|*" on $PWD/artifacts/"*)
+                printf 'Refusing recursive upload of a live mount: %s\n' "$line" >&2
+                exit 1
+                ;;
+            esac
+          done < artifacts/native-recapture/mounts.txt
+      - name: Retain complete unmounted capture
+        if: always() && steps.capture-unmounted.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-compression-query-26-${{ github.run_attempt }}
+          path: |
+            artifacts/compression-query/
+          compression-level: 9
+          if-no-files-found: error
+      - name: Retain command diagnostics even when capture cleanup fails
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-compression-query-26-diagnostics-${{ github.run_attempt }}
+          path: |
+            artifacts/native-recapture/
+            artifacts/ci-observability/
+          compression-level: 9
+          if-no-files-found: error
+
+  compression-query-27:
+    name: Capture only - compression-query-27
+    needs: validate-phase
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'compression-query-27')
+    runs-on: xcode-27
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
+      - name: Bind native profile and untouched source revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          /usr/bin/sw_vers > artifacts/native-recapture/host.txt
+          version=$(/usr/bin/sw_vers -productVersion)
+          major="${version%%.*}"
+          if [ "$major" != '27' ]; then
+            echo 'Wrong actual macOS profile for this capture' >&2
+            exit 1
+          fi
+          git diff --exit-code
+          git diff --cached --exit-code
+          git rev-parse HEAD > artifacts/native-recapture/revision.txt
+          printf '%s\n' 'compression-query-27' > artifacts/native-recapture/recipe.txt
+      - name: Generate complete genuine native evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          apfs-ci-runner --suite native-recapture/compression-query-27 --timeout 55m -- go run scripts/capture-compression-query.go -out artifacts/compression-query/native.json.gz
+      - name: Confirm authoritative sources and fixtures remain unchanged
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code
+          git diff --cached --exit-code
+      - name: Verify capture artifacts contain no live mounts
+        id: capture-unmounted
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          apfs-ci-runner --suite native-recapture/mount-table --timeout 1m -- /sbin/mount > artifacts/native-recapture/mounts.txt
+          physical_root=$(pwd -P)
+          while IFS= read -r line; do
+            case "$line" in
+              *" on $physical_root/artifacts/"*|*" on $PWD/artifacts/"*)
+                printf 'Refusing recursive upload of a live mount: %s\n' "$line" >&2
+                exit 1
+                ;;
+            esac
+          done < artifacts/native-recapture/mounts.txt
+      - name: Retain complete unmounted capture
+        if: always() && steps.capture-unmounted.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-compression-query-27-${{ github.run_attempt }}
+          path: |
+            artifacts/compression-query/
+          compression-level: 9
+          if-no-files-found: error
+      - name: Retain command diagnostics even when capture cleanup fails
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-compression-query-27-diagnostics-${{ github.run_attempt }}
+          path: |
+            artifacts/native-recapture/
+            artifacts/ci-observability/
+          compression-level: 9
+          if-no-files-found: error
+
+  compression-state-27:
+    name: Capture only - compression-state-27
+    needs: validate-phase
+    if: inputs.phase == 'dependent' && (inputs.recipe == '' || inputs.recipe == 'compression-state-27')
+    runs-on: xcode-27
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
+      - name: Bind native profile and untouched source revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          /usr/bin/sw_vers > artifacts/native-recapture/host.txt
+          version=$(/usr/bin/sw_vers -productVersion)
+          major="${version%%.*}"
+          if [ "$major" != '27' ]; then
+            echo 'Wrong actual macOS profile for this capture' >&2
+            exit 1
+          fi
+          git diff --exit-code
+          git diff --cached --exit-code
+          git rev-parse HEAD > artifacts/native-recapture/revision.txt
+          printf '%s\n' 'compression-state-27' > artifacts/native-recapture/recipe.txt
+      - name: Generate complete genuine native evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          apfs-ci-runner --suite native-recapture/compression-state-27 --timeout 55m -- go run scripts/capture-compression-state.go -out artifacts/compression-state/observed.json.gz
+      - name: Confirm authoritative sources and fixtures remain unchanged
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code
+          git diff --cached --exit-code
+      - name: Verify capture artifacts contain no live mounts
+        id: capture-unmounted
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          apfs-ci-runner --suite native-recapture/mount-table --timeout 1m -- /sbin/mount > artifacts/native-recapture/mounts.txt
+          physical_root=$(pwd -P)
+          while IFS= read -r line; do
+            case "$line" in
+              *" on $physical_root/artifacts/"*|*" on $PWD/artifacts/"*)
+                printf 'Refusing recursive upload of a live mount: %s\n' "$line" >&2
+                exit 1
+                ;;
+            esac
+          done < artifacts/native-recapture/mounts.txt
+      - name: Retain complete unmounted capture
+        if: always() && steps.capture-unmounted.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-compression-state-27-${{ github.run_attempt }}
+          path: |
+            artifacts/compression-state/
+          compression-level: 9
+          if-no-files-found: error
+      - name: Retain command diagnostics even when capture cleanup fails
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-compression-state-27-diagnostics-${{ github.run_attempt }}
+          path: |
+            artifacts/native-recapture/
+            artifacts/ci-observability/
+          compression-level: 9
+          if-no-files-found: error
+
+  compression-writer-27:
+    name: Capture only - compression-writer-27
+    needs: validate-phase
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'compression-writer-27')
+    runs-on: xcode-27
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
+      - name: Bind native profile and untouched source revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          /usr/bin/sw_vers > artifacts/native-recapture/host.txt
+          version=$(/usr/bin/sw_vers -productVersion)
+          major="${version%%.*}"
+          if [ "$major" != '27' ]; then
+            echo 'Wrong actual macOS profile for this capture' >&2
+            exit 1
+          fi
+          git diff --exit-code
+          git diff --cached --exit-code
+          git rev-parse HEAD > artifacts/native-recapture/revision.txt
+          printf '%s\n' 'compression-writer-27' > artifacts/native-recapture/recipe.txt
+      - name: Generate complete genuine native evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          apfs-ci-runner --suite native-recapture/compression-writer-27 --timeout 55m -- go run scripts/capture-compression-writer.go -out artifacts/compression-writer/native.json.gz
+      - name: Confirm authoritative sources and fixtures remain unchanged
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code
+          git diff --cached --exit-code
+      - name: Verify capture artifacts contain no live mounts
+        id: capture-unmounted
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          apfs-ci-runner --suite native-recapture/mount-table --timeout 1m -- /sbin/mount > artifacts/native-recapture/mounts.txt
+          physical_root=$(pwd -P)
+          while IFS= read -r line; do
+            case "$line" in
+              *" on $physical_root/artifacts/"*|*" on $PWD/artifacts/"*)
+                printf 'Refusing recursive upload of a live mount: %s\n' "$line" >&2
+                exit 1
+                ;;
+            esac
+          done < artifacts/native-recapture/mounts.txt
+      - name: Retain complete unmounted capture
+        if: always() && steps.capture-unmounted.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-compression-writer-27-${{ github.run_attempt }}
+          path: |
+            artifacts/compression-writer/
+          compression-level: 9
+          if-no-files-found: error
+      - name: Retain command diagnostics even when capture cleanup fails
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-compression-writer-27-diagnostics-${{ github.run_attempt }}
+          path: |
+            artifacts/native-recapture/
+            artifacts/ci-observability/
+          compression-level: 9
+          if-no-files-found: error
+
+  compression-zlib-source-27:
+    name: Capture only - compression-zlib-source-27
+    needs: validate-phase
+    if: inputs.phase == 'dependent' && (inputs.recipe == '' || inputs.recipe == 'compression-zlib-source-27')
+    runs-on: xcode-27
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
+      - name: Bind native profile and untouched source revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          /usr/bin/sw_vers > artifacts/native-recapture/host.txt
+          version=$(/usr/bin/sw_vers -productVersion)
+          major="${version%%.*}"
+          if [ "$major" != '27' ]; then
+            echo 'Wrong actual macOS profile for this capture' >&2
+            exit 1
+          fi
+          git diff --exit-code
+          git diff --cached --exit-code
+          git rev-parse HEAD > artifacts/native-recapture/revision.txt
+          printf '%s\n' 'compression-zlib-source-27' > artifacts/native-recapture/recipe.txt
+      - name: Generate complete genuine native evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          apfs-ci-runner --suite native-recapture/compression-zlib-source-27 --timeout 55m -- go run scripts/verify-compression-zlib-source.go -out artifacts/compression-zlib-source -capture -capture-output artifacts/compression-zlib-source/capture.json
+      - name: Confirm authoritative sources and fixtures remain unchanged
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code
+          git diff --cached --exit-code
+      - name: Verify capture artifacts contain no live mounts
+        id: capture-unmounted
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          apfs-ci-runner --suite native-recapture/mount-table --timeout 1m -- /sbin/mount > artifacts/native-recapture/mounts.txt
+          physical_root=$(pwd -P)
+          while IFS= read -r line; do
+            case "$line" in
+              *" on $physical_root/artifacts/"*|*" on $PWD/artifacts/"*)
+                printf 'Refusing recursive upload of a live mount: %s\n' "$line" >&2
+                exit 1
+                ;;
+            esac
+          done < artifacts/native-recapture/mounts.txt
+      - name: Retain complete unmounted capture
+        if: always() && steps.capture-unmounted.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-compression-zlib-source-27-${{ github.run_attempt }}
+          path: |
+            artifacts/compression-zlib-source/
+          compression-level: 9
+          if-no-files-found: error
+      - name: Retain command diagnostics even when capture cleanup fails
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-compression-zlib-source-27-diagnostics-${{ github.run_attempt }}
+          path: |
+            artifacts/native-recapture/
+            artifacts/ci-observability/
+          compression-level: 9
+          if-no-files-found: error
+
+  content-open-27:
+    name: Capture only - content-open-27
+    needs: validate-phase
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'content-open-27')
+    runs-on: xcode-27
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
+      - name: Bind native profile and untouched source revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          /usr/bin/sw_vers > artifacts/native-recapture/host.txt
+          version=$(/usr/bin/sw_vers -productVersion)
+          major="${version%%.*}"
+          if [ "$major" != '27' ]; then
+            echo 'Wrong actual macOS profile for this capture' >&2
+            exit 1
+          fi
+          git diff --exit-code
+          git diff --cached --exit-code
+          git rev-parse HEAD > artifacts/native-recapture/revision.txt
+          printf '%s\n' 'content-open-27' > artifacts/native-recapture/recipe.txt
+      - name: Generate complete genuine native evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          apfs-ci-runner --suite native-recapture/content-open-27 --timeout 55m -- go run scripts/capture-content-open.go -out artifacts/content-open/native.json
+      - name: Confirm authoritative sources and fixtures remain unchanged
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code
+          git diff --cached --exit-code
+      - name: Verify capture artifacts contain no live mounts
+        id: capture-unmounted
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          apfs-ci-runner --suite native-recapture/mount-table --timeout 1m -- /sbin/mount > artifacts/native-recapture/mounts.txt
+          physical_root=$(pwd -P)
+          while IFS= read -r line; do
+            case "$line" in
+              *" on $physical_root/artifacts/"*|*" on $PWD/artifacts/"*)
+                printf 'Refusing recursive upload of a live mount: %s\n' "$line" >&2
+                exit 1
+                ;;
+            esac
+          done < artifacts/native-recapture/mounts.txt
+      - name: Retain complete unmounted capture
+        if: always() && steps.capture-unmounted.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-content-open-27-${{ github.run_attempt }}
+          path: |
+            artifacts/content-open/
+          compression-level: 9
+          if-no-files-found: error
+      - name: Retain command diagnostics even when capture cleanup fails
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-content-open-27-diagnostics-${{ github.run_attempt }}
+          path: |
+            artifacts/native-recapture/
+            artifacts/ci-observability/
+          compression-level: 9
+          if-no-files-found: error
+
+  entry-type-27:
+    name: Capture only - entry-type-27
+    needs: validate-phase
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'entry-type-27')
+    runs-on: xcode-27
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
+      - name: Bind native profile and untouched source revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          /usr/bin/sw_vers > artifacts/native-recapture/host.txt
+          version=$(/usr/bin/sw_vers -productVersion)
+          major="${version%%.*}"
+          if [ "$major" != '27' ]; then
+            echo 'Wrong actual macOS profile for this capture' >&2
+            exit 1
+          fi
+          git diff --exit-code
+          git diff --cached --exit-code
+          git rev-parse HEAD > artifacts/native-recapture/revision.txt
+          printf '%s\n' 'entry-type-27' > artifacts/native-recapture/recipe.txt
+      - name: Generate complete genuine native evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          apfs-ci-runner --suite native-recapture/entry-type-27 --timeout 55m -- go run scripts/capture-entry-type.go -out artifacts/entry-type/native.json
+      - name: Confirm authoritative sources and fixtures remain unchanged
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code
+          git diff --cached --exit-code
+      - name: Verify capture artifacts contain no live mounts
+        id: capture-unmounted
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          apfs-ci-runner --suite native-recapture/mount-table --timeout 1m -- /sbin/mount > artifacts/native-recapture/mounts.txt
+          physical_root=$(pwd -P)
+          while IFS= read -r line; do
+            case "$line" in
+              *" on $physical_root/artifacts/"*|*" on $PWD/artifacts/"*)
+                printf 'Refusing recursive upload of a live mount: %s\n' "$line" >&2
+                exit 1
+                ;;
+            esac
+          done < artifacts/native-recapture/mounts.txt
+      - name: Retain complete unmounted capture
+        if: always() && steps.capture-unmounted.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-entry-type-27-${{ github.run_attempt }}
+          path: |
+            artifacts/entry-type/
+          compression-level: 9
+          if-no-files-found: error
+      - name: Retain command diagnostics even when capture cleanup fails
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-entry-type-27-diagnostics-${{ github.run_attempt }}
+          path: |
+            artifacts/native-recapture/
+            artifacts/ci-observability/
+          compression-level: 9
+          if-no-files-found: error
+
+  hfs-finderinfo-27:
+    name: Capture only - hfs-finderinfo-27
+    needs: validate-phase
+    if: inputs.phase == 'dependent' && (inputs.recipe == '' || inputs.recipe == 'hfs-finderinfo-27')
+    runs-on: xcode-27
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
+      - name: Bind native profile and untouched source revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          /usr/bin/sw_vers > artifacts/native-recapture/host.txt
+          version=$(/usr/bin/sw_vers -productVersion)
+          major="${version%%.*}"
+          if [ "$major" != '27' ]; then
+            echo 'Wrong actual macOS profile for this capture' >&2
+            exit 1
+          fi
+          git diff --exit-code
+          git diff --cached --exit-code
+          git rev-parse HEAD > artifacts/native-recapture/revision.txt
+          printf '%s\n' 'hfs-finderinfo-27' > artifacts/native-recapture/recipe.txt
+      - name: Generate complete genuine native evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          apfs-ci-runner --suite native-recapture/hfs-finderinfo-27 --timeout 55m -- go run scripts/verify-metadata-transport.go -out artifacts/metadata-transport -capture-finder -capture-output artifacts/metadata-transport/hfs-finderinfo-capture.json.gz
+      - name: Confirm authoritative sources and fixtures remain unchanged
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code
+          git diff --cached --exit-code
+      - name: Verify capture artifacts contain no live mounts
+        id: capture-unmounted
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          apfs-ci-runner --suite native-recapture/mount-table --timeout 1m -- /sbin/mount > artifacts/native-recapture/mounts.txt
+          physical_root=$(pwd -P)
+          while IFS= read -r line; do
+            case "$line" in
+              *" on $physical_root/artifacts/"*|*" on $PWD/artifacts/"*)
+                printf 'Refusing recursive upload of a live mount: %s\n' "$line" >&2
+                exit 1
+                ;;
+            esac
+          done < artifacts/native-recapture/mounts.txt
+      - name: Retain complete unmounted capture
+        if: always() && steps.capture-unmounted.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-hfs-finderinfo-27-${{ github.run_attempt }}
+          path: |
+            artifacts/metadata-transport/
+          compression-level: 9
+          if-no-files-found: error
+      - name: Retain command diagnostics even when capture cleanup fails
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-hfs-finderinfo-27-diagnostics-${{ github.run_attempt }}
+          path: |
+            artifacts/native-recapture/
+            artifacts/ci-observability/
+          compression-level: 9
+          if-no-files-found: error
+
+  hfs-special-names-15:
+    name: Capture only - hfs-special-names-15
+    needs: validate-phase
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'hfs-special-names-15')
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
+      - name: Bind native profile and untouched source revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          /usr/bin/sw_vers > artifacts/native-recapture/host.txt
+          version=$(/usr/bin/sw_vers -productVersion)
+          major="${version%%.*}"
+          if [ "$major" != '15' ]; then
+            echo 'Wrong actual macOS profile for this capture' >&2
+            exit 1
+          fi
+          git diff --exit-code
+          git diff --cached --exit-code
+          git rev-parse HEAD > artifacts/native-recapture/revision.txt
+          printf '%s\n' 'hfs-special-names-15' > artifacts/native-recapture/recipe.txt
+      - name: Generate complete genuine native evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          apfs-ci-runner --suite native-recapture/hfs-special-names-15 --timeout 55m -- go run scripts/capture-hfs-special-names.go -out artifacts/hfs-special-names
+      - name: Confirm authoritative sources and fixtures remain unchanged
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code
+          git diff --cached --exit-code
+      - name: Verify capture artifacts contain no live mounts
+        id: capture-unmounted
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          apfs-ci-runner --suite native-recapture/mount-table --timeout 1m -- /sbin/mount > artifacts/native-recapture/mounts.txt
+          physical_root=$(pwd -P)
+          while IFS= read -r line; do
+            case "$line" in
+              *" on $physical_root/artifacts/"*|*" on $PWD/artifacts/"*)
+                printf 'Refusing recursive upload of a live mount: %s\n' "$line" >&2
+                exit 1
+                ;;
+            esac
+          done < artifacts/native-recapture/mounts.txt
+      - name: Retain complete unmounted capture
+        if: always() && steps.capture-unmounted.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-hfs-special-names-15-${{ github.run_attempt }}
+          path: |
+            artifacts/hfs-special-names/
+          compression-level: 9
+          if-no-files-found: error
+      - name: Retain command diagnostics even when capture cleanup fails
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-hfs-special-names-15-diagnostics-${{ github.run_attempt }}
+          path: |
+            artifacts/native-recapture/
+            artifacts/ci-observability/
+          compression-level: 9
+          if-no-files-found: error
+
+  hfs-special-names-26:
+    name: Capture only - hfs-special-names-26
+    needs: validate-phase
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'hfs-special-names-26')
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
+      - name: Bind native profile and untouched source revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          /usr/bin/sw_vers > artifacts/native-recapture/host.txt
+          version=$(/usr/bin/sw_vers -productVersion)
+          major="${version%%.*}"
+          if [ "$major" != '26' ]; then
+            echo 'Wrong actual macOS profile for this capture' >&2
+            exit 1
+          fi
+          git diff --exit-code
+          git diff --cached --exit-code
+          git rev-parse HEAD > artifacts/native-recapture/revision.txt
+          printf '%s\n' 'hfs-special-names-26' > artifacts/native-recapture/recipe.txt
+      - name: Generate complete genuine native evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          apfs-ci-runner --suite native-recapture/hfs-special-names-26 --timeout 55m -- go run scripts/capture-hfs-special-names.go -out artifacts/hfs-special-names
+      - name: Confirm authoritative sources and fixtures remain unchanged
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code
+          git diff --cached --exit-code
+      - name: Verify capture artifacts contain no live mounts
+        id: capture-unmounted
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          apfs-ci-runner --suite native-recapture/mount-table --timeout 1m -- /sbin/mount > artifacts/native-recapture/mounts.txt
+          physical_root=$(pwd -P)
+          while IFS= read -r line; do
+            case "$line" in
+              *" on $physical_root/artifacts/"*|*" on $PWD/artifacts/"*)
+                printf 'Refusing recursive upload of a live mount: %s\n' "$line" >&2
+                exit 1
+                ;;
+            esac
+          done < artifacts/native-recapture/mounts.txt
+      - name: Retain complete unmounted capture
+        if: always() && steps.capture-unmounted.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-hfs-special-names-26-${{ github.run_attempt }}
+          path: |
+            artifacts/hfs-special-names/
+          compression-level: 9
+          if-no-files-found: error
+      - name: Retain command diagnostics even when capture cleanup fails
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-hfs-special-names-26-diagnostics-${{ github.run_attempt }}
+          path: |
+            artifacts/native-recapture/
+            artifacts/ci-observability/
+          compression-level: 9
+          if-no-files-found: error
+
+  hfs-special-names-27:
+    name: Capture only - hfs-special-names-27
+    needs: validate-phase
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'hfs-special-names-27')
+    runs-on: xcode-27
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
+      - name: Bind native profile and untouched source revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          /usr/bin/sw_vers > artifacts/native-recapture/host.txt
+          version=$(/usr/bin/sw_vers -productVersion)
+          major="${version%%.*}"
+          if [ "$major" != '27' ]; then
+            echo 'Wrong actual macOS profile for this capture' >&2
+            exit 1
+          fi
+          git diff --exit-code
+          git diff --cached --exit-code
+          git rev-parse HEAD > artifacts/native-recapture/revision.txt
+          printf '%s\n' 'hfs-special-names-27' > artifacts/native-recapture/recipe.txt
+      - name: Generate complete genuine native evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          apfs-ci-runner --suite native-recapture/hfs-special-names-27 --timeout 55m -- go run scripts/capture-hfs-special-names.go -out artifacts/hfs-special-names
+      - name: Confirm authoritative sources and fixtures remain unchanged
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code
+          git diff --cached --exit-code
+      - name: Verify capture artifacts contain no live mounts
+        id: capture-unmounted
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          apfs-ci-runner --suite native-recapture/mount-table --timeout 1m -- /sbin/mount > artifacts/native-recapture/mounts.txt
+          physical_root=$(pwd -P)
+          while IFS= read -r line; do
+            case "$line" in
+              *" on $physical_root/artifacts/"*|*" on $PWD/artifacts/"*)
+                printf 'Refusing recursive upload of a live mount: %s\n' "$line" >&2
+                exit 1
+                ;;
+            esac
+          done < artifacts/native-recapture/mounts.txt
+      - name: Retain complete unmounted capture
+        if: always() && steps.capture-unmounted.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-hfs-special-names-27-${{ github.run_attempt }}
+          path: |
+            artifacts/hfs-special-names/
+          compression-level: 9
+          if-no-files-found: error
+      - name: Retain command diagnostics even when capture cleanup fails
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-hfs-special-names-27-diagnostics-${{ github.run_attempt }}
+          path: |
+            artifacts/native-recapture/
+            artifacts/ci-observability/
+          compression-level: 9
+          if-no-files-found: error
+
+  large-compression-27:
+    name: Capture only - large-compression-27
+    needs: validate-phase
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'large-compression-27')
+    runs-on: xcode-27
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
+      - name: Bind native profile and untouched source revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          /usr/bin/sw_vers > artifacts/native-recapture/host.txt
+          version=$(/usr/bin/sw_vers -productVersion)
+          major="${version%%.*}"
+          if [ "$major" != '27' ]; then
+            echo 'Wrong actual macOS profile for this capture' >&2
+            exit 1
+          fi
+          git diff --exit-code
+          git diff --cached --exit-code
+          git rev-parse HEAD > artifacts/native-recapture/revision.txt
+          printf '%s\n' 'large-compression-27' > artifacts/native-recapture/recipe.txt
+      - name: Generate complete genuine native evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          apfs-ci-runner --suite native-recapture/large-compression-27 --timeout 55m -- go run scripts/verify-large-compression.go -out artifacts/large-compression -capture -capture-output artifacts/large-compression/capture
+      - name: Confirm authoritative sources and fixtures remain unchanged
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code
+          git diff --cached --exit-code
+      - name: Verify capture artifacts contain no live mounts
+        id: capture-unmounted
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          apfs-ci-runner --suite native-recapture/mount-table --timeout 1m -- /sbin/mount > artifacts/native-recapture/mounts.txt
+          physical_root=$(pwd -P)
+          while IFS= read -r line; do
+            case "$line" in
+              *" on $physical_root/artifacts/"*|*" on $PWD/artifacts/"*)
+                printf 'Refusing recursive upload of a live mount: %s\n' "$line" >&2
+                exit 1
+                ;;
+            esac
+          done < artifacts/native-recapture/mounts.txt
+      - name: Retain complete unmounted capture
+        if: always() && steps.capture-unmounted.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-large-compression-27-${{ github.run_attempt }}
+          path: |
+            artifacts/large-compression/
+          compression-level: 9
+          if-no-files-found: error
+      - name: Retain command diagnostics even when capture cleanup fails
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-large-compression-27-diagnostics-${{ github.run_attempt }}
+          path: |
+            artifacts/native-recapture/
+            artifacts/ci-observability/
+          compression-level: 9
+          if-no-files-found: error
+
+  name-admission-15:
+    name: Capture only - name-admission-15
+    needs: validate-phase
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'name-admission-15')
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
+      - name: Bind native profile and untouched source revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          /usr/bin/sw_vers > artifacts/native-recapture/host.txt
+          version=$(/usr/bin/sw_vers -productVersion)
+          major="${version%%.*}"
+          if [ "$major" != '15' ]; then
+            echo 'Wrong actual macOS profile for this capture' >&2
+            exit 1
+          fi
+          git diff --exit-code
+          git diff --cached --exit-code
+          git rev-parse HEAD > artifacts/native-recapture/revision.txt
+          printf '%s\n' 'name-admission-15' > artifacts/native-recapture/recipe.txt
+      - name: Generate complete genuine native evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          apfs-ci-runner --suite native-recapture/name-admission-15 --timeout 55m -- go run scripts/capture-name-admission.go -out artifacts/name-admission
+      - name: Confirm authoritative sources and fixtures remain unchanged
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code
+          git diff --cached --exit-code
+      - name: Verify capture artifacts contain no live mounts
+        id: capture-unmounted
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          apfs-ci-runner --suite native-recapture/mount-table --timeout 1m -- /sbin/mount > artifacts/native-recapture/mounts.txt
+          physical_root=$(pwd -P)
+          while IFS= read -r line; do
+            case "$line" in
+              *" on $physical_root/artifacts/"*|*" on $PWD/artifacts/"*)
+                printf 'Refusing recursive upload of a live mount: %s\n' "$line" >&2
+                exit 1
+                ;;
+            esac
+          done < artifacts/native-recapture/mounts.txt
+      - name: Retain complete unmounted capture
+        if: always() && steps.capture-unmounted.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-name-admission-15-${{ github.run_attempt }}
+          path: |
+            artifacts/name-admission/
+          compression-level: 9
+          if-no-files-found: error
+      - name: Retain command diagnostics even when capture cleanup fails
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-name-admission-15-diagnostics-${{ github.run_attempt }}
+          path: |
+            artifacts/native-recapture/
+            artifacts/ci-observability/
+          compression-level: 9
+          if-no-files-found: error
+
+  name-admission-26:
+    name: Capture only - name-admission-26
+    needs: validate-phase
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'name-admission-26')
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
+      - name: Bind native profile and untouched source revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          /usr/bin/sw_vers > artifacts/native-recapture/host.txt
+          version=$(/usr/bin/sw_vers -productVersion)
+          major="${version%%.*}"
+          if [ "$major" != '26' ]; then
+            echo 'Wrong actual macOS profile for this capture' >&2
+            exit 1
+          fi
+          git diff --exit-code
+          git diff --cached --exit-code
+          git rev-parse HEAD > artifacts/native-recapture/revision.txt
+          printf '%s\n' 'name-admission-26' > artifacts/native-recapture/recipe.txt
+      - name: Generate complete genuine native evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          apfs-ci-runner --suite native-recapture/name-admission-26 --timeout 55m -- go run scripts/capture-name-admission.go -out artifacts/name-admission
+      - name: Confirm authoritative sources and fixtures remain unchanged
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code
+          git diff --cached --exit-code
+      - name: Verify capture artifacts contain no live mounts
+        id: capture-unmounted
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          apfs-ci-runner --suite native-recapture/mount-table --timeout 1m -- /sbin/mount > artifacts/native-recapture/mounts.txt
+          physical_root=$(pwd -P)
+          while IFS= read -r line; do
+            case "$line" in
+              *" on $physical_root/artifacts/"*|*" on $PWD/artifacts/"*)
+                printf 'Refusing recursive upload of a live mount: %s\n' "$line" >&2
+                exit 1
+                ;;
+            esac
+          done < artifacts/native-recapture/mounts.txt
+      - name: Retain complete unmounted capture
+        if: always() && steps.capture-unmounted.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-name-admission-26-${{ github.run_attempt }}
+          path: |
+            artifacts/name-admission/
+          compression-level: 9
+          if-no-files-found: error
+      - name: Retain command diagnostics even when capture cleanup fails
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-name-admission-26-diagnostics-${{ github.run_attempt }}
+          path: |
+            artifacts/native-recapture/
+            artifacts/ci-observability/
+          compression-level: 9
+          if-no-files-found: error
+
+  name-admission-27:
+    name: Capture only - name-admission-27
+    needs: validate-phase
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'name-admission-27')
+    runs-on: xcode-27
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
+      - name: Bind native profile and untouched source revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          /usr/bin/sw_vers > artifacts/native-recapture/host.txt
+          version=$(/usr/bin/sw_vers -productVersion)
+          major="${version%%.*}"
+          if [ "$major" != '27' ]; then
+            echo 'Wrong actual macOS profile for this capture' >&2
+            exit 1
+          fi
+          git diff --exit-code
+          git diff --cached --exit-code
+          git rev-parse HEAD > artifacts/native-recapture/revision.txt
+          printf '%s\n' 'name-admission-27' > artifacts/native-recapture/recipe.txt
+      - name: Generate complete genuine native evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          apfs-ci-runner --suite native-recapture/name-admission-27 --timeout 55m -- go run scripts/capture-name-admission.go -out artifacts/name-admission
+      - name: Confirm authoritative sources and fixtures remain unchanged
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code
+          git diff --cached --exit-code
+      - name: Verify capture artifacts contain no live mounts
+        id: capture-unmounted
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          apfs-ci-runner --suite native-recapture/mount-table --timeout 1m -- /sbin/mount > artifacts/native-recapture/mounts.txt
+          physical_root=$(pwd -P)
+          while IFS= read -r line; do
+            case "$line" in
+              *" on $physical_root/artifacts/"*|*" on $PWD/artifacts/"*)
+                printf 'Refusing recursive upload of a live mount: %s\n' "$line" >&2
+                exit 1
+                ;;
+            esac
+          done < artifacts/native-recapture/mounts.txt
+      - name: Retain complete unmounted capture
+        if: always() && steps.capture-unmounted.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-name-admission-27-${{ github.run_attempt }}
+          path: |
+            artifacts/name-admission/
+          compression-level: 9
+          if-no-files-found: error
+      - name: Retain command diagnostics even when capture cleanup fails
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-name-admission-27-diagnostics-${{ github.run_attempt }}
+          path: |
+            artifacts/native-recapture/
+            artifacts/ci-observability/
+          compression-level: 9
+          if-no-files-found: error
+
+  name-collation-15:
+    name: Capture only - name-collation-15
+    needs: validate-phase
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'name-collation-15')
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
+      - name: Bind native profile and untouched source revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          /usr/bin/sw_vers > artifacts/native-recapture/host.txt
+          version=$(/usr/bin/sw_vers -productVersion)
+          major="${version%%.*}"
+          if [ "$major" != '15' ]; then
+            echo 'Wrong actual macOS profile for this capture' >&2
+            exit 1
+          fi
+          git diff --exit-code
+          git diff --cached --exit-code
+          git rev-parse HEAD > artifacts/native-recapture/revision.txt
+          printf '%s\n' 'name-collation-15' > artifacts/native-recapture/recipe.txt
+      - name: Generate complete genuine native evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          apfs-ci-runner --suite native-recapture/name-collation-15 --timeout 55m -- go run scripts/capture-name-collation.go -out artifacts/name-collation
+      - name: Confirm authoritative sources and fixtures remain unchanged
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code
+          git diff --cached --exit-code
+      - name: Verify capture artifacts contain no live mounts
+        id: capture-unmounted
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          apfs-ci-runner --suite native-recapture/mount-table --timeout 1m -- /sbin/mount > artifacts/native-recapture/mounts.txt
+          physical_root=$(pwd -P)
+          while IFS= read -r line; do
+            case "$line" in
+              *" on $physical_root/artifacts/"*|*" on $PWD/artifacts/"*)
+                printf 'Refusing recursive upload of a live mount: %s\n' "$line" >&2
+                exit 1
+                ;;
+            esac
+          done < artifacts/native-recapture/mounts.txt
+      - name: Retain complete unmounted capture
+        if: always() && steps.capture-unmounted.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-name-collation-15-${{ github.run_attempt }}
+          path: |
+            artifacts/name-collation/
+          compression-level: 9
+          if-no-files-found: error
+      - name: Retain command diagnostics even when capture cleanup fails
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-name-collation-15-diagnostics-${{ github.run_attempt }}
+          path: |
+            artifacts/native-recapture/
+            artifacts/ci-observability/
+          compression-level: 9
+          if-no-files-found: error
+
+  name-collation-26:
+    name: Capture only - name-collation-26
+    needs: validate-phase
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'name-collation-26')
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
+      - name: Bind native profile and untouched source revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          /usr/bin/sw_vers > artifacts/native-recapture/host.txt
+          version=$(/usr/bin/sw_vers -productVersion)
+          major="${version%%.*}"
+          if [ "$major" != '26' ]; then
+            echo 'Wrong actual macOS profile for this capture' >&2
+            exit 1
+          fi
+          git diff --exit-code
+          git diff --cached --exit-code
+          git rev-parse HEAD > artifacts/native-recapture/revision.txt
+          printf '%s\n' 'name-collation-26' > artifacts/native-recapture/recipe.txt
+      - name: Generate complete genuine native evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          apfs-ci-runner --suite native-recapture/name-collation-26 --timeout 55m -- go run scripts/capture-name-collation.go -out artifacts/name-collation
+      - name: Confirm authoritative sources and fixtures remain unchanged
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code
+          git diff --cached --exit-code
+      - name: Verify capture artifacts contain no live mounts
+        id: capture-unmounted
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          apfs-ci-runner --suite native-recapture/mount-table --timeout 1m -- /sbin/mount > artifacts/native-recapture/mounts.txt
+          physical_root=$(pwd -P)
+          while IFS= read -r line; do
+            case "$line" in
+              *" on $physical_root/artifacts/"*|*" on $PWD/artifacts/"*)
+                printf 'Refusing recursive upload of a live mount: %s\n' "$line" >&2
+                exit 1
+                ;;
+            esac
+          done < artifacts/native-recapture/mounts.txt
+      - name: Retain complete unmounted capture
+        if: always() && steps.capture-unmounted.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-name-collation-26-${{ github.run_attempt }}
+          path: |
+            artifacts/name-collation/
+          compression-level: 9
+          if-no-files-found: error
+      - name: Retain command diagnostics even when capture cleanup fails
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-name-collation-26-diagnostics-${{ github.run_attempt }}
+          path: |
+            artifacts/native-recapture/
+            artifacts/ci-observability/
+          compression-level: 9
+          if-no-files-found: error
+
+  name-collation-27:
+    name: Capture only - name-collation-27
+    needs: validate-phase
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'name-collation-27')
+    runs-on: xcode-27
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
+      - name: Bind native profile and untouched source revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          /usr/bin/sw_vers > artifacts/native-recapture/host.txt
+          version=$(/usr/bin/sw_vers -productVersion)
+          major="${version%%.*}"
+          if [ "$major" != '27' ]; then
+            echo 'Wrong actual macOS profile for this capture' >&2
+            exit 1
+          fi
+          git diff --exit-code
+          git diff --cached --exit-code
+          git rev-parse HEAD > artifacts/native-recapture/revision.txt
+          printf '%s\n' 'name-collation-27' > artifacts/native-recapture/recipe.txt
+      - name: Generate complete genuine native evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          apfs-ci-runner --suite native-recapture/name-collation-27 --timeout 55m -- go run scripts/capture-name-collation.go -out artifacts/name-collation
+      - name: Confirm authoritative sources and fixtures remain unchanged
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code
+          git diff --cached --exit-code
+      - name: Verify capture artifacts contain no live mounts
+        id: capture-unmounted
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          apfs-ci-runner --suite native-recapture/mount-table --timeout 1m -- /sbin/mount > artifacts/native-recapture/mounts.txt
+          physical_root=$(pwd -P)
+          while IFS= read -r line; do
+            case "$line" in
+              *" on $physical_root/artifacts/"*|*" on $PWD/artifacts/"*)
+                printf 'Refusing recursive upload of a live mount: %s\n' "$line" >&2
+                exit 1
+                ;;
+            esac
+          done < artifacts/native-recapture/mounts.txt
+      - name: Retain complete unmounted capture
+        if: always() && steps.capture-unmounted.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-name-collation-27-${{ github.run_attempt }}
+          path: |
+            artifacts/name-collation/
+          compression-level: 9
+          if-no-files-found: error
+      - name: Retain command diagnostics even when capture cleanup fails
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-name-collation-27-diagnostics-${{ github.run_attempt }}
+          path: |
+            artifacts/native-recapture/
+            artifacts/ci-observability/
+          compression-level: 9
+          if-no-files-found: error
+
+  name-lookup-15:
+    name: Capture only - name-lookup-15
+    needs: validate-phase
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'name-lookup-15')
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
+      - name: Bind native profile and untouched source revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          /usr/bin/sw_vers > artifacts/native-recapture/host.txt
+          version=$(/usr/bin/sw_vers -productVersion)
+          major="${version%%.*}"
+          if [ "$major" != '15' ]; then
+            echo 'Wrong actual macOS profile for this capture' >&2
+            exit 1
+          fi
+          git diff --exit-code
+          git diff --cached --exit-code
+          git rev-parse HEAD > artifacts/native-recapture/revision.txt
+          printf '%s\n' 'name-lookup-15' > artifacts/native-recapture/recipe.txt
+      - name: Generate complete genuine native evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          apfs-ci-runner --suite native-recapture/name-lookup-15 --timeout 55m -- go run scripts/capture-name-lookup.go -out artifacts/name-lookup
+      - name: Confirm authoritative sources and fixtures remain unchanged
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code
+          git diff --cached --exit-code
+      - name: Verify capture artifacts contain no live mounts
+        id: capture-unmounted
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          apfs-ci-runner --suite native-recapture/mount-table --timeout 1m -- /sbin/mount > artifacts/native-recapture/mounts.txt
+          physical_root=$(pwd -P)
+          while IFS= read -r line; do
+            case "$line" in
+              *" on $physical_root/artifacts/"*|*" on $PWD/artifacts/"*)
+                printf 'Refusing recursive upload of a live mount: %s\n' "$line" >&2
+                exit 1
+                ;;
+            esac
+          done < artifacts/native-recapture/mounts.txt
+      - name: Retain complete unmounted capture
+        if: always() && steps.capture-unmounted.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-name-lookup-15-${{ github.run_attempt }}
+          path: |
+            artifacts/name-lookup/
+          compression-level: 9
+          if-no-files-found: error
+      - name: Retain command diagnostics even when capture cleanup fails
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-name-lookup-15-diagnostics-${{ github.run_attempt }}
+          path: |
+            artifacts/native-recapture/
+            artifacts/ci-observability/
+          compression-level: 9
+          if-no-files-found: error
+
+  name-lookup-26:
+    name: Capture only - name-lookup-26
+    needs: validate-phase
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'name-lookup-26')
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
+      - name: Bind native profile and untouched source revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          /usr/bin/sw_vers > artifacts/native-recapture/host.txt
+          version=$(/usr/bin/sw_vers -productVersion)
+          major="${version%%.*}"
+          if [ "$major" != '26' ]; then
+            echo 'Wrong actual macOS profile for this capture' >&2
+            exit 1
+          fi
+          git diff --exit-code
+          git diff --cached --exit-code
+          git rev-parse HEAD > artifacts/native-recapture/revision.txt
+          printf '%s\n' 'name-lookup-26' > artifacts/native-recapture/recipe.txt
+      - name: Generate complete genuine native evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          apfs-ci-runner --suite native-recapture/name-lookup-26 --timeout 55m -- go run scripts/capture-name-lookup.go -out artifacts/name-lookup
+      - name: Confirm authoritative sources and fixtures remain unchanged
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code
+          git diff --cached --exit-code
+      - name: Verify capture artifacts contain no live mounts
+        id: capture-unmounted
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          apfs-ci-runner --suite native-recapture/mount-table --timeout 1m -- /sbin/mount > artifacts/native-recapture/mounts.txt
+          physical_root=$(pwd -P)
+          while IFS= read -r line; do
+            case "$line" in
+              *" on $physical_root/artifacts/"*|*" on $PWD/artifacts/"*)
+                printf 'Refusing recursive upload of a live mount: %s\n' "$line" >&2
+                exit 1
+                ;;
+            esac
+          done < artifacts/native-recapture/mounts.txt
+      - name: Retain complete unmounted capture
+        if: always() && steps.capture-unmounted.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-name-lookup-26-${{ github.run_attempt }}
+          path: |
+            artifacts/name-lookup/
+          compression-level: 9
+          if-no-files-found: error
+      - name: Retain command diagnostics even when capture cleanup fails
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-name-lookup-26-diagnostics-${{ github.run_attempt }}
+          path: |
+            artifacts/native-recapture/
+            artifacts/ci-observability/
+          compression-level: 9
+          if-no-files-found: error
+
+  name-lookup-27:
+    name: Capture only - name-lookup-27
+    needs: validate-phase
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'name-lookup-27')
+    runs-on: xcode-27
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
+      - name: Bind native profile and untouched source revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          /usr/bin/sw_vers > artifacts/native-recapture/host.txt
+          version=$(/usr/bin/sw_vers -productVersion)
+          major="${version%%.*}"
+          if [ "$major" != '27' ]; then
+            echo 'Wrong actual macOS profile for this capture' >&2
+            exit 1
+          fi
+          git diff --exit-code
+          git diff --cached --exit-code
+          git rev-parse HEAD > artifacts/native-recapture/revision.txt
+          printf '%s\n' 'name-lookup-27' > artifacts/native-recapture/recipe.txt
+      - name: Generate complete genuine native evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          apfs-ci-runner --suite native-recapture/name-lookup-27 --timeout 55m -- go run scripts/capture-name-lookup.go -out artifacts/name-lookup
+      - name: Confirm authoritative sources and fixtures remain unchanged
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code
+          git diff --cached --exit-code
+      - name: Verify capture artifacts contain no live mounts
+        id: capture-unmounted
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          apfs-ci-runner --suite native-recapture/mount-table --timeout 1m -- /sbin/mount > artifacts/native-recapture/mounts.txt
+          physical_root=$(pwd -P)
+          while IFS= read -r line; do
+            case "$line" in
+              *" on $physical_root/artifacts/"*|*" on $PWD/artifacts/"*)
+                printf 'Refusing recursive upload of a live mount: %s\n' "$line" >&2
+                exit 1
+                ;;
+            esac
+          done < artifacts/native-recapture/mounts.txt
+      - name: Retain complete unmounted capture
+        if: always() && steps.capture-unmounted.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-name-lookup-27-${{ github.run_attempt }}
+          path: |
+            artifacts/name-lookup/
+          compression-level: 9
+          if-no-files-found: error
+      - name: Retain command diagnostics even when capture cleanup fails
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-name-lookup-27-diagnostics-${{ github.run_attempt }}
+          path: |
+            artifacts/native-recapture/
+            artifacts/ci-observability/
+          compression-level: 9
+          if-no-files-found: error
+
+  pathname-limits-15:
+    name: Capture only - pathname-limits-15
+    needs: validate-phase
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'pathname-limits-15')
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
+      - name: Bind native profile and untouched source revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          /usr/bin/sw_vers > artifacts/native-recapture/host.txt
+          version=$(/usr/bin/sw_vers -productVersion)
+          major="${version%%.*}"
+          if [ "$major" != '15' ]; then
+            echo 'Wrong actual macOS profile for this capture' >&2
+            exit 1
+          fi
+          git diff --exit-code
+          git diff --cached --exit-code
+          git rev-parse HEAD > artifacts/native-recapture/revision.txt
+          printf '%s\n' 'pathname-limits-15' > artifacts/native-recapture/recipe.txt
+      - name: Generate complete genuine native evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          apfs-ci-runner --suite native-recapture/pathname-limits-15 --timeout 55m -- go run scripts/capture-pathname-limits.go -out artifacts/pathname-limits
+      - name: Confirm authoritative sources and fixtures remain unchanged
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code
+          git diff --cached --exit-code
+      - name: Verify capture artifacts contain no live mounts
+        id: capture-unmounted
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          apfs-ci-runner --suite native-recapture/mount-table --timeout 1m -- /sbin/mount > artifacts/native-recapture/mounts.txt
+          physical_root=$(pwd -P)
+          while IFS= read -r line; do
+            case "$line" in
+              *" on $physical_root/artifacts/"*|*" on $PWD/artifacts/"*)
+                printf 'Refusing recursive upload of a live mount: %s\n' "$line" >&2
+                exit 1
+                ;;
+            esac
+          done < artifacts/native-recapture/mounts.txt
+      - name: Retain complete unmounted capture
+        if: always() && steps.capture-unmounted.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-pathname-limits-15-${{ github.run_attempt }}
+          path: |
+            artifacts/pathname-limits/
+          compression-level: 9
+          if-no-files-found: error
+      - name: Retain command diagnostics even when capture cleanup fails
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-pathname-limits-15-diagnostics-${{ github.run_attempt }}
+          path: |
+            artifacts/native-recapture/
+            artifacts/ci-observability/
+          compression-level: 9
+          if-no-files-found: error
+
+  pathname-limits-26:
+    name: Capture only - pathname-limits-26
+    needs: validate-phase
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'pathname-limits-26')
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
+      - name: Bind native profile and untouched source revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          /usr/bin/sw_vers > artifacts/native-recapture/host.txt
+          version=$(/usr/bin/sw_vers -productVersion)
+          major="${version%%.*}"
+          if [ "$major" != '26' ]; then
+            echo 'Wrong actual macOS profile for this capture' >&2
+            exit 1
+          fi
+          git diff --exit-code
+          git diff --cached --exit-code
+          git rev-parse HEAD > artifacts/native-recapture/revision.txt
+          printf '%s\n' 'pathname-limits-26' > artifacts/native-recapture/recipe.txt
+      - name: Generate complete genuine native evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          apfs-ci-runner --suite native-recapture/pathname-limits-26 --timeout 55m -- go run scripts/capture-pathname-limits.go -out artifacts/pathname-limits
+      - name: Confirm authoritative sources and fixtures remain unchanged
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code
+          git diff --cached --exit-code
+      - name: Verify capture artifacts contain no live mounts
+        id: capture-unmounted
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          apfs-ci-runner --suite native-recapture/mount-table --timeout 1m -- /sbin/mount > artifacts/native-recapture/mounts.txt
+          physical_root=$(pwd -P)
+          while IFS= read -r line; do
+            case "$line" in
+              *" on $physical_root/artifacts/"*|*" on $PWD/artifacts/"*)
+                printf 'Refusing recursive upload of a live mount: %s\n' "$line" >&2
+                exit 1
+                ;;
+            esac
+          done < artifacts/native-recapture/mounts.txt
+      - name: Retain complete unmounted capture
+        if: always() && steps.capture-unmounted.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-pathname-limits-26-${{ github.run_attempt }}
+          path: |
+            artifacts/pathname-limits/
+          compression-level: 9
+          if-no-files-found: error
+      - name: Retain command diagnostics even when capture cleanup fails
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-pathname-limits-26-diagnostics-${{ github.run_attempt }}
+          path: |
+            artifacts/native-recapture/
+            artifacts/ci-observability/
+          compression-level: 9
+          if-no-files-found: error
+
+  pathname-limits-27:
+    name: Capture only - pathname-limits-27
+    needs: validate-phase
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'pathname-limits-27')
+    runs-on: xcode-27
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
+      - name: Bind native profile and untouched source revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          /usr/bin/sw_vers > artifacts/native-recapture/host.txt
+          version=$(/usr/bin/sw_vers -productVersion)
+          major="${version%%.*}"
+          if [ "$major" != '27' ]; then
+            echo 'Wrong actual macOS profile for this capture' >&2
+            exit 1
+          fi
+          git diff --exit-code
+          git diff --cached --exit-code
+          git rev-parse HEAD > artifacts/native-recapture/revision.txt
+          printf '%s\n' 'pathname-limits-27' > artifacts/native-recapture/recipe.txt
+      - name: Generate complete genuine native evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          apfs-ci-runner --suite native-recapture/pathname-limits-27 --timeout 55m -- go run scripts/capture-pathname-limits.go -out artifacts/pathname-limits
+      - name: Confirm authoritative sources and fixtures remain unchanged
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code
+          git diff --cached --exit-code
+      - name: Verify capture artifacts contain no live mounts
+        id: capture-unmounted
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          apfs-ci-runner --suite native-recapture/mount-table --timeout 1m -- /sbin/mount > artifacts/native-recapture/mounts.txt
+          physical_root=$(pwd -P)
+          while IFS= read -r line; do
+            case "$line" in
+              *" on $physical_root/artifacts/"*|*" on $PWD/artifacts/"*)
+                printf 'Refusing recursive upload of a live mount: %s\n' "$line" >&2
+                exit 1
+                ;;
+            esac
+          done < artifacts/native-recapture/mounts.txt
+      - name: Retain complete unmounted capture
+        if: always() && steps.capture-unmounted.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-pathname-limits-27-${{ github.run_attempt }}
+          path: |
+            artifacts/pathname-limits/
+          compression-level: 9
+          if-no-files-found: error
+      - name: Retain command diagnostics even when capture cleanup fails
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-pathname-limits-27-diagnostics-${{ github.run_attempt }}
+          path: |
+            artifacts/native-recapture/
+            artifacts/ci-observability/
+          compression-level: 9
+          if-no-files-found: error
+
+  recompression-access-15:
+    name: Capture only - recompression-access-15
+    needs: validate-phase
+    if: inputs.phase == 'dependent' && (inputs.recipe == '' || inputs.recipe == 'recompression-access-15')
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
+      - name: Bind native profile and untouched source revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          /usr/bin/sw_vers > artifacts/native-recapture/host.txt
+          version=$(/usr/bin/sw_vers -productVersion)
+          major="${version%%.*}"
+          if [ "$major" != '15' ]; then
+            echo 'Wrong actual macOS profile for this capture' >&2
+            exit 1
+          fi
+          git diff --exit-code
+          git diff --cached --exit-code
+          git rev-parse HEAD > artifacts/native-recapture/revision.txt
+          printf '%s\n' 'recompression-access-15' > artifacts/native-recapture/recipe.txt
+      - name: Generate complete genuine native evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          apfs-ci-runner --suite native-recapture/recompression-access-15 --timeout 55m -- go run scripts/capture-recompression-access.go -out artifacts/recompression-access/native.json.gz
+      - name: Confirm authoritative sources and fixtures remain unchanged
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code
+          git diff --cached --exit-code
+      - name: Verify capture artifacts contain no live mounts
+        id: capture-unmounted
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          apfs-ci-runner --suite native-recapture/mount-table --timeout 1m -- /sbin/mount > artifacts/native-recapture/mounts.txt
+          physical_root=$(pwd -P)
+          while IFS= read -r line; do
+            case "$line" in
+              *" on $physical_root/artifacts/"*|*" on $PWD/artifacts/"*)
+                printf 'Refusing recursive upload of a live mount: %s\n' "$line" >&2
+                exit 1
+                ;;
+            esac
+          done < artifacts/native-recapture/mounts.txt
+      - name: Retain complete unmounted capture
+        if: always() && steps.capture-unmounted.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-recompression-access-15-${{ github.run_attempt }}
+          path: |
+            artifacts/recompression-access/
+          compression-level: 9
+          if-no-files-found: error
+      - name: Retain command diagnostics even when capture cleanup fails
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-recompression-access-15-diagnostics-${{ github.run_attempt }}
+          path: |
+            artifacts/native-recapture/
+            artifacts/ci-observability/
+          compression-level: 9
+          if-no-files-found: error
+
+  recompression-access-26:
+    name: Capture only - recompression-access-26
+    needs: validate-phase
+    if: inputs.phase == 'dependent' && (inputs.recipe == '' || inputs.recipe == 'recompression-access-26')
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
+      - name: Bind native profile and untouched source revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          /usr/bin/sw_vers > artifacts/native-recapture/host.txt
+          version=$(/usr/bin/sw_vers -productVersion)
+          major="${version%%.*}"
+          if [ "$major" != '26' ]; then
+            echo 'Wrong actual macOS profile for this capture' >&2
+            exit 1
+          fi
+          git diff --exit-code
+          git diff --cached --exit-code
+          git rev-parse HEAD > artifacts/native-recapture/revision.txt
+          printf '%s\n' 'recompression-access-26' > artifacts/native-recapture/recipe.txt
+      - name: Generate complete genuine native evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          apfs-ci-runner --suite native-recapture/recompression-access-26 --timeout 55m -- go run scripts/capture-recompression-access.go -out artifacts/recompression-access/native.json.gz
+      - name: Confirm authoritative sources and fixtures remain unchanged
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code
+          git diff --cached --exit-code
+      - name: Verify capture artifacts contain no live mounts
+        id: capture-unmounted
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          apfs-ci-runner --suite native-recapture/mount-table --timeout 1m -- /sbin/mount > artifacts/native-recapture/mounts.txt
+          physical_root=$(pwd -P)
+          while IFS= read -r line; do
+            case "$line" in
+              *" on $physical_root/artifacts/"*|*" on $PWD/artifacts/"*)
+                printf 'Refusing recursive upload of a live mount: %s\n' "$line" >&2
+                exit 1
+                ;;
+            esac
+          done < artifacts/native-recapture/mounts.txt
+      - name: Retain complete unmounted capture
+        if: always() && steps.capture-unmounted.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-recompression-access-26-${{ github.run_attempt }}
+          path: |
+            artifacts/recompression-access/
+          compression-level: 9
+          if-no-files-found: error
+      - name: Retain command diagnostics even when capture cleanup fails
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-recompression-access-26-diagnostics-${{ github.run_attempt }}
+          path: |
+            artifacts/native-recapture/
+            artifacts/ci-observability/
+          compression-level: 9
+          if-no-files-found: error
+
+  recompression-access-27:
+    name: Capture only - recompression-access-27
+    needs: validate-phase
+    if: inputs.phase == 'dependent' && (inputs.recipe == '' || inputs.recipe == 'recompression-access-27')
+    runs-on: xcode-27
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
+      - name: Bind native profile and untouched source revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          /usr/bin/sw_vers > artifacts/native-recapture/host.txt
+          version=$(/usr/bin/sw_vers -productVersion)
+          major="${version%%.*}"
+          if [ "$major" != '27' ]; then
+            echo 'Wrong actual macOS profile for this capture' >&2
+            exit 1
+          fi
+          git diff --exit-code
+          git diff --cached --exit-code
+          git rev-parse HEAD > artifacts/native-recapture/revision.txt
+          printf '%s\n' 'recompression-access-27' > artifacts/native-recapture/recipe.txt
+      - name: Generate complete genuine native evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          apfs-ci-runner --suite native-recapture/recompression-access-27 --timeout 55m -- go run scripts/capture-recompression-access.go -out artifacts/recompression-access/native.json.gz
+      - name: Confirm authoritative sources and fixtures remain unchanged
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code
+          git diff --cached --exit-code
+      - name: Verify capture artifacts contain no live mounts
+        id: capture-unmounted
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          apfs-ci-runner --suite native-recapture/mount-table --timeout 1m -- /sbin/mount > artifacts/native-recapture/mounts.txt
+          physical_root=$(pwd -P)
+          while IFS= read -r line; do
+            case "$line" in
+              *" on $physical_root/artifacts/"*|*" on $PWD/artifacts/"*)
+                printf 'Refusing recursive upload of a live mount: %s\n' "$line" >&2
+                exit 1
+                ;;
+            esac
+          done < artifacts/native-recapture/mounts.txt
+      - name: Retain complete unmounted capture
+        if: always() && steps.capture-unmounted.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-recompression-access-27-${{ github.run_attempt }}
+          path: |
+            artifacts/recompression-access/
+          compression-level: 9
+          if-no-files-found: error
+      - name: Retain command diagnostics even when capture cleanup fails
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-recompression-access-27-diagnostics-${{ github.run_attempt }}
+          path: |
+            artifacts/native-recapture/
+            artifacts/ci-observability/
+          compression-level: 9
+          if-no-files-found: error
+
+  replacement-27:
+    name: Capture only - replacement-27
+    needs: validate-phase
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'replacement-27')
+    runs-on: xcode-27
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
+      - name: Bind native profile and untouched source revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          /usr/bin/sw_vers > artifacts/native-recapture/host.txt
+          version=$(/usr/bin/sw_vers -productVersion)
+          major="${version%%.*}"
+          if [ "$major" != '27' ]; then
+            echo 'Wrong actual macOS profile for this capture' >&2
+            exit 1
+          fi
+          git diff --exit-code
+          git diff --cached --exit-code
+          git rev-parse HEAD > artifacts/native-recapture/revision.txt
+          printf '%s\n' 'replacement-27' > artifacts/native-recapture/recipe.txt
+      - name: Generate complete genuine native evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          apfs-ci-runner --suite native-recapture/replacement-27 --timeout 55m -- go run scripts/verify-replacement-native.go -capture artifacts/replacement-native/capture-copy.json -capture-compressed artifacts/replacement-native/capture-compressed.json
+      - name: Confirm authoritative sources and fixtures remain unchanged
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code
+          git diff --cached --exit-code
+      - name: Verify capture artifacts contain no live mounts
+        id: capture-unmounted
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          apfs-ci-runner --suite native-recapture/mount-table --timeout 1m -- /sbin/mount > artifacts/native-recapture/mounts.txt
+          physical_root=$(pwd -P)
+          while IFS= read -r line; do
+            case "$line" in
+              *" on $physical_root/artifacts/"*|*" on $PWD/artifacts/"*)
+                printf 'Refusing recursive upload of a live mount: %s\n' "$line" >&2
+                exit 1
+                ;;
+            esac
+          done < artifacts/native-recapture/mounts.txt
+      - name: Retain complete unmounted capture
+        if: always() && steps.capture-unmounted.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-replacement-27-${{ github.run_attempt }}
+          path: |
+            artifacts/replacement-native/
+          compression-level: 9
+          if-no-files-found: error
+      - name: Retain command diagnostics even when capture cleanup fails
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-replacement-27-diagnostics-${{ github.run_attempt }}
+          path: |
+            artifacts/native-recapture/
+            artifacts/ci-observability/
+          compression-level: 9
+          if-no-files-found: error
+
+  resource-fork-open-15:
+    name: Capture only - resource-fork-open-15
+    needs: validate-phase
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'resource-fork-open-15')
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
+      - name: Bind native profile and untouched source revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          /usr/bin/sw_vers > artifacts/native-recapture/host.txt
+          version=$(/usr/bin/sw_vers -productVersion)
+          major="${version%%.*}"
+          if [ "$major" != '15' ]; then
+            echo 'Wrong actual macOS profile for this capture' >&2
+            exit 1
+          fi
+          git diff --exit-code
+          git diff --cached --exit-code
+          git rev-parse HEAD > artifacts/native-recapture/revision.txt
+          printf '%s\n' 'resource-fork-open-15' > artifacts/native-recapture/recipe.txt
+      - name: Generate complete genuine native evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          apfs-ci-runner --suite native-recapture/resource-fork-open-15 --timeout 55m -- go run scripts/capture-resource-fork-open.go -out artifacts/resource-fork-open/native.json.gz
+      - name: Confirm authoritative sources and fixtures remain unchanged
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code
+          git diff --cached --exit-code
+      - name: Verify capture artifacts contain no live mounts
+        id: capture-unmounted
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          apfs-ci-runner --suite native-recapture/mount-table --timeout 1m -- /sbin/mount > artifacts/native-recapture/mounts.txt
+          physical_root=$(pwd -P)
+          while IFS= read -r line; do
+            case "$line" in
+              *" on $physical_root/artifacts/"*|*" on $PWD/artifacts/"*)
+                printf 'Refusing recursive upload of a live mount: %s\n' "$line" >&2
+                exit 1
+                ;;
+            esac
+          done < artifacts/native-recapture/mounts.txt
+      - name: Retain complete unmounted capture
+        if: always() && steps.capture-unmounted.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-resource-fork-open-15-${{ github.run_attempt }}
+          path: |
+            artifacts/resource-fork-open/
+          compression-level: 9
+          if-no-files-found: error
+      - name: Retain command diagnostics even when capture cleanup fails
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-resource-fork-open-15-diagnostics-${{ github.run_attempt }}
+          path: |
+            artifacts/native-recapture/
+            artifacts/ci-observability/
+          compression-level: 9
+          if-no-files-found: error
+
+  resource-fork-open-26:
+    name: Capture only - resource-fork-open-26
+    needs: validate-phase
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'resource-fork-open-26')
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
+      - name: Bind native profile and untouched source revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          /usr/bin/sw_vers > artifacts/native-recapture/host.txt
+          version=$(/usr/bin/sw_vers -productVersion)
+          major="${version%%.*}"
+          if [ "$major" != '26' ]; then
+            echo 'Wrong actual macOS profile for this capture' >&2
+            exit 1
+          fi
+          git diff --exit-code
+          git diff --cached --exit-code
+          git rev-parse HEAD > artifacts/native-recapture/revision.txt
+          printf '%s\n' 'resource-fork-open-26' > artifacts/native-recapture/recipe.txt
+      - name: Generate complete genuine native evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          apfs-ci-runner --suite native-recapture/resource-fork-open-26 --timeout 55m -- go run scripts/capture-resource-fork-open.go -out artifacts/resource-fork-open/native.json.gz
+      - name: Confirm authoritative sources and fixtures remain unchanged
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code
+          git diff --cached --exit-code
+      - name: Verify capture artifacts contain no live mounts
+        id: capture-unmounted
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          apfs-ci-runner --suite native-recapture/mount-table --timeout 1m -- /sbin/mount > artifacts/native-recapture/mounts.txt
+          physical_root=$(pwd -P)
+          while IFS= read -r line; do
+            case "$line" in
+              *" on $physical_root/artifacts/"*|*" on $PWD/artifacts/"*)
+                printf 'Refusing recursive upload of a live mount: %s\n' "$line" >&2
+                exit 1
+                ;;
+            esac
+          done < artifacts/native-recapture/mounts.txt
+      - name: Retain complete unmounted capture
+        if: always() && steps.capture-unmounted.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-resource-fork-open-26-${{ github.run_attempt }}
+          path: |
+            artifacts/resource-fork-open/
+          compression-level: 9
+          if-no-files-found: error
+      - name: Retain command diagnostics even when capture cleanup fails
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-resource-fork-open-26-diagnostics-${{ github.run_attempt }}
+          path: |
+            artifacts/native-recapture/
+            artifacts/ci-observability/
+          compression-level: 9
+          if-no-files-found: error
+
+  resource-fork-open-27:
+    name: Capture only - resource-fork-open-27
+    needs: validate-phase
+    if: inputs.phase == 'base' && (inputs.recipe == '' || inputs.recipe == 'resource-fork-open-27')
+    runs-on: xcode-27
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
+      - name: Bind native profile and untouched source revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          /usr/bin/sw_vers > artifacts/native-recapture/host.txt
+          version=$(/usr/bin/sw_vers -productVersion)
+          major="${version%%.*}"
+          if [ "$major" != '27' ]; then
+            echo 'Wrong actual macOS profile for this capture' >&2
+            exit 1
+          fi
+          git diff --exit-code
+          git diff --cached --exit-code
+          git rev-parse HEAD > artifacts/native-recapture/revision.txt
+          printf '%s\n' 'resource-fork-open-27' > artifacts/native-recapture/recipe.txt
+      - name: Generate complete genuine native evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          apfs-ci-runner --suite native-recapture/resource-fork-open-27 --timeout 55m -- go run scripts/capture-resource-fork-open.go -out artifacts/resource-fork-open/native.json.gz
+      - name: Confirm authoritative sources and fixtures remain unchanged
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code
+          git diff --cached --exit-code
+      - name: Verify capture artifacts contain no live mounts
+        id: capture-unmounted
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-recapture
+          apfs-ci-runner --suite native-recapture/mount-table --timeout 1m -- /sbin/mount > artifacts/native-recapture/mounts.txt
+          physical_root=$(pwd -P)
+          while IFS= read -r line; do
+            case "$line" in
+              *" on $physical_root/artifacts/"*|*" on $PWD/artifacts/"*)
+                printf 'Refusing recursive upload of a live mount: %s\n' "$line" >&2
+                exit 1
+                ;;
+            esac
+          done < artifacts/native-recapture/mounts.txt
+      - name: Retain complete unmounted capture
+        if: always() && steps.capture-unmounted.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-resource-fork-open-27-${{ github.run_attempt }}
+          path: |
+            artifacts/resource-fork-open/
+          compression-level: 9
+          if-no-files-found: error
+      - name: Retain command diagnostics even when capture cleanup fails
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: native-harness-recapture-resource-fork-open-27-diagnostics-${{ github.run_attempt }}
+          path: |
+            artifacts/native-recapture/
+            artifacts/ci-observability/
+          compression-level: 9
+          if-no-files-found: error

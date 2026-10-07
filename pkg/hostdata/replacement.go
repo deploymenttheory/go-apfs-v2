@@ -1,10 +1,10 @@
 package hostdata
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 )
 
 // Replacement is a private, writable file prepared from an existing regular
@@ -16,10 +16,8 @@ import (
 // if it cannot preserve the supported metadata; unlike ListXattrs/SetXattrs,
 // missing metadata is not treated as a recoverable fidelity loss.
 type Replacement struct {
-	File   *os.File
-	source *os.File
-	info   os.FileInfo
-	dir    string
+	File *os.File
+	replacementPlatformState
 }
 
 // PrepareReplacement creates a private staging directory under parent on the
@@ -34,58 +32,56 @@ type Replacement struct {
 // is preserved. RestoreMetadata keeps the target's own compression state.
 // Recompression policy belongs to the caller. On Linux
 // ownership, mode and readable extended attributes (including POSIX ACLs) are
-// restored. On Windows CopyFile preserves streams and attributes; the owner,
-// group and DACL are restored explicitly. Linux xattr names and values each have
-// an 8 MiB aggregate limit. Darwin's copying fallback bounds names to 1 MiB and
+// restored. On Windows unencrypted sources use held BackupRead/BackupWrite
+// transfers to preserve ordinary and sparse alternate streams, EAs and NTFS
+// compression. EFS uses contained, identity-checked CopyFileEx plus explicit EA
+// transfer; recipient and recovery keys must match. The owner, group and DACL
+// are restored explicitly. Prepare before unlinking the source: a held main-data
+// handle alone cannot acquire its alternate streams once Windows marks it for
+// deletion. Preparation fails if complete metadata cannot be read.
+// Linux bounds the xattr name list and each individual
+// value to 8 MiB; values transfer separately without a cumulative byte limit. Darwin's copying fallback bounds names to 1 MiB and
 // ordinary values to 8 MiB in aggregate; resource forks stream in 64 KiB chunks
 // without that value limit. Modification/access timestamps and Linux inode flags
 // are not preserved. No cgo is required.
 func PrepareReplacement(source *os.File, parent string) (*Replacement, error) {
-	info, err := source.Stat()
+	return PrepareReplacementContext(context.Background(), source, parent)
+}
+
+// PrepareReplacementContext prepares a private replacement with cancellation
+// checkpoints around native calls and between streamed metadata transfers.
+// Cleanup always completes independently of cancellation. A single native call
+// need not be interruptible. The caller retains ownership of source.
+func PrepareReplacementContext(ctx context.Context, source *os.File, parent string) (*Replacement, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	info, err := replacementValue(ctx, source.Stat)
 	if err != nil {
 		return nil, err
 	}
 	if !info.Mode().IsRegular() {
 		return nil, fmt.Errorf("prepare replacement: %w: non-regular source", ErrUnsupportedReplacement)
 	}
-	dir, err := os.MkdirTemp(parent, ".apfs-replacement-")
-	if err != nil {
-		return nil, err
-	}
-	path := filepath.Join(dir, "replacement")
-	f, err := prepareReplacement(source, path, info)
-	if err != nil {
-		_ = os.Chmod(path, 0600)
-		_ = os.RemoveAll(dir)
-		return nil, fmt.Errorf("prepare replacement: %w", err)
-	}
-	return &Replacement{File: f, source: source, info: info, dir: dir}, nil
+	return prepareReplacementPrivateContext(ctx, source, parent, info)
 }
 
 // RestoreMetadata restores metadata after all replacement content has been
 // written. On failure the caller must discard the replacement without renaming
 // it over the source. It does not sync or close either file.
 func (r *Replacement) RestoreMetadata() error {
-	current, err := r.source.Stat()
-	if err != nil {
-		return err
-	}
-	if !os.SameFile(r.info, current) {
-		return fmt.Errorf("replacement source changed")
-	}
-	return restoreReplacementMetadata(r.source, r.File, r.info)
+	return r.RestoreMetadataContext(context.Background())
+}
+
+// RestoreMetadataContext restores metadata with cancellation checkpoints.
+// Any error requires discarding the uncommitted replacement.
+func (r *Replacement) RestoreMetadataContext(ctx context.Context) error {
+	return restorePrivateReplacementContext(ctx, r)
 }
 
 // Close closes File if necessary and removes the private staging directory.
 // It is safe after the caller closes or renames File. It never closes source.
-func (r *Replacement) Close() error {
-	err := r.File.Close()
-	if errors.Is(err, os.ErrClosed) {
-		err = nil
-	}
-	_ = os.Chmod(r.File.Name(), 0600) // allow removal of a Windows read-only copy
-	return errors.Join(err, os.RemoveAll(r.dir))
-}
+func (r *Replacement) Close() error { return closePrivateReplacement(r) }
 
 // ErrUnsupportedReplacement identifies file types, metadata or filesystems
 // whose replacement metadata this package cannot safely preserve.

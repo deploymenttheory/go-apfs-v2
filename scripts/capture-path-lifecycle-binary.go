@@ -11,13 +11,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"regexp"
 	"runtime"
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 func main() {
@@ -40,7 +42,7 @@ func capture() error {
 		return err
 	}
 	source := "testdata/appledouble/native/path-copyfile.c"
-	if output, err := exec.Command("xcrun", "clang", source, "-o", executable).CombinedOutput(); err != nil {
+	if output, err := cirunner.Command("xcrun", "clang", source, "-o", executable).CombinedOutput(); err != nil {
 		return fmt.Errorf("compile: %w: %s", err, output)
 	}
 	names := []string{"copyfile", "copyfile_set_dst_permissions", "copyfile_validate_dst", "copyfile_fix_perms", "copyfile_open", "reset_security", "copyfile_internal", "copyfile_state_free", "open_src_rsrc_fork", "open_dst_rsrc_fork"}
@@ -49,7 +51,7 @@ func capture() error {
 		arguments = append(arguments, "-o", "disassemble --name "+name)
 	}
 	arguments = append(arguments, "-o", "image list libcopyfile.dylib", "-o", "quit", "--", executable)
-	output, err := exec.Command("xcrun", arguments...).CombinedOutput()
+	output, err := cirunner.Command("xcrun", arguments...).CombinedOutput()
 	if err != nil {
 		_ = os.WriteFile(filepath.Join(directory, "debugger-error.txt"), output, 0600)
 		return fmt.Errorf("owned probe disassembly: %w; see %s/debugger-error.txt", err, directory)
@@ -72,11 +74,11 @@ func capture() error {
 	if len(image) != 3 {
 		return fmt.Errorf("missing image UUID/base")
 	}
-	host, err := exec.Command("sw_vers").Output()
+	host, err := cirunner.Command("sw_vers").Output()
 	if err != nil {
 		return err
 	}
-	revision, err := exec.Command("git", "rev-parse", "HEAD").Output()
+	revision, err := cirunner.Command("git", "rev-parse", "HEAD").Output()
 	if err != nil {
 		return err
 	}
@@ -142,7 +144,7 @@ func resolveStubs(executable string, functions map[string]string) (map[string]st
 			args = append(args, "-o", command)
 		}
 		args = append(args, "-o", "quit", "--", executable)
-		out, err := exec.Command("xcrun", args...).CombinedOutput()
+		out, err := cirunner.Command("xcrun", args...).CombinedOutput()
 		if err != nil {
 			return nil, fmt.Errorf("resolve native call stubs: %w", err)
 		}

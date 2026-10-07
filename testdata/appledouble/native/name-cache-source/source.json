@@ -1,0 +1,41 @@
+{
+  "schema": 1,
+  "release": "xnu-11417.140.69",
+  "url": "https://raw.githubusercontent.com/apple-oss-distributions/xnu/xnu-11417.140.69/bsd/vfs/vfs_cache.c",
+  "source_sha256": "73b996de9d0d03b576d04317f1c5d96cecf2c1c6cced92470ff2bc736115fdcb",
+  "start": 44516,
+  "end": 63187,
+  "fragment_sha256": "53ad8395944429ba7ffdd33de14fd7ac518eeb3e16337c079864ad6999c45df5",
+  "functions": [
+    {
+      "name": "save_ndp_state",
+      "brace": 44804,
+      "end": 45145,
+      "sha256": "4e6873e653150d47e428bf67b65c52fb5d0c8aef5c9c724131f4d9e6a2a11125"
+    },
+    {
+      "name": "restore_ndp_state",
+      "brace": 45265,
+      "end": 45606,
+      "sha256": "34d958609233dc4b6f044a942f6b0664f2cb46f8cdb9459c8080aed9f2ba0a73"
+    },
+    {
+      "name": "vid_is_same",
+      "brace": 45665,
+      "end": 45782,
+      "sha256": "c5aaa0ba979bda10f68d43cb6289eb8c052dc5275fc69241dacddc65d037aa20"
+    },
+    {
+      "name": "can_check_v_mountedhere",
+      "brace": 45839,
+      "end": 46074,
+      "sha256": "8f1a197f8979756834dfaac748a540d2ef306ec482bb09f9814b831f0ba37730"
+    },
+    {
+      "name": "cache_lookup_path",
+      "brace": 46463,
+      "end": 63187,
+      "sha256": "7905eee840d16a60c83bf44f8fdd5f95e38c31465977dd797ea602c0eb08a750"
+    }
+  ]
+}

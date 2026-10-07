@@ -59,6 +59,10 @@ type Result struct {
 }
 
 // RecompressRecord recompresses one explicitly associated regular-file record.
+// This is an already-resolved, caller-authorized endpoint operation. It does not
+// authorize parent traversal or establish that absent source security was observed.
+// Pathname callers use RecompressPath with complete explicit source observations;
+// they must not fall back here when that context is missing.
 // Host access permissions govern access to carrier/payload storage; its Darwin
 // metadata is preserved without mapping foreign principals to local identities.
 // The caller excludes external payload mutation for the entire operation.

@@ -1,0 +1,91 @@
+name: Native pathname limits
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pathname-limits-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CGO_ENABLED: "0"
+  GOTOOLCHAIN: local
+
+jobs:
+  native:
+    name: Native path limits (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, macos-latest, xcode-27]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
+      - name: Capture every mounted and ordinary native limit control
+        run: |
+          apfs-ci-runner --suite pathname-limits/native/step3 --timeout 29m -- go run scripts/capture-pathname-limits.go -out artifacts/pathname-limits
+      - name: Replay the complete fresh native capture through the production resolver
+        env:
+          APFS_PATHNAME_LIMITS_CAPTURE: ${{ github.workspace }}/artifacts/pathname-limits/capture.json.gz
+        run: |
+          apfs-ci-runner --suite pathname-limits/native/step4 --timeout 29m -- go test -json -tags native_path_limits_fresh ./pkg/recompression -run '^TestFreshNativePathLimits$' -count=1 -v
+      - name: Retain native outputs, complete ASTs, source bytes and mount cleanup evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: pathname-limits-${{ matrix.os }}
+          path: artifacts/pathname-limits/
+          if-no-files-found: error
+      - name: Require all three retained native release profiles
+        run: |
+          apfs-ci-runner --suite pathname-limits/native/step6 --timeout 29m -- go test -json ./pkg/recompression -run '^TestNativePathLimits$' -count=1 -v
+
+      - name: Retain complete CI command diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: ci-observability-pathname-limits-native-${{ strategy.job-index || 0 }}-${{ github.run_attempt }}
+          path: artifacts/ci-observability/
+          compression-level: 9
+          if-no-files-found: error
+  portable:
+    name: Replay path limits (${{ matrix.os }})
+    needs: native
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
+      - name: Replay all three mandatory retained native release profiles
+        run: |
+          apfs-ci-runner --suite pathname-limits/portable/step3 --timeout 19m -- go test -json ./pkg/recompression -run '^TestNativePathLimits$' -count=1 -v
+
+      - name: Retain complete CI command diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: ci-observability-pathname-limits-portable-${{ strategy.job-index || 0 }}-${{ github.run_attempt }}
+          path: artifacts/ci-observability/
+          compression-level: 9
+          if-no-files-found: error

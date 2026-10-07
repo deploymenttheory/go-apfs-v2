@@ -10,13 +10,15 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/evidenceaudit"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 func main() {
@@ -36,7 +38,7 @@ func verify() error {
 	}
 	var transcript bytes.Buffer
 	profile := filepath.Join(dir, "coverage.out")
-	cmd := exec.Command("go", "test", "-count=1", "-json", "-covermode=atomic", "-coverprofile="+profile, "./pkg/osversion")
+	cmd := cirunner.Command("go", "test", "-count=1", "-json", "-covermode=atomic", "-coverprofile="+profile, "./pkg/osversion")
 	cmd.Stdout = io.MultiWriter(os.Stdout, log, &transcript)
 	cmd.Stderr = os.Stderr
 	if err = errors.Join(cmd.Run(), log.Close()); err != nil {
@@ -113,11 +115,11 @@ func verify() error {
 		covered += counts[0]
 		total += counts[1]
 	}
-	hashes, err := evidenceaudit.SourceHashes(os.DirFS("."), []string{"pkg/osversion/*.go", "scripts/verify-osversion.go", "go.mod", "go.sum"})
+	hashes, err := evidenceaudit.HarnessSourceHashes(os.DirFS("."), []string{"pkg/osversion/*.go", "scripts/verify-osversion.go", "go.mod", "go.sum"})
 	if err != nil {
 		return err
 	}
-	revision, err := exec.Command("git", "rev-parse", "HEAD").Output()
+	revision, err := cirunner.Command("git", "rev-parse", "HEAD").Output()
 	if err != nil {
 		return err
 	}

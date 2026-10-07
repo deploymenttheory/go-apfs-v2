@@ -15,7 +15,7 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -30,6 +30,8 @@ import (
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfswrite"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/hfsplus"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 type command struct {
@@ -57,7 +59,7 @@ func fileSum(p string) string {
 	return fmt.Sprintf("%x", h.Sum(nil))
 }
 func run(args ...string) []byte {
-	b, e := exec.Command(args[0], args[1:]...).CombinedOutput()
+	b, e := cirunner.Command(args[0], args[1:]...).CombinedOutput()
 	c := command{Args: args, Output: string(b)}
 	if e != nil {
 		c.Error = e.Error()
@@ -302,7 +304,7 @@ func check(image, kind string) {
 	}
 	defer run("hdiutil", "detach", device)
 	args := []string{"/sbin/fsck_hfs", "-n", device}
-	output, e := exec.Command(args[0], args[1:]...).CombinedOutput()
+	output, e := cirunner.Command(args[0], args[1:]...).CombinedOutput()
 	c := command{Args: args, Output: string(output)}
 	if e != nil {
 		c.Error = e.Error()

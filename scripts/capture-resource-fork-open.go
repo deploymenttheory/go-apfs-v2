@@ -19,6 +19,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/captureprovenance"
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/diskimage"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/osversion"
 )
@@ -39,7 +41,7 @@ const forkArtifact = "artifacts/resource-fork-open"
 func forkCommand(name string, args ...string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	b, e := exec.CommandContext(ctx, name, args...).CombinedOutput()
+	b, e := cirunner.CommandContext(ctx, name, args...).CombinedOutput()
 	if e != nil {
 		return b, fmt.Errorf("%s %v: %w: %s", name, args, e, b)
 	}
@@ -99,6 +101,9 @@ func captureFork(out string, check bool) (result error) {
 		return e
 	}
 	corpus := forkCapture{Schema: 1, Host: string(host), Sources: map[string]string{}}
+	if err := captureprovenance.Bind(os.DirFS("."), filepath.Dir(out), corpus.Sources); err != nil {
+		return err
+	}
 	for _, item := range []struct {
 		args []string
 		dst  *string
@@ -178,6 +183,9 @@ func captureFork(out string, check bool) (result error) {
 		var prior forkCapture
 		if e = json.NewDecoder(z).Decode(&prior); e != nil {
 			return e
+		}
+		if err := captureprovenance.Verify(os.DirFS("."), prior.Sources); err != nil {
+			return err
 		}
 		version, e := osversion.ParseProductVersion(prior.Host)
 		if e != nil {

@@ -1,0 +1,19 @@
+name: Set up shared CI command reporting
+description: Build a host-native runner while preserving target settings for child commands
+runs:
+  using: composite
+  steps:
+    - name: Build reporting runner for the actual host
+      shell: bash
+      run: |
+        set -euo pipefail
+        runner_dir="$RUNNER_TEMP/apfs-ci-runner-bin"
+        mkdir -p "$runner_dir"
+        runner_binary="$runner_dir/apfs-ci-runner"
+        if [ "$RUNNER_OS" = Windows ]; then
+          runner_binary="${runner_binary}.exe"
+        fi
+        GOOS="$(go env GOHOSTOS)" GOARCH="$(go env GOHOSTARCH)" CGO_ENABLED=0 go build -o "$runner_binary" "$GITHUB_WORKSPACE/scripts/ci-run.go"
+        echo "$runner_dir" >> "$GITHUB_PATH"
+        echo "APFS_CI_REPORT_DIR=$GITHUB_WORKSPACE/artifacts/ci-observability" >> "$GITHUB_ENV"
+        echo "APFS_CI_STRICT_REPORTING=1" >> "$GITHUB_ENV"

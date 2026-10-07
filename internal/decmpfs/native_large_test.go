@@ -11,6 +11,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/captureprovenance"
 )
 
 type nativeLargeCase struct {
@@ -43,6 +45,9 @@ func TestLargeCompressionNativeRanges(t *testing.T) {
 		Cases   []nativeLargeCase
 	}
 	if err = json.Unmarshal(manifest, &corpus); err != nil {
+		t.Fatal(err)
+	}
+	if err := captureprovenance.Verify(os.DirFS("../.."), corpus.Sources); err != nil {
 		t.Fatal(err)
 	}
 	for _, path := range []string{"scripts/verify-large-compression.go", "testdata/appledouble/native/decmpfs-large.c", "testdata/appledouble/native/decmpfs-expand.c"} {

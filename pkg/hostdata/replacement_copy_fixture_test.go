@@ -8,6 +8,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/captureprovenance"
 )
 
 // Replay independently captured Darwin outcomes on every supported host. This
@@ -36,6 +38,9 @@ func TestReplacementCopyNativeFixture(t *testing.T) {
 	}
 	if fixture.Schema != 1 || len(fixture.Cases) != 8 {
 		t.Fatalf("incomplete native fixture: schema %d cases %d", fixture.Schema, len(fixture.Cases))
+	}
+	if err := captureprovenance.Verify(os.DirFS("../.."), fixture.Hashes); err != nil {
+		t.Fatal(err)
 	}
 	source, err := os.ReadFile("../../testdata/appledouble/native/replacement-copy.c")
 	if err != nil {

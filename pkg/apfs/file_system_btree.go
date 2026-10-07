@@ -695,6 +695,10 @@ func (bt *FileSystemBTree) DirectoryEntryRecordByUTF8Name(
 		return nil, fmt.Errorf("invalid name")
 	}
 
+	if err := ValidateLookupName(name); err != nil {
+		return nil, fmt.Errorf("invalid directory lookup name: %w", err)
+	}
+
 	nameHash := CalculateNameHash([]byte(name), bt.UseCaseFolding)
 	index, err := bt.directoryIndex(reader, parentIdentifier)
 	if err != nil {

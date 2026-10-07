@@ -9,13 +9,15 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/evidenceaudit"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 func main() {
@@ -36,7 +38,7 @@ func verify() error {
 	defer log.Close()
 	var transcript bytes.Buffer
 	profile := filepath.Join(dir, "coverage.out")
-	cmd := exec.Command("go", "test", "-count=1", "-json", "-run", "^Test", "-covermode=atomic", "-coverprofile="+profile, "-coverpkg=./pkg/compression/lz4,./internal/decmpfs,./pkg/compression/lzbitmap,./pkg/compression/lzfse,./pkg/compression/decmpfs", "./internal/decmpfs", "./pkg/compression/lz4", "./pkg/compression/lzbitmap", "./pkg/compression/lzfse", "./pkg/compression/decmpfs")
+	cmd := cirunner.Command("go", "test", "-count=1", "-json", "-run", "^Test", "-covermode=atomic", "-coverprofile="+profile, "-coverpkg=./pkg/compression/lz4,./internal/decmpfs,./pkg/compression/lzbitmap,./pkg/compression/lzfse,./pkg/compression/decmpfs", "./internal/decmpfs", "./pkg/compression/lz4", "./pkg/compression/lzbitmap", "./pkg/compression/lzfse", "./pkg/compression/decmpfs")
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 	cmd.Stdout = io.MultiWriter(os.Stdout, log, &transcript)
 	cmd.Stderr = io.MultiWriter(os.Stderr, log)
@@ -157,11 +159,11 @@ func verify() error {
 	files = append(files, "internal/evidenceaudit/*.go", "internal/decmpfs/*.go", "pkg/compression/lzbitmap/*.go")
 	files = append(files, "scripts/verify-large-compression*.go", "testdata/appledouble/native/decmpfs-large.c", "testdata/appledouble/native/decmpfs-expand.c", "testdata/appledouble/native/large-compression/*")
 	files = append(files, "pkg/compression/lz4/*.go", "pkg/compression/decmpfs/*.go", "pkg/compression/lzfse/*.go", "pkg/compression/lzbitmap/testdata/scalar/*.zbm", "scripts/capture-compression-*.go", "scripts/verify-compression-zlib-source.go", "testdata/appledouble/native/compression-*")
-	hashes, e := evidenceaudit.SourceHashes(os.DirFS("."), files)
+	hashes, e := evidenceaudit.HarnessSourceHashes(os.DirFS("."), files)
 	if e != nil {
 		return e
 	}
-	revision, e := exec.Command("git", "rev-parse", "HEAD").Output()
+	revision, e := cirunner.Command("git", "rev-parse", "HEAD").Output()
 	if e != nil {
 		return e
 	}

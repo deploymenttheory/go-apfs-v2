@@ -1,47 +1,33 @@
 package recompression
 
 import (
-	"encoding/binary"
 	"errors"
-	"maps"
 	"slices"
 	"syscall"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/metatransport"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/authorization"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/osversion"
 )
 
 // ErrAuthority means a required foreign identity observation was
 // not supplied. Missing observations are not implicit permission grants or denials.
-var ErrAuthority = errors.New("uncaptured recompression authority")
+var ErrAuthority = authorization.ErrAuthority
 
-// Membership records a source UUID membership query. Failed means
-// a real source lookup failed; absent/zero is different and means uncaptured.
-type Membership uint8
+// Membership preserves the existing recompression identity API.
+type Membership = authorization.Membership
 
 const (
-	NotMember Membership = iota + 1
-	Member
-	MembershipFailed
+	NotMember        = authorization.NotMember
+	Member           = authorization.Member
+	MembershipFailed = authorization.MembershipFailed
 )
 
-// Authority supplies the foreign effective identity for regular-file
-// discretionary access checks. Groups includes every applicable numeric group;
-// it must be captured or explicitly selected, never inferred from the Go host.
-// UserUUIDFailed records a failed source UID-to-UUID lookup. A nil UserUUID with
-// UserUUIDFailed=false is uncaptured. Membership retains actual UUID lookup results.
-// This does not transport sandbox entitlements, authorize host storage access, or
-// emulate process-specific permission overrides. Those require separate evidence.
-type Authority struct {
-	UID            uint32
-	Groups         []uint32
-	UserUUID       *[16]byte
-	UserUUIDFailed bool
-	Membership     map[[16]byte]Membership
-}
+// Authority preserves the shared captured-credential API.
+type Authority = authorization.Authority
 
 type recompressionAccess struct {
 	authority Authority
@@ -51,21 +37,14 @@ type recompressionAccess struct {
 }
 
 func newRecompressionAccess(record metatransport.Record, security *appledouble.FileSecurity, authority *Authority, volume uint32) (*recompressionAccess, error) {
-	if authority == nil || record.Darwin.UID == nil || record.Darwin.GID == nil || authority.UserUUID != nil && authority.UserUUIDFailed {
+	if record.Darwin.UID == nil || record.Darwin.GID == nil {
 		return nil, ErrAuthority
 	}
-	for _, membership := range authority.Membership {
-		if membership < NotMember || membership > MembershipFailed {
-			return nil, ErrAuthority
-		}
+	captured, err := authorization.CloneAuthority(authority)
+	if err != nil {
+		return nil, err
 	}
-	result := &recompressionAccess{authority: *authority, volume: volume}
-	result.authority.Groups = slices.Clone(authority.Groups)
-	result.authority.Membership = maps.Clone(authority.Membership)
-	if authority.UserUUID != nil {
-		value := *authority.UserUUID
-		result.authority.UserUUID = &value
-	}
+	result := &recompressionAccess{authority: captured, volume: volume}
 	if security != nil {
 		if len(security.Trailing) != 0 {
 			return nil, appledouble.ErrFileSecurity
@@ -174,6 +153,9 @@ func (a *recompressionAccess) rights(requested uint32, stat hostdata.StatCopySou
 	if flagsOnly {
 		mask = 0x00060000
 	}
+	if authorization.OwnerOverride(a.authority, stat) {
+		mask &= 0xffff0000
+	}
 	if stat.Flags&mask != 0 {
 		return syscall.EPERM
 	}
@@ -187,34 +169,12 @@ func (a *recompressionAccess) rights(requested uint32, stat hostdata.StatCopySou
 	if requested == 0 {
 		return nil
 	}
-	residual := requested
-	for _, entry := range a.acl {
-		kind := entry.Flags & 15
-		if entry.Flags&256 != 0 || kind != 1 && kind != 2 {
-			continue
-		}
-		rights := recompressionExpandRights(entry.Rights)
-		relevant := residual
-		if kind == 2 {
-			relevant = requested
-		}
-		if relevant&rights == 0 {
-			continue
-		}
-		applies, err := a.applies(entry.Principal, kind == 2, stat)
-		if err != nil {
-			return err
-		}
-		if !applies {
-			continue
-		}
-		if kind == 2 {
-			return syscall.EACCES
-		}
-		residual &^= rights
-		if residual == 0 {
+	residual, err := authorization.EvaluateACL(a.authority, a.acl, requested, stat)
+	if err != nil {
+		if errors.Is(err, syscall.EACCES) && authorization.OwnerOverride(a.authority, stat) {
 			return nil
 		}
+		return err
 	}
 	if owner {
 		residual &^= recompressionWriteAttributes
@@ -235,67 +195,11 @@ func (a *recompressionAccess) rights(requested uint32, stat hostdata.StatCopySou
 	} else if slices.Contains(a.authority.Groups, stat.GID) {
 		bits = stat.Mode >> 3 & 7
 	}
+	if authorization.OwnerOverride(a.authority, stat) {
+		return nil
+	}
 	if bits&needed != needed {
 		return syscall.EACCES
 	}
 	return nil
-}
-
-func recompressionExpandRights(rights uint32) uint32 {
-	const read = recompressionReadData | 1<<7 | recompressionReadXattr | 1<<11
-	const write = recompressionWriteData | 1<<5 | 1<<4 | 1<<6 | recompressionWriteAttributes | recompressionWriteXattr | recompressionWriteSecurity
-	if rights&(1<<21) != 0 {
-		rights |= read | write | 1<<3
-	}
-	if rights&(1<<22) != 0 {
-		rights |= 1 << 3
-	}
-	if rights&(1<<23) != 0 {
-		rights |= write
-	}
-	if rights&(1<<24) != 0 {
-		rights |= read
-	}
-	return rights
-}
-
-func (a *recompressionAccess) applies(principal [16]byte, deny bool, stat hostdata.StatCopySource) (bool, error) {
-	prefix := [12]byte{0xab, 0xcd, 0xef, 0xab, 0xcd, 0xef, 0xab, 0xcd, 0xef, 0xab, 0xcd, 0xef}
-	if [12]byte(principal[:12]) == prefix {
-		switch binary.BigEndian.Uint32(principal[12:]) {
-		case 12:
-			return true, nil
-		case 0xfffffffe:
-			return false, nil
-		case 10:
-			return a.authority.UID == stat.UID, nil
-		case 16:
-			if a.authority.UserUUIDFailed {
-				return deny, nil
-			}
-			if a.authority.UserUUID == nil {
-				return false, ErrAuthority
-			}
-			return slices.Contains(a.authority.Groups, stat.GID), nil
-		}
-	}
-	if a.authority.UserUUIDFailed {
-		return deny, nil
-	}
-	if a.authority.UserUUID == nil {
-		return false, ErrAuthority
-	}
-	if principal == *a.authority.UserUUID {
-		return true, nil
-	}
-	switch a.authority.Membership[principal] {
-	case NotMember:
-		return false, nil
-	case Member:
-		return true, nil
-	case MembershipFailed:
-		return deny, nil
-	default:
-		return false, ErrAuthority
-	}
 }

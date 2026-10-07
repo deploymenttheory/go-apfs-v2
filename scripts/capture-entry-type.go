@@ -9,10 +9,12 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/entrytype"
 	"os"
-	"os/exec"
 	"path/filepath"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/captureprovenance"
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/entrytype"
 )
 
 func must(err error) {
@@ -21,14 +23,14 @@ func must(err error) {
 	}
 }
 func run(name string, args ...string) []byte {
-	b, err := exec.Command(name, args...).CombinedOutput()
+	b, err := cirunner.Command(name, args...).CombinedOutput()
 	if err != nil {
 		panic(fmt.Sprintf("%s %v: %v: %s", name, args, err, b))
 	}
 	return b
 }
 func main() {
-	out := flag.String("out", "testdata/appledouble/native/entry-type.json", "capture output")
+	out := flag.String("out", "artifacts/entry-type/native.json", "fresh capture output")
 	flag.Parse()
 	dir, err := os.MkdirTemp("/tmp", "entry-type-native-")
 	must(err)
@@ -47,6 +49,7 @@ func main() {
 		}()
 	}
 	hashes := map[string]string{}
+	must(captureprovenance.Bind(os.DirFS("."), filepath.Dir(*out), hashes))
 	for _, p := range []string{"scripts/capture-entry-type.go", "testdata/appledouble/native/entry-type.c", "internal/testutil/entrytype/fixture_darwin.go"} {
 		b, err := os.ReadFile(p)
 		must(err)

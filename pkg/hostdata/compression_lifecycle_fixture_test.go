@@ -5,10 +5,12 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/osversion"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/captureprovenance"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/osversion"
 )
 
 func TestCompressionLifecycleProvenance(t *testing.T) {
@@ -74,6 +76,9 @@ func testCompressionProvenanceFrom(t *testing.T, fixture, name string, count int
 		if err != nil || want == 0 || actual != want {
 			t.Fatal("native operation profile mismatch", fixture, version, err)
 		}
+	}
+	if err := captureprovenance.Verify(os.DirFS("../.."), corpus.Sources); err != nil {
+		t.Fatal(err)
 	}
 	for _, path := range append(additional, "scripts/capture-"+name+".go", "testdata/appledouble/native/"+name+".c", "testdata/appledouble/native/"+name+"-interpose.c", "testdata/appledouble/native/compression-policy.c", "go.mod", "go.sum") {
 		data, e := os.ReadFile("../../" + path)

@@ -15,7 +15,7 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -24,6 +24,8 @@ import (
 
 	sandbox "github.com/deploymenttheory/go-apfs-v2/pkg/hostdata/sandbox"
 	xattrintent "github.com/deploymenttheory/go-apfs-v2/pkg/hostdata/xattrintent"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 const dir = "artifacts/xattr-intent"
@@ -52,7 +54,7 @@ func must(e error) {
 func hash(b []byte) string { h := sha256.Sum256(b); return hex.EncodeToString(h[:]) }
 func read(p string) []byte { b, e := os.ReadFile(p); must(e); return b }
 func run(input []byte, args ...string) []byte {
-	cmd := exec.Command(args[0], args[1:]...)
+	cmd := cirunner.Command(args[0], args[1:]...)
 	cmd.Stdin = bytes.NewReader(input)
 	b, e := cmd.CombinedOutput()
 	if e != nil {

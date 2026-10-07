@@ -18,6 +18,8 @@ import (
 	"time"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfswrite"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 // TestCreateContainerFsckClean formats a container into a temp file and runs
@@ -37,7 +39,7 @@ func TestCreateContainerFsckClean(t *testing.T) {
 	dev := attachRaw(t, imgPath)
 	defer detach(t, dev)
 
-	out, err := exec.Command("fsck_apfs", "-n", dev).CombinedOutput()
+	out, err := cirunner.Command("fsck_apfs", "-n", dev).CombinedOutput()
 	t.Logf("fsck_apfs output:\n%s", out)
 	if err != nil {
 		t.Fatalf("fsck_apfs reported errors (exit %v)", err)
@@ -63,7 +65,7 @@ func TestCreateContainerApfsckClean(t *testing.T) {
 	writeImage(t, imgPath, size, &apfswrite.CreateOptions{VolumeName: "ApfsckVol"})
 
 	// apfsck exits non-zero on problems; -c also checks the container.
-	out, err := exec.Command("apfsck", "-cw", imgPath).CombinedOutput()
+	out, err := cirunner.Command("apfsck", "-cw", imgPath).CombinedOutput()
 	t.Logf("apfsck output:\n%s", out)
 	if err != nil {
 		t.Fatalf("apfsck reported problems (exit %v)", err)
@@ -87,13 +89,13 @@ func TestCreateContainerMountsViaHdiutil(t *testing.T) {
 		t.Fatalf("mkdir mnt: %v", err)
 	}
 
-	out, err := exec.Command("hdiutil", "attach", "-readonly", "-nobrowse", "-mountpoint", mnt, imgPath).CombinedOutput()
+	out, err := cirunner.Command("hdiutil", "attach", "-readonly", "-nobrowse", "-mountpoint", mnt, imgPath).CombinedOutput()
 	if err != nil {
 		t.Fatalf("hdiutil attach: %v\n%s", err, out)
 	}
 	defer func() {
-		if o, e := exec.Command("hdiutil", "detach", mnt).CombinedOutput(); e != nil {
-			exec.Command("diskutil", "unmount", "force", mnt).Run()
+		if o, e := cirunner.Command("hdiutil", "detach", mnt).CombinedOutput(); e != nil {
+			cirunner.Command("diskutil", "unmount", "force", mnt).Run()
 			t.Logf("hdiutil detach: %v\n%s", e, o)
 		}
 	}()
@@ -129,7 +131,7 @@ func TestCreateContainerWithFileFsckClean(t *testing.T) {
 	dev := attachRaw(t, imgPath)
 	defer detach(t, dev)
 
-	out, err := exec.Command("fsck_apfs", "-n", dev).CombinedOutput()
+	out, err := cirunner.Command("fsck_apfs", "-n", dev).CombinedOutput()
 	t.Logf("fsck_apfs output:\n%s", out)
 	if err != nil {
 		t.Fatalf("fsck_apfs reported errors (exit %v)", err)
@@ -164,7 +166,7 @@ func TestCreateContainerManyExtentsFsckClean(t *testing.T) {
 	dev := attachRaw(t, imgPath)
 	defer detach(t, dev)
 
-	out, err := exec.Command("fsck_apfs", "-n", dev).CombinedOutput()
+	out, err := cirunner.Command("fsck_apfs", "-n", dev).CombinedOutput()
 	t.Logf("fsck_apfs output:\n%s", out)
 	if err != nil {
 		t.Fatalf("fsck_apfs reported errors (exit %v)", err)
@@ -200,7 +202,7 @@ func TestCreateContainerLargeFileFsckClean(t *testing.T) {
 	dev := attachRaw(t, imgPath)
 	defer detach(t, dev)
 
-	out, err := exec.Command("fsck_apfs", "-n", dev).CombinedOutput()
+	out, err := cirunner.Command("fsck_apfs", "-n", dev).CombinedOutput()
 	t.Logf("fsck_apfs output:\n%s", out)
 	if err != nil {
 		t.Fatalf("fsck_apfs reported errors (exit %v)", err)
@@ -239,7 +241,7 @@ func TestCreateContainerMetadataFsckClean(t *testing.T) {
 	dev := attachRaw(t, imgPath)
 	defer detach(t, dev)
 
-	out, err := exec.Command("fsck_apfs", "-n", dev).CombinedOutput()
+	out, err := cirunner.Command("fsck_apfs", "-n", dev).CombinedOutput()
 	t.Logf("fsck_apfs output:\n%s", out)
 	if err != nil {
 		t.Fatalf("fsck_apfs reported errors (exit %v)", err)
@@ -264,7 +266,7 @@ func TestCreateContainerSnapshotFsckClean(t *testing.T) {
 	dev := attachRaw(t, imgPath)
 	defer detach(t, dev)
 
-	out, err := exec.Command("fsck_apfs", "-n", dev).CombinedOutput()
+	out, err := cirunner.Command("fsck_apfs", "-n", dev).CombinedOutput()
 	t.Logf("fsck_apfs output:\n%s", out)
 	if err != nil {
 		t.Fatalf("fsck_apfs reported errors (exit %v)", err)
@@ -283,7 +285,7 @@ func TestCreateContainerSnapshotApfsckClean(t *testing.T) {
 	imgPath := filepath.Join(t.TempDir(), "snap.img")
 	writeImage(t, imgPath, size, snapshotOpts())
 
-	out, err := exec.Command("apfsck", "-cw", imgPath).CombinedOutput()
+	out, err := cirunner.Command("apfsck", "-cw", imgPath).CombinedOutput()
 	t.Logf("apfsck output:\n%s", out)
 	if err != nil {
 		t.Fatalf("apfsck reported problems (exit %v)", err)
@@ -307,18 +309,18 @@ func TestCreateContainerSnapshotListedByDiskutil(t *testing.T) {
 	mnt := t.TempDir()
 	// Mounting (not a raw attach) makes macOS synthesize the APFS volume; the
 	// attach output names the synthesized volume device.
-	out, err := exec.Command("hdiutil", "attach", "-readonly", "-nobrowse", "-mountpoint", mnt, imgPath).CombinedOutput()
+	out, err := cirunner.Command("hdiutil", "attach", "-readonly", "-nobrowse", "-mountpoint", mnt, imgPath).CombinedOutput()
 	if err != nil {
 		t.Fatalf("hdiutil attach (mount) failed: %v\n%s", err, out)
 	}
-	defer exec.Command("hdiutil", "detach", mnt).Run()
+	defer cirunner.Command("hdiutil", "detach", mnt).Run()
 
 	vol := regexp.MustCompile(`/dev/disk\d+s\d+`).FindString(string(out))
 	if vol == "" {
 		t.Fatalf("could not find synthesized volume device in attach output:\n%s", out)
 	}
 
-	snap, err := exec.Command("diskutil", "apfs", "listSnapshots", vol).CombinedOutput()
+	snap, err := cirunner.Command("diskutil", "apfs", "listSnapshots", vol).CombinedOutput()
 	t.Logf("diskutil listSnapshots %s:\n%s", vol, snap)
 	if err != nil {
 		t.Fatalf("diskutil listSnapshots failed (exit %v)", err)
@@ -367,7 +369,7 @@ func TestCreateContainerTreeFsckClean(t *testing.T) {
 	dev := attachRaw(t, imgPath)
 	defer detach(t, dev)
 
-	out, err := exec.Command("fsck_apfs", "-n", dev).CombinedOutput()
+	out, err := cirunner.Command("fsck_apfs", "-n", dev).CombinedOutput()
 	t.Logf("fsck_apfs output:\n%s", out)
 	if err != nil {
 		t.Fatalf("fsck_apfs reported errors (exit %v)", err)
@@ -402,7 +404,7 @@ func TestCreateContainerMultiLeafFsckClean(t *testing.T) {
 	dev := attachRaw(t, imgPath)
 	defer detach(t, dev)
 
-	out, err := exec.Command("fsck_apfs", "-n", dev).CombinedOutput()
+	out, err := cirunner.Command("fsck_apfs", "-n", dev).CombinedOutput()
 	t.Logf("fsck_apfs output:\n%s", out)
 	if err != nil {
 		t.Fatalf("fsck_apfs reported errors (exit %v)", err)
@@ -434,7 +436,7 @@ func TestCreateContainerMultiChunkFsckClean(t *testing.T) {
 	dev := attachRaw(t, imgPath)
 	defer detach(t, dev)
 
-	out, err := exec.Command("fsck_apfs", "-n", dev).CombinedOutput()
+	out, err := cirunner.Command("fsck_apfs", "-n", dev).CombinedOutput()
 	t.Logf("fsck_apfs output:\n%s", out)
 	if err != nil {
 		t.Fatalf("fsck_apfs reported errors (exit %v)", err)
@@ -474,7 +476,7 @@ func TestMultipleSnapshotsApfsckClean(t *testing.T) {
 			imgPath := filepath.Join(t.TempDir(), "snaps.img")
 			writeImage(t, imgPath, 64*1024*1024, multiSnapshotOptions(n))
 
-			out, err := exec.Command("apfsck", "-cw", imgPath).CombinedOutput()
+			out, err := cirunner.Command("apfsck", "-cw", imgPath).CombinedOutput()
 			t.Logf("apfsck output:\n%s", out)
 			if err != nil {
 				t.Fatalf("apfsck reported problems (exit %v)", err)
@@ -501,7 +503,7 @@ func TestMultipleSnapshotsMountAndList(t *testing.T) {
 	// An APFS container surfaces as a synthesized disk of its own, separate
 	// from the physical store hdiutil attached, so the volume to ask about is
 	// not simply the attached device plus a slice.
-	attach, err := exec.Command("hdiutil", "attach", "-readonly", "-nobrowse",
+	attach, err := cirunner.Command("hdiutil", "attach", "-readonly", "-nobrowse",
 		"-imagekey", "diskimage-class=CRawDiskImage", imgPath).CombinedOutput()
 	if err != nil {
 		t.Fatalf("hdiutil attach: %v\n%s", err, attach)
@@ -514,7 +516,7 @@ func TestMultipleSnapshotsMountAndList(t *testing.T) {
 		t.Fatalf("no APFS volume device in the attach output:\n%s", attach)
 	}
 
-	out, err := exec.Command("diskutil", "apfs", "listSnapshots", volume).CombinedOutput()
+	out, err := cirunner.Command("diskutil", "apfs", "listSnapshots", volume).CombinedOutput()
 	if err != nil {
 		t.Fatalf("diskutil listSnapshots: %v\n%s", err, out)
 	}
@@ -525,7 +527,7 @@ func TestMultipleSnapshotsMountAndList(t *testing.T) {
 		}
 	}
 
-	fsck, _ := exec.Command("fsck_apfs", "-n", dev).CombinedOutput()
+	fsck, _ := cirunner.Command("fsck_apfs", "-n", dev).CombinedOutput()
 	if strings.Contains(string(fsck), "corrupt") {
 		t.Errorf("fsck_apfs found the volume corrupt:\n%s", fsck)
 	}
@@ -564,7 +566,7 @@ func TestMultipleVolumesApfsckClean(t *testing.T) {
 			imgPath := filepath.Join(t.TempDir(), "multivol.img")
 			writeImage(t, imgPath, multiVolumeBytes(n), multiVolumeOptions(n))
 
-			out, err := exec.Command("apfsck", "-cw", imgPath).CombinedOutput()
+			out, err := cirunner.Command("apfsck", "-cw", imgPath).CombinedOutput()
 			t.Logf("apfsck output:\n%s", out)
 			if err != nil {
 				t.Fatalf("apfsck reported problems (exit %v)", err)
@@ -586,7 +588,7 @@ func TestMultipleVolumesMountSeparately(t *testing.T) {
 	imgPath := filepath.Join(t.TempDir(), "multivol.img")
 	writeImage(t, imgPath, multiVolumeBytes(n), multiVolumeOptions(n))
 
-	out, err := exec.Command("hdiutil", "attach", "-readonly", "-nobrowse",
+	out, err := cirunner.Command("hdiutil", "attach", "-readonly", "-nobrowse",
 		"-imagekey", "diskimage-class=CRawDiskImage", imgPath).CombinedOutput()
 	if err != nil {
 		t.Fatalf("hdiutil attach: %v\n%s", err, out)
@@ -607,7 +609,7 @@ func TestMultipleVolumesMountSeparately(t *testing.T) {
 		}
 	}
 
-	fsck, _ := exec.Command("fsck_apfs", "-n", dev).CombinedOutput()
+	fsck, _ := cirunner.Command("fsck_apfs", "-n", dev).CombinedOutput()
 	if strings.Contains(string(fsck), "corrupt") {
 		t.Errorf("fsck_apfs found the container corrupt:\n%s", fsck)
 	}
@@ -634,7 +636,7 @@ func TestSnapshotsAcrossVolumesRecognized(t *testing.T) {
 		},
 	})
 
-	out, err := exec.Command("hdiutil", "attach", "-readonly", "-nobrowse",
+	out, err := cirunner.Command("hdiutil", "attach", "-readonly", "-nobrowse",
 		"-imagekey", "diskimage-class=CRawDiskImage", imgPath).CombinedOutput()
 	if err != nil {
 		t.Fatalf("hdiutil attach: %v\n%s", err, out)
@@ -650,7 +652,7 @@ func TestSnapshotsAcrossVolumesRecognized(t *testing.T) {
 	// Each volume's own snapshots, and none of the other's.
 	want := [][]string{{"v1snapA", "v1snapB"}, {"v2snapA"}}
 	for i, volume := range volumes {
-		listing, err := exec.Command("diskutil", "apfs", "listSnapshots", volume).CombinedOutput()
+		listing, err := cirunner.Command("diskutil", "apfs", "listSnapshots", volume).CombinedOutput()
 		if err != nil {
 			t.Fatalf("diskutil listSnapshots %s: %v\n%s", volume, err, listing)
 		}
@@ -672,7 +674,7 @@ func TestSnapshotsAcrossVolumesRecognized(t *testing.T) {
 		}
 	}
 
-	fsck, _ := exec.Command("fsck_apfs", "-n", dev).CombinedOutput()
+	fsck, _ := cirunner.Command("fsck_apfs", "-n", dev).CombinedOutput()
 	if strings.Contains(string(fsck), "corrupt") {
 		t.Errorf("fsck_apfs found the container corrupt:\n%s", fsck)
 	}

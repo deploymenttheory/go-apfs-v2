@@ -1,0 +1,254 @@
+{
+  "entries": [
+    {
+      "brace": 0,
+      "end": 203056,
+      "file": "vfs_subr.c",
+      "name": "vauth_ctx",
+      "sha256": "16be7591ed8ea68c850f210337c1443e2e75e694fe20a9e7d72a6f85a8b19cd6",
+      "start": 202636
+    },
+    {
+      "brace": 224242,
+      "end": 224890,
+      "file": "vfs_subr.c",
+      "name": "vnode_immutable",
+      "sha256": "84cb9a5ed23892ff7fcd48868557f9a8a921e6e5c58599e8077175174fa42d43",
+      "start": 224167
+    },
+    {
+      "brace": 224963,
+      "end": 225311,
+      "file": "vfs_subr.c",
+      "name": "vauth_node_owner",
+      "sha256": "129d9db9eac68f4831ad1801b8579cb13201c92f8b16874e25bf26f1408876bf",
+      "start": 224892
+    },
+    {
+      "brace": 225918,
+      "end": 227768,
+      "file": "vfs_subr.c",
+      "name": "vauth_node_group",
+      "sha256": "4634a4e55477272e1d7c1ac157674f55c6099901c355c2af2880065fe90ee513",
+      "start": 225817
+    },
+    {
+      "brace": 227813,
+      "end": 228167,
+      "file": "vfs_subr.c",
+      "name": "vauth_file_owner",
+      "sha256": "21680133055e964a6d3e3352e31e326b015498117860dacffeb955eaa77783cc",
+      "start": 227770
+    },
+    {
+      "brace": 228886,
+      "end": 229413,
+      "file": "vfs_subr.c",
+      "name": "vauth_file_ingroup",
+      "sha256": "606ed1578553db651b69caab0d8d223bac43bc1c07bfcf204979b6acdf8e7a19",
+      "start": 228811
+    },
+    {
+      "brace": 229457,
+      "end": 229832,
+      "file": "vfs_subr.c",
+      "name": "vauth_dir_owner",
+      "sha256": "900a50b331a696ed1b067d75f8638bcf96c84bf5179be835e12b1ee0e7418113",
+      "start": 229415
+    },
+    {
+      "brace": 230548,
+      "end": 231096,
+      "file": "vfs_subr.c",
+      "name": "vauth_dir_ingroup",
+      "sha256": "b8433811b30e8da43bd547a8b70c075cd7862fb47f672aa87471c25eccb3c1f8",
+      "start": 230474
+    },
+    {
+      "brace": 231274,
+      "end": 235203,
+      "file": "vfs_subr.c",
+      "name": "vnode_authorize_posix",
+      "sha256": "3ade489d9fdbb3618c45540fb8064f9e6974c03ab129df8c787a42e29dd0d9ac",
+      "start": 231202
+    },
+    {
+      "brace": 236660,
+      "end": 242246,
+      "file": "vfs_subr.c",
+      "name": "vnode_authorize_delete",
+      "sha256": "1717bab465374cf284cb7c39524202d58af9edbe16c7e3c8f5299d1dc980bcd6",
+      "start": 236580
+    },
+    {
+      "brace": 242452,
+      "end": 248748,
+      "file": "vfs_subr.c",
+      "name": "vnode_authorize_simple",
+      "sha256": "84d7d784c47e40bdbb72d758154ee8d2e34ec555dc658efcd2a0046c4d80dcd8",
+      "start": 242314
+    },
+    {
+      "brace": 248910,
+      "end": 250862,
+      "file": "vfs_subr.c",
+      "name": "vnode_authorize_checkimmutable",
+      "sha256": "49703ea9d079db17f29425e98f400e138921c4492dde3ae5d71f3cf75ca66cf6",
+      "start": 248789
+    },
+    {
+      "brace": 210522,
+      "end": 211124,
+      "file": "vfs_subr.c",
+      "name": "vn_authorize_create",
+      "sha256": "1e8987e6817ab10b01e0529260e70bf12bc616394c02719b3795f9b7e5bc7574",
+      "start": 210399
+    },
+    {
+      "brace": 211642,
+      "end": 211754,
+      "file": "vfs_subr.c",
+      "name": "vn_authorize_renamex",
+      "sha256": "e5a4ef8b4002e05adbdae68ea2502d3b16aacc0081fc1bc4a578609287689654",
+      "start": 211414
+    },
+    {
+      "brace": 212039,
+      "end": 218181,
+      "file": "vfs_subr.c",
+      "name": "vn_authorize_renamex_with_paths",
+      "sha256": "ab72c46c6cf955b3cda691844e83f2dd0ef3c2504aaaf49560a7f5b357cfa662",
+      "start": 211756
+    },
+    {
+      "brace": 18371,
+      "end": 23127,
+      "file": "kern_authorization.c",
+      "name": "kauth_acl_evaluate",
+      "sha256": "1f4f3da215f60b0de03d34b23f81dc6881ff34bd69fa2a1a23e32990dfafc982",
+      "start": 18306
+    },
+    {
+      "brace": 24764,
+      "end": 25091,
+      "file": "vfs_lookup.c",
+      "name": "lookup_authorize_search",
+      "sha256": "15024bbd4117cf2d19b127557af8732eaf2521df8523f0e305eed97390b91574",
+      "start": 24643
+    },
+    {
+      "brace": 48333,
+      "end": 48669,
+      "file": "vfs_lookup.c",
+      "name": "lookup_validate_creation_path",
+      "sha256": "6d18fb7e75f6d2822bb6bf9a04cbe76dde92e5dbaf6ee86dddb62019e3fda78a",
+      "start": 48276
+    },
+    {
+      "brace": 7018,
+      "end": 23207,
+      "file": "vfs_lookup.c",
+      "name": "namei",
+      "sha256": "1017444ae917a9cc7faf7835bc22ec17583caf86f44cb099efe944b9799d0db9",
+      "start": 6985
+    },
+    {
+      "brace": 37212,
+      "end": 46609,
+      "file": "vfs_lookup.c",
+      "name": "lookup",
+      "sha256": "470c5dc9bf8e00d324d91621c24343bd4d417173eb5e5267bccf270c0cf12a6d",
+      "start": 37178
+    },
+    {
+      "brace": 11979,
+      "end": 22749,
+      "file": "vfs_vnops.c",
+      "name": "vn_open_auth",
+      "sha256": "c50ea594c7784b7862875817336cf0158b18f45a8e962d353e968db544f2924c",
+      "start": 11886
+    },
+    {
+      "brace": 6770,
+      "end": 7149,
+      "file": "vfs_vnops.c",
+      "name": "vn_open_auth_finish",
+      "sha256": "cba2ef2d8193f004fec93f1682c33083f89a9b919db5e18d022aa647e9fd1eef",
+      "start": 6697
+    },
+    {
+      "brace": 7432,
+      "end": 9689,
+      "file": "vfs_vnops.c",
+      "name": "vn_open_auth_do_create",
+      "sha256": "468678cbffec43f27ee6593188d8af9016424063e1752f49494125b6a4f2f353",
+      "start": 7277
+    },
+    {
+      "brace": 64398,
+      "end": 65311,
+      "file": "kern_resource.c",
+      "name": "iopolicysys_vfs_ignore_node_permissions",
+      "sha256": "2cf75998ad927620d84dea97d5a58fbb88fcf0c11e6a472052a720d692f4d545",
+      "start": 64259
+    },
+    {
+      "brace": 72248,
+      "end": 72442,
+      "file": "kern_resource.c",
+      "name": "set_thread_support_long_paths",
+      "sha256": "e3caf93599d133899654ecc72904d804609ec2fbc68b226968a528aa8404d861",
+      "start": 72167
+    },
+    {
+      "brace": 72512,
+      "end": 72669,
+      "file": "kern_resource.c",
+      "name": "get_thread_support_long_paths",
+      "sha256": "e516eda8e487b01a2802fb65e11da40585d711f38f1b09d68423fd0678f591fe",
+      "start": 72444
+    },
+    {
+      "brace": 72746,
+      "end": 72976,
+      "file": "kern_resource.c",
+      "name": "set_proc_support_long_paths",
+      "sha256": "7c6ec689dbdafa87c307c33e240bce7dec7068b6a64925220fff901ea58f05cd",
+      "start": 72671
+    },
+    {
+      "brace": 73040,
+      "end": 73215,
+      "file": "kern_resource.c",
+      "name": "get_proc_support_long_paths",
+      "sha256": "9c08a3508a350ffa4955be9d6ceec60f985903725d35d67dd6736e473de95d43",
+      "start": 72978
+    },
+    {
+      "brace": 73435,
+      "end": 74552,
+      "file": "kern_resource.c",
+      "name": "iopolicysys_vfs_support_long_paths",
+      "sha256": "348744f2fe6c42270fea5006f8d4e3232f474daff2b7e8c0d77000990035ef67",
+      "start": 73303
+    },
+    {
+      "brace": 65851,
+      "end": 65948,
+      "file": "kern_proc.c",
+      "name": "proc_ignores_node_permissions",
+      "sha256": "2467772d064170cf729422b05036fdda09ae3f964fa2f92eb9bacc97c7abe424",
+      "start": 65806
+    },
+    {
+      "brace": 66733,
+      "end": 67171,
+      "file": "kern_proc.c",
+      "name": "proc_support_long_paths",
+      "sha256": "ebbcb8d181d3ae067846baa85f6d41215fbfcade441d29168acbdda9d88567a1",
+      "start": 66694
+    }
+  ],
+  "release": "xnu-11417.140.69",
+  "schema": 1
+}

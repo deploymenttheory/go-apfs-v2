@@ -20,6 +20,8 @@ import (
 	"time"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 type commandResult struct {
@@ -82,7 +84,7 @@ func run(args ...string) []byte {
 	return b
 }
 func observe(args ...string) ([]byte, error) {
-	b, err := exec.Command(args[0], args[1:]...).CombinedOutput()
+	b, err := cirunner.Command(args[0], args[1:]...).CombinedOutput()
 	r := commandResult{Args: args, Output: string(b)}
 	if err != nil {
 		r.Error = err.Error()

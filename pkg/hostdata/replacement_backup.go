@@ -2,6 +2,7 @@ package hostdata
 
 import (
 	"bufio"
+	"context"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -15,11 +16,16 @@ import (
 // blocks belong to the preceding DATA or ALTERNATE_DATA stream (MS-BKUP 2.10).
 // Never send a main-data sparse block to BackupWrite: the caller owns new bytes.
 func filterReplacementStreams(input io.Reader, output io.Writer) error {
-	reader := bufio.NewReaderSize(input, 64<<10)
-	writer := bufio.NewWriterSize(output, 64<<10)
-	budget := uint64(8 << 20)
+	return filterReplacementStreamsContext(context.Background(), input, output)
+}
+func filterReplacementStreamsContext(ctx context.Context, input io.Reader, output io.Writer) error {
+	reader := bufio.NewReaderSize(replacementReader{ctx, input}, 64<<10)
+	writer := bufio.NewWriterSize(replacementWriter{ctx, output}, 64<<10)
 	var sparse, named bool
-	for count := 0; count < 65536; count++ {
+	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		var header [20]byte
 		if _, err := io.ReadFull(reader, header[:]); err != nil {
 			if err == io.EOF {
@@ -67,18 +73,11 @@ func filterReplacementStreams(input io.Reader, output io.Writer) error {
 			if start > math.MaxInt64 || size-8 > math.MaxInt64-start {
 				return fmt.Errorf("invalid sparse backup extent")
 			}
-			if named && start+size-8 > 8<<20 {
-				return fmt.Errorf("%w: sparse alternate stream exceeds limit", ErrUnsupportedReplacement)
-			}
 			keep = named
 		default:
 			return fmt.Errorf("%w: backup stream type %d", ErrUnsupportedReplacement, id)
 		}
 		if keep {
-			if uint64(nameSize) > budget || size > budget-uint64(nameSize) {
-				return fmt.Errorf("%w: extended attributes/streams exceed limit", ErrUnsupportedReplacement)
-			}
-			budget -= uint64(nameSize) + size
 			if _, err := writer.Write(header[:]); err != nil {
 				return err
 			}
@@ -102,5 +101,4 @@ func filterReplacementStreams(input io.Reader, output io.Writer) error {
 			return err
 		}
 	}
-	return fmt.Errorf("%w: backup stream count", ErrUnsupportedReplacement)
 }

@@ -13,7 +13,7 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -21,6 +21,8 @@ import (
 	"time"
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/xattrrestore"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 type command struct {
@@ -39,7 +41,7 @@ func read(p string) []byte     { b, e := os.ReadFile(p); must(e); return b }
 func write(p string, b []byte) { must(os.WriteFile(p, b, 0600)) }
 func sum(b []byte) string      { return fmt.Sprintf("%x", sha256.Sum256(b)) }
 func run(input string, args ...string) []byte {
-	cmd := exec.Command(args[0], args[1:]...)
+	cmd := cirunner.Command(args[0], args[1:]...)
 	cmd.Stdin = strings.NewReader(input)
 	var out, errout bytes.Buffer
 	cmd.Stdout = &out

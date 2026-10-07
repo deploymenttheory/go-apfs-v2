@@ -11,7 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -22,6 +22,8 @@ import (
 	"github.com/deploymenttheory/go-apfs-v2/internal/evidenceaudit"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 const out = "artifacts/path-fork-native"
@@ -34,7 +36,7 @@ func must(e error) {
 func hash(b []byte) string { h := sha256.Sum256(b); return hex.EncodeToString(h[:]) }
 func read(p string) []byte { b, e := os.ReadFile(p); must(e); return b }
 func run(args ...string) []byte {
-	b, e := exec.Command(args[0], args[1:]...).CombinedOutput()
+	b, e := cirunner.Command(args[0], args[1:]...).CombinedOutput()
 	if e != nil {
 		panic(fmt.Sprintf("%s: %v %s", args[0], e, b))
 	}
@@ -147,7 +149,7 @@ func main() {
 		}
 	}
 	must(os.RemoveAll(work))
-	hashes, e := evidenceaudit.SourceHashes(os.DirFS("."), []string{source, "scripts/verify-path-fork-native.go", "pkg/hostdata/*.go", "pkg/hostdata/*/*.go", "internal/hosttime/*.go", "internal/testutil/heldfixture/*.go", "go.mod", "go.sum"})
+	hashes, e := evidenceaudit.HarnessSourceHashes(os.DirFS("."), []string{source, "scripts/verify-path-fork-native.go", "pkg/hostdata/*.go", "pkg/hostdata/*/*.go", "internal/hosttime/*.go", "internal/testutil/heldfixture/*.go", "go.mod", "go.sum"})
 	must(e)
 	report := map[string]any{"passed": true, "revision": strings.TrimSpace(string(run("git", "rev-parse", "HEAD"))), "goos": runtime.GOOS, "goarch": runtime.GOARCH, "source_sha256": hashes, "ast_sha256": ast, "cases": cases, "sdk": strings.TrimSpace(string(run("xcrun", "--show-sdk-version"))), "host": string(run("sw_vers")), "compiler": string(run("xcrun", "clang", "--version"))}
 	b, e := json.MarshalIndent(report, "", "  ")

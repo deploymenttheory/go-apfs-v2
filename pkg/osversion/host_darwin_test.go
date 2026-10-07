@@ -2,9 +2,11 @@ package osversion
 
 import (
 	"context"
-	"os/exec"
+
 	"strings"
 	"testing"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 func TestDetectNative(t *testing.T) {
@@ -12,7 +14,7 @@ func TestDetectNative(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	raw, err := exec.CommandContext(t.Context(), "sw_vers", "-productVersion").Output()
+	raw, err := cirunner.CommandContext(t.Context(), "sw_vers", "-productVersion").Output()
 	if err != nil {
 		t.Fatal(err)
 	}

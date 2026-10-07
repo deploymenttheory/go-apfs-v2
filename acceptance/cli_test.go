@@ -8,7 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -16,6 +16,8 @@ import (
 	"testing"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/exitcode"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 // --- info ---
@@ -143,7 +145,7 @@ func TestListJSONLines(t *testing.T) {
 }
 
 func TestListEnvOutputJSON(t *testing.T) {
-	cmd := exec.Command(binPath, "list", fixtureDMG)
+	cmd := cirunner.Command(binPath, "list", fixtureDMG)
 	cmd.Env = append(os.Environ(), "APFS_OUTPUT=json")
 	out, err := cmd.Output()
 	if err != nil {

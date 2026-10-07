@@ -16,7 +16,7 @@ import (
 	"io"
 	"io/fs"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -24,6 +24,8 @@ import (
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/disk"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/exitcode"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 // Expected facts about the acceptance image (default: Firefox 150),
@@ -304,11 +306,11 @@ func TestAcceptanceGroundTruthAgainstHdiutil(t *testing.T) {
 	if err := os.MkdirAll(mountPoint, 0755); err != nil {
 		t.Fatal(err)
 	}
-	attach := exec.Command("hdiutil", "attach", "-readonly", "-nobrowse", "-mountpoint", mountPoint, dmg)
+	attach := cirunner.Command("hdiutil", "attach", "-readonly", "-nobrowse", "-mountpoint", mountPoint, dmg)
 	if out, err := attach.CombinedOutput(); err != nil {
 		t.Fatalf("hdiutil attach failed: %v\n%s", err, out)
 	}
-	defer exec.Command("hdiutil", "detach", mountPoint).Run()
+	defer cirunner.Command("hdiutil", "detach", mountPoint).Run()
 
 	var checked int
 	err := filepath.WalkDir(mountPoint, func(path string, entry fs.DirEntry, err error) error {

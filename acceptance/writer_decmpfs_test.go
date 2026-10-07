@@ -21,6 +21,8 @@ import (
 	"testing"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfswrite"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 const decmpfsText = "the quick brown fox jumps over the lazy dog, repeatedly and at length. " +
@@ -72,7 +74,7 @@ func TestDecmpfsFsckClean(t *testing.T) {
 	dev := attachRaw(t, imgPath)
 	defer detach(t, dev)
 
-	out, err := exec.Command("fsck_apfs", "-n", dev).CombinedOutput()
+	out, err := cirunner.Command("fsck_apfs", "-n", dev).CombinedOutput()
 	t.Logf("fsck_apfs output:\n%s", out)
 	if err != nil {
 		t.Fatalf("fsck_apfs reported errors (exit %v)", err)
@@ -94,7 +96,7 @@ func TestDecmpfsApfsckClean(t *testing.T) {
 	imgPath := filepath.Join(t.TempDir(), "decmpfs-apfsck.img")
 	writeDecmpfsImage(t, imgPath)
 
-	out, err := exec.Command("apfsck", "-cw", imgPath).CombinedOutput()
+	out, err := cirunner.Command("apfsck", "-cw", imgPath).CombinedOutput()
 	t.Logf("apfsck output:\n%s", out)
 	if err != nil {
 		t.Fatalf("apfsck reported problems (exit %v)", err)

@@ -13,13 +13,15 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"reflect"
 	"runtime"
 	"strings"
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/unpackrestore"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 type command struct {
@@ -62,7 +64,7 @@ func main() {
 	write := func(path string, b []byte) { must(os.WriteFile(path, b, 0600)) }
 	sum := func(b []byte) string { return fmt.Sprintf("%x", sha256.Sum256(b)) }
 	run := func(input string, args ...string) []byte {
-		cmd := exec.Command(args[0], args[1:]...)
+		cmd := cirunner.Command(args[0], args[1:]...)
 		cmd.Stdin = strings.NewReader(input)
 		var out, stderr bytes.Buffer
 		cmd.Stdout, cmd.Stderr = &out, &stderr

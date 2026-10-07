@@ -6,13 +6,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"reflect"
 	"testing"
 	"time"
 
 	"golang.org/x/sys/unix"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 func TestReplacementCompressedDarwinNative(t *testing.T) {
@@ -23,7 +25,7 @@ func TestReplacementCompressedDarwinNative(t *testing.T) {
 	tools := t.TempDir()
 	run := func(args ...string) []byte {
 		t.Helper()
-		out, err := exec.Command(args[0], args[1:]...).CombinedOutput()
+		out, err := cirunner.Command(args[0], args[1:]...).CombinedOutput()
 		if err != nil {
 			t.Fatalf("%v: %v\n%s", args, err, out)
 		}

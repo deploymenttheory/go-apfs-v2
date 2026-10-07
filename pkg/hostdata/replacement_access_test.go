@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"errors"
 	"os"
-	"os/exec"
+
 	"runtime"
 	"testing"
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/heldfixture"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 // Exercise a real host write denial through both public APIs on every OS.
@@ -22,11 +24,11 @@ func TestReplacementWriteDeniedSource(t *testing.T) {
 		}
 		switch runtime.GOOS {
 		case "darwin":
-			if out, err := exec.Command("/bin/chmod", "+a", "everyone deny write", source.Name()).CombinedOutput(); err != nil {
+			if out, err := cirunner.Command("/bin/chmod", "+a", "everyone deny write", source.Name()).CombinedOutput(); err != nil {
 				t.Fatalf("set source denial: %v %s", err, out)
 			}
 		case "windows":
-			if out, err := exec.Command("icacls", source.Name(), "/deny", "*S-1-1-0:(WD)").CombinedOutput(); err != nil {
+			if out, err := cirunner.Command("icacls", source.Name(), "/deny", "*S-1-1-0:(WD)").CombinedOutput(); err != nil {
 				t.Fatalf("set source denial: %v %s", err, out)
 			}
 		default:

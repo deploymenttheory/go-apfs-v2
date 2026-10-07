@@ -1,0 +1,66 @@
+name: Held replacement qualification
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: replacement-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  CGO_ENABLED: "0"
+  GOTOOLCHAIN: local
+
+jobs:
+  qualification:
+    name: Replacement coverage and native controls (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-2022, windows-2025, macos-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
+      - name: Require EFS service for native encrypted-file controls
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Set-Service -Name EFS -StartupType Manual
+          Start-Service -Name EFS
+          Get-Service -Name EFS | Format-List Name,Status,StartType
+          fsutil behavior query disableencryption
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot query required EFS capability' }
+      - name: Require complete hostdata and every changed replacement file above 95 percent
+        run: |
+          apfs-ci-runner --suite replacement/qualification/step4 --timeout 39m -- go run scripts/verify-replacement.go
+      - name: Retain exact tests and per-file coverage
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: replacement-qualification-${{ matrix.os }}
+          path: artifacts/replacement-coverage/
+          if-no-files-found: error
+
+      - name: Retain complete CI command diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: ci-observability-replacement-qualification-${{ strategy.job-index || 0 }}-${{ github.run_attempt }}
+          path: artifacts/ci-observability/
+          compression-level: 9
+          if-no-files-found: error

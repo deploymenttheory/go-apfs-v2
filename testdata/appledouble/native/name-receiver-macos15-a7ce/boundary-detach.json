@@ -1,0 +1,6 @@
+{
+  "device": "/dev/disk6",
+  "diagnostic_only": true,
+  "error": "\u003cnil\u003e",
+  "mount": "/Users/runner/work/go-apfs-v2/go-apfs-v2/artifacts/name-native-boundary-mounts/26-APFS-mount"
+}

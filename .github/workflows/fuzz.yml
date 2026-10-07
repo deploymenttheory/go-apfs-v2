@@ -76,16 +76,27 @@ jobs:
       # The fuzzer minimizes every new interesting input, for up to 60s by
       # default, without counting executions; on these multi-KiB inputs that
       # stalls it, so minimization is capped at a second.
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
       - name: Fuzz
         env:
           FUZZTIME: ${{ github.event_name == 'schedule' && '10m' || '30s' }}
-        run: >
-          go test ${{ matrix.pkg }} -run '^$'
-          -fuzz '^${{ matrix.target }}$'
-          -fuzztime "$FUZZTIME" -fuzzminimizetime 1s
+        run: |
+          apfs-ci-runner --suite fuzz/fuzz/step3 --timeout 60m -- go test -json ${{ matrix.pkg }} -run '^$' -fuzz '^${{ matrix.target }}$' -fuzztime "$FUZZTIME" -fuzzminimizetime 1s
       - name: Upload crashing input
         if: failure()
         uses: actions/upload-artifact@v7.0.1
         with:
+          include-hidden-files: true
           name: crasher-${{ matrix.target }}
           path: ${{ matrix.pkg }}/testdata/fuzz/${{ matrix.target }}/
+
+      - name: Retain complete CI command diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: ci-observability-fuzz-fuzz-${{ strategy.job-index || 0 }}-${{ github.run_attempt }}
+          path: artifacts/ci-observability/
+          compression-level: 9
+          if-no-files-found: error

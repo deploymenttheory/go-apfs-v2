@@ -1,0 +1,17 @@
+{
+  "diagnostic_only": true,
+  "exit_code": 0,
+  "final": {
+    "schema": 1,
+    "nonce": "6ec1ec090f09eda032694b3cc2ce82ea",
+    "pid": 2516,
+    "completed": 2,
+    "stopped": false,
+    "cleanup_errno": 0,
+    "Error": 0
+  },
+  "image_sha256": "da469bc3aa3af936b1b64ca548055cdd823857b7af9d177215b593e145ae8ec7",
+  "observations": 4,
+  "observed_cases": 2,
+  "qualifies_full_gate": false
+}

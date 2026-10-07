@@ -1,0 +1,49 @@
+name: Native pathname cache source
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: name-cache-ast-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  native:
+    name: Complete pathname cache bodies (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, macos-latest, xcode-27]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
+      - name: Parse unchanged source bodies and reject tampered ranges
+        env:
+          CGO_ENABLED: "0"
+        run: |
+          apfs-ci-runner --suite name-cache-ast/native/step3 --timeout 19m -- go test -json -count=1 -v scripts/capture-pathname-authorization-ast.go scripts/capture-name-cache-ast_test.go
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          include-hidden-files: true
+          name: name-cache-ast-${{ matrix.os }}
+          path: artifacts/name-cache-ast/
+          if-no-files-found: error
+
+      - name: Retain complete CI command diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: ci-observability-name-cache-ast-native-${{ strategy.job-index || 0 }}-${{ github.run_attempt }}
+          path: artifacts/ci-observability/
+          compression-level: 9
+          if-no-files-found: error

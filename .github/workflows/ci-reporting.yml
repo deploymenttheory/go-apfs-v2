@@ -1,0 +1,64 @@
+name: Shared CI reporting
+on:
+  workflow_call:
+  workflow_dispatch:
+permissions:
+  contents: read
+env:
+  CGO_ENABLED: "0"
+  GOTOOLCHAIN: local
+jobs:
+  reporting:
+    name: Reporting contract (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-2022, windows-2025, macos-15, macos-latest, xcode-27]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
+      - name: Reject reporting bypasses across the repository
+        run: |
+          apfs-ci-runner --suite ci-reporting/audit --timeout 3m -- go run scripts/audit-ci-reporting.go -report artifacts/ci-reporting-audit/inventory.json
+      - name: Enforce reporting and provenance coverage
+        run: |
+          apfs-ci-runner --suite ci-reporting/coverage --timeout 8m -- go run scripts/verify-ci-reporting.go
+      - name: Exercise CLI and workflow rejection regressions
+        run: |
+          apfs-ci-runner --suite ci-reporting/cli --timeout 3m -- go test -json -count=1 scripts/ci-run.go scripts/ci-run_test.go
+          apfs-ci-runner --suite ci-reporting/audit-tests --timeout 3m -- go test -json -count=1 scripts/audit-ci-reporting.go scripts/audit-ci-reporting_test.go
+          apfs-ci-runner --suite ci-reporting/coverage-tests --timeout 3m -- go test -json -count=1 scripts/verify-ci-reporting.go scripts/verify-ci-reporting_test.go
+      - name: Exercise reporting concurrency under the race detector
+        if: runner.os == 'Linux'
+        env:
+          CGO_ENABLED: "1"
+        run: |
+          apfs-ci-runner --suite ci-reporting/race --timeout 4m -- go test -json -race -count=1 ./internal/testutil/cirunner ./internal/testutil/captureprovenance ./internal/evidenceaudit
+      - name: Retain complete CI command diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: ci-observability-ci-reporting-${{ matrix.os }}-${{ github.run_attempt }}
+          path: artifacts/ci-observability/
+          compression-level: 9
+          if-no-files-found: error
+      - name: Retain reporting coverage and audit evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: ci-reporting-qualification-${{ matrix.os }}-${{ github.run_attempt }}
+          path: |
+            artifacts/ci-reporting-coverage/
+            artifacts/ci-reporting-audit/
+          if-no-files-found: error

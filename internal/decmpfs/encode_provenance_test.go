@@ -11,6 +11,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/captureprovenance"
 )
 
 func TestNativeEncoderProvenance(t *testing.T) {
@@ -49,6 +51,9 @@ func TestNativeEncoderProvenance(t *testing.T) {
 			}
 			if record.Host == "" || record.Compiler == "" || record.SDK == "" {
 				t.Fatal("missing native host/compiler/SDK evidence")
+			}
+			if err := captureprovenance.Verify(os.DirFS("../.."), record.Sources); err != nil {
+				t.Fatal(err)
 			}
 			for _, path := range c.sources {
 				b, err := os.ReadFile(filepath.Join("../..", path))

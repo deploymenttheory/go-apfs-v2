@@ -1,7 +1,6 @@
 package hostdata
 
 import (
-	"errors"
 	"os"
 	"testing"
 
@@ -9,7 +8,7 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-func TestRootReplacementWindowsStreamLimit(t *testing.T) {
+func TestRootReplacementWindowsLargeStream(t *testing.T) {
 	source := heldfixture.Source(t, 0600)
 	if err := os.WriteFile(source.Name()+":too-large", make([]byte, (8<<20)+1), 0600); err != nil {
 		t.Fatal(err)
@@ -20,11 +19,16 @@ func TestRootReplacementWindowsStreamLimit(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer root.Close()
-	if r, err := PrepareReplacementAt(source, root, "."); !errors.Is(err, ErrUnsupportedReplacement) {
-		if r != nil {
-			r.Close()
-		}
-		t.Fatalf("oversized stream: %v", err)
+	r, err := PrepareReplacementAt(source, root, ".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(r.File.Name() + ":too-large")
+	if err != nil || len(got) != (8<<20)+1 {
+		t.Fatalf("large stream lost: %d %v", len(got), err)
+	}
+	if err = r.Close(); err != nil {
+		t.Fatal(err)
 	}
 	entries, err := os.ReadDir(dir)
 	if err != nil || len(entries) != 0 {

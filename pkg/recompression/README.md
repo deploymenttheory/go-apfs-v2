@@ -15,7 +15,8 @@ choose the foreign identity, target macOS release or mount policy.
 
 | Package | Responsibility |
 | --- | --- |
-| `recompression` | Foreign operation policy, permission evaluation, private staging, logical inode transitions and hard-link outcomes |
+| `authorization` | Explicit captured credentials, ordered Darwin ACL/POSIX search and namespace permission decisions |
+| `recompression` | Path-aware foreign operation integration, endpoint permission checks, private staging, logical inode transitions and hard-link outcomes |
 | `metatransport` | Held payload access, immutable blobs, association checks, generation locks and publication |
 | `hostdata` | Shared compression lifecycle and native held-file operations |
 | `compression/decmpfs` | Encoding and decoding compression storage |
@@ -26,7 +27,45 @@ contracts. Carrier storage has no dependency on compression policy. This boundar
 lets codesign reuse the shared operation instead of implementing its own metadata
 transport or compression lifecycle.
 
-## Calling the operation
+## Selecting a path or an acquired endpoint
+
+Use `RecompressPath` when the operation starts from a source pathname. Bind
+explicit observations with `NewPathContext` to the selected Store, manifest and
+generation, then supply this context through `PathOptions`. The resolver checks
+every directory actually traversed, including symbolic-link and dot-component
+traversal, before entering the same endpoint lifecycle. Missing ancestor or leaf
+security observations produce `ErrAuthority`; they never bypass lookup checks.
+
+`PathCapture.Root` identifies the captured original directory. `FilesystemRoot`
+explicitly establishes a root for absolute link targets. `Complete` declares
+that missing entries really are absent; otherwise missing names remain unknown.
+Mount observations belong to the logical source and may differ along the path.
+A changed manifest requires a new context, even if another store happens to use
+the same generation number. Path-aware calls also require an explicitly observed
+`Authority.Process.LongPaths` value; a nonnil `ProcessPolicy{}` alone is
+insufficient. See the [captured process example](../authorization/README.md#path-length-process-observation).
+The original input length is checked before directory search; symlink expansion
+preserves native trailing-slash and error-order distinctions. Enabled long-path
+behavior is source-backed until a successful native entitled context is qualified.
+
+For each source record, `CapturedPathObservation` can derive ACL presence or
+absence through `Store.ObservedSourceAttribute`. It requires complete successful
+source-attribute enumeration, recorded as `SourceAttributesCaptured`. The caller
+still provides actual logical mount and inode context. Older carriers without
+this flag remain explicitly uncaptured. New manifests containing it require an
+updated reader because old readers reject unknown fields.
+
+`RecompressRecord` is the pre-resolved, caller-authorized endpoint API. It checks
+the leaf operation but cannot establish parent search authorization or prove
+that absent source ACL data was observed. Use it only when those prerequisites
+have already been established by the caller; it is not a fallback for incomplete
+path context.
+
+The namespace integration is still being qualified for mounted filesystem name
+comparison, path limits and the full native operation corpus. A successful unit
+test does not qualify those unresolved native behaviors.
+
+## Calling the endpoint operation
 
 ```go
 result, err := recompression.RecompressRecord(ctx, store, originalName, generation,
@@ -56,7 +95,11 @@ old compressed storage to be silently reinterpreted as the edited content.
 The caller keeps the store open and excludes uncoordinated changes to payloads,
 metadata and namespace for the operation's lifetime. Ordinary host permissions
 still control access to that storage. The scoped Darwin evaluator does not grant
-host privileges or claim to reproduce uncaptured sandbox/process overrides.
+host privileges. Path-aware calls require an explicit observed process policy;
+the same captured policy reaches endpoint authorization. External sandbox/MAC
+hooks remain outside the discretionary evaluator. Enabled private owner overrides
+are source-backed controls with an explicit outstanding native-qualification
+constraint; see [authorization](../authorization/README.md).
 
 ## Outcomes and failures
 
@@ -88,12 +131,12 @@ storage validation use bounded reads rather than whole-resource-fork buffers.
 
 ## Qualification and remaining integration
 
-The mandatory harness replays 648 retained native-profile cases, produces nine
-APFS/HFS+ images with 666 entries on each host and reads each producer's images
+The mandatory harness replays 648 retained native-profile cases, adds 72 replacement-composition cases, produces nine
+APFS/HFS+ images with 846 entries on each host and reads each producer's images
 through the native macOS kernel. Native access probes retain 168 independent
 operations and two LZ4 write-open controls per captured release, with arm64 and
 x86_64 Clang ASTs. Existing lifecycle, codec and resource-fork gates remain active.
-Both complete packages and every production file selected by the new harness
+All three complete packages (`authorization`, `metatransport`, `recompression`) and every production file selected by the new harness
 must exceed 95 percent coverage.
 
 The standalone access corpus retains macOS 15, 26 and 27. Targets 15/26 reject
@@ -104,3 +147,25 @@ prerequisite is qualified. A green SDK
 harness also does not finish codesign Phase 2: its consumer integration, native
 `--preserve-afsc` behavior, full failure matrix, shared resource budgets and
 large-file measurements remain obligations in that project's implementation plan.
+
+### Source name comparison and lookup
+
+`RecompressPath` additionally requires each searched directory's observed
+`Mount.CaseSensitive` value. `NewPathContext` snapshots that pointer along with
+other observations. Capture the source volume's case-sensitivity capability and
+its validity bit; do not infer it from the receiving host or the label "APFS" or
+"HFS+". APFS and HFS+ each have case-sensitive and case-insensitive variants.
+
+After directory search permission succeeds, lookup applies the source
+filesystem's component-length and decoding rules, then its shared name
+comparator. A carrier with two matching siblings returns `ErrConflict`, even if
+one spelling exactly matches the request. Lookup retains the selected original
+manifest name for publication. Creating a new name has different admission
+rules and must not be substituted for lookup of an existing entry.
+
+The native lookup corpus separately captures `O_RDWR` without `O_CREAT`, actual
+creation attempts, stored directory spelling, permission failures and contents.
+For example, HFS+ can resolve illegal UTF-8 bytes through literal percent-escaped
+catalog names, while APFS reports a missing name. Native capture and portable
+replay on macOS 15, 26 and 27 remain mandatory; one fresh bootstrap capture never
+replaces the three retained baselines.

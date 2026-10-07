@@ -2,12 +2,21 @@
 
 package hostdata
 
-import "os"
+import (
+	"context"
+	"os"
+)
 
-func prepareReplacement(_ *os.File, _ string, _ os.FileInfo) (*os.File, error) {
+func prepareReplacementContext(ctx context.Context, _ *os.File, _ string, _ os.FileInfo) (*os.File, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	return nil, ErrUnsupportedReplacement
 }
 
-func restoreReplacementMetadata(_, _ *os.File, _ os.FileInfo) error {
+func restoreReplacementMetadataContext(ctx context.Context, _, _ *os.File, _ os.FileInfo) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	return ErrUnsupportedReplacement
 }

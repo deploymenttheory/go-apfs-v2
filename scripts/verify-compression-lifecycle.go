@@ -9,13 +9,15 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/evidenceaudit"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 func main() {
@@ -36,23 +38,24 @@ func verify() error {
 	defer log.Close()
 	profile := filepath.Join(dir, "coverage.out")
 	var transcript bytes.Buffer
-	cmd := exec.Command("go", "test", "-count=1", "-json", "-run=^(TestRecompress|TestCompressionResourceFork|TestPathResourceForkNative|TestNativeCompressionAcquisition|TestCompressionOperation|TestInstallHeldCompression|TestInstallCompression|TestCommitHeldCompression|TestCommitCompression|TestActivateCompression|TestCaptureCompressionMetadata|TestCompressionMetadata|TestCompressionLifecycle|TestQueryCompressionHeldNativeCorpus|TestCompressionNativeMetadata)", "-covermode=atomic", "-coverprofile="+profile, "./pkg/hostdata")
+	cmd := cirunner.Command("go", "test", "-count=1", "-json", "-run=^(TestRecompress|TestCompressionResourceFork|TestCarrierNativeResourceFork|TestResourceFork|TestPathResourceForkNative|TestNativeCompressionAcquisition|TestNativeCompressionOwned|TestCompressionOperation|TestInstallHeldCompression|TestInstallCompression|TestCommitHeldCompression|TestCommitCompression|TestActivateCompression|TestCaptureCompressionMetadata|TestCompressionMetadata|TestCompressionLifecycle|TestQueryCompressionHeldNativeCorpus|TestCompressionNativeMetadata)", "-covermode=atomic", "-coverprofile="+profile, "./pkg/hostdata")
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 	cmd.Stdout = io.MultiWriter(os.Stdout, log, &transcript)
 	cmd.Stderr = io.MultiWriter(os.Stderr, log)
 	if e = cmd.Run(); e != nil {
 		return e
 	}
-	required := map[string]bool{}
+	required := map[string]bool{"TestResourceForkContextOwnership": true, "TestNativeCompressionOwnedValidation": true}
 	for _, name := range []string{"TestCompressionResourceForkProvenance", "TestRecompressNativeStorage", "TestRecompressNativeOperationProfiles", "TestRecompressAdmissionAndDeclines", "TestRecompressFailuresAndCancellation", "TestCompressionOperationProvenance", "TestInstallHeldCompressionBindingFailures", "TestInstallCompressionForeignFiles", "TestInstallCompressionStageFailures", "TestInstallCompressionForkNativeLifecycle", "TestInstallCompressionForkMultiBlockAndFailures", "TestInstallCompressionForkInvalidStorage", "TestCompressionMetadataHeldProviderBinding", "TestCommitHeldCompressionBinding", "TestCommitCompressionNativeLifecycle", "TestCommitCompressionCancellationAndValidation", "TestActivateCompressionNativeComparisons", "TestActivateCompressionCancellationAndReadFailures", "TestCaptureCompressionMetadataBounded", "TestCaptureCompressionMetadataFailures", "TestCaptureCompressionMetadataAbsent", "TestCompressionMetadataInvalidArguments", "TestCompressionLifecycleProvenance"} {
 		required[name] = true
 	}
 	if runtime.GOOS == "darwin" {
-		for _, name := range []string{"TestCompressionResourceForkOpeningNative", "TestCompressionResourceForkVersionRouting", "TestCompressionResourceForkLegacyFailures", "TestCompressionResourceForkLegacyIdentity", "TestPathResourceForkNative", "TestRecompressNativeFiles", "TestNativeCompressionAcquisitionErrors", "TestNativeCompressionAcquisitionDecompresses", "TestInstallHeldCompressionNativeReadback", "TestCommitHeldCompressionNativeReadback", "TestCommitHeldCompressionNativeErrors", "TestQueryCompressionHeldNativeCorpus", "TestCompressionMetadataHeldLargeFork", "TestCompressionMetadataNativeErrors"} {
+		for _, name := range []string{"TestNativeCompressionOwnedHeldAcquisition", "TestNativeCompressionOwnedNoAcquisitionCalls", "TestNativeCompressionOwnedReadOnlyAdmission", "TestNativeCompressionOwnedMounted", "TestCompressionResourceForkOpeningNative", "TestCarrierNativeResourceFork", "TestCompressionResourceForkVersionRouting", "TestCompressionResourceForkLegacyFailures", "TestCompressionResourceForkLegacyIdentity", "TestResourceForkContextVersionRouting", "TestResourceForkLegacyContextCheckpoints", "TestResourceForkNativeLateCancellationCloses", "TestResourceForkLegacyContextNativeBinding", "TestPathResourceForkNative", "TestRecompressNativeFiles", "TestNativeCompressionAcquisitionErrors", "TestNativeCompressionAcquisitionDecompresses", "TestInstallHeldCompressionNativeReadback", "TestCommitHeldCompressionNativeReadback", "TestCommitHeldCompressionNativeErrors", "TestQueryCompressionHeldNativeCorpus", "TestCompressionMetadataHeldLargeFork", "TestCompressionMetadataNativeErrors"} {
 			required[name] = true
 		}
 	} else {
 		required["TestNativeCompressionAcquisitionRequiresDarwinContext"] = true
+		required["TestNativeCompressionOwnedForeignHost"] = true
 		required["TestCompressionNativeMetadataRequiresDarwinContext"] = true
 		required["TestCommitHeldCompressionRequiresNativeDarwinView"] = true
 		required["TestInstallHeldCompressionRequiresNativeDarwinView"] = true
@@ -131,7 +134,7 @@ func verify() error {
 		return e
 	}
 	packageProfile := filepath.Join(dir, "package-coverage.out")
-	packageCmd := exec.Command("go", "test", "-count=1", "-json", "-covermode=atomic", "-coverprofile="+packageProfile, "./pkg/hostdata")
+	packageCmd := cirunner.Command("go", "test", "-count=1", "-json", "-covermode=atomic", "-coverprofile="+packageProfile, "./pkg/hostdata")
 	packageCmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 	packageCmd.Stdout = io.MultiWriter(os.Stdout, packageLog)
 	packageCmd.Stderr = os.Stderr
@@ -172,11 +175,11 @@ func verify() error {
 	if packageTotal == 0 || packageCovered*100 <= packageTotal*95 {
 		return fmt.Errorf("complete hostdata package coverage must exceed 95%%: %d/%d", packageCovered, packageTotal)
 	}
-	hashes, e := evidenceaudit.SourceHashes(os.DirFS("."), []string{"pkg/hostdata/compression_*.go", "pkg/hostdata/resource_fork*.go", "pkg/hostdata/appledouble_path_fork*.go", "internal/darwinabi/*.go", "internal/darwinabi/*.s", "pkg/osversion/*.go", "scripts/verify-compression-lifecycle.go", "scripts/capture-compression-lifecycle.go", "testdata/appledouble/native/compression-lifecycle*", "testdata/appledouble/native/compression-operation*", "testdata/appledouble/native/resource-fork-open*", "scripts/capture-resource-fork-open.go", "scripts/capture-compression-operation*.go", "testdata/appledouble/native/compression-policy.c", "testdata/appledouble/native/compression-query.json.gz", "go.mod", "go.sum"})
+	hashes, e := evidenceaudit.HarnessSourceHashes(os.DirFS("."), []string{"pkg/hostdata/compression_*.go", "pkg/hostdata/resource_fork*.go", "pkg/hostdata/appledouble_path_fork*.go", "internal/darwinabi/*.go", "internal/darwinabi/*.s", "pkg/osversion/*.go", "scripts/verify-compression-lifecycle.go", "scripts/capture-compression-lifecycle.go", "testdata/appledouble/native/compression-lifecycle*", "testdata/appledouble/native/compression-operation*", "testdata/appledouble/native/resource-fork-open*", "scripts/capture-resource-fork-open.go", "scripts/capture-compression-operation*.go", "testdata/appledouble/native/compression-policy.c", "testdata/appledouble/native/compression-query.json.gz", "go.mod", "go.sum"})
 	if e != nil {
 		return e
 	}
-	revision, e := exec.Command("git", "rev-parse", "HEAD").Output()
+	revision, e := cirunner.Command("git", "rev-parse", "HEAD").Output()
 	if e != nil {
 		return e
 	}

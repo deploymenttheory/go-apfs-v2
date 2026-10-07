@@ -102,6 +102,11 @@ func compareCatalogKeysFolded(a, b []byte) int {
 		}
 		return 1
 	}
+	// Apple CompareExtendedCatalogKeys reserves empty names for thread keys.
+	// An all-ignorable filename must not compare equal to its folder thread.
+	if len(na) == 0 || len(nb) == 0 {
+		return len(na) - len(nb)
+	}
 	i, j := 0, 0
 	for {
 		var ua, ub uint16

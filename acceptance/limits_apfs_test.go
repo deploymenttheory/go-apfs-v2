@@ -17,6 +17,8 @@ import (
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfswrite"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/disk"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/exitcode"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 // flatDir creates a directory of n small files with 12-byte names.
@@ -133,7 +135,7 @@ func checkAPFSImage(t *testing.T, rawPath string) {
 	t.Helper()
 	checked := false
 	if _, err := exec.LookPath("apfsck"); err == nil {
-		out, err := exec.Command("apfsck", "-cw", rawPath).CombinedOutput()
+		out, err := cirunner.Command("apfsck", "-cw", rawPath).CombinedOutput()
 		if err != nil {
 			t.Fatalf("apfsck reported problems (exit %v):\n%s", err, out)
 		}
@@ -144,7 +146,7 @@ func checkAPFSImage(t *testing.T, rawPath string) {
 		requireTools(t, "hdiutil", "fsck_apfs")
 		dev := attachRaw(t, rawPath)
 		defer detach(t, dev)
-		out, err := exec.Command("fsck_apfs", "-n", dev).CombinedOutput()
+		out, err := cirunner.Command("fsck_apfs", "-n", dev).CombinedOutput()
 		if err != nil || !strings.Contains(string(out), "appears to be OK") {
 			t.Fatalf("fsck_apfs did not report the container clean (%v):\n%s", err, out)
 		}

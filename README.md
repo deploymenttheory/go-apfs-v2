@@ -63,6 +63,12 @@ over the output mean something. `--source-date-epoch` (or the standard
 times to it; `--uuid` pins the volume identity. See
 [docs/reproducible-output.md](docs/reproducible-output.md).
 
+Filesystem name compatibility is shared by image readers, writers and foreign
+pathname authorization. APFS image creation defaults to macOS 27 on every host;
+library callers can select macOS 15 or 26 explicitly. See
+[filename compatibility](docs/filename-compatibility.md) for creation versus
+lookup rules, HFS conversion, native evidence and the acceptance harness.
+
 **Image formats read:** UDIF DMGs compressed with zlib (UDZO), bzip2 (UDBZ),
 ADC, LZFSE (ULFO) or LZMA (ULMO); GPT-partitioned and Apple-Partition-Map
 layouts; and raw file system images. Images are detected by content, not by
@@ -449,7 +455,10 @@ data, _ := fs.ReadFile(vol, "Applications/Some.app/Contents/Info.plist")
 Key packages: `pkg/apfs` (APFS reader), `pkg/hfsplus` (HFS+ reader and writer),
 `pkg/disk` (DMG/UDIF reader and writer, partition tables), and `pkg/apfswrite`
 (APFS container writer), `pkg/appledouble` (shared AppleDouble codec), and
-`pkg/hostdata` (shared host metadata operations), and
+[`pkg/hostdata`](pkg/hostdata/README.md) (shared host metadata operations),
+[`pkg/metatransport`](pkg/metatransport/README.md) (foreign filesystem metadata and payload association),
+[`pkg/authorization`](pkg/authorization/README.md) (explicit captured Darwin filesystem authority),
+[`pkg/recompression`](pkg/recompression/README.md) (foreign compression lifecycle), and
 [`pkg/osversion`](pkg/osversion/README.md) (explicit macOS 15/26/27 behavior
 targets and native product-version detection). Version recognition does not imply
 that every feature has been qualified for that release. See the
@@ -490,6 +499,9 @@ Charles for HFS+, Zed and BBEdit for APFS), and on macOS every extraction is
 compared byte-for-byte against an `hdiutil` mount of the same image. See the
 [vendor DMG fixtures](docs/vendor-dmg-acceptance.md) for pinned versions,
 checksums, format differences and local test commands.
+
+CI command reporting and raw evidence retention are described in
+[CI observability](docs/ci-observability.md).
 
 ## Acknowledgements
 

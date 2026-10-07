@@ -5,7 +5,7 @@ import (
 	"errors"
 	"io"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"syscall"
 	"testing"
@@ -13,6 +13,8 @@ import (
 
 	heldfixture "github.com/deploymenttheory/go-apfs-v2/internal/testutil/heldfixture"
 	"golang.org/x/sys/unix"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 func TestRecordReadAccessDarwinHeldFile(t *testing.T) {
@@ -45,13 +47,13 @@ func TestRecordReadAccessDarwinHeldFile(t *testing.T) {
 			if err := os.Chmod(original, 0400); err != nil {
 				t.Fatal(err)
 			}
-			if out, err := exec.Command("/bin/chmod", "+a", "everyone deny writeattr", original).CombinedOutput(); err != nil {
+			if out, err := cirunner.Command("/bin/chmod", "+a", "everyone deny writeattr", original).CombinedOutput(); err != nil {
 				t.Fatalf("ACL: %v: %s", err, out)
 			}
 			if err := os.Rename(original, moved); err != nil {
 				t.Fatal(err)
 			}
-			t.Cleanup(func() { _ = exec.Command("/bin/chmod", "-N", moved).Run() })
+			t.Cleanup(func() { _ = cirunner.Command("/bin/chmod", "-N", moved).Run() })
 			if err := os.WriteFile(original, []byte("neighbour"), 0600); err != nil {
 				t.Fatal(err)
 			}
@@ -71,7 +73,7 @@ func TestRecordReadAccessDarwinHeldFile(t *testing.T) {
 				return *info.Sys().(*syscall.Stat_t)
 			}
 			acl := func() []byte {
-				out, err := exec.Command("/bin/ls", "-lde", moved).CombinedOutput()
+				out, err := cirunner.Command("/bin/ls", "-lde", moved).CombinedOutput()
 				if err != nil {
 					t.Fatal(err)
 				}

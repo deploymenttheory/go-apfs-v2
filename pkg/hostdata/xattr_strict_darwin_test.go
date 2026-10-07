@@ -6,12 +6,14 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"golang.org/x/sys/unix"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 func TestStrictXattrDarwinNativeValues(t *testing.T) {
@@ -30,7 +32,7 @@ func TestStrictXattrDarwinNativeValues(t *testing.T) {
 			if err := os.WriteFile(path, []byte("contents"), 0600); err != nil {
 				t.Fatal(err)
 			}
-			if out, err := exec.Command("/usr/bin/xattr", "-wx", tc.name, hex.EncodeToString(tc.value), path).CombinedOutput(); err != nil {
+			if out, err := cirunner.Command("/usr/bin/xattr", "-wx", tc.name, hex.EncodeToString(tc.value), path).CombinedOutput(); err != nil {
 				t.Fatal(err, string(out))
 			}
 			file, err := os.Open(path)
@@ -47,7 +49,7 @@ func TestStrictXattrDarwinNativeValues(t *testing.T) {
 				if data, present, err := ReadXattr(file, tc.name, len(tc.value)); data != nil || present || err != nil {
 					t.Fatal(data, present, err)
 				}
-				if out, err := exec.Command("/usr/bin/xattr", "-px", tc.name, path).CombinedOutput(); err == nil {
+				if out, err := cirunner.Command("/usr/bin/xattr", "-px", tc.name, path).CombinedOutput(); err == nil {
 					t.Fatal("native exposes normalized-away value", string(out))
 				}
 				return
@@ -58,7 +60,7 @@ func TestStrictXattrDarwinNativeValues(t *testing.T) {
 			if got, present, err := ReadXattr(file, tc.name, len(tc.value)); !present || !bytes.Equal(got, tc.value) || err != nil {
 				t.Fatal(got, present, err)
 			}
-			out, err := exec.Command("/usr/bin/xattr", "-px", tc.name, path).CombinedOutput()
+			out, err := cirunner.Command("/usr/bin/xattr", "-px", tc.name, path).CombinedOutput()
 			if err != nil {
 				t.Fatal(err, string(out))
 			}
@@ -69,7 +71,7 @@ func TestStrictXattrDarwinNativeValues(t *testing.T) {
 			if removed, err := RemoveXattr(file, tc.name); !removed || err != nil {
 				t.Fatal(removed, err)
 			}
-			if out, err := exec.Command("/usr/bin/xattr", "-px", tc.name, path).CombinedOutput(); err == nil {
+			if out, err := cirunner.Command("/usr/bin/xattr", "-px", tc.name, path).CombinedOutput(); err == nil {
 				t.Fatal("native still reads removed attribute", string(out))
 			}
 		})
@@ -129,10 +131,10 @@ func TestStrictXattrDarwinPermissionErrors(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer file.Close()
-	if out, err := exec.Command("/bin/chmod", "+a", "everyone deny readextattr,writeextattr", path).CombinedOutput(); err != nil {
+	if out, err := cirunner.Command("/bin/chmod", "+a", "everyone deny readextattr,writeextattr", path).CombinedOutput(); err != nil {
 		t.Fatal(err, string(out))
 	}
-	t.Cleanup(func() { _ = exec.Command("/bin/chmod", "-N", path).Run() })
+	t.Cleanup(func() { _ = cirunner.Command("/bin/chmod", "-N", path).Run() })
 	for _, read := range []func() error{
 		func() error { _, _, err := XattrSize(file, "user.strict"); return err },
 		func() error { _, _, err := ReadXattr(file, "user.strict", 4); return err },
@@ -145,7 +147,7 @@ func TestStrictXattrDarwinPermissionErrors(t *testing.T) {
 			t.Fatal("permission error suppressed", err)
 		}
 	}
-	if out, err := exec.Command("/bin/chmod", "-N", path).CombinedOutput(); err != nil {
+	if out, err := cirunner.Command("/bin/chmod", "-N", path).CombinedOutput(); err != nil {
 		t.Fatal(err, string(out))
 	}
 	if got, present, err := ReadXattr(file, "user.strict", 4); string(got) != "keep" || !present || err != nil {

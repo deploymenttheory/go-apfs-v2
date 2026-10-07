@@ -26,10 +26,14 @@ import (
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/evidenceaudit"
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/diskimage"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 type expectedCase struct {
 	Name, Scenario, Requested, Inline string
+	IdentityGroup                     string
+	Links                             uint32
 	Attribute, Fork, Data             []byte
 	Mode, Flags                       uint32
 	Birth, Modify, Change, Access     time.Time
@@ -66,7 +70,7 @@ func main() {
 	}
 }
 func command(ctx context.Context, name string, args ...string) ([]byte, error) {
-	b, e := exec.CommandContext(ctx, name, args...).CombinedOutput()
+	b, e := cirunner.CommandContext(ctx, name, args...).CombinedOutput()
 	if e != nil {
 		return b, fmt.Errorf("%s %v: %w: %s", name, args, e, b)
 	}
@@ -101,7 +105,7 @@ func run(foreign string) (err error) {
 	if e = json.Unmarshal(producerReport, &producer); e != nil {
 		return e
 	}
-	revision, e := exec.CommandContext(ctx, "git", "rev-parse", "HEAD").Output()
+	revision, e := cirunner.CommandContext(ctx, "git", "rev-parse", "HEAD").Output()
 	if e != nil {
 		return e
 	}
@@ -122,7 +126,7 @@ func run(foreign string) (err error) {
 	if _, e = command(ctx, "xcrun", "clang", "-Wall", "-Wextra", "-Werror", source, "-o", helper); e != nil {
 		return e
 	}
-	sources, e := evidenceaudit.SourceHashes(os.DirFS("."), []string{source, "scripts/verify-carrier-recompression-native.go", "scripts/verify-carrier-recompression.go", "acceptance/carrier_recompression_test.go", "pkg/metatransport/*.go", "pkg/recompression/*.go", "pkg/compression/decmpfs/*.go", "internal/decmpfs/*.go", "testdata/appledouble/native/compression-operation*.json.gz", "scripts/capture-recompression-access.go", "testdata/appledouble/native/recompression-access*.json.gz", "testdata/appledouble/native/recompression-access.c", "testdata/appledouble/native/recompression-open.c", "testdata/appledouble/native/recompression-access-source/*", ".github/workflows/carrier-recompression.yml", "go.mod", "go.sum"})
+	sources, e := evidenceaudit.HarnessSourceHashes(os.DirFS("."), []string{source, "scripts/verify-carrier-recompression-native.go", "scripts/verify-carrier-recompression.go", "acceptance/carrier_recompression_test.go", "acceptance/carrier_replacement_test.go", "pkg/metatransport/*.go", "pkg/hostdata/*.go", "pkg/recompression/*.go", "pkg/authorization/*.go", "pkg/compression/decmpfs/*.go", "internal/decmpfs/*.go", "testdata/appledouble/native/compression-operation*.json.gz", "scripts/capture-recompression-access.go", "testdata/appledouble/native/recompression-access*.json.gz", "testdata/appledouble/native/recompression-access.c", "testdata/appledouble/native/recompression-open.c", "testdata/appledouble/native/recompression-access-source/*", ".github/workflows/carrier-recompression.yml", "go.mod", "go.sum"})
 	if e != nil {
 		return e
 	}
@@ -179,7 +183,7 @@ func run(foreign string) (err error) {
 				return e
 			}
 			wantProfile := map[int]string{15: "compression-operation-macos15", 26: "compression-operation-macos26", 27: "compression-operation"}[major]
-			if expected.Schema != 1 || expected.Profile != wantProfile || expected.Filesystem != filesystem || len(expected.Cases) != 74 {
+			if expected.Schema != 1 || expected.Profile != wantProfile || expected.Filesystem != filesystem || len(expected.Cases) != 94 {
 				return fmt.Errorf("incomplete producer case manifest %s", name)
 			}
 			h, e := digest(path)
@@ -203,7 +207,7 @@ func run(foreign string) (err error) {
 			results = append(results, result)
 		}
 	}
-	report := map[string]any{"host": string(host), "compiler": string(compiler), "sources": sources, "images": results, "image_count": len(results), "native_cases": 666}
+	report := map[string]any{"host": string(host), "compiler": string(compiler), "sources": sources, "images": results, "image_count": len(results), "native_cases": 846}
 	b, e := json.MarshalIndent(report, "", "  ")
 	if e != nil {
 		return e
@@ -211,7 +215,7 @@ func run(foreign string) (err error) {
 	if e = os.WriteFile(filepath.Join(artifact, "report.json"), b, 0644); e != nil {
 		return e
 	}
-	fmt.Println("9 foreign carrier images; 666 complete native payload, storage and metadata observations passed")
+	fmt.Println("9 foreign carrier images; 846 complete native payload, storage and metadata observations passed")
 	return nil
 }
 func verifyImage(ctx context.Context, root, helper, artifact, path string, expected expectedImage) (result map[string]any, err error) {
@@ -237,7 +241,7 @@ func verifyImage(ctx context.Context, root, helper, artifact, path string, expec
 		defer cancel()
 		var attempts []map[string]any
 		detachErr := diskimage.RetryDetach(detachCtx, func() (int, error) {
-			b, e := exec.CommandContext(detachCtx, "hdiutil", "detach", device).CombinedOutput()
+			b, e := cirunner.CommandContext(detachCtx, "hdiutil", "detach", device).CombinedOutput()
 			code := 0
 			if e != nil {
 				code = -1
@@ -268,7 +272,7 @@ func verifyImage(ctx context.Context, root, helper, artifact, path string, expec
 		names[c.Name] = true
 		input.WriteString(c.Name + "\n")
 	}
-	cmd := exec.CommandContext(ctx, "sudo", "-n", helper, mount, output)
+	cmd := cirunner.CommandContext(ctx, "sudo", "-n", helper, mount, output)
 	cmd.Stdin = strings.NewReader(input.String())
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -313,6 +317,19 @@ func verifyImage(ctx context.Context, root, helper, artifact, path string, expec
 			}
 			if !bytes.Equal(b, part.want) {
 				return nil, fmt.Errorf("native complete bytes differ %s/%s%s", name, c.Name, part.suffix)
+			}
+		}
+		if c.Scenario == "replacement-composition" {
+			if c.IdentityGroup == "" || c.Links == 0 || got.Links != c.Links {
+				return nil, fmt.Errorf("replacement link count differs %s/%s: %d want %d", name, c.Name, got.Links, c.Links)
+			}
+			for _, other := range expected.Cases {
+				if other.Scenario != "replacement-composition" {
+					continue
+				}
+				if (observations[other.Name].Inode == got.Inode) != (other.IdentityGroup == c.IdentityGroup) {
+					return nil, fmt.Errorf("replacement inode grouping differs %s/%s/%s", name, c.Name, other.Name)
+				}
 			}
 		}
 		if c.Scenario == "hardlink" {

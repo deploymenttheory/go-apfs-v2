@@ -11,7 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -20,6 +20,8 @@ import (
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 type observation struct {
@@ -45,14 +47,14 @@ func verify() error {
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return err
 	}
-	sdk, err := exec.Command("xcrun", "--show-sdk-path").Output()
+	sdk, err := cirunner.Command("xcrun", "--show-sdk-path").Output()
 	if err != nil {
 		return err
 	}
 	source := "testdata/appledouble/native/held-metadata.c"
 	for _, arch := range []string{"arm64", "x86_64"} {
 		args := []string{"clang", "-arch", arch, "-isysroot", strings.TrimSpace(string(sdk)), "-std=c11", "-Xclang", "-ast-dump=json", "-fsyntax-only", source}
-		ast, err := exec.Command("xcrun", args...).Output()
+		ast, err := cirunner.Command("xcrun", args...).Output()
 		if err != nil {
 			return fmt.Errorf("%s AST: %w", arch, err)
 		}
@@ -61,7 +63,7 @@ func verify() error {
 		}
 	}
 	helper := filepath.Join(dir, "held-metadata")
-	if out, err := exec.Command("xcrun", "clang", "-std=c11", "-Wall", "-Wextra", "-Werror", source, "-o", helper).CombinedOutput(); err != nil {
+	if out, err := cirunner.Command("xcrun", "clang", "-std=c11", "-Wall", "-Wextra", "-Werror", source, "-o", helper).CombinedOutput(); err != nil {
 		return fmt.Errorf("compile: %w: %s", err, out)
 	}
 	work, err := os.MkdirTemp(dir, "objects-")
@@ -120,7 +122,7 @@ func verify() error {
 				_ = f.Close()
 				return err
 			}
-			out, err := exec.Command(helper, filepath.Join(work, name)).Output()
+			out, err := cirunner.Command(helper, filepath.Join(work, name)).Output()
 			if err != nil {
 				_ = f.Close()
 				return fmt.Errorf("%s oracle: %w", name, err)
@@ -149,13 +151,13 @@ func verify() error {
 		sum := sha256.Sum256(b)
 		hashes[path] = hex.EncodeToString(sum[:])
 	}
-	rev, err := exec.Command("git", "rev-parse", "HEAD").Output()
+	rev, err := cirunner.Command("git", "rev-parse", "HEAD").Output()
 	if err != nil {
 		return err
 	}
 	report := map[string]any{"revision": strings.TrimSpace(string(rev)), "goos": runtime.GOOS, "goarch": runtime.GOARCH, "source_sha256": hashes, "cases": len(observations), "observations": observations, "sdk": strings.TrimSpace(string(sdk))}
 	for key, args := range map[string][]string{"sw_vers": {"sw_vers"}, "kernel": {"uname", "-r"}, "clang": {"xcrun", "clang", "--version"}} {
-		out, e := exec.Command(args[0], args[1:]...).Output()
+		out, e := cirunner.Command(args[0], args[1:]...).Output()
 		if e != nil {
 			return e
 		}

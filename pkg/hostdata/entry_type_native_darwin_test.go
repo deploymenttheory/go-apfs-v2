@@ -5,10 +5,12 @@ import (
 	"errors"
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/entrytype"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"syscall"
 	"testing"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 func TestEntryTypeNative(t *testing.T) {
@@ -51,7 +53,7 @@ func TestEntryTypeNative(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			b, err := exec.Command(oracle, parent).Output()
+			b, err := cirunner.Command(oracle, parent).Output()
 			if err != nil {
 				t.Fatal(err)
 			}

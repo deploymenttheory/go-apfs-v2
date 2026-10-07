@@ -14,10 +14,12 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 type sample struct {
@@ -46,7 +48,7 @@ func must(e error) {
 }
 func read(p string) []byte { b, e := os.ReadFile(p); must(e); return b }
 func run(args ...string) []byte {
-	b, e := exec.Command(args[0], args[1:]...).CombinedOutput()
+	b, e := cirunner.Command(args[0], args[1:]...).CombinedOutput()
 	evidence.Commands = append(evidence.Commands, command{args, string(b)})
 	if e != nil {
 		panic(fmt.Sprintf("%v: %v\n%s", args, e, b))

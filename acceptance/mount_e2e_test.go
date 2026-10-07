@@ -17,7 +17,7 @@ import (
 	"encoding/hex"
 	"io"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -29,6 +29,8 @@ import (
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/disk"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/hfsplus"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 // requireFUSE skips unless a FUSE mount can actually be attempted here.
@@ -107,10 +109,10 @@ func mountFixture(t *testing.T, imagePath string) string {
 			time.Sleep(100 * time.Millisecond)
 		}
 		if runtime.GOOS == "linux" {
-			exec.Command("fusermount3", "-u", mountPoint).Run()
-			exec.Command("fusermount", "-u", mountPoint).Run()
+			cirunner.Command("fusermount3", "-u", mountPoint).Run()
+			cirunner.Command("fusermount", "-u", mountPoint).Run()
 		} else {
-			exec.Command("umount", mountPoint).Run()
+			cirunner.Command("umount", mountPoint).Run()
 		}
 	})
 

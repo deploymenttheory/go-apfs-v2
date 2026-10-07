@@ -5,13 +5,15 @@ package acceptance
 
 import (
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/disk"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 // TestRepackMountsViaHdiutil repacks the source DMG and attaches it read-only
@@ -31,7 +33,7 @@ func TestRepackMountsViaHdiutil(t *testing.T) {
 		t.Fatalf("RepackDMG: %v", err)
 	}
 
-	out, err := exec.Command("hdiutil", "attach", "-readonly", "-nobrowse", "-plist", dst).CombinedOutput()
+	out, err := cirunner.Command("hdiutil", "attach", "-readonly", "-nobrowse", "-plist", dst).CombinedOutput()
 	if err != nil {
 		t.Fatalf("hdiutil attach failed: %v\n%s", err, out)
 	}
@@ -42,7 +44,7 @@ func TestRepackMountsViaHdiutil(t *testing.T) {
 		t.Fatalf("could not determine attached device from hdiutil output:\n%s", out)
 	}
 	t.Cleanup(func() {
-		_ = exec.Command("hdiutil", "detach", "-force", dev).Run()
+		_ = cirunner.Command("hdiutil", "detach", "-force", dev).Run()
 	})
 
 	t.Logf("repacked DMG mounted via hdiutil as %s", dev)
@@ -100,7 +102,7 @@ func TestCreatedDMGMountsViaHdiutil(t *testing.T) {
 			mustRun(t, "pack", source, dst, "--fs", fs, "--volname", "CREATED", "-q")
 
 			mnt := t.TempDir()
-			out, err := exec.Command("hdiutil", "attach", "-readonly", "-nobrowse",
+			out, err := cirunner.Command("hdiutil", "attach", "-readonly", "-nobrowse",
 				"-mountpoint", mnt, dst).CombinedOutput()
 			if err != nil {
 				t.Fatalf("hdiutil could not mount a DMG we created: %v\n%s", err, out)

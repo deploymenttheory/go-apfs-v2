@@ -11,11 +11,13 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 func main() {
@@ -36,7 +38,7 @@ func verify() error {
 	}
 	defer log.Close()
 	profile := filepath.Join(dir, "coverage.out")
-	cmd := exec.Command("go", "test", "-count=1", "-json", "-covermode=atomic", "-coverprofile="+profile, "-run", "^TestStrictXattr", "./pkg/hostdata")
+	cmd := cirunner.Command("go", "test", "-count=1", "-json", "-covermode=atomic", "-coverprofile="+profile, "-run", "^TestStrictXattr", "./pkg/hostdata")
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 	var transcript bytes.Buffer
 	cmd.Stdout = io.MultiWriter(os.Stdout, log, &transcript)
@@ -129,7 +131,7 @@ func verify() error {
 		h := sha256.Sum256(b)
 		sources[filepath.ToSlash(name)] = hex.EncodeToString(h[:])
 	}
-	revision, err := exec.Command("git", "rev-parse", "HEAD").Output()
+	revision, err := cirunner.Command("git", "rev-parse", "HEAD").Output()
 	if err != nil {
 		return err
 	}

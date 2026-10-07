@@ -3,8 +3,11 @@
 package hostdata
 
 import (
+	"context"
 	"errors"
 	"os"
 )
 
-func openNativeResourceFork(int, bool) (*os.File, error) { return nil, errors.ErrUnsupported }
+func openNativeResourceForkContext(context.Context, int, bool) (*os.File, error) {
+	return nil, errors.ErrUnsupported
+}

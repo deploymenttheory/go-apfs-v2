@@ -15,12 +15,14 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"reflect"
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/captureprovenance"
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 func must(err error) {
@@ -33,7 +35,7 @@ func hash(b []byte) string    { h := sha256.Sum256(b); return hex.EncodeToString
 func run(name string, args ...string) []byte {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	b, e := exec.CommandContext(ctx, name, args...).CombinedOutput()
+	b, e := cirunner.CommandContext(ctx, name, args...).CombinedOutput()
 	if e != nil {
 		panic(fmt.Sprintf("%s: %v: %s", name, e, b))
 	}
@@ -83,6 +85,7 @@ func main() {
 	helper := filepath.Join(dir, "producer")
 	run("xcrun", "clang", "-Wall", "-Wextra", "-Werror", "-lcompression", source, "-o", helper)
 	c := capture{Host: string(run("sw_vers")), Compiler: string(run("xcrun", "clang", "--version")), SDK: string(run("xcrun", "--show-sdk-version")), Library: string(run("xcrun", "dyld_info", "-uuid", "/usr/lib/libcompression.dylib")), Sources: map[string]string{}}
+	must(captureprovenance.Bind(os.DirFS("."), filepath.Dir(*out), c.Sources))
 	sdk := strings.TrimSpace(string(run("xcrun", "--show-sdk-path")))
 	c.Sources["SDK/compression.h"] = hash(read(filepath.Join(sdk, "usr/include/compression.h")))
 	// Compression's LZBITMAP matcher is not in the published Apple C sources.
@@ -258,6 +261,7 @@ func main() {
 		defer z.Close()
 		var old capture
 		must(json.NewDecoder(z).Decode(&old))
+		must(captureprovenance.Verify(os.DirFS("."), old.Sources))
 		for _, path := range []string{source, "scripts/capture-compression-blocks.go"} {
 			if old.Sources[path] != c.Sources[path] {
 				panic("stale retained source provenance: " + path)

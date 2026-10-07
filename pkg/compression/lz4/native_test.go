@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"os"
 	"testing"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/captureprovenance"
 )
 
 type nativeBuffer struct {
@@ -42,6 +44,9 @@ func corpus(t testing.TB) ([]nativeBuffer, []nativeDecoder) {
 	}
 	if c.Schema != 1 || len(c.Buffers) != 140 || len(c.Decoders) != 900 {
 		t.Fatal("incomplete native LZ4 corpus")
+	}
+	if err := captureprovenance.Verify(os.DirFS("../../.."), c.Sources); err != nil {
+		t.Fatal(err)
 	}
 	for _, p := range []string{"scripts/capture-compression-lz4.go", "testdata/appledouble/native/compression-lz4.c", "testdata/appledouble/native/decmpfs-formats.c", "go.mod", "go.sum"} {
 		b, e := os.ReadFile("../../../" + p)

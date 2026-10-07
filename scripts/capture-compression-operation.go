@@ -20,6 +20,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/captureprovenance"
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/diskimage"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/osversion"
 )
@@ -43,7 +45,7 @@ type capture struct {
 func command(name string, args ...string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	b, e := exec.CommandContext(ctx, name, args...).CombinedOutput()
+	b, e := cirunner.CommandContext(ctx, name, args...).CombinedOutput()
 	if e != nil {
 		return b, fmt.Errorf("%s %v: %w: %s", name, args, e, b)
 	}
@@ -99,6 +101,9 @@ func run(out string, check bool) (result error) {
 		return e
 	}
 	capture := capture{Schema: 1, Host: string(host), Sources: map[string]string{}}
+	if err := captureprovenance.Bind(os.DirFS("."), artifact, capture.Sources); err != nil {
+		return err
+	}
 	for _, item := range []struct {
 		name string
 		args []string
@@ -255,7 +260,7 @@ func run(out string, check bool) (result error) {
 				path, prefix := filepath.Join(root, base), filepath.Join(root, "observed")
 				var stdout, stderr bytes.Buffer
 				ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-				cmd := exec.CommandContext(ctx, helper, c.Scenario, path, prefix, c.Requested, c.Inline)
+				cmd := cirunner.CommandContext(ctx, helper, c.Scenario, path, prefix, c.Requested, c.Inline)
 				cmd.Env = append(os.Environ(), "DYLD_INSERT_LIBRARIES="+library, "APFS_NATIVE_FAULT_TARGET="+path, "APFS_NATIVE_FAULT_STAGE="+c.Fault, fmt.Sprintf("APFS_NATIVE_FAULT_COUNT=%d", c.FaultCount), fmt.Sprintf("APFS_NATIVE_FAULT_ERRNO=%d", c.FaultErrno), fmt.Sprintf("APFS_NATIVE_FAULT_SKIP=%d", c.FaultSkip))
 				cmd.Stdout = &stdout
 				cmd.Stderr = &stderr
@@ -335,12 +340,16 @@ func run(out string, check bool) (result error) {
 		}
 		defer z.Close()
 		var prior struct {
-			Schema int
-			Host   string
-			Cases  []trial
+			Sources map[string]string
+			Schema  int
+			Host    string
+			Cases   []trial
 		}
 		if e = json.NewDecoder(z).Decode(&prior); e != nil {
 			return e
+		}
+		if err := captureprovenance.Verify(os.DirFS("."), prior.Sources); err != nil {
+			return err
 		}
 		priorBaseline, e := operationBaseline(prior.Host)
 		if e != nil || priorBaseline != baseline {

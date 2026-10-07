@@ -13,7 +13,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -21,6 +21,8 @@ import (
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
 	aclmeta "github.com/deploymenttheory/go-apfs-v2/pkg/hostdata/acl"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 const out = "artifacts/acl-identity-capture-native"
@@ -63,7 +65,7 @@ func must(e error) {
 }
 func read(p string) []byte { b, e := os.ReadFile(p); must(e); return b }
 func run(args ...string) []byte {
-	b, e := exec.Command(args[0], args[1:]...).CombinedOutput()
+	b, e := cirunner.Command(args[0], args[1:]...).CombinedOutput()
 	evidence.Commands = append(evidence.Commands, command{args, string(b)})
 	if e != nil {
 		panic(fmt.Sprintf("%v: %v %s", args, e, b))
@@ -123,7 +125,7 @@ func main() {
 		var n native
 		// Account identifiers remain in process memory. Published command
 		// observations carry only the lookup family and successful comparison.
-		b, err := exec.Command(oracle, args...).Output()
+		b, err := cirunner.Command(oracle, args...).Output()
 		if err != nil {
 			panic("native identity observer failed")
 		}

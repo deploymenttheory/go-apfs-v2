@@ -11,6 +11,8 @@ import (
 	"testing"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfswrite"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 var devRe = regexp.MustCompile(`/dev/disk\d+`)
@@ -29,7 +31,7 @@ func requireTools(t *testing.T, tools ...string) {
 // device node, so a checker can be pointed at the whole container.
 func attachRaw(t *testing.T, imgPath string) string {
 	t.Helper()
-	out, err := exec.Command("hdiutil", "attach",
+	out, err := cirunner.Command("hdiutil", "attach",
 		"-imagekey", "diskimage-class=CRawDiskImage",
 		"-nomount", "-readonly", imgPath).CombinedOutput()
 	if err != nil {
@@ -46,7 +48,7 @@ func attachRaw(t *testing.T, imgPath string) string {
 // than fatal so they cannot mask the assertion that actually matters.
 func detach(t *testing.T, dev string) {
 	t.Helper()
-	if out, err := exec.Command("hdiutil", "detach", dev).CombinedOutput(); err != nil {
+	if out, err := cirunner.Command("hdiutil", "detach", dev).CombinedOutput(); err != nil {
 		t.Logf("hdiutil detach %s: %v\n%s", dev, err, out)
 	}
 }
@@ -98,14 +100,14 @@ func mountPointFrom(out []byte) string {
 // mount point and the device to detach.
 func attachAndMount(t *testing.T, imgPath string) (mountPoint, dev string) {
 	t.Helper()
-	out, err := exec.Command("hdiutil", "attach",
+	out, err := cirunner.Command("hdiutil", "attach",
 		"-imagekey", "diskimage-class=CRawDiskImage", "-readonly", imgPath).CombinedOutput()
 	if err != nil {
 		t.Fatalf("hdiutil attach: %v\n%s", err, out)
 	}
 	dev = devRe.FindString(string(out))
 	if mountPoint = mountPointFrom(out); mountPoint == "" {
-		exec.Command("hdiutil", "detach", dev).Run()
+		cirunner.Command("hdiutil", "detach", dev).Run()
 		t.Fatalf("the image did not mount:\n%s", out)
 	}
 	return mountPoint, dev

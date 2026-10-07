@@ -12,7 +12,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -23,6 +23,8 @@ import (
 	"github.com/deploymenttheory/go-apfs-v2/internal/tools"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/metatransport"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 const out = "artifacts/native-projection"
@@ -85,7 +87,7 @@ func must(e error) {
 func read(p string) []byte   { b, e := os.ReadFile(p); must(e); return b }
 func digest(b []byte) string { v := sha256.Sum256(b); return hex.EncodeToString(v[:]) }
 func run(args ...string) []byte {
-	b, e := exec.Command(args[0], args[1:]...).CombinedOutput()
+	b, e := cirunner.Command(args[0], args[1:]...).CombinedOutput()
 	if e != nil {
 		panic(fmt.Errorf("%v: %w: %s", args, e, b))
 	}

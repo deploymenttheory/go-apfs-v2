@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf16"
 )
 
 const (
@@ -360,10 +361,14 @@ func (v *Volume) lookup(name string) (*entry, error) {
 		// Stored names are decomposed, so a caller passing a precomposed one --
 		// which is what a Go string literal or a path from most systems holds --
 		// would not match without this.
-		next := findChild(current, normalizeName(catalogName(part)), v.caseSensitive)
+		normalized, err := NormalizeLookupName(part)
+		if err != nil {
+			return nil, fmt.Errorf("component %q: %w", part, err)
+		}
+		next := findChild(current, catalogName(normalized), v.caseSensitive)
 		if next == nil && part != catalogName(part) {
 			// A volume written by something that stored the colon verbatim.
-			next = findChild(current, normalizeName(part), v.caseSensitive)
+			next = findChild(current, normalized, v.caseSensitive)
 		}
 		if next == nil {
 			return nil, fmt.Errorf("no such file or directory: %q", part)
@@ -386,7 +391,7 @@ func findChild(dir *entry, name string, caseSensitive bool) *entry {
 		return nil
 	}
 	for _, child := range dir.children {
-		if strings.EqualFold(child.name, name) {
+		if compareNameUnits(utf16.Encode([]rune(child.name)), utf16.Encode([]rune(name)), false) == 0 {
 			return child
 		}
 	}
@@ -468,8 +473,9 @@ func (v *Volume) loadOverflowExtents() error {
 	if v.overflowExtents != nil {
 		return nil
 	}
-	v.overflowExtents = make(map[overflowKey][]overflowRun)
+	pending := make(map[overflowKey][]overflowRun)
 	if v.extentsTree == nil {
+		v.overflowExtents = pending
 		return nil
 	}
 
@@ -487,7 +493,7 @@ func (v *Volume) loadOverflowExtents() error {
 			run.extents[i].StartBlock = binary.BigEndian.Uint32(rec.data[i*8:])
 			run.extents[i].BlockCount = binary.BigEndian.Uint32(rec.data[i*8+4:])
 		}
-		v.overflowExtents[key] = append(v.overflowExtents[key], run)
+		pending[key] = append(pending[key], run)
 		return nil
 	})
 	if err != nil {
@@ -496,11 +502,14 @@ func (v *Volume) loadOverflowExtents() error {
 
 	// Leaf order already sorts by (forkType, fileID, startBlock), but be
 	// defensive about it.
-	for key := range v.overflowExtents {
-		runs := v.overflowExtents[key]
+	for key := range pending {
+		runs := pending[key]
 		sort.Slice(runs, func(i, j int) bool { return runs[i].startBlock < runs[j].startBlock })
 	}
 
+	// Publish only a complete successful walk; retries must retain malformed
+	// records and provider failures instead of accepting a partial cache.
+	v.overflowExtents = pending
 	return nil
 }
 

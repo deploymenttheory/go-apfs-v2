@@ -16,11 +16,13 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"reflect"
 	"runtime"
 	"time"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/captureprovenance"
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 const revision = "06673bf7cb4066003fd14a0b87085c05739fc4ac"
@@ -42,7 +44,7 @@ func save(p string, b []byte) { must(os.WriteFile(p, b, 0644)) }
 func run(name string, args ...string) []byte {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	b, e := exec.CommandContext(ctx, name, args...).CombinedOutput()
+	b, e := cirunner.CommandContext(ctx, name, args...).CombinedOutput()
 	if e != nil {
 		panic(fmt.Sprintf("%s %v: %v: %s", name, args, e, b))
 	}
@@ -72,12 +74,19 @@ func hasBody(n node, name string) bool {
 func main() {
 	out := flag.String("out", "artifacts/compression-zlib-source", "artifact directory")
 	capture := flag.Bool("capture", false, "retain fresh source qualification report")
+	captureOutput := flag.String("capture-output", "", "explicit fresh capture destination (directory for large storage, file for source report)")
 	flag.Parse()
+	if *captureOutput != "" && !*capture {
+		panic("capture-output requires capture mode")
+	}
 	if runtime.GOOS != "darwin" {
 		panic("native source qualification requires macOS")
 	}
 	must(os.MkdirAll(*out, 0755))
 	fixture := "testdata/appledouble/native/compression-zlib-source.json"
+	if *captureOutput != "" {
+		fixture = *captureOutput
+	}
 	var old report
 	if !*capture {
 		must(json.Unmarshal(read(fixture), &old))
@@ -86,6 +95,7 @@ func main() {
 		}
 	}
 	r := report{Revision: revision, Host: string(run("sw_vers")), Compiler: string(run("xcrun", "clang", "--version")), SDK: string(run("xcrun", "--show-sdk-version")), Sources: map[string]string{}, Cases: map[string]string{}}
+	must(captureprovenance.Bind(os.DirFS("."), *out, r.Sources))
 	defer func() { b, e := json.MarshalIndent(r, "", "  "); must(e); save(filepath.Join(*out, "report.json"), b) }()
 	client := http.Client{Timeout: time.Minute}
 	for _, name := range []string{"deflate.c", "deflate.h", "trees.c", "trees.h", "zutil.c", "zutil.h", "zlib.h", "zconf.h", "adler32.c", "gzguts.h"} {
@@ -166,6 +176,9 @@ func main() {
 		if !bytes.Equal(got, c.Encoded) {
 			panic("pinned source and native codec differ: " + c.Name)
 		}
+	}
+	if !*capture {
+		must(captureprovenance.Verify(os.DirFS("."), old.Sources))
 	}
 	if len(r.Cases) != 366 {
 		panic("incomplete source qualification")

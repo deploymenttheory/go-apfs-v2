@@ -4,16 +4,18 @@ import (
 	"bytes"
 	"golang.org/x/sys/unix"
 	"os"
-	"os/exec"
+
 	"testing"
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/heldfixture"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 func TestReplacementDarwinDeniesWriteAfterRestore(t *testing.T) {
 	replacementVariants(t, func(t *testing.T, prepare func(*os.File, string) (*testedReplacement, error)) {
 		source := heldfixture.Source(t, 0751)
-		if out, err := exec.Command("/bin/chmod", "+a", "everyone deny write", source.Name()).CombinedOutput(); err != nil {
+		if out, err := cirunner.Command("/bin/chmod", "+a", "everyone deny write", source.Name()).CombinedOutput(); err != nil {
 			t.Fatalf("set ACL: %v %s", err, out)
 		}
 		from, err := NewHeldMetadata(source)
@@ -103,11 +105,11 @@ func TestReplacementDarwinACLRestoreFailures(t *testing.T) {
 				})
 			case "source-read-security":
 				file, right := source, "readsecurity"
-				if out, err := exec.Command("/bin/chmod", "+a", "everyone deny "+right, file.Name()).CombinedOutput(); err != nil {
+				if out, err := cirunner.Command("/bin/chmod", "+a", "everyone deny "+right, file.Name()).CombinedOutput(); err != nil {
 					t.Fatalf("deny security: %v %s", err, out)
 				}
 				t.Cleanup(func() {
-					if out, err := exec.Command("/bin/chmod", "-N", file.Name()).CombinedOutput(); err != nil {
+					if out, err := cirunner.Command("/bin/chmod", "-N", file.Name()).CombinedOutput(); err != nil {
 						t.Errorf("reset security: %v %s", err, out)
 					}
 				})

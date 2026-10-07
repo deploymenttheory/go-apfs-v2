@@ -15,11 +15,13 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 var wholeDiskRe = regexp.MustCompile(`/dev/disk\d+`)
@@ -31,7 +33,7 @@ var wholeDiskRe = regexp.MustCompile(`/dev/disk\d+`)
 // volume: there is no sNN slice, and the device to check is /dev/diskN itself.
 func attachHFS(t *testing.T, dmg string) (mountPoint, dev string) {
 	t.Helper()
-	out, err := exec.Command("hdiutil", "attach", "-readonly", "-nobrowse", dmg).CombinedOutput()
+	out, err := cirunner.Command("hdiutil", "attach", "-readonly", "-nobrowse", dmg).CombinedOutput()
 	if err != nil {
 		t.Fatalf("hdiutil attach %s: %v\n%s", dmg, err, out)
 	}
@@ -95,7 +97,7 @@ func TestPackHFSPlusCompressedIsFsckClean(t *testing.T) {
 	_ = mountPoint
 	defer detach(t, dev)
 
-	out, _ := exec.Command("fsck_hfs", "-n", dev).CombinedOutput()
+	out, _ := cirunner.Command("fsck_hfs", "-n", dev).CombinedOutput()
 	t.Logf("fsck_hfs output:\n%s", out)
 	if !strings.Contains(string(out), "appears to be OK") {
 		t.Errorf("fsck_hfs did not report the volume clean")

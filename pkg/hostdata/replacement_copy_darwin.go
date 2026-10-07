@@ -16,8 +16,11 @@ func replacementCloneUnavailable(err error) bool {
 }
 
 func copyReplacementMetadata(source, target *os.File, info os.FileInfo) error {
+	return copyReplacementMetadataContext(context.Background(), source, target, info)
+}
+func copyReplacementMetadataContext(ctx context.Context, source, target *os.File, info os.FileInfo) error {
 	birth := info.Sys().(*syscall.Stat_t).Birthtimespec
-	return copyReplacementMetadataUsing(replacementCopyOps{
+	return copyReplacementMetadataUsingContext(ctx, replacementCopyOps{
 		compressed: info.Sys().(*syscall.Stat_t).Flags&UFCompressed != 0,
 		list:       func() ([]string, error) { return ListXattrNames(source, MaxXattrListSize) },
 		read: func(name string, limit int) ([]byte, bool, error) {
@@ -34,9 +37,9 @@ func copyReplacementMetadata(source, target *os.File, info os.FileInfo) error {
 			return value, present, err
 		},
 		write:    func(name string, value []byte) error { return SetXattr(target, name, value) },
-		openFork: func() (replacementFork, error) { return OpenResourceFork(source, false) },
+		openFork: func() (replacementFork, error) { return OpenResourceForkContext(ctx, source, false) },
 		replaceFork: func(value appledouble.Value) error {
-			_, err := ReplaceResourceFork(context.Background(), target, value)
+			_, err := ReplaceResourceFork(ctx, target, value)
 			return err
 		},
 		birth: func() error { return SetCreationTime(target, time.Unix(birth.Sec, birth.Nsec)) },

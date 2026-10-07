@@ -5,7 +5,7 @@ import (
 	"errors"
 	"io"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"syscall"
 	"testing"
@@ -13,6 +13,8 @@ import (
 
 	heldfixture "github.com/deploymenttheory/go-apfs-v2/internal/testutil/heldfixture"
 	"golang.org/x/sys/unix"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 func accessTimeStat(t *testing.T, file *os.File) syscall.Stat_t {
@@ -41,7 +43,7 @@ func TestCopyAccessTimeDarwinHeldFiles(t *testing.T) {
 						t.Fatal(err)
 					}
 				}
-				if out, err := exec.Command("/bin/chmod", "+a", "everyone allow read", target.Name()).CombinedOutput(); err != nil {
+				if out, err := cirunner.Command("/bin/chmod", "+a", "everyone allow read", target.Name()).CombinedOutput(); err != nil {
 					t.Fatalf("ACL: %v: %s", err, out)
 				}
 				if err := unix.Fsetxattr(int(target.Fd()), "org.example.access-copy", []byte("retained"), 0); err != nil {
@@ -81,7 +83,7 @@ func TestCopyAccessTimeDarwinHeldFiles(t *testing.T) {
 					t.Fatal(err)
 				}
 				acl := func() []byte {
-					out, err := exec.Command("/bin/ls", "-lde", files[1].moved).CombinedOutput()
+					out, err := cirunner.Command("/bin/ls", "-lde", files[1].moved).CombinedOutput()
 					if err != nil {
 						t.Fatal(err)
 					}
@@ -149,10 +151,10 @@ func TestCopyAccessTimeDarwinDenied(t *testing.T) {
 				}
 				t.Cleanup(func() { _ = unix.Chflags(target.Name(), 0) })
 			case "deny-writeattr":
-				if out, err := exec.Command("/bin/chmod", "+a", "everyone deny writeattr", target.Name()).CombinedOutput(); err != nil {
+				if out, err := cirunner.Command("/bin/chmod", "+a", "everyone deny writeattr", target.Name()).CombinedOutput(); err != nil {
 					t.Fatalf("ACL: %v: %s", err, out)
 				}
-				t.Cleanup(func() { _ = exec.Command("/bin/chmod", "-N", target.Name()).Run() })
+				t.Cleanup(func() { _ = cirunner.Command("/bin/chmod", "-N", target.Name()).Run() })
 			}
 			from, to := accessTimeStat(t, source), accessTimeStat(t, target)
 			if err := CopyAccessTime(source, target); !errors.Is(err, os.ErrPermission) {

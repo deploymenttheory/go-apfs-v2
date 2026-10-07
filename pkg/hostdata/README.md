@@ -311,26 +311,37 @@ host. `pkg/metatransport` preserves this logical state outside the payload tree
 when the destination host cannot represent it. Storage and host enforcement are
 separate capabilities; there is no global preservation/native mode.
 
-`PrepareReplacement(source, parent)` provides a separate strict contract:
+`PrepareReplacementContext(ctx, source, parent)` prepares a writable replacement
+while preserving the source. The original `PrepareReplacement` API delegates with
+a background context. The rooted operation is `PrepareReplacementAtContext`; both
+result types expose `RestoreMetadataContext` as well as the original method.
+For example:
 
 ```go
-r, err := hostdata.PrepareReplacement(source, filepath.Dir(destination))
+func replace(ctx context.Context, source *os.File, destination string, contents []byte) (err error) {
+r, err := hostdata.PrepareReplacementContext(ctx, source, filepath.Dir(destination))
 if err != nil { return err }
-defer r.Close()
+defer func() { err = errors.Join(err, r.Close()) }()
 if _, err := r.File.WriteAt(contents, 0); err != nil { return err }
 if err := r.File.Truncate(int64(len(contents))); err != nil { return err }
-if err := r.RestoreMetadata(); err != nil { return err }
+if err := r.RestoreMetadataContext(ctx); err != nil { return err }
 if err := r.File.Sync(); err != nil { return err }
 if err := r.File.Close(); err != nil { return err }
 // Close source and verify the destination still names the expected source.
 // The caller owns the decision to commit, and whether to use a rename.
 return os.Rename(r.File.Name(), destination)
+}
 ```
 
 The source stays open and unchanged while the replacement is prepared. The
 package owns a private staging directory and cleans it on `Close`, including
 after the caller renames the staged file. Callers handle concurrency and the
-final rename; no transactional or crash-durability guarantee is made.
+final rename; no transactional or crash-durability guarantee is made. Check the
+error returned by `Close` as well as the operation error; close, permission-reset
+and removal failures are retained together. Cancellation is checked around native
+operations and between bounded transfers. Cleanup is never canceled, and one
+native call need not be immediately interruptible. Neither cancellation nor cleanup
+closes a caller-owned source or root.
 
 - Darwin uses x/sys's libSystem-backed `Fclonefileat`, `Setattrlist` and
   `Fchflags` wrappers. It preserves ownership, mode, xattrs, source ACLs, birth
@@ -357,11 +368,28 @@ final rename; no transactional or crash-durability guarantee is made.
   state; it never reattaches the source flag to rewritten logical data.
   Recompression is a separate caller policy, not an automatic replacement step.
 - Linux copies owner/group, mode and readable xattrs (including POSIX ACLs),
-  with an 8 MiB aggregate limit each for names and values. Inherited staging
+  with an 8 MiB bound for the name list and each individual value. Values are
+  transferred separately, without a cumulative attribute-byte limit. Inherited staging
   ACLs are removed first. Linux inode flags and birth time are not preserved.
-- Windows copies streams/attributes using `CopyFileW`, then restores owner,
-  group and the DACL. SACL preservation is not promised. Replacing a read-only
-  destination may still fail at the caller's rename.
+- Windows transfers unencrypted files through held `BackupRead`/`BackupWrite`
+  handles, preserving sparse alternate streams without materializing their holes.
+  EFS uses `CopyFileEx` inside an atomically secured private directory, with
+  held namespace pins and a separate raw EA transfer because native encrypted
+  copying omits those attributes. A path obtained from the source handle is a lookup hint:
+  the callback must observe the same source identity and a destination beneath
+  the held stage. Empty files also require this identity observation. A native
+  copy handle is duplicated without increasing its rights; separate held
+  security/attribute rights allow deferred acquisition of the writable data
+  handle after native copying finishes. Temporary permissions apply only to the
+  private copy. The source owner, group and complete DACL are restored after writing,
+  including inherited ACEs and protection/auto-inheritance control bits. A held
+  `NtSetSecurityObject` operation avoids re-inheriting permissions from the private
+  staging directory. Closed files never reach this operation as pseudohandles.
+  Ordinary/sparse alternate streams, EAs, NTFS compression, encryption, creation
+  time and ordinary attributes are preserved. EFS user and recovery-certificate
+  hashes/SIDs are compared through pinned names: a decrypted destination or
+  changed key set fails preparation. SACL preservation is not promised.
+  Replacing a read-only destination may still fail at the caller's rename.
 
 All three implementations build with `CGO_ENABLED=0`. The new API never invokes
 an external tool or signing service. Tests run on Linux, macOS and Windows in
@@ -369,8 +397,14 @@ the existing CI matrix. Darwin tests compare ACL text, xattr values, ownership,
 BSD flags and creation time on the host; Windows tests compare streams and
 security descriptors.
 Replacement qualification adds `go run scripts/verify-replacement.go` on every
-CI host, requiring coverage strictly above 95% for each new fallback file,
-no skipped tests, raw test transcripts and source hashes. On macOS,
+CI host, requiring coverage strictly above 95% for every changed replacement
+production file and the complete hostdata package. The original focused gate
+retains mandatory suites, rejects every skipped replacement test, binds source
+hashes to the tested revision and independently audits the report and raw
+transcript. The complete-package run has a separate transcript/profile. Windows
+2022 and 2025 qualification requires native EFS and NTFS controls, empty inputs,
+large alternate streams, restrictive ACLs, retained-source identities and
+cancellation; capability failures are not skipped. On macOS,
 `go run scripts/verify-replacement-native.go` creates disposable APFS and HFS+
 images, compiles the C control with Clang, retains arm64/x86_64 ASTs and checks
 both public APIs with inherited/deny-write ACLs and a resource fork exceeding
@@ -410,13 +444,45 @@ or closes those caller-owned objects and is not safe for concurrent method calls
 Darwin clones or exclusively creates relative to the opened staging directory and uses the held
 directory's `/dev/fd/N` name with the supported `Setattrlist` wrapper to clear
 inherited ACLs. Linux creates through the root and copies metadata by descriptor.
-Windows reopens existing handles with `ReOpenFile`, then copies bounded EAs and
-alternate data streams through `BackupRead`/`BackupWrite`; it never reopens the
-source by its pathname or restores backup hard-link/object-identity records.
-Owner, group, DACL, creation time and ordinary Windows attributes are preserved.
-The root API rejects compressed, encrypted and reparse Windows files and
-bounds combined stream/EA names and data to 8 MiB. Darwin's
-protected-file limitations remain. SACLs are outside the contract.
+Windows uses the same held-stream and EFS routes as the path API. Its private
+DACL is supplied to the root-relative `NtCreateFile(FILE_CREATE)` operation,
+avoiding a create-then-chmod permission window. Held directory/anchor capabilities
+remain live through copy and final identity checks. EFS destination copy flags
+reject existing links, including dangling symlinks. Callback identity validation
+is additional protection; it does not substitute for contained creation.
+
+Unencrypted sources use `ReOpenFile` plus `BackupRead`/`BackupWrite` throughout.
+The transfer streams EAs and alternate data, excluding main-data and backup
+identity/link records. It preserves NTFS compression through held filesystem
+controls. Stream payloads, sparse extents and record counts have no arbitrary
+aggregate limit; fixed transfer buffers and checked signed offsets bound resource
+use. Reparse sources remain unsupported. Encrypted files never use BackupRead or
+a plaintext fallback: unavailable EFS names/keys return an error. EFS attributes
+transfer as raw native EA records to preserve their flags, names and values.
+Permission, identity and storage failures do not silently select another algorithm.
+
+Prepare the replacement before unlinking the source. Windows can retain readable
+main data on a zero-link, delete-pending handle while rejecting both backup-stream
+reads and new alternate-stream opens. Such a handle does not by itself retain all
+metadata capabilities. Late preparation must fail and remove the private stage
+when complete capture is impossible. The prepared stage retains the transferred
+streams for writing and publication; keep the source open through restoration.
+Both Windows runner versions must qualify this lifecycle for ordinary, compressed,
+sparse, encrypted, deny-write and read-only inputs, including cancellation cleanup.
+
+`RestoreMetadata` restores source attributes before publication. A subsequent
+native rename may change attributes, including setting the archive flag. The
+caller owns that rename; cleanup does not rewrite the published target. Acceptance
+compares exact attributes before publication and independently checks the native
+rename transition.
+
+Cleanup retains attribute rights acquired before restrictive source ACLs are
+restored. It clears readonly only after verifying the held file still has its
+private staging name. If the caller already renamed it, cleanup leaves the
+committed target's attributes unchanged, including when `File` was closed first.
+Darwin's protected-file limitations remain; SACLs remain outside the contract.
+The [prerequisite tracker](../../docs/codesign-filesystem-prerequisites.md) records
+outstanding platform qualification; implementation alone does not close a gate.
 
 The existing path API remains available. Both APIs run the same platform metadata
 tests. Root-specific tests cover containment, a moved root with an old-path decoy,
@@ -424,7 +490,11 @@ hard-link detachment, failed restoration, cleanup and close after commit.
 Concurrent source/staging-tree mutation and crash durability are not promised;
 callers own source/destination identity checks and commit decisions.
 
-Windows protocol references: [BackupRead](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-backupread),
+Windows protocol references: [CopyFileEx](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-copyfileexw),
+[copy callbacks](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nc-winbase-lpprogress_routine),
+[EFS users](https://learn.microsoft.com/en-us/windows/win32/api/winefs/nf-winefs-queryusersonencryptedfile),
+[EFS recovery agents](https://learn.microsoft.com/en-us/windows/win32/api/winefs/nf-winefs-queryrecoveryagentsonencryptedfile),
+[BackupRead](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-backupread),
 [BackupWrite](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-backupwrite),
 [WIN32_STREAM_ID](https://learn.microsoft.com/en-us/windows/win32/api/winbase/ns-winbase-win32_stream_id)
 and [ReOpenFile](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-reopenfile).
@@ -597,8 +667,10 @@ restoration contract. Preparation and discard never modify the source.
 
 The backup filter follows Microsoft's [sparse block stream format](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-bkup/6be866e6-6d1f-4183-8b78-b10c2941228a):
 sparse blocks belong to the preceding main or named data stream. Named-stream
-logical extents and transferred metadata retain the existing 8 MiB bound.
-Malformed, orphaned, overflowing and truncated records fail before commit.
+logical extents and transferred metadata are streamed without the former 8 MiB
+aggregate ceiling. Sparse offsets use checked 64-bit arithmetic; malformed,
+orphaned, overflowing and truncated records fail before commit. Main-stream data
+is never used as replacement content.
 The portable filter has a strict coverage gate above 95%; Windows CI also
 exercises a source above 4 GiB with populated regions, sparse/ordinary named
 streams, hard-link neighbours, commit, discard and staging cleanup.

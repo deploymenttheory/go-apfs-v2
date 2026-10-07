@@ -1,0 +1,29 @@
+{
+  "Sources": [
+    {
+      "File": "UnicodeData-3.2.0.txt.gz",
+      "URL": "https://www.unicode.org/Public/3.2-Update/UnicodeData-3.2.0.txt",
+      "SHA256": "5e444028b6e76d96f9dc509609c5e3222bf609056f35e5fcde7e6fb8a58cd446"
+    },
+    {
+      "File": "UCStringCompareData.h.gz",
+      "URL": "https://raw.githubusercontent.com/apple-oss-distributions/hfs/d1bac2f062e6e9c0dfcce302d9aacb10173d0eea/core/UCStringCompareData.h",
+      "SHA256": "88773669ce79ebe2d6bcc84d3341c3c2586e649984ac97453adb1b8706440464"
+    },
+    {
+      "File": "UnicodeWrappers.c.gz",
+      "URL": "https://raw.githubusercontent.com/apple-oss-distributions/hfs/d1bac2f062e6e9c0dfcce302d9aacb10173d0eea/core/UnicodeWrappers.c",
+      "SHA256": "7300de813b94d41d14faf9aa2a0ddf436010bb43d258f81fc92ab841bc7157f2"
+    },
+    {
+      "File": "hfs_catalog.c.gz",
+      "URL": "https://raw.githubusercontent.com/apple-oss-distributions/hfs/d1bac2f062e6e9c0dfcce302d9aacb10173d0eea/core/hfs_catalog.c",
+      "SHA256": "a459793a5f38d05ad3b5a8e6f9761aefb3d9dfeb077962a7a190b6812bd37dd6"
+    },
+    {
+      "File": "vfs_utfconv.c.gz",
+      "URL": "https://raw.githubusercontent.com/apple-oss-distributions/xnu/xnu-11417.140.69/bsd/vfs/vfs_utfconv.c",
+      "SHA256": "4cfa93d4cc2d60ea28752180c77323307a2b6908d21a68c7dd7e5caedafbc0e3"
+    }
+  ]
+}

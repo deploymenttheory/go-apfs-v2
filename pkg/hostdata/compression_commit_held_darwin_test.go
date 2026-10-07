@@ -5,13 +5,15 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
+
 	"syscall"
 	"testing"
 	"time"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/compression/decmpfs"
 	"golang.org/x/sys/unix"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 func TestCommitHeldCompressionNativeReadback(t *testing.T)  { compressionHeldNativeReadback(t, false) }
@@ -139,14 +141,14 @@ func TestCommitHeldCompressionNativeErrors(t *testing.T) {
 		t.Fatal(e)
 	}
 	// A real deny-write-extattr ACL distinguishes native EACCES from EPERM.
-	if output, e := exec.Command("/bin/chmod", "+a", "everyone deny writeextattr", f.Name()).CombinedOutput(); e != nil {
+	if output, e := cirunner.Command("/bin/chmod", "+a", "everyone deny writeextattr", f.Name()).CombinedOutput(); e != nil {
 		t.Fatal(e, string(output))
 	}
 	e = backend.SetCompressionAttribute(compressionMetadataHeader(8)[:16])
 	if !errors.Is(e, ErrCompressionAttributeAccess) || !errors.Is(e, syscall.EACCES) {
 		t.Fatal(e)
 	}
-	if output, e := exec.Command("/bin/chmod", "-N", f.Name()).CombinedOutput(); e != nil {
+	if output, e := cirunner.Command("/bin/chmod", "-N", f.Name()).CombinedOutput(); e != nil {
 		t.Fatal(e, string(output))
 	}
 	if e = unix.Fchflags(int(f.Fd()), unix.UF_IMMUTABLE); e != nil {

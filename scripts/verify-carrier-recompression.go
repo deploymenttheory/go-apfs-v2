@@ -13,7 +13,7 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -21,6 +21,8 @@ import (
 	"time"
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/evidenceaudit"
+
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
 const artifact = "artifacts/carrier-recompression-portable"
@@ -46,9 +48,9 @@ func run() error {
 		return e
 	}
 	var transcript bytes.Buffer
-	commands := [][]string{{"test", "-count=1", "-json", "-covermode=atomic", "-coverprofile=" + filepath.Join(out, "coverage.out"), "./pkg/metatransport", "./pkg/recompression"}, {"test", "-count=1", "-json", "-run=^TestCarrierRecompressionNativeProfiles$", "./acceptance"}}
+	commands := [][]string{{"test", "-count=1", "-json", "-covermode=atomic", "-coverprofile=" + filepath.Join(out, "coverage.out"), "./pkg/metatransport", "./pkg/recompression", "./pkg/authorization"}, {"test", "-count=1", "-json", "-run=^TestCarrierRecompressionNativeProfiles$", "./acceptance"}}
 	for _, args := range commands {
-		cmd := exec.CommandContext(ctx, "go", args...)
+		cmd := cirunner.CommandContext(ctx, "go", args...)
 		cmd.Env = append(os.Environ(), "CGO_ENABLED=0", "APFS_CARRIER_RECOMPRESSION_OUTPUT="+out)
 		cmd.Stdout = io.MultiWriter(log, &transcript)
 		cmd.Stderr = os.Stderr
@@ -60,7 +62,16 @@ func run() error {
 	if e = log.Close(); e != nil {
 		return e
 	}
-	passed, cases, packages := 0, 0, 0
+	passed, cases, compositions, packages := 0, 0, 0, 0
+	unitCompositions := make(map[string]bool)
+	for _, count := range []int{2, 3} {
+		for _, linked := range []bool{false, true} {
+			for _, outcome := range []string{"recompress", "admission-denied", "cancel-publication", "stale-generation", "failure-after-rename", "cancel-after-rename", "cancel-after-publication"} {
+				unitCompositions[fmt.Sprintf("TestCarrierReplacementRecompressionComposition/names-%d/linked-%t/%s", count, linked, outcome)] = false
+			}
+			unitCompositions[fmt.Sprintf("TestCarrierInPlaceEditedAliases/names-%d/linked-%t", count, linked)] = false
+		}
+	}
 	top := false
 	scanner := bufio.NewScanner(&transcript)
 	scanner.Buffer(make([]byte, 4096), 1<<20)
@@ -73,6 +84,12 @@ func run() error {
 			return fmt.Errorf("qualification %s: %s", event.Action, event.Test)
 		}
 		if event.Action == "pass" {
+			if seen, required := unitCompositions[event.Test]; required {
+				if seen {
+					return fmt.Errorf("duplicate carrier composition: %s", event.Test)
+				}
+				unitCompositions[event.Test] = true
+			}
 			if event.Test == "" {
 				packages++
 			} else {
@@ -80,6 +97,9 @@ func run() error {
 			}
 			if event.Test == "TestCarrierRecompressionNativeProfiles" {
 				top = true
+			}
+			if strings.HasPrefix(event.Test, "TestCarrierRecompressionNativeProfiles/") && strings.Contains(event.Test, "/composition-") {
+				compositions++
 			}
 			if strings.HasPrefix(event.Test, "TestCarrierRecompressionNativeProfiles/") && strings.Contains(event.Test, "/case-") {
 				cases++
@@ -89,8 +109,13 @@ func run() error {
 	if e = scanner.Err(); e != nil {
 		return e
 	}
-	if !top || cases != 648 || packages != 3 {
-		return fmt.Errorf("incomplete carrier qualification: top=%v native cases=%d packages=%d", top, cases, packages)
+	for name, seen := range unitCompositions {
+		if !seen {
+			return fmt.Errorf("required carrier composition missing: %s", name)
+		}
+	}
+	if !top || cases != 648 || compositions != 72 || packages != 4 {
+		return fmt.Errorf("incomplete carrier qualification: top=%v native cases=%d compositions=%d packages=%d", top, cases, compositions, packages)
 	}
 	b, e := os.ReadFile(filepath.Join(out, "coverage.out"))
 	if e != nil {
@@ -121,7 +146,7 @@ func run() error {
 		if hits > 0 {
 			allCovered += n
 		}
-		if strings.HasPrefix(name, "pkg/metatransport/") || strings.HasPrefix(name, "pkg/recompression/") {
+		if strings.HasPrefix(name, "pkg/metatransport/") || strings.HasPrefix(name, "pkg/recompression/") || strings.HasPrefix(name, "pkg/authorization/") {
 			v := files[name]
 			v[1] += n
 			if hits > 0 {
@@ -140,7 +165,7 @@ func run() error {
 	}
 	mandatory := 0
 	covered, total := 0, 0
-	for _, packageName := range []string{"pkg/metatransport", "pkg/recompression"} {
+	for _, packageName := range []string{"pkg/metatransport", "pkg/recompression", "pkg/authorization"} {
 		expected, e := filepath.Glob(packageName + "/*.go")
 		if e != nil {
 			return e
@@ -164,20 +189,20 @@ func run() error {
 		}
 	}
 	if mandatory < 6 || len(files) != mandatory {
-		return errors.New("incomplete recompression and transport production coverage inventory")
+		return errors.New("incomplete recompression, transport and authorization production coverage inventory")
 	}
 	if covered != allCovered || total != allStatements {
 		return errors.New("incomplete package coverage totals")
 	}
-	hashes, e := evidenceaudit.SourceHashes(os.DirFS("."), []string{"pkg/metatransport/*.go", "pkg/recompression/*.go", "pkg/compression/decmpfs/*.go", "internal/decmpfs/*.go", "pkg/hostdata/compression*.go", "pkg/osversion/*.go", "pkg/apfswrite/*.go", "pkg/hfsplus/*.go", "internal/hostwalk/*.go", "acceptance/carrier_recompression_test.go", "scripts/verify-carrier-recompression*.go", "testdata/appledouble/native/carrier-recompression-readback.c", "testdata/appledouble/native/compression-operation*.json.gz", "scripts/capture-recompression-access.go", "testdata/appledouble/native/recompression-access*.json.gz", "testdata/appledouble/native/recompression-access.c", "testdata/appledouble/native/recompression-open.c", "testdata/appledouble/native/recompression-access-source/*", ".github/workflows/carrier-recompression.yml", "go.mod", "go.sum"})
+	hashes, e := evidenceaudit.HarnessSourceHashes(os.DirFS("."), []string{"pkg/metatransport/*.go", "pkg/recompression/*.go", "pkg/authorization/*.go", "pkg/compression/decmpfs/*.go", "internal/decmpfs/*.go", "pkg/hostdata/*.go", "pkg/osversion/*.go", "pkg/apfswrite/*.go", "pkg/hfsplus/*.go", "internal/hostwalk/*.go", "acceptance/carrier_recompression_test.go", "acceptance/carrier_replacement_test.go", "scripts/verify-carrier-recompression*.go", "testdata/appledouble/native/carrier-recompression-readback.c", "testdata/appledouble/native/compression-operation*.json.gz", "scripts/capture-recompression-access.go", "testdata/appledouble/native/recompression-access*.json.gz", "testdata/appledouble/native/recompression-access.c", "testdata/appledouble/native/recompression-open.c", "testdata/appledouble/native/recompression-access-source/*", ".github/workflows/carrier-recompression.yml", "go.mod", "go.sum"})
 	if e != nil {
 		return e
 	}
-	revision, e := exec.CommandContext(ctx, "git", "rev-parse", "HEAD").Output()
+	revision, e := cirunner.CommandContext(ctx, "git", "rev-parse", "HEAD").Output()
 	if e != nil {
 		return e
 	}
-	report := map[string]any{"revision": strings.TrimSpace(string(revision)), "source_sha256": hashes, "go": runtime.Version(), "goos": runtime.GOOS, "goarch": runtime.GOARCH, "native_cases": cases, "image_count": 9, "image_entries": 666, "passed_tests": passed, "covered": covered, "statements": total, "coverage_files": files, "package_coverage": packageCounts, "package_covered": allCovered, "package_statements": allStatements}
+	report := map[string]any{"revision": strings.TrimSpace(string(revision)), "source_sha256": hashes, "go": runtime.Version(), "goos": runtime.GOOS, "goarch": runtime.GOARCH, "native_cases": cases, "replacement_compositions": compositions, "image_count": 9, "image_entries": 846, "passed_tests": passed, "covered": covered, "statements": total, "coverage_files": files, "package_coverage": packageCounts, "package_covered": allCovered, "package_statements": allStatements}
 	b, e = json.MarshalIndent(report, "", "  ")
 	if e != nil {
 		return e
@@ -188,7 +213,7 @@ func run() error {
 	if e = evidenceaudit.Coverage(os.DirFS("."), os.DirFS("artifacts"), "carrier-recompression-portable", strings.TrimSpace(string(revision)), runtime.GOOS); e != nil {
 		return e
 	}
-	fmt.Printf("648 native operation cases; 9 images with 666 entries; per-file and both complete packages %d/%d; combined coverage %d/%d\n", covered, total, allCovered, allStatements)
+	fmt.Printf("648 native operation cases; 9 images with 846 entries; per-file and all three complete packages %d/%d; combined coverage %d/%d\n", covered, total, allCovered, allStatements)
 	return nil
 }
 
