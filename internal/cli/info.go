@@ -12,6 +12,7 @@ import (
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/tools"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/apfsversion"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/disk"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/hfsplus"
 	"github.com/spf13/cobra"
@@ -58,13 +59,16 @@ func init() {
 
 // containerInfo is the JSON schema for apfs info.
 type containerInfo struct {
-	FileSystem  string       `json:"fileSystem"` // "apfs" or "hfs+"
-	UUID        string       `json:"uuid"`
-	Size        uint64       `json:"size"`
-	BlockSize   uint32       `json:"blockSize"`
-	VolumeCount int          `json:"volumeCount"`
-	Locked      bool         `json:"locked"`
-	Volumes     []volumeInfo `json:"volumes"`
+	FileSystem  string `json:"fileSystem"` // "apfs" or "hfs+"
+	UUID        string `json:"uuid"`
+	Size        uint64 `json:"size"`
+	BlockSize   uint32 `json:"blockSize"`
+	VolumeCount int    `json:"volumeCount"`
+	Locked      bool   `json:"locked"`
+	// NewestMountedVersion is the newest Apple APFS driver build that mounted
+	// the container (nx_newest_mounted_version), omitted when never recorded.
+	NewestMountedVersion string       `json:"newestMountedVersion,omitempty"`
+	Volumes              []volumeInfo `json:"volumes"`
 }
 
 type volumeInfo struct {
@@ -92,6 +96,12 @@ type volumeInfo struct {
 	Snapshots     uint64    `json:"snapshots"`
 	Size          uint64    `json:"size"`
 	UnmountTime   time.Time `json:"unmountTime"`
+	// FormattedBy and LastModifiedBy are the writer stamps Apple's tools leave
+	// in the volume superblock ("newfs_apfs (3288.1.3)"); FormatterMacOS names
+	// the macOS release that build series shipped in when it is in the ledger.
+	FormattedBy    string `json:"formattedBy,omitempty"`
+	LastModifiedBy string `json:"lastModifiedBy,omitempty"`
+	FormatterMacOS string `json:"formatterMacOS,omitempty"`
 }
 
 func runInfo(cmd *cobra.Command, args []string) error {
@@ -134,6 +144,11 @@ func runInfo(cmd *cobra.Command, args []string) error {
 		}
 		defer container.Close()
 		info, err = collectContainerInfo(container)
+		if err == nil {
+			if newest, e := apfsversion.ReadNewestMounted(imagePath); e == nil && !newest.IsZero() {
+				info.NewestMountedVersion = newest.String()
+			}
+		}
 		if err != nil {
 			return err
 		}
@@ -238,6 +253,11 @@ func collectContainerInfo(container *apfs.Container) (*containerInfo, error) { /
 		if volUUID, err := volume.Identifier(); err == nil {
 			vi.UUID = formatUUIDBytes(volUUID[:])
 		}
+		if volume.Superblock != nil {
+			vi.FormattedBy = stampString(volume.Superblock.FormattedBy.ID)
+			vi.LastModifiedBy = stampString(volume.Superblock.ModifiedBy[0].ID)
+			vi.FormatterMacOS = formatterMacOS(vi.FormattedBy, vi.LastModifiedBy)
+		}
 		if ci, err := volume.IsCaseInsensitive(); err == nil {
 			vi.CaseSensitive = !ci
 		}
@@ -285,6 +305,9 @@ func printContainerInfo(info *containerInfo) {
 	fmt.Printf("  %-18s %s (%d bytes)\n", "Size", formatSize(info.Size), info.Size)
 	fmt.Printf("  %-18s %d bytes\n", "Block size", info.BlockSize)
 	fmt.Printf("  %-18s %d\n", "Volumes", info.VolumeCount)
+	if info.NewestMountedVersion != "" {
+		fmt.Printf("  %-18s APFS %s\n", "Newest mounted by", info.NewestMountedVersion)
+	}
 	if info.Locked {
 		fmt.Printf("  %-18s yes\n", "Locked")
 	}
@@ -305,6 +328,15 @@ func printContainerInfo(info *containerInfo) {
 			fmt.Printf("  %-18s %d\n", "Snapshots", vi.Snapshots)
 		}
 		fmt.Printf("  %-18s %v\n", "Case-sensitive", vi.CaseSensitive)
+		if vi.FormattedBy != "" {
+			fmt.Printf("  %-18s %s\n", "Formatted by", vi.FormattedBy)
+		}
+		if vi.LastModifiedBy != "" {
+			fmt.Printf("  %-18s %s\n", "Last modified by", vi.LastModifiedBy)
+		}
+		if vi.FormatterMacOS != "" {
+			fmt.Printf("  %-18s %s\n", "APFS release", vi.FormatterMacOS)
+		}
 		if vi.Encrypted {
 			fmt.Printf("  %-18s yes\n", "Encrypted")
 		}
@@ -381,4 +413,30 @@ func runLegacyInfo(imagePath string) error {
 	default:
 		return handle.PrintFileSystemHierarchy()
 	}
+}
+
+// stampString renders an on-disk apfs_modified_by identifier without padding.
+func stampString(id [32]byte) string {
+	return strings.TrimRight(string(id[:]), "\x00")
+}
+
+// formatterMacOS attributes the newest Apple build among the stamps to a macOS
+// release from the apfsversion ledger, or returns "" for non-Apple writers.
+func formatterMacOS(stamps ...string) string {
+	var newest apfsversion.Version
+	for _, raw := range stamps {
+		if st, err := apfsversion.ParseStamp(raw); err == nil && st.IsApple() && (newest.IsZero() || st.Version.Compare(newest) > 0) {
+			newest = st.Version
+		}
+	}
+	if newest.IsZero() {
+		return ""
+	}
+	if r, ok := apfsversion.ReleaseForSeries(newest.Series()); ok {
+		return fmt.Sprintf("%d (%s)", newest.Series(), r.MacOS)
+	}
+	if major, _, ok := apfsversion.MacOSMajor(newest.Series()); ok {
+		return fmt.Sprintf("%d (macOS %d, inferred)", newest.Series(), major)
+	}
+	return fmt.Sprintf("%d (not in ledger)", newest.Series())
 }

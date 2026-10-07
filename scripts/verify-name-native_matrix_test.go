@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/captureprovenance"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/apfsversion"
 	"io"
 	"os"
 	"path/filepath"
@@ -206,19 +207,19 @@ func TestQualifyNativeNameMatrix(t *testing.T) {
 						if err != nil {
 							t.Fatal(err)
 						}
-						if !bytes.Equal(read(filepath.Join(out, stem+"-forward-incompatible.json")), append(expected, '\n')) || report.Observations != 0 || report.Incompatible != 1 {
-							t.Fatal("forward-incompatible cell record differs from the images")
+						if !bytes.Equal(read(filepath.Join(out, stem+"-native-mount-refused.json")), append(expected, '\n')) || report.Observations != 0 || report.Incompatible != 1 {
+							t.Fatal("native-mount refusal record differs from the images")
 						}
 						for _, suffix := range []string{"-attach.plist", "-detach.json", "-readback.json"} {
 							if _, err := os.Stat(filepath.Join(out, stem+suffix)); err == nil {
-								t.Fatal("forward-incompatible cell mounted the image")
+								t.Fatal("cell with a refused native mount mounted the image")
 							}
 						}
 						incompatible = true
 						continue
 					}
 					if report.Incompatible != 0 {
-						t.Fatal("mountable cell reported a forward-incompatible volume")
+						t.Fatal("mountable cell reported a refused native mount")
 					}
 					if err = compareNativeReceiver(read(filepath.Join(out, stem+"-readback.json")), want, volume.Native.Cases); err != nil {
 						t.Fatal(err)
@@ -510,38 +511,46 @@ func TestNativeNameMatrixHistoricalReceiverEvidence(t *testing.T) {
 	}
 }
 
-func stubAPFSVolumeVersions(t *testing.T, versions map[string][2]string) {
-	t.Helper()
-	prior := readAPFSVolumeVersions
-	readAPFSVolumeVersions = func(image string) (string, string, error) {
-		v, ok := versions[filepath.Base(filepath.Dir(image))+"/"+filepath.Base(image)]
-		if !ok {
-			return "", "", fmt.Errorf("unexpected image %s", image)
-		}
-		return v[0], v[1], nil
-	}
-	t.Cleanup(func() { readAPFSVolumeVersions = prior })
+// stubNativeInspection replaces the portable-reader inspection with fixed
+// results keyed by "<artifact dir>/<image>", so unit tests need no images.
+type stubbedInspection struct {
+	formattedBy, modifiedBy string
+	unrepresentable         int
+	entries                 int
 }
 
-func TestNativeNameForwardIncompatibility(t *testing.T) {
-	for id, want := range map[string]int{"newfs_apfs (2811.160.7.0.4)": 2811, "apfs_kext (2332.140.13.702.2)": 2332, "newfs_apfs (3288.1.3)": 3288, "apfs_kext (2632.0.84)": 2632} {
-		if got, err := apfsVersionLine(id); err != nil || got != want {
-			t.Fatalf("%q: %d %v", id, got, err)
+func stubNativeInspection(t *testing.T, images map[string]stubbedInspection) {
+	t.Helper()
+	prior := inspectNativeImage
+	inspectNativeImage = func(image string, hostMajor int) (apfsversion.Inspection, error) {
+		s, ok := images[filepath.Base(filepath.Dir(image))+"/"+filepath.Base(image)]
+		if !ok {
+			return apfsversion.Inspection{}, fmt.Errorf("unexpected image %s", image)
 		}
-	}
-	for _, bad := range []string{"", "go-apfs (apfswrite)", "newfs_apfs 2811.1", "newfs_apfs ()", "newfs_apfs (2811.1) extra", "NEWFS (2811)"} {
-		if _, err := apfsVersionLine(bad); err == nil {
-			t.Fatalf("accepted %q", bad)
+		fb, err := apfsversion.ParseStamp(s.formattedBy)
+		if err != nil {
+			return apfsversion.Inspection{}, err
 		}
-	}
-	for _, c := range []struct {
-		receiver, image int
-		want            bool
-	}{{2332, 2811, true}, {2332, 3288, true}, {2317, 2632, true}, {2332, 2332, false}, {2332, 2313, false}, {2811, 3288, false}, {3288, 2811, false}, {2632, 2811, false}, {2811, 2332, false}} {
-		if got := forwardIncompatibleAPFS(c.receiver, c.image); got != c.want {
-			t.Fatalf("receiver %d image %d: %v", c.receiver, c.image, got)
+		mb, err := apfsversion.ParseStamp(s.modifiedBy)
+		if err != nil {
+			return apfsversion.Inspection{}, err
 		}
+		v := apfsversion.VolumeInspection{Name: "Collation", FormattedBy: fb, LastModifiedBy: mb}
+		if hostMajor != 0 {
+			v.Entries = s.entries
+			if hostMajor == 15 {
+				v.UnrepresentableNames = s.unrepresentable
+				for i := 0; i < s.unrepresentable && i < apfsversion.SampleLimit; i++ {
+					v.Samples = append(v.Samples, fmt.Sprintf("%+q", string(rune(0xA7CE+i))))
+				}
+			}
+		}
+		return apfsversion.Inspection{NewestMounted: mb.Version, HostMajor: hostMajor, Volumes: []apfsversion.VolumeInspection{v}}, nil
 	}
+	t.Cleanup(func() { inspectNativeImage = prior })
+}
+
+func TestNativeNameMountRefusal(t *testing.T) {
 	base := t.TempDir()
 	write := func(path string, b []byte) {
 		t.Helper()
@@ -558,47 +567,52 @@ func TestNativeNameForwardIncompatibility(t *testing.T) {
 	write(filepath.Join(base, "name-collation-macos-15", "APFS.dmg"), []byte("receiver image"))
 	write(filepath.Join(base, "name-collation-macos-15", "APFSX.dmg"), []byte("receiver sensitive image"))
 	write(filepath.Join(base, "name-collation-xcode-27", "APFS.dmg"), []byte("newest image"))
-	stubAPFSVolumeVersions(t, map[string][2]string{
-		"name-collation-macos-latest/APFS.dmg":  {"newfs_apfs (2811.160.7.0.4)", "apfs_kext (2811.160.7.0.4)"},
-		"name-collation-macos-latest/APFSX.dmg": {"newfs_apfs (2811.160.7.0.4)", "newfs_apfs (2811.160.7.0.4)"},
-		"name-collation-macos-15/APFS.dmg":      {"newfs_apfs (2332.140.13.702.2)", "apfs_kext (2332.140.13.702.2)"},
-		"name-collation-macos-15/APFSX.dmg":     {"newfs_apfs (2332.140.13.702.2)", "newfs_apfs (2332.140.13.702.2)"},
-		"name-collation-xcode-27/APFS.dmg":      {"newfs_apfs (3288.1.3)", "apfs_kext (3288.1.3)"},
+	stubNativeInspection(t, map[string]stubbedInspection{
+		"name-collation-macos-latest/APFS.dmg":  {"newfs_apfs (2811.160.7.0.4)", "apfs_kext (2811.160.7.0.4)", 28, 7508},
+		"name-collation-macos-latest/APFSX.dmg": {"newfs_apfs (2811.160.7.0.4)", "newfs_apfs (2811.160.7.0.4)", 28, 7508},
+		"name-collation-macos-15/APFS.dmg":      {"newfs_apfs (2332.140.13.702.2)", "apfs_kext (2332.140.13.702.2)", 0, 7480},
+		"name-collation-macos-15/APFSX.dmg":     {"newfs_apfs (2332.140.13.702.2)", "newfs_apfs (2332.140.13.702.2)", 0, 7480},
+		"name-collation-xcode-27/APFS.dmg":      {"newfs_apfs (3288.1.3)", "apfs_kext (3288.1.3)", 0, 7508},
 	})
 	host := "ProductVersion: 15.7.9"
 	v := volumeCapture{Kind: "APFS", ImageSHA256: sum([]byte("newer image"))}
-	record, err := nativeForwardIncompatible(host, nativeNameCell{26, 15, "APFS"}, v, base, producer)
+	record, err := nativeMountRefusalFor(host, nativeNameCell{26, 15, "APFS"}, v, base, producer)
 	if err != nil || record == nil {
 		t.Fatal(record, err)
 	}
-	want := &nativeForwardIncompatibility{Schema: 1, Outcome: nativeForwardIncompatibleOutcome, Producer: 26, Receiver: 15, Filesystem: "APFS", Host: host, ImageSHA256: v.ImageSHA256, ImageFormattedBy: "newfs_apfs (2811.160.7.0.4)", ImageModifiedBy: "apfs_kext (2811.160.7.0.4)", ImageLine: 2811, ReceiverImage: sum([]byte("receiver image")), ReceiverKext: "apfs_kext (2332.140.13.702.2)", ReceiverLine: 2332, Rule: nativeForwardIncompatibleRule}
-	if !reflect.DeepEqual(record, want) {
+	want := &nativeMountRefusal{Schema: 2, Outcome: nativeMountRefusedOutcome, Verdict: "known-deadlock", Code: apfsversion.CodeUnicodeNames, Reason: record.Reason, Producer: 26, Receiver: 15, Filesystem: "APFS", Host: host, ImageSHA256: v.ImageSHA256, ImageFormattedBy: "newfs_apfs (2811.160.7.0.4)", ImageModifiedBy: "apfs_kext (2811.160.7.0.4)", ImageNewestMounted: "2811.160.7.0.4", ReceiverImage: sum([]byte("receiver image")), ReceiverKext: "apfs_kext (2332.140.13.702.2)", Entries: 7508, UnrepresentableNames: 28, SampleNames: record.SampleNames}
+	if !reflect.DeepEqual(record, want) || len(record.SampleNames) != apfsversion.SampleLimit || record.Reason == "" {
 		t.Fatalf("record %+v", record)
 	}
-	// Same line, HFS, and a receiver newer than the image never produce a record.
-	if r, err := nativeForwardIncompatible(host, nativeNameCell{26, 26, "APFS"}, v, base, producer); err != nil || r != nil {
+	// Receivers 26 and 27 read the same names natively; macOS 15 reading its own
+	// image has nothing unrepresentable; HFS is never assessed.
+	if r, err := nativeMountRefusalFor("ProductVersion: 26.4", nativeNameCell{26, 26, "APFS"}, v, base, producer); err != nil || r != nil {
 		t.Fatal(r, err)
 	}
-	if r, err := nativeForwardIncompatible(host, nativeNameCell{26, 15, "HFS+"}, volumeCapture{Kind: "HFS+"}, base, producer); err != nil || r != nil {
+	if r, err := nativeMountRefusalFor("ProductVersion: 27.0.1", nativeNameCell{26, 27, "APFS"}, v, base, producer); err != nil || r != nil {
 		t.Fatal(r, err)
 	}
-	if r, err := nativeForwardIncompatible("ProductVersion: 27.0.1", nativeNameCell{26, 27, "APFS"}, v, base, producer); err != nil || r != nil {
+	own := volumeCapture{Kind: "APFS", ImageSHA256: sum([]byte("receiver image"))}
+	if r, err := nativeMountRefusalFor(host, nativeNameCell{15, 15, "APFS"}, own, base, filepath.Join(base, "name-collation-macos-15")); err != nil || r != nil {
 		t.Fatal(r, err)
 	}
-	// A tampered image, an image whose receiver evidence was not written by the
-	// receiver kernel, and a receiver without its own producer artifact all fail.
-	if _, err := nativeForwardIncompatible(host, nativeNameCell{26, 15, "APFS"}, volumeCapture{Kind: "APFS", ImageSHA256: "0"}, base, producer); err == nil {
+	if r, err := nativeMountRefusalFor(host, nativeNameCell{26, 15, "HFS+"}, volumeCapture{Kind: "HFS+"}, base, producer); err != nil || r != nil {
+		t.Fatal(r, err)
+	}
+	// A tampered image, receiver evidence not written by the receiver kernel,
+	// and a receiver without its own producer artifact all fail closed.
+	if _, err := nativeMountRefusalFor(host, nativeNameCell{26, 15, "APFS"}, volumeCapture{Kind: "APFS", ImageSHA256: "0"}, base, producer); err == nil {
 		t.Fatal("accepted image hash mismatch")
 	}
-	if _, err := nativeForwardIncompatible(host, nativeNameCell{26, 15, "APFSX"}, volumeCapture{Kind: "APFSX", ImageSHA256: sum([]byte("newer sensitive image"))}, base, producer); err == nil {
+	if _, err := nativeMountRefusalFor(host, nativeNameCell{26, 15, "APFSX"}, volumeCapture{Kind: "APFSX", ImageSHA256: sum([]byte("newer sensitive image"))}, base, producer); err == nil {
 		t.Fatal("accepted receiver evidence not written by the receiver kernel")
 	}
-	if _, err := nativeForwardIncompatible(host, nativeNameCell{26, 14, "APFS"}, v, base, producer); err == nil {
+	if _, err := nativeMountRefusalFor(host, nativeNameCell{26, 14, "APFS"}, v, base, producer); err == nil {
 		t.Fatal("accepted unknown receiver")
 	}
 }
 
-func TestNativeNameForwardIncompatibleReference(t *testing.T) {
+func TestNativeNameMountRefusalReference(t *testing.T) {
 	t.Chdir("..")
 	cell := nativeNameCell{26, 15, "APFS"}
 	host := "ProductVersion: 15.7.9"
@@ -629,9 +643,9 @@ func TestNativeNameForwardIncompatibleReference(t *testing.T) {
 			write(filepath.Join(input, "cases.tsv"), []byte("producer manifest"))
 			write(filepath.Join(input, "APFS.dmg"), []byte("newer image"))
 			write(filepath.Join(base, "name-collation-macos-15", "APFS.dmg"), []byte("receiver image"))
-			stubAPFSVolumeVersions(t, map[string][2]string{
-				"name-collation-macos-latest/APFS.dmg": {"newfs_apfs (2811.160.7.0.4)", "apfs_kext (2811.160.7.0.4)"},
-				"name-collation-macos-15/APFS.dmg":     {"newfs_apfs (2332.140.13.702.2)", "apfs_kext (2332.140.13.702.2)"},
+			stubNativeInspection(t, map[string]stubbedInspection{
+				"name-collation-macos-latest/APFS.dmg": {"newfs_apfs (2811.160.7.0.4)", "apfs_kext (2811.160.7.0.4)", 28, 7508},
+				"name-collation-macos-15/APFS.dmg":     {"newfs_apfs (2332.140.13.702.2)", "apfs_kext (2332.140.13.702.2)", 0, 7480},
 			})
 			for _, name := range []string{"arm64.ast.json", "x86_64.ast.json", "SDK/sys/stat.h", "SDK/sys/fcntl.h", "SDK/unistd.h", "SDK/sys/errno.h", "probe"} {
 				write(filepath.Join(out, name), []byte(name))
@@ -644,7 +658,7 @@ func TestNativeNameForwardIncompatibleReference(t *testing.T) {
 			for i := 0; i < casesPerVolume; i++ {
 				v.Native.Cases = append(v.Native.Cases, nativeCase{ID: fmt.Sprintf("case-%d", i)})
 			}
-			record, err := nativeForwardIncompatible(host, cell, v, base, input)
+			record, err := nativeMountRefusalFor(host, cell, v, base, input)
 			if err != nil || record == nil {
 				t.Fatal(record, err)
 			}
@@ -655,12 +669,12 @@ func TestNativeNameForwardIncompatibleReference(t *testing.T) {
 			encoded = append(encoded, '\n')
 			switch mutation {
 			case "tampered":
-				encoded = bytes.Replace(encoded, []byte("2811"), []byte("2632"), 1)
+				encoded = bytes.Replace(encoded, []byte(`"unrepresentable_names": 28`), []byte(`"unrepresentable_names": 1`), 1)
 			case "mount-evidence":
 				write(filepath.Join(out, "26-APFS-attach.plist"), []byte("attached"))
 			}
 			if mutation != "missing-record" {
-				write(filepath.Join(out, "26-APFS-forward-incompatible.json"), encoded)
+				write(filepath.Join(out, "26-APFS-native-mount-refused.json"), encoded)
 			}
 			r := nativeNameMatrixReport{Schema: 3, Reference: true, Selection: cell, Host: host, Revision: revision, Sources: sources, Inputs: map[string]string{}, Evidence: map[string]string{}, Observations: 0, Incompatible: 1, Profiles: 1, Volumes: 1}
 			if mutation == "observations-claimed" {
@@ -713,7 +727,7 @@ func TestNativeNameMatrixReceiverReference(t *testing.T) {
 	t.Chdir("..")
 	cell := nativeNameCell{27, 27, "APFS"}
 	host := "ProductVersion: 27.0.1"
-	stubAPFSVolumeVersions(t, map[string][2]string{"name-collation-xcode-27/APFS.dmg": {"newfs_apfs (3288.1.3)", "apfs_kext (3288.1.3)"}})
+	stubNativeInspection(t, map[string]stubbedInspection{"name-collation-xcode-27/APFS.dmg": {"newfs_apfs (3288.1.3)", "apfs_kext (3288.1.3)", 0, 7506}})
 	for _, mutation := range []string{"valid", "missing-report", "schema", "preparation", "not-reference", "host", "selection", "inventory", "revision", "sources", "inputs", "extra-input", "hash", "missing-raw", "truncated-raw", "changed-observations", "missing-detach", "failed-detach"} {
 		t.Run(mutation, func(t *testing.T) {
 			base := t.TempDir()

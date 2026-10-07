@@ -14,7 +14,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -23,7 +22,7 @@ import (
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/captureprovenance"
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/diskimage"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/apfsversion"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/osversion"
 )
 
@@ -244,13 +243,13 @@ func runNativeNameImages(t *testing.T, reference, prepare bool) {
 				continue
 			}
 			cell := nativeNameCell{Producer: p.major, Receiver: int(version.Major), Filesystem: v.Kind}
-			record, err := nativeForwardIncompatible(string(host), cell, v, base, dir)
+			record, err := nativeMountRefusalFor(string(host), cell, v, base, dir)
 			if err != nil {
 				t.Fatal(err)
 			}
 			if record != nil {
 				t.Run(fmt.Sprintf("%d/%s", p.major, v.Kind), func(t *testing.T) {
-					nativeImageForwardIncompatible(t, out, record, reference)
+					nativeImageMountRefused(t, out, record, reference)
 					incompatible++
 				})
 				continue
@@ -266,7 +265,7 @@ func runNativeNameImages(t *testing.T, reference, prepare bool) {
 		wantProfiles, wantVolumes, wantChecked = 1, 1, 7506
 	}
 	if (!prepare && checked+incompatible*casesPerVolume*2 != wantChecked) || profiles != wantProfiles || volumes != wantVolumes || t.Failed() {
-		t.Fatalf("incomplete native qualification: observations %d/%d forward-incompatible volumes %d profiles %d/%d volumes %d/%d", checked, wantChecked, incompatible, profiles, wantProfiles, volumes, wantVolumes)
+		t.Fatalf("incomplete native qualification: observations %d/%d refused native mounts %d profiles %d/%d volumes %d/%d", checked, wantChecked, incompatible, profiles, wantProfiles, volumes, wantVolumes)
 	}
 	compiler, e := commands.run(ctx, "xcrun", "clang", "--version")
 	if e != nil {
@@ -329,13 +328,13 @@ func nativeImageReadback(t *testing.T, ctx context.Context, commands *nativeComm
 		}
 		cell.Receiver = int(version.Major)
 		refDir := filepath.Join(filepath.Dir(out), "name-native-reference")
-		var record *nativeForwardIncompatibility
+		var record *nativeMountRefusal
 		want, record, err = loadNativeReceiverReference(refDir, cell, host, v, dir)
 		if err != nil {
 			t.Fatal(err)
 		}
 		if record != nil {
-			t.Fatal("receiver reference recorded a forward-incompatible volume for a mountable image")
+			t.Fatal("receiver reference refused a native mount the ledger supports")
 		}
 	}
 	// Never place a live mount under an uploaded artifact directory: an upload
@@ -438,7 +437,7 @@ type nativeNameMatrixReport struct {
 
 // nativeReportComplete reports whether a receiver report accounts for every
 // observation of its selection, either as a native lookup result or as a
-// recorded forward-incompatible volume that the receiver must not mount.
+// recorded native-mount refusal for a volume the receiver must not mount.
 func nativeReportComplete(r nativeNameMatrixReport, selection nativeNameCell) bool {
 	if selection == (nativeNameCell{}) {
 		return r.Observations+r.Incompatible*casesPerVolume*2 == 90072 && r.Profiles == 3 && r.Volumes == 12
@@ -556,10 +555,10 @@ func parseNativeReceiver(raw []byte, expected []nativeCase) ([]byte, error) {
 
 // loadNativeReceiverReference validates a receiver reference directory and
 // returns either the normalized observations for a mounted volume or the
-// forward-incompatibility record of a volume the receiver must not mount.
-// Exactly one of the two is non-nil on success. The record is re-derived from
-// the producer image and the receiver's own image, never trusted as written.
-func loadNativeReceiverReference(out string, cell nativeNameCell, host string, v volumeCapture, input string) ([]byte, *nativeForwardIncompatibility, error) {
+// native-mount refusal of a volume the receiver must not mount. Exactly one of
+// the two is non-nil on success. The record is re-derived from the producer
+// image and the receiver's own image, never trusted as written.
+func loadNativeReceiverReference(out string, cell nativeNameCell, host string, v volumeCapture, input string) ([]byte, *nativeMountRefusal, error) {
 	raw, err := os.ReadFile(filepath.Join(out, "report.json"))
 	if err != nil {
 		return nil, nil, err
@@ -599,25 +598,25 @@ func loadNativeReceiverReference(out string, cell nativeNameCell, host string, v
 		return nil, nil, errors.New("receiver reference revision mismatch")
 	}
 	stem := fmt.Sprintf("%d-%s", cell.Producer, strings.ReplaceAll(cell.Filesystem, "+", "plus"))
-	expected, err := nativeForwardIncompatible(host, cell, v, filepath.Dir(input), input)
+	expected, err := nativeMountRefusalFor(host, cell, v, filepath.Dir(input), input)
 	if err != nil {
 		return nil, nil, err
 	}
-	recorded, err := os.ReadFile(filepath.Join(out, stem+"-forward-incompatible.json"))
+	recorded, err := os.ReadFile(filepath.Join(out, stem+"-native-mount-refused.json"))
 	if expected != nil || err == nil {
 		if err != nil {
-			return nil, nil, fmt.Errorf("receiver reference omits the forward-incompatible record: %w", err)
+			return nil, nil, fmt.Errorf("receiver reference omits the native-mount refusal: %w", err)
 		}
-		var got nativeForwardIncompatibility
+		var got nativeMountRefusal
 		if err = decodeNativeJSON(recorded, &got); err != nil {
 			return nil, nil, err
 		}
 		if expected == nil || !reflect.DeepEqual(got, *expected) {
-			return nil, nil, errors.New("receiver forward-incompatible record differs from the images")
+			return nil, nil, errors.New("receiver native-mount refusal differs from the images")
 		}
 		for _, suffix := range []string{"-attach.plist", "-detach.json", "-readback.json", "-observations.json"} {
 			if _, err := os.Stat(filepath.Join(out, stem+suffix)); err == nil {
-				return nil, nil, errors.New("forward-incompatible volume carries mount evidence")
+				return nil, nil, errors.New("refused native mount carries mount evidence")
 			}
 		}
 		return nil, expected, nil
@@ -651,84 +650,49 @@ func loadNativeReceiverReference(out string, cell nativeNameCell, host string, v
 	return stored, nil, nil
 }
 
-// Forward-incompatible APFS: the macOS 15 APFS driver line (23xx) deadlocks the
-// receiving kernel while mounting, or shortly after mounting, a container that
-// a macOS 26 or newer APFS line (26xx and above) formatted. The deadlock is
-// nondeterministic, survives every userland deadline and leaves no CI log, so
-// the receiver never attempts that mount. It records both version lines from
-// the image bytes themselves and from an image its own kernel wrote in the
-// same run, and the replay and aggregate stages re-derive the same record.
-type nativeForwardIncompatibility struct {
-	Schema           int    `json:"schema"`
-	Outcome          string `json:"outcome"`
-	Producer         int    `json:"producer"`
-	Receiver         int    `json:"receiver"`
-	Filesystem       string `json:"filesystem"`
-	Host             string `json:"host"`
-	ImageSHA256      string `json:"image_sha256"`
-	ImageFormattedBy string `json:"image_formatted_by"`
-	ImageModifiedBy  string `json:"image_last_modified_by"`
-	ImageLine        int    `json:"image_apfs_line"`
-	ReceiverImage    string `json:"receiver_image_sha256"`
-	ReceiverKext     string `json:"receiver_apfs_kext"`
-	ReceiverLine     int    `json:"receiver_apfs_line"`
-	Rule             string `json:"rule"`
+// Native mount refusal: the macOS 15 APFS driver deadlocks the receiving
+// kernel's disk I/O while mounting, or shortly after mounting, a volume whose
+// directories hold names it cannot represent (Unicode 16 code points stored by
+// macOS 26 and 27). The deadlock is nondeterministic, survives every userland
+// deadline and leaves no CI log, so the receiver inspects each image with the
+// portable reader first and never attempts such a mount. The record carries
+// the assessment from pkg/apfsversion, the receiver's own APFS driver version
+// (read from the image its kernel wrote in the same run), and the counts and
+// samples; the replay and aggregate stages re-derive the same record.
+type nativeMountRefusal struct {
+	Schema               int      `json:"schema"`
+	Outcome              string   `json:"outcome"`
+	Verdict              string   `json:"verdict"`
+	Code                 string   `json:"code"`
+	Reason               string   `json:"reason"`
+	Producer             int      `json:"producer"`
+	Receiver             int      `json:"receiver"`
+	Filesystem           string   `json:"filesystem"`
+	Host                 string   `json:"host"`
+	ImageSHA256          string   `json:"image_sha256"`
+	ImageFormattedBy     string   `json:"image_formatted_by"`
+	ImageModifiedBy      string   `json:"image_last_modified_by"`
+	ImageNewestMounted   string   `json:"image_newest_mounted"`
+	ReceiverImage        string   `json:"receiver_image_sha256"`
+	ReceiverKext         string   `json:"receiver_apfs_kext"`
+	Entries              int      `json:"entries"`
+	UnrepresentableNames int      `json:"unrepresentable_names"`
+	SampleNames          []string `json:"sample_names"`
 }
 
-const (
-	nativeForwardIncompatibleOutcome = "forward-incompatible-apfs"
-	nativeForwardIncompatibleRule    = "receiver APFS line below 2600 (macOS 15) must not mount a container formatted by APFS line 2600 or newer (macOS 26 and later): the mount deadlocks the receiving kernel"
-	// The first macOS 26 APFS line is 2632; macOS 15 ships 2313 to 2332.
-	nativeAPFSMacOS26Line = 2600
-)
+const nativeMountRefusedOutcome = "native-mount-refused"
 
-var apfsVersionLinePattern = regexp.MustCompile(`^[a-z_]+ \((\d+)(?:\.\d+)*\)$`)
-
-// apfsVersionLine extracts the leading APFS release line from an on-disk
-// apfs_modified_by identifier such as "newfs_apfs (2811.160.7.0.4)".
-func apfsVersionLine(id string) (int, error) {
-	m := apfsVersionLinePattern.FindStringSubmatch(id)
-	if m == nil {
-		return 0, fmt.Errorf("unrecognized APFS version identifier %q", id)
-	}
-	return strconv.Atoi(m[1])
-}
-
-func forwardIncompatibleAPFS(receiverLine, imageLine int) bool {
-	return receiverLine < nativeAPFSMacOS26Line && imageLine >= nativeAPFSMacOS26Line
-}
-
-// apfsVolumeVersions reads the formatter and most recent read-write mounter
-// recorded in the single volume of an image, using the portable reader only.
-func apfsVolumeVersions(image string) (formattedBy, modifiedBy string, err error) {
-	container, closer, err := apfs.OpenImage(image, nil)
-	if err != nil {
-		return "", "", err
-	}
-	defer func() { err = errors.Join(err, closer.Close()) }()
-	volumes, err := container.Volumes()
-	if err != nil {
-		return "", "", err
-	}
-	if len(volumes) != 1 || volumes[0].Superblock == nil {
-		return "", "", errors.New("unexpected APFS volume inventory")
-	}
-	sb := volumes[0].Superblock
-	id := func(b [32]byte) string { return strings.TrimRight(string(b[:]), "\x00") }
-	return id(sb.FormattedBy.ID), id(sb.ModifiedBy[0].ID), nil
-}
-
-// readAPFSVolumeVersions is replaced by unit tests that have no real images.
-var readAPFSVolumeVersions = apfsVolumeVersions
+// inspectNativeImage is replaced by unit tests that have no real images.
+var inspectNativeImage = apfsversion.Inspect
 
 func receiverProducerArtifact(major int) string {
 	return map[int]string{15: "name-collation-macos-15", 26: "name-collation-macos-latest", 27: "name-collation-xcode-27"}[major]
 }
 
-// nativeForwardIncompatible returns the record for an APFS image the receiver
-// must not mount, or nil when the receiver may mount it. The receiver's own
-// APFS line comes from the same-filesystem image its kernel wrote in this run.
-func nativeForwardIncompatible(host string, cell nativeNameCell, v volumeCapture, artifacts, input string) (*nativeForwardIncompatibility, error) {
+// nativeMountRefusalFor returns the record for an APFS image the receiver must
+// not mount, or nil when the ledger supports the mount. The receiver's driver
+// version comes from the same-filesystem image its own kernel wrote this run.
+func nativeMountRefusalFor(host string, cell nativeNameCell, v volumeCapture, artifacts, input string) (*nativeMountRefusal, error) {
 	if v.Kind != "APFS" && v.Kind != "APFSX" {
 		return nil, nil
 	}
@@ -736,15 +700,7 @@ func nativeForwardIncompatible(host string, cell nativeNameCell, v volumeCapture
 	image := filepath.Join(input, name)
 	b, err := os.ReadFile(image)
 	if err != nil || sum(b) != v.ImageSHA256 {
-		return nil, errors.Join(err, errors.New("forward-compatibility check requires the genuine producer image"))
-	}
-	formattedBy, modifiedBy, err := readAPFSVolumeVersions(image)
-	if err != nil {
-		return nil, err
-	}
-	imageLine, err := apfsVersionLine(formattedBy)
-	if err != nil {
-		return nil, err
+		return nil, errors.Join(err, errors.New("native mount assessment requires the genuine producer image"))
 	}
 	receiverArtifact := receiverProducerArtifact(cell.Receiver)
 	if receiverArtifact == "" {
@@ -755,26 +711,32 @@ func nativeForwardIncompatible(host string, cell nativeNameCell, v volumeCapture
 	if err != nil {
 		return nil, err
 	}
-	_, receiverKext, err := readAPFSVolumeVersions(receiverImage)
+	own, err := inspectNativeImage(receiverImage, 0)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("receiver image: %w", err)
 	}
-	if !strings.HasPrefix(receiverKext, "apfs_kext (") {
-		return nil, fmt.Errorf("receiver image was last modified by %q, not the receiver kernel", receiverKext)
+	if len(own.Volumes) != 1 || own.Volumes[0].LastModifiedBy.Tool != "apfs_kext" || !own.Volumes[0].LastModifiedBy.IsApple() {
+		return nil, fmt.Errorf("receiver image was last modified by %q, not the receiver kernel", own.Volumes[0].LastModifiedBy)
 	}
-	receiverLine, err := apfsVersionLine(receiverKext)
+	receiverKext := own.Volumes[0].LastModifiedBy
+	inspection, err := inspectNativeImage(image, cell.Receiver)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("producer image: %w", err)
 	}
-	if !forwardIncompatibleAPFS(receiverLine, imageLine) {
+	if len(inspection.Volumes) != 1 {
+		return nil, errors.New("unexpected APFS volume inventory")
+	}
+	assessment := apfsversion.AssessNativeMount(receiverKext.Version, inspection.Image(0))
+	if assessment.Verdict == apfsversion.Supported {
 		return nil, nil
 	}
-	return &nativeForwardIncompatibility{Schema: 1, Outcome: nativeForwardIncompatibleOutcome, Producer: cell.Producer, Receiver: cell.Receiver, Filesystem: v.Kind, Host: host, ImageSHA256: v.ImageSHA256, ImageFormattedBy: formattedBy, ImageModifiedBy: modifiedBy, ImageLine: imageLine, ReceiverImage: sum(rb), ReceiverKext: receiverKext, ReceiverLine: receiverLine, Rule: nativeForwardIncompatibleRule}, nil
+	volume := inspection.Volumes[0]
+	return &nativeMountRefusal{Schema: 2, Outcome: nativeMountRefusedOutcome, Verdict: assessment.Verdict.String(), Code: assessment.Code, Reason: assessment.Reason, Producer: cell.Producer, Receiver: cell.Receiver, Filesystem: v.Kind, Host: host, ImageSHA256: v.ImageSHA256, ImageFormattedBy: volume.FormattedBy.String(), ImageModifiedBy: volume.LastModifiedBy.String(), ImageNewestMounted: inspection.NewestMounted.String(), ReceiverImage: sum(rb), ReceiverKext: receiverKext.String(), Entries: volume.Entries, UnrepresentableNames: volume.UnrepresentableNames, SampleNames: append([]string{}, volume.Samples...)}, nil
 }
 
 // The reference stage writes the record; the replay stage requires the
 // reference to hold the identical re-derived record before writing its own.
-func nativeImageForwardIncompatible(t *testing.T, out string, record *nativeForwardIncompatibility, reference bool) {
+func nativeImageMountRefused(t *testing.T, out string, record *nativeMountRefusal, reference bool) {
 	t.Helper()
 	stem := fmt.Sprintf("%d-%s", record.Producer, strings.ReplaceAll(record.Filesystem, "+", "plus"))
 	data, err := json.MarshalIndent(record, "", "  ")
@@ -783,18 +745,18 @@ func nativeImageForwardIncompatible(t *testing.T, out string, record *nativeForw
 	}
 	data = append(data, '\n')
 	if !reference {
-		prior, err := os.ReadFile(filepath.Join(filepath.Dir(out), "name-native-reference", stem+"-forward-incompatible.json"))
+		prior, err := os.ReadFile(filepath.Join(filepath.Dir(out), "name-native-reference", stem+"-native-mount-refused.json"))
 		if err != nil {
 			t.Fatal(err)
 		}
 		if !bytes.Equal(prior, data) {
-			t.Fatalf("receiver reference forward-incompatible record differs:\n%s\nreplay:\n%s", prior, data)
+			t.Fatalf("receiver reference mount refusal differs:\n%s\nreplay:\n%s", prior, data)
 		}
 	}
-	if err = os.WriteFile(filepath.Join(out, stem+"-forward-incompatible.json"), data, 0644); err != nil {
+	if err = os.WriteFile(filepath.Join(out, stem+"-native-mount-refused.json"), data, 0644); err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("%s: %s formatted by %s; receiver %s: native mount not attempted", stem, record.Filesystem, record.ImageFormattedBy, record.ReceiverKext)
+	t.Logf("%s: %s %s (%s): %d of %d stored names unrepresentable on receiver %s; native mount not attempted", stem, record.Filesystem, record.Verdict, record.Code, record.UnrepresentableNames, record.Entries, record.ReceiverKext)
 }
 
 func readReceiverProducerRevision(input string) string {
