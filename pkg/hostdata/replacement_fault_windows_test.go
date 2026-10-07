@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 	"golang.org/x/sys/windows"
 	"io"
 	"os"
@@ -770,12 +771,67 @@ func TestReplacementWindowsPrivateFailures(t *testing.T) {
 		if e == nil {
 			t.Fatalf("accepted %q", name)
 		}
+		if name == "exists" && !errors.Is(e, os.ErrExist) {
+			t.Fatalf("private directory collision lost its Go error class: %v", e)
+		}
 	}
 	source, err := os.CreateTemp(t.TempDir(), "source")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer source.Close()
+	// The NT creation path must expose the same error class as Go's native
+	// directory operation. Downstream writers use it to preserve independent
+	// sibling commits after an allocation denial.
+	if err = root.Mkdir("denied", 0700); err != nil {
+		t.Fatal(err)
+	}
+	denied := filepath.Join(directory, "denied")
+	if out, e := cirunner.Command("icacls", denied, "/deny", "*S-1-1-0:(AD,WD)").CombinedOutput(); e != nil {
+		t.Fatalf("deny creation: %v: %s", e, out)
+	}
+	t.Cleanup(func() {
+		if out, e := cirunner.Command("icacls", denied, "/remove:d", "*S-1-1-0").CombinedOutput(); e != nil {
+			t.Errorf("restore creation: %v: %s", e, out)
+		}
+	})
+	if e := os.Mkdir(filepath.Join(denied, "control"), 0700); !errors.Is(e, os.ErrPermission) {
+		t.Fatalf("native directory denial control: %v", e)
+	}
+	for _, acquire := range []func() error{
+		func() error {
+			release, e := makeReplacementDirectoryAt(t.Context(), root, filepath.Join("denied", "private"))
+			if release != nil {
+				t.Error("denied creation returned a capability")
+				e = errors.Join(e, release())
+			}
+			return e
+		},
+		func() error {
+			r, e := PrepareReplacementAtContext(t.Context(), source, root, "denied")
+			if r != nil {
+				t.Error("denied rooted preparation returned a replacement")
+				e = errors.Join(e, r.Close())
+			}
+			return e
+		},
+		func() error {
+			r, e := PrepareReplacementContext(t.Context(), source, denied)
+			if r != nil {
+				t.Error("denied preparation returned a replacement")
+				e = errors.Join(e, r.Close())
+			}
+			return e
+		},
+	} {
+		if e := acquire(); !errors.Is(e, os.ErrPermission) {
+			t.Fatalf("allocation denial lost its Go error class: %v", e)
+		}
+	}
+	entries, err := os.ReadDir(denied)
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("denied allocation leaked staging: %v %v", entries, err)
+	}
 	replacement, err := PrepareReplacementContext(t.Context(), source, "")
 	if err != nil {
 		t.Fatal(err)
