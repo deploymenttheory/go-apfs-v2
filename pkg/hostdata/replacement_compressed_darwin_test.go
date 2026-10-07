@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 
 	"path/filepath"
@@ -15,6 +16,7 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
 )
 
 func TestReplacementCompressedDarwinNative(t *testing.T) {
@@ -140,6 +142,27 @@ func TestReplacementCompressedDarwinNative(t *testing.T) {
 					t.Fatal(err)
 				}
 				control := replacementSnapshotOf(t, f)
+				// The foreign borrowed API must select the same complete attribute
+				// set as independent native copyfile, including fork ownership.
+				nativeValues, err := CaptureXattrs(t.Context(), f, limits)
+				if err != nil {
+					t.Fatal(err)
+				}
+				borrowed := make(map[string]appledouble.Value, len(storageBefore))
+				for name, data := range storageBefore {
+					borrowed[name] = bytes.NewReader(data)
+				}
+				selected, err := ReplacementAttributeValues(t.Context(), before.Flags, borrowed)
+				if err != nil || len(selected) != len(nativeValues) {
+					t.Fatal("foreign/native attribute selection", selected, nativeValues, err)
+				}
+				for name, value := range selected {
+					data, err := io.ReadAll(io.NewSectionReader(value, 0, value.Size()))
+					if err != nil || !bytes.Equal(data, nativeValues[name]) {
+						t.Fatal("foreign/native attribute bytes", name, err)
+					}
+				}
+
 				if err := f.Close(); err != nil {
 					t.Fatal(err)
 				}

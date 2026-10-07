@@ -333,6 +333,24 @@ return os.Rename(r.File.Name(), destination)
 }
 ```
 
+For an explicit foreign carrier, `ReplacementAttributeValues(ctx, sourceFlags,
+values)` applies the same attribute selection to borrowed values. Use captured
+Darwin flags: native replacement omits both the compression attribute and resource
+fork while compression is active. macOS hides even independent forks on active
+inline-compressed files from this operation's ordinary attribute enumeration.
+Inactive compression attributes remain ordinary metadata. The helper reads only the
+compression header, so large forks stay borrowed. The caller keeps the source
+values alive, restores stat/security separately and publishes the returned values
+with the rewritten payload through `metatransport.Store.Publish`. This helper
+neither mutates a carrier nor activates compression; recompression is a later
+explicit operation.
+
+The visibility rule is source-backed by Apple's
+[`decmpfs_hides_rsrc` and `decmpfs_hides_xattr`](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/bsd/kern/decmpfs.c#L963).
+The mounted replacement harness independently compares every selected attribute
+and resource-fork byte with native `copyfile`; source inspection is not a
+substitute for that live qualification.
+
 The source stays open and unchanged while the replacement is prepared. The
 package owns a private staging directory and cleans it on `Close`, including
 after the caller renames the staged file. Callers handle concurrency and the
@@ -362,8 +380,9 @@ closes a caller-owned source or root.
   Immutable and append-only inputs still fail before commit. Compressed Darwin
   sources use a fresh uncompressed stage. The metadata copier reads the hidden
   compression header through the existing typed host wrapper, excludes the old
-  compression attribute and its owned storage fork, and preserves independent
-  forks on inline-compressed files. Unknown/missing headers fail without
+  compression attribute and its owned storage fork. Ordinary native enumeration
+  also hides independent forks while compression is active, so replacement does
+  not copy those forks. This differs from lossless archive transport. Unknown/missing headers fail without
   discarding an unclassified fork. Restoration keeps the target's compression
   state; it never reattaches the source flag to rewritten logical data.
   Recompression is a separate caller policy, not an automatic replacement step.
