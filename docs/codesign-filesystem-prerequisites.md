@@ -71,20 +71,26 @@ The remaining acceptance work is:
   producer's creation admission and lookup errno do not supply the receiver's
   expectations. Exact stored identity, empty content and cleanup remain required.
   The four previously stalled cells are producer 26/27 APFS and APFSX images on
-  the macOS 15 receiver. Live CI output showed the macOS 15 kernel (APFS line
-  2332) freezing all disk I/O while mounting, or within about two seconds of
-  sustained access after mounting, a container formatted by APFS 2811 or 3288;
-  `fsck_apfs` reports that container as "mounted by APFS version 3288.1.3, which
-  is newer than 2332.140.13.702.2". The freeze is nondeterministic, is not tied
-  to any filename, survives every userland deadline and leaves no retained log.
-  The receiver therefore never mounts an APFS image whose formatter line is 2600
-  or newer when its own kernel line is below 2600. It records a
-  forward-incompatible outcome from the image bytes and from the image its own
-  kernel wrote in the same run; the replay stage and the aggregate gate re-derive
-  that record. Neither a timeout nor a partial capture supplies an expected errno,
-  and no lookup expectation is inferred for those cells. The historical two-case
-  macOS 15 APFS reproduction is retained only as a regression fixture, not as a
-  blanket filename policy.
+  the macOS 15 receiver. The cause is filename content, not the on-disk format:
+  macOS 26 and 27 store names using Unicode 16 code points (U+A7CE, U+A7D2,
+  U+A7D4, U+16EA0 to U+16EB8 in the case list) that macOS 15 refuses to create
+  with EILSEQ, and the macOS 15 APFS driver deadlocks the kernel's disk I/O
+  while mounting, or within seconds of sustained access to, a volume holding
+  them. Controlled runs settled this: 6 of 6 mounts of a macOS 27 volume with
+  those 28 names froze whether its version stamps read 3288 or were rewritten to
+  2332; 0 of 14 ASCII-only volumes froze, including a macOS 15 volume restamped
+  as 3288 and a macOS 27 volume restamped as 2332; every other on-disk structure
+  of the two producers is identical. The freeze is nondeterministic, is not
+  tied to any syscall, survives every userland deadline and leaves no retained
+  log. The receiver therefore inspects each image with the portable reader
+  (`pkg/apfsversion`) before mounting: when its own kernel cannot represent a
+  stored name, it records a native-mount refusal carrying the assessment code,
+  the counts, samples and both hosts' APFS versions, and never attaches the
+  image. The replay stage and the aggregate gate re-derive that record from the
+  same image and the receiver's own image. Neither a timeout nor a partial
+  capture supplies an expected errno, and no lookup expectation is inferred for
+  those cells. The historical two-case macOS 15 APFS reproduction is retained
+  only as a regression fixture, not as a blanket filename policy.
   Portable raw image readers must continue to expose valid stored names;
   explicit target-version operational pathname policy needs separate native
   qualification, including writable opens.
