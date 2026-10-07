@@ -925,7 +925,7 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: name-comparison-${{ matrix.os }}
-          path: artifacts
+          path: artifacts/name-comparison-coverage
       - name: Audit portable AppleDouble qualification evidence
         env:
           CGO_ENABLED: "0"
