@@ -49,7 +49,14 @@ func TestRecompressNativeFiles(t *testing.T) {
 		t.Fatal("unqualified native compression OS profile", version)
 	}
 	cases := map[string]compressionLifecycleTrial{}
-	for _, c := range compressionTrials(t, fixture, 330) {
+	trials := compressionTrials(t, fixture, 330)
+	// The hosted runner and developer APFS volumes have different content-
+	// protection flags. Keep native byte/metadata qualification for both;
+	// physical allocation comparison remains a separate unresolved oracle gate.
+	if profile == osversion.MacOS27 {
+		trials = append(trials, compressionTrials(t, "allocation-observations/macos27-first", 330)...)
+	}
+	for _, c := range trials {
 
 		if c.Fault != "" || c.Scenario != "ordinary" && c.Scenario != "multi-block" || c.Observation.VolumeFlags&0x80 != volume&0x80 || c.Observation.FilesystemType != filesystem {
 			continue

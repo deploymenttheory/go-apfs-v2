@@ -112,6 +112,7 @@ The following deliverables remain required:
   association, concurrent substitution, cancellation and cleanup qualification.
 - Foreign-produced output readback on native macOS, genuine large-fork acceptance,
   and remaining ordinary-attribute streaming limits.
+- Resolve the [local native allocation counterexample](../testdata/appledouble/native/allocation-observations/README.md) without discarding stored-byte or lifecycle checks.
 - Codesign consumption, removal/replacement of obsolete CLI routing scenarios,
   and complete Phase 2 lifecycle and resource-budget acceptance.
 
