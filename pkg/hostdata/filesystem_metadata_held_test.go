@@ -125,8 +125,14 @@ func TestFilesystemMetadataHeldFailures(t *testing.T) {
 	if err = file.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = FilesystemMetadataForFile(ctx, file); !errors.Is(err, os.ErrClosed) {
-		t.Fatal(err)
+	// An SDK-created Windows descriptor retains GetFileType's native invalid-
+	// handle error after close. Acquisition must preserve the actual Stat error.
+	_, statErr := file.Stat()
+	if statErr == nil {
+		t.Fatal("closed descriptor accepted by Stat")
+	}
+	if view, err := FilesystemMetadataForFile(ctx, file); view != nil || err == nil || err.Error() != statErr.Error() {
+		t.Fatal(view, err, statErr)
 	}
 }
 
