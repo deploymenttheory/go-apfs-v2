@@ -12,6 +12,7 @@ struct volume_result { uint32_t length; vol_capabilities_attr_t caps; };
 _Static_assert(sizeof(struct volume_result) == 36, "volume reply size");
 _Static_assert(offsetof(struct volume_result, caps.valid) == 20, "validity offset");
 _Static_assert(VOL_CAPABILITIES_INTERFACES == 1, "interface index");
+_Static_assert(VOL_CAP_INT_EXTENDED_ATTR == 0x4000, "xattr capability bit");
 _Static_assert(VOL_CAP_INT_EXTENDED_SECURITY == 0x400, "ACL capability bit");
 int replacement_volume_oracle(const char *path, const char *target) {
  int fd = open(path, O_RDONLY);

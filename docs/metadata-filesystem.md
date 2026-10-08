@@ -199,3 +199,22 @@ hashes, native observations and coverage. The replacement workflow runs it on
 macOS 15, 26 and 27. This Darwin qualification does not establish foreign-host
 replacement of associated AppleDouble files; that remains a separate prerequisite
 for complete transparent signing on Linux and Windows.
+
+### Querying attribute-file storage
+
+`hostdata.FilesystemUsesXattrFiles(ctx, file)` queries the held object's volume.
+On Darwin it reads `VOL_CAP_INT_EXTENDED_ATTR` and its validity mask; missing
+native support (including an unknown capability) selects companion-file storage,
+matching Apple's `pathFileSystemUsesXattrFiles`. Query and malformed-reply errors
+remain errors for callers to handle. On Linux and Windows the qualified FAT and
+exFAT filesystems select that storage; native attribute filesystems do not.
+
+This differs from `FilesystemMetadata.UsesAppleDouble`, which identifies whether
+Go itself resolves carriers. Darwin's kernel resolves them even on FAT, so that
+method remains false there. Neither query makes every `._` file a valid carrier.
+Callers must apply their own enumeration policy and inspect the companion object.
+For example, codesign root validation and resource traversal have different rules.
+
+The native volume qualification checks this query against a Clang-built oracle
+on APFS, HFS+, FAT32 and exFAT across macOS 15, 26 and 27. Portable lifecycle tests
+exercise cancellation, missing/closed handles and caller ownership on all hosts.
