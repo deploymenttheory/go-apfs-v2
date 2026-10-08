@@ -10,14 +10,17 @@ import (
 
 // FilesystemMetadataForFile borrows the caller's held file; closing the view does
 // not close it. Native storage uses that descriptor without pathname acquisition.
-// FAT storage additionally binds the parent of file.Name after physical path
-// resolution and verifies the entry's identity. Keep the file open and exclude
-// concurrent namespace changes. An arbitrary descriptor label cannot establish
-// a FAT association; an unresolvable or substituted name returns an error.
+// FAT storage additionally resolves the held descriptor's current pathname and
+// verifies the associated entry's identity. Keep the file open and exclude
+// concurrent namespace changes. File.Name is only a label and is never used
+// as association authority; an unresolvable or substituted path returns an error.
 func FilesystemMetadataForFile(ctx context.Context, file *os.File) (*FilesystemMetadata, error) {
 	return filesystemMetadataForFile(ctx, file, filesystemUsesAppleDouble)
 }
 func filesystemMetadataForFile(ctx context.Context, file *os.File, selectStorage func(*os.File) (bool, error)) (*FilesystemMetadata, error) {
+	return filesystemMetadataForFileUsing(ctx, file, selectStorage, filesystemMetadataPath)
+}
+func filesystemMetadataForFileUsing(ctx context.Context, file *os.File, selectStorage func(*os.File) (bool, error), resolve func(context.Context, *os.File) (string, error)) (*FilesystemMetadata, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -34,16 +37,13 @@ func filesystemMetadataForFile(ctx context.Context, file *os.File, selectStorage
 	}
 	v := &FilesystemMetadata{file: file, identity: info, sidecar: selected, borrowed: true, ops: defaultFilesystemMetadataOps()}
 	if selected {
-		path, err := filepath.EvalSymlinks(file.Name())
+		path, err := resolve(ctx, file)
 		if err != nil {
 			return nil, err
 		}
 		parent, base := filepath.Split(path)
-		if base == "" || base == "." || base == ".." {
+		if !filepath.IsAbs(path) || base == "" || base == "." || base == ".." {
 			return nil, os.ErrInvalid
-		}
-		if parent == "" {
-			parent = "."
 		}
 		v.parent, err = os.OpenRoot(parent)
 		if err != nil {

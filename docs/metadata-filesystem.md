@@ -88,8 +88,10 @@ attributes still use the existing bounded snapshot API (8 MiB maximum).
 
 `FilesystemMetadataForFile(ctx, file)` borrows an already-held object. Closing
 its view leaves the caller's file open. Native storage never reopens its name.
-Foreign FAT storage resolves the containing directory and verifies that the name
-still identifies the held object. A missing or substituted name is an error;
+Foreign FAT storage resolves the descriptor's current path through the OS and
+verifies that the entry still identifies the held object. Descriptor labels are
+not used as paths; the existing typed Windows final-path and Darwin held-path
+wrappers are reused, and Linux resolves its process-owned `/proc/self/fd` link. A missing or substituted name is an error;
 callers must keep the descriptor open and exclude concurrent namespace changes.
 `UsesAppleDouble` and `CaseInsensitiveNames` report the selected storage's
 properties; they do not change the selection.

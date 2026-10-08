@@ -77,8 +77,10 @@ func TestFilesystemMetadataHeldFailures(t *testing.T) {
 	if _, err := FilesystemMetadataForFile(ctx, nil); !errors.Is(err, os.ErrInvalid) {
 		t.Fatal(err)
 	}
-	_, _, dir := newMetadataTestView(t, true)
-	file, err := os.Open(filepath.Join(dir, "input"))
+	_, root, dir := newMetadataTestView(t, true)
+	// The missing/substituted-name cases require a rename-capable held file.
+	// Use the SDK opener, which retains Windows delete sharing.
+	file, err := OpenMetadataFileRead(root, "input")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,18 +92,34 @@ func TestFilesystemMetadataHeldFailures(t *testing.T) {
 	if _, err = filesystemMetadataForFile(canceled, file, func(*os.File) (bool, error) { cancel(); return false, nil }); !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
 	}
-	if _, err = filesystemMetadataForFile(ctx, file, func(*os.File) (bool, error) {
-		if err := os.Rename(file.Name(), filepath.Join(dir, "moved")); err != nil {
-			t.Fatal(err)
+	selected := func(*os.File) (bool, error) { return true, nil }
+	originalPath := filepath.Join(dir, "input")
+	if err = root.Rename("input", "moved"); err != nil {
+		t.Fatal(err)
+	}
+	stale := func(context.Context, *os.File) (string, error) { return originalPath, nil }
+	if _, err = filesystemMetadataForFileUsing(ctx, file, selected, stale); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal(err)
+	}
+	if err = root.WriteFile("input", []byte("replacement"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = filesystemMetadataForFileUsing(ctx, file, selected, stale); !errors.Is(err, ErrMetadataIdentity) {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		path string
+		err  error
+	}{
+		{"input", os.ErrInvalid},
+		{filepath.VolumeName(dir) + string(os.PathSeparator), os.ErrInvalid},
+		{filepath.Join(dir, "missing", "input"), os.ErrNotExist},
+	} {
+		if _, err = filesystemMetadataForFileUsing(ctx, file, selected, func(context.Context, *os.File) (string, error) { return tc.path, nil }); !errors.Is(err, tc.err) {
+			t.Fatal(tc.path, err)
 		}
-		return true, nil
-	}); !errors.Is(err, os.ErrNotExist) {
-		t.Fatal(err)
 	}
-	if err = os.WriteFile(file.Name(), []byte("replacement"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	if _, err = filesystemMetadataForFile(ctx, file, func(*os.File) (bool, error) { return true, nil }); !errors.Is(err, ErrMetadataIdentity) {
+	if _, err = filesystemMetadataForFileUsing(ctx, file, selected, func(context.Context, *os.File) (string, error) { return "", io.ErrClosedPipe }); !errors.Is(err, io.ErrClosedPipe) {
 		t.Fatal(err)
 	}
 	if err = file.Close(); err != nil {
@@ -149,26 +167,39 @@ func TestFilesystemMetadataSizeFailures(t *testing.T) {
 }
 
 func TestFilesystemMetadataRelativeHeldName(t *testing.T) {
-	_, _, dir := newMetadataTestView(t, true)
-	t.Chdir(dir)
-	file, err := os.Open("input")
+	_, root, _ := newMetadataTestView(t, true)
+	file, err := OpenContentFileRead(root, "input")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer file.Close()
+	if err = root.Rename("input", "moved"); err != nil {
+		t.Fatal(err)
+	}
+	seed, err := readMetadataViewSeed()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = root.WriteFile("._moved", seed, 0600); err != nil {
+		t.Fatal(err)
+	}
 	view, err := filesystemMetadataForFile(context.Background(), file, func(*os.File) (bool, error) { return true, nil })
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = view.Close(); err != nil {
+	defer view.Close()
+	if n, p, err := view.Size(context.Background(), ResourceForkName); err != nil || !p || n != 12 {
+		t.Fatal(n, p, err)
+	}
+	if _, err = filesystemMetadataPath(context.Background(), nil); !errors.Is(err, os.ErrInvalid) {
 		t.Fatal(err)
 	}
-	directory, err := os.Open(".")
-	if err != nil {
+	if err = file.Close(); err != nil {
 		t.Fatal(err)
 	}
-	defer directory.Close()
-	if _, err = filesystemMetadataForFile(context.Background(), directory, func(*os.File) (bool, error) { return true, nil }); !errors.Is(err, os.ErrInvalid) {
-		t.Fatal(err)
+	// RawConn errors retain their provider-specific identity. No closed handle
+	// may resolve a usable path.
+	if path, err := filesystemMetadataPath(context.Background(), file); err == nil || path != "" {
+		t.Fatal(path, err)
 	}
 }

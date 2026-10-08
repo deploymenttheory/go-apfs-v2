@@ -27,6 +27,7 @@ jobs:
       matrix:
         include:
           - { pkg: ./pkg/appledouble, target: FuzzStreamDecode }
+          - { pkg: ./pkg/appledouble, target: FuzzFilesystemRemoval }
           - { pkg: ./pkg/appledouble, target: FuzzDecode }
           - { pkg: ./pkg/appledouble, target: FuzzACLText }
           - { pkg: ./pkg/appledouble, target: FuzzACLBinary }
