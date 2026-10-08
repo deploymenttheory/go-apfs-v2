@@ -21,6 +21,10 @@ import (
 // Successful indexing does not prove that later value IO will succeed. This is
 // a validated snapshot API, not native sequential unpack/partial-mutation policy.
 func DecodeStream(ctx context.Context, source Value, limits StreamLimits) (*StreamFile, error) {
+	return decodeStream(ctx, source, limits, false)
+}
+
+func decodeStream(ctx context.Context, source Value, limits StreamLimits, filesystem bool) (*StreamFile, error) {
 	if err := streamContext(ctx); err != nil {
 		return nil, err
 	}
@@ -94,7 +98,15 @@ func DecodeStream(ctx context.Context, source Value, limits StreamLimits) (*Stre
 			if err := validateFinderInfo(string(name), uint64(length)); err != nil {
 				return nil, err
 			}
-			value, err := span(binary.BigEndian.Uint32(raw[off:]), length)
+			offset := binary.BigEndian.Uint32(raw[off:])
+			// COPYFILE_PACK leaves empty values at offset zero. Native VFS
+			// rejects this carrier as an attribute namespace, including its
+			// otherwise valid FinderInfo and resource fork. Snapshot unpacking
+			// still accepts it. Native VFS-created empty values have a data offset.
+			if filesystem && length == 0 && offset == 0 {
+				return nil, ErrNotAppleDouble
+			}
+			value, err := span(offset, length)
 			if err != nil {
 				return nil, err
 			}

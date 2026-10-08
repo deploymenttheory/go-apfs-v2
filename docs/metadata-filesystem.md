@@ -49,6 +49,34 @@ bodies. Kernel helpers are declaration-only shims; private constants and vnode
 layout are symbolic. This is static source evidence, not kernel execution or a
 claim that a published source revision matches the installed macOS binary.
 
+### Packed empty values versus filesystem-visible metadata
+
+`COPYFILE_PACK` can encode an empty ATTR value with offset zero. It is a valid
+snapshot for unpacking, but the filesystem can reject the entire carrier as an
+attribute namespace: even its FinderInfo and resource fork become unavailable.
+`DecodeStream` retains that snapshot. `DecodeFilesystemStream`, used by the
+filesystem view and in-place removal, applies the observed filesystem rule.
+No application mode or CLI flag selects this distinction.
+
+The `packed-empty` profile installs an actual empty native attribute, packs it
+with `copyfile`, then exercises the same twelve actions on files and directories
+across APFS, HFS+, FAT32 and exFAT: 96 native cases. Both pathname and held queries,
+raw carrier bytes and mutation failures are retained. The checked-in capture is
+from macOS 27; CI independently captures 15, 26 and 27 and requires all three
+corpora on Linux, Windows and macOS. The original 960-case profile stays required.
+Native VFS-created empty values have ordinary data offsets and remain supported;
+the original `empty-plain` cases retain that positive control.
+
+The distinction matters to generic signature removal. A missing individual value
+is harmless to that removal operation, while failure to list an existing invalid
+namespace remains an error. Consumers retain the operation's already-committed
+changes and render its diagnostic; the filesystem API preserves the distinction.
+
+```sh
+go run scripts/capture-metadata-filesystem.go -profile packed-empty -out artifacts/metadata-packed/native.json
+go run scripts/capture-metadata-filesystem.go -profile packed-empty -verify artifacts/metadata-packed/native.json
+```
+
 ## Reading filesystem-selected metadata
 
 `hostdata.OpenFilesystemMetadata(ctx, root, name)` opens a contained entry and

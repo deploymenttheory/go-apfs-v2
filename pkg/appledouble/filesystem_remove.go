@@ -41,13 +41,23 @@ func FilesystemForkVisible(ctx context.Context, value Value) (bool, error) {
 	return string(raw[:]) != tag, nil
 }
 
+// DecodeFilesystemStream indexes the qualified VFS attribute-file profile.
+// A COPYFILE_PACK snapshot with a zero-offset empty ATTR value remains a valid
+// snapshot for DecodeStream, but the native filesystem treats the entire
+// carrier as an absent attribute namespace (ErrNotAppleDouble). Association,
+// authorization and translating that result for get/list/remove belong to the
+// filesystem layer. Native-produced empty values with a data offset are valid.
+func DecodeFilesystemStream(ctx context.Context, source Value, limits StreamLimits) (*StreamFile, error) {
+	return decodeStream(ctx, source, limits, true)
+}
+
 // RemoveFilesystemAttribute applies the byte operations used by XNU's
 // default_removexattr_vfs. It preserves allocation slack, record order, unrelated
 // bytes and fork offsets; it does not canonicalize through copyfile encoding.
 // Association and authorization checks belong to the caller.
 func RemoveFilesystemAttribute(ctx context.Context, file AttributeFile, name string) (AttributeRemoval, error) {
 	result := AttributeRemoval{}
-	decoded, err := DecodeStream(ctx, file, DefaultStreamLimits())
+	decoded, err := DecodeFilesystemStream(ctx, file, DefaultStreamLimits())
 	if err != nil {
 		return result, err
 	}

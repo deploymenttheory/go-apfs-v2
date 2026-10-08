@@ -57,6 +57,8 @@ func TestMetadataFilesystemRejectsIncompleteEvidence(t *testing.T) {
 		change func(*metadataCapture)
 	}{
 		{"schema", func(c *metadataCapture) { c.Schema++ }},
+		{"unknown-profile", func(c *metadataCapture) { c.Profile = "invented" }},
+		{"wrong-profile", func(c *metadataCapture) { c.Profile = "packed-empty" }},
 		{"partial", func(c *metadataCapture) { c.Complete = false }},
 		{"partial-go-readback", func(c *metadataCapture) { c.GoReadCases = 959 }},
 		{"host", func(c *metadataCapture) { c.Host = "invalid" }},
@@ -154,5 +156,25 @@ func TestMetadataFilesystemMountOwnership(t *testing.T) {
 		if got := metadataMountOwnership(tc.filesystem); got != tc.owners {
 			t.Errorf("%s owners=%s, want %s", tc.filesystem, got, tc.owners)
 		}
+	}
+}
+
+func TestMetadataFilesystemPackedInventory(t *testing.T) {
+	c, err := readMetadataCapture("testdata/appledouble/native/metadata-filesystem-packed-empty-macos27.json.gz")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Profile != "packed-empty" || len(c.Cases) != 96 {
+		t.Fatal("incomplete packed corpus")
+	}
+	if err := validateMetadataCapture(c); err != nil {
+		t.Fatal(err)
+	}
+	if err := captureprovenance.Verify(os.DirFS("."), c.Sources); err != nil {
+		t.Fatal(err)
+	}
+	c.Profile = ""
+	if validateMetadataCapture(c) == nil {
+		t.Fatal("packed profile accepted as ordinary corpus")
 	}
 }

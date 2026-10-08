@@ -336,7 +336,7 @@ func (v *FilesystemMetadata) appleDouble(ctx context.Context) (*os.File, []apple
 	if !os.SameFile(info, st) || !st.Mode().IsRegular() {
 		return fail(ErrMetadataIdentity)
 	}
-	decoded, err := appledouble.DecodeStream(ctx, io.NewSectionReader(f, 0, st.Size()), appledouble.DefaultStreamLimits())
+	decoded, err := appledouble.DecodeFilesystemStream(ctx, io.NewSectionReader(f, 0, st.Size()), appledouble.DefaultStreamLimits())
 	if errors.Is(err, appledouble.ErrNotAppleDouble) {
 		return fail(ErrXattrNotFound)
 	}

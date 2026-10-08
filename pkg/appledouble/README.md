@@ -223,6 +223,12 @@ maintainer controls the batch release and downstream phase-closure decision.
 
 ### Filesystem attribute removal
 
+`DecodeFilesystemStream` interprets a carrier as filesystem-visible storage.
+Unlike snapshot decoding, it rejects the zero-offset empty ATTR records produced
+by `COPYFILE_PACK`, matching the native namespace rejection. Native VFS-created
+empty values with a data offset remain readable and removable. `DecodeStream`
+continues to preserve valid packed snapshots for transport and unpacking.
+
 `RemoveFilesystemAttribute` mutates an already-authorized VFS-layout carrier
 without canonical repacking. It preserves unrelated bytes and uses bounded
 streaming shifts for large values. The filesystem owner handles association,

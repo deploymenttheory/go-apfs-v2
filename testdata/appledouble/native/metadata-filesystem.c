@@ -52,14 +52,15 @@ static void observe(const char *path, int fd, int held) {
 
 static int install(const char *path, int different) {
     unsigned char finder[32] = {0};
-    memcpy(finder, different ? "DIFF" : "TEST", 4);
-    const unsigned char *p = different ? changed : plain;
-    size_t n = different ? sizeof(changed)-1 : sizeof(plain)-1;
+    memcpy(finder, different == 1 ? "DIFF" : "TEST", 4);
+    const unsigned char *p = different == 1 ? changed : plain;
+    size_t n = different == 1 ? sizeof(changed)-1 : sizeof(plain)-1;
     printf("{\"setup\":[");
     for (size_t i = 0; i < sizeof(names)/sizeof(names[0]); i++) {
         if (i) putchar(',');
         const void *value = i == 1 ? (const void *)finder : (const void *)p;
         size_t length = i == 1 ? sizeof(finder) : n;
+        if (different == 2 && i == 0) length = 0;
         errno = 0;
         int result = setxattr(path, names[i], value, length, 0, XATTR_NOFOLLOW);
         printf("{\"name\":\"%s\",\"result\":%d,\"errno\":%d}", names[i], result, result < 0 ? errno : 0);
@@ -80,6 +81,7 @@ int main(int argc, char **argv) {
         return result != 0;
     }
     if (!strcmp(action, "seed")) return install(path, 0);
+    if (!strcmp(action, "seed-empty")) return install(path, 2);
     if (!strcmp(action, "seed-different")) return install(path, 1);
     struct statfs volume;
     if (statfs(path, &volume) != 0) { perror("statfs"); return 1; }
