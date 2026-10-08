@@ -24,10 +24,14 @@ type filesystemMetadataOps struct {
 	size    func(*os.File, string) (int, bool, error)
 	fork    func(*os.File, bool) (*os.File, error)
 	sidecar func(*os.Root, string) (*os.File, error)
+	writer  func(*os.Root, string) (*os.File, error)
+	unlink  func(*os.Root, string) error
+	remove  func(context.Context, appledouble.AttributeFile, string) (appledouble.AttributeRemoval, error)
 }
 
 func defaultFilesystemMetadataOps() filesystemMetadataOps {
-	return filesystemMetadataOps{ListXattrNames, ReadXattr, XattrSize, OpenResourceFork, openFilesystemSidecar}
+	return filesystemMetadataOps{list: ListXattrNames, read: ReadXattr, size: XattrSize, fork: OpenResourceFork, sidecar: openFilesystemSidecar,
+		writer: openFilesystemMetadataWriter, unlink: func(root *os.Root, name string) error { return root.Remove(name) }, remove: appledouble.RemoveFilesystemAttribute}
 }
 
 // FilesystemMetadata binds attribute discovery to an entry and its containing
@@ -48,6 +52,7 @@ type FilesystemMetadata struct {
 	identity os.FileInfo
 	sidecar  bool
 	closed   bool
+	borrowed bool
 }
 
 // OpenFilesystemMetadata acquires the named entry without following its final
@@ -114,7 +119,14 @@ func (v *FilesystemMetadata) Close() error {
 		return nil
 	}
 	v.closed = true
-	return errors.Join(v.file.Close(), v.parent.Close())
+	var err error
+	if !v.borrowed {
+		err = v.file.Close()
+	}
+	if v.parent != nil {
+		err = errors.Join(err, v.parent.Close())
+	}
+	return err
 }
 
 // List returns visible names in native storage order, with a bounded combined
@@ -350,26 +362,5 @@ func (v *FilesystemMetadata) appleDouble(ctx context.Context) (*os.File, []apple
 // RF_EMPTY_TAG at byte 16, independently of the remaining resource header.
 // This is filesystem visibility, not a codec transformation: retain raw bytes.
 func filesystemResourceForkVisible(ctx context.Context, value appledouble.Value) (bool, error) {
-	if err := ctx.Err(); err != nil {
-		return false, err
-	}
-	if value == nil || value.Size() == 0 {
-		return false, nil
-	}
-	if value.Size() != 286 {
-		return true, nil
-	}
-	const tag = "This resource fork intentionally left blank   \x00"
-	var raw [len(tag)]byte
-	n, err := value.ReadAt(raw[:], 16)
-	if n == len(raw) && errors.Is(err, io.EOF) {
-		err = nil
-	}
-	if n != len(raw) && err == nil {
-		err = io.ErrUnexpectedEOF
-	}
-	if err != nil {
-		return false, err
-	}
-	return string(raw[:]) != tag, nil
+	return appledouble.FilesystemForkVisible(ctx, value)
 }

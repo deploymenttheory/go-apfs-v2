@@ -187,7 +187,7 @@ jobs:
         env:
           APFS_METADATA_FILESYSTEM_PRODUCERS: ${{ github.workspace }}/artifacts/filesystem-producers
         run: |
-          apfs-ci-runner --suite metadata-transport/filesystem/fresh-readback --timeout 3m -- go test -timeout 2m -json -count=1 -run '^TestFilesystemMetadataNativeFATReadback$' ./pkg/hostdata
+          apfs-ci-runner --suite metadata-transport/filesystem/fresh-readback --timeout 3m -- go test -timeout 2m -json -count=1 -run '^(TestFilesystemMetadataNativeFAT(Readback|Removal)|TestFilesystemRemovalNativeBytes)$' ./pkg/hostdata ./pkg/appledouble
       - name: Reject missing cases and corrupted oracle evidence
         run: |
           apfs-ci-runner --suite metadata-transport/filesystem/negative-controls --timeout 2m -- go test -timeout 90s -json -count=1 scripts/capture-metadata-filesystem.go scripts/capture-metadata-filesystem_test.go
