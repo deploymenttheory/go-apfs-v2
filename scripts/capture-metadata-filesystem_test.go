@@ -51,6 +51,22 @@ func TestMetadataFilesystemNativeInventory(t *testing.T) {
 	}
 }
 
+func TestMetadataFilesystemAttributeTargetInventory(t *testing.T) {
+	c, err := readMetadataCapture("testdata/appledouble/native/metadata-filesystem-attribute-target-macos27.json.gz")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validateMetadataCapture(c); err != nil {
+		t.Fatal(err)
+	}
+	if c.Profile != "attribute-target" || len(c.Cases) != 192 || c.GoReadCases != 192 {
+		t.Fatal("incomplete attribute-target capture")
+	}
+	if err := captureprovenance.Verify(os.DirFS("."), c.Sources); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestMetadataFilesystemRejectsIncompleteEvidence(t *testing.T) {
 	for _, tc := range []struct {
 		name   string

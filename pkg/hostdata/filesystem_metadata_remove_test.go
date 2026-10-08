@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 )
 
@@ -81,13 +82,17 @@ func TestFilesystemMetadataNativeFATRemoval(t *testing.T) {
 						t.Fatal(err)
 					}
 					defer root.Close()
-					view, err := openFilesystemMetadata(context.Background(), root, "input", func(*os.File) (bool, error) { return true, nil })
+					view, err := openFilesystemMetadata(context.Background(), root, profile.target(), func(*os.File) (bool, error) { return true, nil })
 					if err != nil {
 						t.Fatal(err)
 					}
 					defer view.Close()
 					removed, err := view.Remove(context.Background(), name)
-					if err != nil || removed != (c.Observation.Result == 0) || (c.Observation.Result != 0 && c.Observation.Errno != 93) {
+					if c.Observation.Errno == 1 {
+						if !errors.Is(err, syscall.EPERM) || removed || c.Observation.Result != -1 {
+							t.Fatalf("expected native EPERM removal: removed=%v err=%v", removed, err)
+						}
+					} else if err != nil || removed != (c.Observation.Result == 0) || (c.Observation.Result != 0 && c.Observation.Errno != 93) {
 						t.Fatalf("removed=%v err=%v; native result=%d errno=%d", removed, err, c.Observation.Result, c.Observation.Errno)
 					}
 					entries, err := os.ReadDir(dir)

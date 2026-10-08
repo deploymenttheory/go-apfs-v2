@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"syscall"
 	"testing"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
@@ -208,7 +209,7 @@ func TestFilesystemMetadataAcquisitionBoundaries(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer v.Close()
-	if _, err = v.List(ctx, 100); !errors.Is(err, os.ErrPermission) {
+	if _, err = v.List(ctx, 100); !errors.Is(err, syscall.EPERM) {
 		t.Fatal(err)
 	}
 }

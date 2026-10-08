@@ -12,26 +12,38 @@ type filesystemMetadataCorpus struct {
 	Cases               int
 }
 
+func (c filesystemMetadataCorpus) target() string {
+	if c.Profile == "attribute-target" {
+		return "._input"
+	}
+	return "input"
+}
+
 func filesystemMetadataCorpora() []filesystemMetadataCorpus {
 	fresh := os.Getenv("APFS_METADATA_FILESYSTEM_PRODUCERS")
 	var result []filesystemMetadataCorpus
 	for _, major := range []int{15, 26, 27} {
-		for _, packed := range []bool{false, true} {
+		for _, profile := range []string{"", "packed-empty", "attribute-target"} {
 			// The retained packed corpus was executed on 27. Fresh CI requires all
 			// three actual producers; never label a 27 observation as an older host.
-			if packed && major != 27 && fresh == "" {
+			if profile != "" && major != 27 && fresh == "" {
 				continue
 			}
-			name, profile, cases := fmt.Sprint(major), "", 960
+			name, cases := fmt.Sprint(major), 960
 			path := fmt.Sprintf("../../testdata/appledouble/native/metadata-filesystem-macos%d.json.gz", major)
-			if packed {
-				name, profile, cases = fmt.Sprintf("packed-empty-%d", major), "packed-empty", 96
-				path = fmt.Sprintf("../../testdata/appledouble/native/metadata-filesystem-packed-empty-macos%d.json.gz", major)
+			if profile != "" {
+				name, cases = fmt.Sprintf("%s-%d", profile, major), 96
+				if profile == "attribute-target" {
+					cases = 192
+				}
+				path = fmt.Sprintf("../../testdata/appledouble/native/metadata-filesystem-%s-macos%d.json.gz", profile, major)
 			}
 			if fresh != "" {
 				path = filepath.Join(fresh, fmt.Sprintf("filesystem-metadata-macos%d", major), "native.json")
-				if packed {
+				if profile == "packed-empty" {
 					path = filepath.Join(filepath.Dir(path), "packed", "native.json")
+				} else if profile == "attribute-target" {
+					path = filepath.Join(filepath.Dir(path), "attribute-target", "native.json")
 				}
 			}
 			result = append(result, filesystemMetadataCorpus{name, path, profile, cases})
@@ -44,10 +56,10 @@ func TestFilesystemMetadataCorpusInventory(t *testing.T) {
 	for _, fresh := range []bool{false, true} {
 		t.Run(fmt.Sprint(fresh), func(t *testing.T) {
 			directory := ""
-			expected := 4
+			expected := 5
 			if fresh {
 				directory = t.TempDir()
-				expected = 6
+				expected = 9
 			}
 			t.Setenv("APFS_METADATA_FILESYSTEM_PRODUCERS", directory)
 			corpus := filesystemMetadataCorpora()

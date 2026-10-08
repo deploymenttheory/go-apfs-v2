@@ -138,6 +138,10 @@ jobs:
       - name: Independently validate complete native inventory
         run: |
           apfs-ci-runner --suite metadata-transport/filesystem/validate --timeout 2m -- go run scripts/capture-metadata-filesystem.go -verify artifacts/metadata-filesystem/native.json -major ${{ matrix.major }}
+      - name: Capture and validate attribute-file query and mutation errors
+        run: |
+          apfs-ci-runner --suite metadata-transport/filesystem/attribute-target-capture --timeout 3m -- go run scripts/capture-metadata-filesystem.go -profile attribute-target -major ${{ matrix.major }} -out artifacts/metadata-filesystem/attribute-target/native.json
+          apfs-ci-runner --suite metadata-transport/filesystem/attribute-target-validate --timeout 2m -- go run scripts/capture-metadata-filesystem.go -profile attribute-target -verify artifacts/metadata-filesystem/attribute-target/native.json -major ${{ matrix.major }}
       - name: Retain every native result and compiler input
         if: always()
         uses: actions/upload-artifact@v7
@@ -187,6 +191,7 @@ jobs:
           for version in 15 26 27; do
             apfs-ci-runner --suite metadata-transport/filesystem/producer-$version --timeout 2m -- go run scripts/capture-metadata-filesystem.go -major "$version" -verify "artifacts/filesystem-producers/filesystem-metadata-macos$version/native.json"
             apfs-ci-runner --suite metadata-transport/filesystem/packed-empty-producer-$version --timeout 2m -- go run scripts/capture-metadata-filesystem.go -profile packed-empty -major "$version" -verify "artifacts/filesystem-producers/filesystem-metadata-macos$version/packed/native.json"
+            apfs-ci-runner --suite metadata-transport/filesystem/attribute-target-producer-$version --timeout 2m -- go run scripts/capture-metadata-filesystem.go -profile attribute-target -major "$version" -verify "artifacts/filesystem-producers/filesystem-metadata-macos$version/attribute-target/native.json"
           done
       - name: Replay fresh native FAT observations through the Go filesystem view
         env:

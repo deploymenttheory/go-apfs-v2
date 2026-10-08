@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 )
 
@@ -25,6 +26,7 @@ func TestFilesystemMetadataNativeFATReadback(t *testing.T) {
 		Attributes []struct {
 			Name      string
 			Size      int64
+			SizeErrno int `json:"size_errno"`
 			ReadErrno int `json:"read_errno"`
 			Bytes     string
 		}
@@ -95,13 +97,17 @@ func TestFilesystemMetadataNativeFATReadback(t *testing.T) {
 							t.Fatal(err)
 						}
 						defer root.Close()
-						view, err := openFilesystemMetadata(context.Background(), root, "input", func(*os.File) (bool, error) { return true, nil })
+						view, err := openFilesystemMetadata(context.Background(), root, profile.target(), func(*os.File) (bool, error) { return true, nil })
 						if err != nil {
 							t.Fatal(err)
 						}
 						defer view.Close()
 						names, err := view.List(context.Background(), MaxXattrListSize)
-						if stage.query.ListErrno == 93 {
+						if stage.query.ListErrno == 1 {
+							if !errors.Is(err, syscall.EPERM) {
+								t.Fatal("expected native EPERM list result", err)
+							}
+						} else if stage.query.ListErrno == 93 {
 							if !errors.Is(err, ErrXattrNotFound) {
 								t.Fatal("expected native ENOATTR list result", err)
 							}
@@ -116,7 +122,21 @@ func TestFilesystemMetadataNativeFATReadback(t *testing.T) {
 							t.Fatalf("native names %s, Go %x", stage.query.ListBytes, raw)
 						}
 						for _, a := range stage.query.Attributes {
+							size, exists, sizeErr := view.Size(context.Background(), a.Name)
+							if a.SizeErrno == 1 {
+								if !errors.Is(sizeErr, syscall.EPERM) || exists || size != 0 {
+									t.Fatal("expected native EPERM size result", a.Name, size, exists, sizeErr)
+								}
+							} else if sizeErr != nil || exists != (a.SizeErrno == 0) || size != max(a.Size, 0) {
+								t.Fatalf("%s: native size=%d errno=%d; Go size=%d present=%v err=%v", a.Name, a.Size, a.SizeErrno, size, exists, sizeErr)
+							}
 							value, present, err := view.Read(context.Background(), a.Name, 65536)
+							if a.ReadErrno == 1 {
+								if !errors.Is(err, syscall.EPERM) || present || len(value) != 0 {
+									t.Fatal("expected native EPERM read result", a.Name, present, value, err)
+								}
+								continue
+							}
 							if err != nil {
 								t.Fatal(a.Name, err)
 							}

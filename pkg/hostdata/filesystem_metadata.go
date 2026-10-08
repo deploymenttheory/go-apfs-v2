@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
 )
@@ -311,7 +312,9 @@ func (v *FilesystemMetadata) appleDouble(ctx context.Context) (*os.File, []apple
 		return nil, nil, ErrMetadataIdentity
 	}
 	if current.Mode().IsRegular() && len(v.name) > 2 && strings.HasPrefix(v.name, "._") {
-		return nil, nil, os.ErrPermission
+		// XNU rejects attributes on attribute files with EPERM. EACCES is a
+		// different policy result: callers such as codesign distinguish them.
+		return nil, nil, syscall.EPERM
 	}
 	name := "._" + v.name
 	info, err := StatMetadata(v.parent, name)
