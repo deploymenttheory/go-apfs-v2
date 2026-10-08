@@ -6,6 +6,11 @@ TEXT trampolineFcntlGetPath<>(SB),NOSPLIT,$0-0
 GLOBL ·addrFcntlGetPath(SB), RODATA, $8
 DATA ·addrFcntlGetPath(SB)/8, $trampolineFcntlGetPath<>(SB)
 
+TEXT trampolineFgetattrlist<>(SB),NOSPLIT,$0-0
+	JMP importedFgetattrlist(SB)
+GLOBL ·addrFgetattrlist(SB), RODATA, $8
+DATA ·addrFgetattrlist(SB)/8, $trampolineFgetattrlist<>(SB)
+
 TEXT trampolineGetattrlistat<>(SB),NOSPLIT,$0-0
 	JMP importedGetattrlistat(SB)
 GLOBL ·addrGetattrlistat(SB), RODATA, $8

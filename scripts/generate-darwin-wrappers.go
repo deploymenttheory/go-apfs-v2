@@ -28,6 +28,7 @@ func main() {
 	const xpc = "/usr/lib/system/libxpc.dylib"
 	entries := []binding{
 		{name: "FcntlGetPath", symbol: "fcntl", params: "fd int32, path *[unix.PathMax]byte", args: "uintptr(fd), uintptr(unix.F_GETPATH), uintptr(unsafe.Pointer(path))", result: "int", threeArgs: true},
+		{name: "Fgetattrlist", symbol: "fgetattrlist", params: "fd int32, attributes *unix.Attrlist, data unsafe.Pointer, size uintptr, options uint32", args: "uintptr(fd), uintptr(unsafe.Pointer(attributes)), uintptr(data), size, uintptr(options)", result: "int"},
 		{name: "Getattrlistat", symbol: "getattrlistat", params: "fd int32, path *byte, attributes *unix.Attrlist, data unsafe.Pointer, size uintptr, options uint64", args: "uintptr(fd), uintptr(unsafe.Pointer(path)), uintptr(unsafe.Pointer(attributes)), uintptr(data), size, uintptr(options)", result: "int"},
 		{name: "Listxattr", symbol: "listxattr", params: "path, data *byte, size uintptr, options int32", args: "uintptr(unsafe.Pointer(path)), uintptr(unsafe.Pointer(data)), size, uintptr(options)", result: "size"},
 		{name: "Getxattr", symbol: "getxattr", params: "path, name, data *byte, size uintptr, position uint32, options int32", args: "uintptr(unsafe.Pointer(path)), uintptr(unsafe.Pointer(name)), uintptr(unsafe.Pointer(data)), size, uintptr(position), uintptr(options)", result: "size"},

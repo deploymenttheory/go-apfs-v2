@@ -177,3 +177,25 @@ Consolidation must retain unique cases and raw per-host coverage, including
 stricter per-file gates, while removing duplicate execution. Distinct race modes,
 macOS producers and foreign-image readbacks are not interchangeable. Separate
 queue time from execution time when evaluating improvements.
+
+### Replacement on volumes without ACLs
+
+Darwin replacement queries `ATTR_VOL_CAPABILITIES` through the held file before
+clearing staging ACLs or restoring source ACLs. The value and validity bit for
+`VOL_CAP_INT_EXTENDED_SECURITY` must both be understood. FAT32 and exFAT report
+that extended security is unsupported; no ACL operation is needed there. APFS
+and HFS+ keep the existing ACL capture, temporary write access and restoration
+checks. Query failures and unknown capabilities are errors, never permission to
+discard metadata. See Apple's [volume capability contract](https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man2/getattrlist.2.html).
+
+`TestReplacementVolumeDarwinNative` exercises both path and rooted preparation on
+fresh APFS, HFS+, FAT32 and exFAT images. The independent Clang-built
+`replacement-volume.c` observer checks capability results and creation-time setter
+precision; exFAT setters can round a source creation timestamp. The test compares
+against the actual native result and verifies ownership, mode, flags, unrelated
+attributes, unchanged source data and removal of private staging objects.
+`scripts/verify-replacement-volume.go` retains both architecture ASTs, source
+hashes, native observations and coverage. The replacement workflow runs it on
+macOS 15, 26 and 27. This Darwin qualification does not establish foreign-host
+replacement of associated AppleDouble files; that remains a separate prerequisite
+for complete transparent signing on Linux and Windows.

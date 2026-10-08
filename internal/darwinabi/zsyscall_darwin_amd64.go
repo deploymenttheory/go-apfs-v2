@@ -24,6 +24,21 @@ var addrFcntlGetPath uintptr
 
 //go:cgo_import_dynamic importedFcntlGetPath fcntl "/usr/lib/libSystem.B.dylib"
 
+// Fgetattrlist is the typed fgetattrlist wrapper.
+//
+//go:uintptrescapes
+func Fgetattrlist(fd int32, attributes *unix.Attrlist, data unsafe.Pointer, size uintptr, options uint32) (int32, error) {
+	r, _, e := syscall6(addrFgetattrlist, uintptr(fd), uintptr(unsafe.Pointer(attributes)), uintptr(data), size, uintptr(options), 0)
+	if e != 0 {
+		return int32(r), e
+	}
+	return int32(r), nil
+}
+
+var addrFgetattrlist uintptr
+
+//go:cgo_import_dynamic importedFgetattrlist fgetattrlist "/usr/lib/libSystem.B.dylib"
+
 // Getattrlistat is the typed getattrlistat wrapper.
 //
 //go:uintptrescapes

@@ -192,3 +192,19 @@ func TestTypedHeldPath(t *testing.T) {
 		t.Fatal(n, err)
 	}
 }
+
+func TestTypedVolumeCapabilities(t *testing.T) {
+	file, err := os.CreateTemp(t.TempDir(), "volume")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	list := unix.Attrlist{Bitmapcount: 5, Volattr: unix.ATTR_VOL_INFO | unix.ATTR_VOL_CAPABILITIES}
+	var result [9]uint32
+	if status, err := Fgetattrlist(int32(file.Fd()), &list, unsafe.Pointer(&result), unsafe.Sizeof(result), 0); status != 0 || err != nil || result[0] != uint32(unsafe.Sizeof(result)) {
+		t.Fatal(status, result, err)
+	}
+	if status, err := Fgetattrlist(-1, &list, unsafe.Pointer(&result), unsafe.Sizeof(result), 0); status != -1 || !errors.Is(err, syscall.EBADF) {
+		t.Fatal(status, err)
+	}
+}

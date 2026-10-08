@@ -93,7 +93,7 @@ func verify() error {
 		}
 	}
 	if runtime.GOOS == "darwin" {
-		for _, name := range []string{"TestReplacementCompressedDarwinNative", "TestReplacementCompressedTargetState", "TestReplacementCopyCloneErrors", "TestReplacementCopyDarwinNative"} {
+		for _, name := range []string{"TestReplacementCompressedDarwinNative", "TestReplacementCompressedTargetState", "TestReplacementCopyCloneErrors", "TestReplacementCopyDarwinNative", "TestReplacementVolumeCapabilityFailures", "TestReplacementVolumeDarwinNative"} {
 			if !passedNames[name] {
 				return fmt.Errorf("required Darwin suite missing: %s", name)
 			}
@@ -147,6 +147,7 @@ func verify() error {
 	}
 	if runtime.GOOS == "darwin" {
 		coverageFiles["pkg/hostdata/replacement_copy_darwin.go"] = [2]int{}
+		coverageFiles["pkg/hostdata/replacement_volume_darwin.go"] = [2]int{}
 	}
 	blocks := map[string][2]int{}
 	for _, line := range strings.Split(string(b), "\n") {
