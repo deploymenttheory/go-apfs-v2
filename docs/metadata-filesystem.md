@@ -27,6 +27,15 @@ Fixture creation removes host-created provenance sidecars before preparing an
 explicit absent or replacement-sidecar state. This does not normalize attributes
 out of the operation's observations.
 
+FAT32 and exFAT use shared-volume ownership (`-owners off`), matching the
+normal ownership mode documented by `mount_exfat(8)`. APFS and HFS+ retain
+`-owners on`. Forcing Unix ownership on FAT made setup depend on the mount
+service's identity and prevented the macOS 15/26 CI user from creating fixtures.
+This change does not disable file-mode checks: readonly sidecars remain in every
+producer's matrix. Before cases begin, the C oracle records actual mount flags,
+mount owner, process credentials, and root ownership/mode in `mount-N.json` and
+the CI log. Dedicated ownership/authorization profiles remain separate work.
+
 The existing Metadata transport workflow now captures macOS 15, 26 and 27
 separately. Each producer must report the requested actual version; a moved runner
 alias fails rather than silently substituting a different producer. All three

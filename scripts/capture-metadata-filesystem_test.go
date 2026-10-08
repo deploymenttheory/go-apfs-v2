@@ -138,3 +138,13 @@ func TestMetadataFilesystemReaderErrors(t *testing.T) {
 		}
 	}
 }
+
+func TestMetadataFilesystemMountOwnership(t *testing.T) {
+	for _, tc := range []struct{ filesystem, owners string }{
+		{"ExFAT", "off"}, {"MS-DOS FAT32", "off"}, {"APFS", "on"}, {"HFS+", "on"},
+	} {
+		if got := metadataMountOwnership(tc.filesystem); got != tc.owners {
+			t.Errorf("%s owners=%s, want %s", tc.filesystem, got, tc.owners)
+		}
+	}
+}

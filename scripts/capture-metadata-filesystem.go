@@ -13,8 +13,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
-	"github.com/deploymenttheory/go-apfs-v2/pkg/osversion"
 	"io"
 	"os"
 	"path/filepath"
@@ -26,6 +24,8 @@ import (
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/captureprovenance"
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/diskimage"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/osversion"
 )
 
 var metadataStates = []string{"absent", "sidecar", "truncated", "bad-magic", "empty", "directory", "seeded", "seeded-equal", "seeded-conflict", "readonly"}
@@ -144,6 +144,17 @@ func prepareMetadataCase(root, state, kind string, seed []byte, oracle string) e
 		return os.Chmod(sidecar, 0444)
 	}
 	return nil
+}
+
+// FAT has no stored Unix ownership. Use its normal shared-volume mount mode;
+// forcing owners on makes fixture access depend on the mount service's identity
+// (which can differ from the unprivileged CI runner). APFS/HFS+ retain ownership.
+// File modes, including readonly sidecars, remain enforced in either mode.
+func metadataMountOwnership(filesystem string) string {
+	if filesystem == "ExFAT" || filesystem == "MS-DOS FAT32" {
+		return "off"
+	}
+	return "on"
 }
 
 func captureMetadataFilesystem(out string) (result error) {
@@ -271,7 +282,7 @@ func captureMetadataFilesystem(out string) (result error) {
 			if _, err := metadataCommand("hdiutil", "create", "-size", "128m", "-fs", filesystem, "-volname", "METADATA", image); err != nil {
 				return err
 			}
-			attached, err := metadataCommand("hdiutil", "attach", "-plist", "-nobrowse", "-owners", "on", "-mountpoint", mount, image)
+			attached, err := metadataCommand("hdiutil", "attach", "-plist", "-nobrowse", "-owners", metadataMountOwnership(filesystem), "-mountpoint", mount, image)
 			if err != nil {
 				return err
 			}
@@ -298,13 +309,28 @@ func captureMetadataFilesystem(out string) (result error) {
 			if err = os.WriteFile(filepath.Join(artifact, fmt.Sprintf("attach-%d.plist", fi)), attached, 0600); err != nil {
 				return err
 			}
+			// Record actual credentials and mount permissions before fixture creation,
+			// so a setup failure still leaves useful native evidence in CI artifacts.
+			diagnostic, err := metadataCommand(oracle, mount, "mount")
+			if err != nil {
+				return err
+			}
+			if !json.Valid(diagnostic) {
+				return fmt.Errorf("invalid mount diagnostic for %s", filesystem)
+			}
+			name := fmt.Sprintf("mount-%d.json", fi)
+			if err = os.WriteFile(filepath.Join(artifact, name), diagnostic, 0600); err != nil {
+				return err
+			}
+			capture.Sources[name] = hash(diagnostic)
+			fmt.Printf("MOUNT %s owners=%s %s", filesystem, metadataMountOwnership(filesystem), diagnostic)
 			for _, kind := range []string{"file", "directory"} {
 				for _, state := range metadataStates {
 					for _, action := range metadataActions {
 						id := fmt.Sprintf("%s/%s/%s/%s", filesystem, kind, state, action)
 						root := filepath.Join(mount, "case")
 						if err = os.Mkdir(root, 0755); err != nil {
-							return err
+							return fmt.Errorf("create case directory %s: %w", id, err)
 						}
 						if err = prepareMetadataCase(root, state, kind, seed, oracle); err != nil {
 							return fmt.Errorf("prepare %s: %w", id, err)
@@ -339,7 +365,11 @@ func captureMetadataFilesystem(out string) (result error) {
 		}
 	}
 	capture.Complete = true
-	return validateMetadataCapture(capture)
+	if err = validateMetadataCapture(capture); err != nil {
+		capture.Complete = false
+		return err
+	}
+	return nil
 }
 
 // This validates evidence membership and native input controls, not Go parity.

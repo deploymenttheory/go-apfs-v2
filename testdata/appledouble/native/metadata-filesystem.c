@@ -83,6 +83,17 @@ int main(int argc, char **argv) {
     if (!strcmp(action, "seed-different")) return install(path, 1);
     struct statfs volume;
     if (statfs(path, &volume) != 0) { perror("statfs"); return 1; }
+    if (!strcmp(action, "mount")) {
+        struct stat root;
+        if (lstat(path, &root) != 0) { perror("lstat mount"); return 1; }
+        printf("{\"filesystem\":\"%s\",\"volume_flags\":%u,\"mount_owner\":%u,"
+               "\"uid\":%u,\"euid\":%u,\"gid\":%u,\"egid\":%u,"
+               "\"root_uid\":%u,\"root_gid\":%u,\"root_mode\":%u}\n",
+               volume.f_fstypename, volume.f_flags, (unsigned)volume.f_owner,
+               (unsigned)getuid(), (unsigned)geteuid(), (unsigned)getgid(), (unsigned)getegid(),
+               (unsigned)root.st_uid, (unsigned)root.st_gid, (unsigned)(root.st_mode & 07777));
+        return 0;
+    }
     errno = 0;
     int fd = open(path, O_RDONLY | O_NOFOLLOW);
     int open_error = fd < 0 ? errno : 0;
