@@ -79,6 +79,25 @@ go run scripts/capture-metadata-filesystem.go -profile packed-empty -verify arti
 
 ## Reading filesystem-selected metadata
 
+### Attribute files as query targets
+
+On FAT/exFAT, querying attributes on a regular `._name` file fails with `EPERM`.
+This is distinct from an access-denied (`EACCES`) result. The filesystem view
+preserves that distinction on every host: codesign treats a presence-query
+`EPERM` as absence but still rejects removal failures and access-denied queries.
+A directory named `._name` remains a directory with its own metadata; the rule
+does not apply to every name beginning with dot-underscore or to native APFS/HFS
+storage.
+
+The `attribute-target` profile captures 192 C-oracle observations across all four
+filesystems: file/directory targets, absent/present associated storage and all
+twelve operations. Retained evidence is from macOS 27. CI captures macOS 15, 26
+and 27 independently, then requires every producer's read and removal outcomes
+on Linux, Windows and macOS, including exact unchanged bytes after failed
+removals. Both XNU dispatch AST targets remain required.
+
+### Opening a metadata view
+
 `hostdata.OpenFilesystemMetadata(ctx, root, name)` opens a contained entry and
 retains its parent association. `List` returns visible attribute names, `Size` queries without allocating the value, `Read`
 returns an owned value with a caller-supplied allocation bound, and `OpenValue`

@@ -358,11 +358,23 @@ func captureMetadataFilesystem(out, profile string) (result error) {
 						if err = prepareMetadataCase(root, state, kind, seed, oracle); err != nil {
 							return fmt.Errorf("prepare %s: %w", id, err)
 						}
+						target := "input"
+						if profile == "attribute-target" {
+							target = "._input"
+							if state == "sidecar" {
+								if err = os.Rename(filepath.Join(root, "._input"), filepath.Join(root, "._._input")); err != nil {
+									return err
+								}
+							}
+							if err = os.Rename(filepath.Join(root, "input"), filepath.Join(root, target)); err != nil {
+								return err
+							}
+						}
 						before, err := metadataTree(root)
 						if err != nil {
 							return err
 						}
-						b, err := metadataCommand(oracle, filepath.Join(root, "input"), action)
+						b, err := metadataCommand(oracle, filepath.Join(root, target), action)
 						if err != nil {
 							return fmt.Errorf("observe %s: %w", id, err)
 						}
@@ -374,7 +386,7 @@ func captureMetadataFilesystem(out, profile string) (result error) {
 							return err
 						}
 						capture.Cases = append(capture.Cases, metadataCase{id, before, b, after})
-						if err = qualifyMetadataFilesystemRead(root, b); err != nil {
+						if err = qualifyMetadataFilesystemRead(root, target, b); err != nil {
 							return fmt.Errorf("Go/native readback %s: %w", id, err)
 						}
 						capture.GoReadCases++
@@ -406,6 +418,8 @@ func metadataProfileStates(profile string) ([]string, error) {
 		return metadataStates, nil
 	case "packed-empty":
 		return []string{"sidecar"}, nil
+	case "attribute-target":
+		return []string{"absent", "sidecar"}, nil
 	default:
 		return nil, fmt.Errorf("unknown filesystem metadata profile %q", profile)
 	}
@@ -642,7 +656,7 @@ func readMetadataCapture(path string) (metadataCapture, error) {
 
 // The C observation is already captured independently; this verifies the live
 // public Go view against its complete visible attribute names and values.
-func qualifyMetadataFilesystemRead(path string, raw json.RawMessage) (err error) {
+func qualifyMetadataFilesystemRead(path, target string, raw json.RawMessage) (err error) {
 	var o struct {
 		After struct {
 			Attributes []struct {
@@ -662,13 +676,17 @@ func qualifyMetadataFilesystemRead(path string, raw json.RawMessage) (err error)
 		return err
 	}
 	defer func() { err = errors.Join(err, root.Close()) }()
-	view, err := hostdata.OpenFilesystemMetadata(context.Background(), root, "input")
+	view, err := hostdata.OpenFilesystemMetadata(context.Background(), root, target)
 	if err != nil {
 		return err
 	}
 	defer func() { err = errors.Join(err, view.Close()) }()
 	names, listErr := view.List(context.Background(), hostdata.MaxXattrListSize)
-	if o.After.ListErrno == 93 {
+	if o.After.ListErrno == 1 {
+		if !errors.Is(listErr, syscall.EPERM) {
+			return fmt.Errorf("Go/native list EPERM mismatch: %v", listErr)
+		}
+	} else if o.After.ListErrno == 93 {
 		if !errors.Is(listErr, hostdata.ErrXattrNotFound) {
 			return fmt.Errorf("Go/native list ENOATTR mismatch: %v", listErr)
 		}
@@ -703,7 +721,7 @@ func qualifyMetadataFilesystemRead(path string, raw json.RawMessage) (err error)
 }
 
 func main() {
-	profile := flag.String("profile", "", "native input profile: default or packed-empty")
+	profile := flag.String("profile", "", "native input profile: default, packed-empty or attribute-target")
 	out := flag.String("out", "artifacts/metadata-filesystem/native.json", "native capture path")
 	verify := flag.String("verify", "", "validate a complete native capture without executing native commands")
 	major := flag.Uint("major", 0, "require the native producer's macOS major version")
