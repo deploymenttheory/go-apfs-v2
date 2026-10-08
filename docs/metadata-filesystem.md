@@ -49,21 +49,73 @@ bodies. Kernel helpers are declaration-only shims; private constants and vnode
 layout are symbolic. This is static source evidence, not kernel execution or a
 claim that a published source revision matches the installed macOS binary.
 
-**These jobs validate native research evidence, not completed Go filesystem
-parity.** Production integration, behavioral replay against the eventual shared
-metadata view, current-profile regression comparisons and foreign output native
-readback remain required before closing the prerequisite. Native fixtures from
-15/26 must be retained from their actual runner captures, never synthesized by
-changing a version field in the local 27 capture.
+## Reading filesystem-selected metadata
 
-## What the local capture establishes
+`hostdata.OpenFilesystemMetadata(ctx, root, name)` opens a contained entry and
+retains its parent association. `List` returns visible attribute names, `Read`
+returns an owned value with a caller-supplied allocation bound, and `OpenValue`
+returns a sized `ReaderAt` that owns its backing handle. Close both the view and
+each returned value; a value remains readable after the view closes. The context
+supplied to `OpenValue` also cancels subsequent reads.
 
-On macOS 27.0.1 build 26A434, valid packed sidecar attributes are visible on FAT32
-and exFAT while the same sidecars remain separate files on APFS and HFS+.
-Reading an existing fork and setting a fork have different outcomes on the
-AppleDouble-backed volumes. The implementation must use operation-specific
-contracts; neither blindly scanning every `._` file nor applying the copyfile
-logical-value rules globally is sufficient.
+Selection is automatic. On macOS the kernel selects the storage. On Linux,
+`fstatfs` selects AppleDouble for FAT/exFAT. On Windows, the held volume's FAT,
+FAT32 or exFAT type selects it. Other local filesystems retain native attributes;
+a neighboring `._` file does not enable an alternative metadata mode. The codec
+is reused for borrowed value ranges, without copying the resource fork.
+
+Pass a named entry beneath its parent root, including when inspecting a
+directory. Dot, dot-dot and an empty final path component are rejected. A root
+capability does not authorize reading its parent's sidecar, and a planted `._.`
+inside an arbitrary directory must not become that directory's attributes.
+Volume-root metadata and consumer path normalization remain integration work.
+
+The retained observations establish visible name order, empty versus missing
+attributes, zero FinderInfo suppression, the native blank-fork marker, and the
+difference between absent storage and an existing invalid header. In particular,
+invalid-header enumeration returns `ErrXattrNotFound`; it is not a successful
+empty list. Permission, identity, I/O and unqualified format errors remain errors.
+Exclude concurrent namespace and content changes: held identity checks do not
+provide a snapshot transaction or detect arbitrary same-size in-place edits.
+
+Resource-fork reads use the existing 64-bit named stream on APFS/HFS. Darwin FAT
+forks use held positional attribute reads because their fork vnode can have a
+different inode from the data vnode. The AppleDouble length field bounds that
+route to `uint32`; it does not limit native APFS/HFS forks. Ordinary native
+attributes still use the existing bounded snapshot API (8 MiB maximum).
+
+## Qualification and remaining deliverables
+
+Each retained macOS 15/26/27 fixture comes from its actual producer. Portable
+readback checks both before and after snapshots of the 480 FAT cases per producer:
+2,880 snapshots in total. The independent CI read job requires every compiled new
+production file to exceed 95% coverage and rejects skipped tests. It retains the
+raw profile, test transcript, source hashes and exact revision. The final evidence
+auditor imports that host's report from the same workflow run instead of executing
+the focused suite again.
+
+Fresh captures also compare the public Go reader with the live C oracle on all
+960 cases, including APFS and HFS+. Linux, Windows and macOS replay the resulting
+FAT snapshots after independently validating all three producer corpora. A sparse
+format-boundary test checks reads around 2 GiB and at the maximum 32-bit fork
+length without allocating or writing a dense multi-gigabyte fixture. That test is
+a storage/format boundary check, not a native large-fork capture.
+
+This implements discovery and reads, not the complete filesystem operation layer.
+The following deliverables remain required:
+
+- Version-qualified create, replace, set and remove operations, including the
+  macOS 15 versus 26/27 FAT resource-fork write differences.
+- Native byte layout and partial effects for sidecar updates; copyfile packing's
+  layout is not interchangeable with the VFS writer's layout.
+- Authorization, readonly storage, ownership, links, root paths, rename/unlink
+  association, concurrent substitution, cancellation and cleanup qualification.
+- Foreign-produced output readback on native macOS, genuine large-fork acceptance,
+  and remaining ordinary-attribute streaming limits.
+- Codesign consumption, removal/replacement of obsolete CLI routing scenarios,
+  and complete Phase 2 lifecycle and resource-budget acceptance.
+
+These gaps keep the prerequisite open even when the read coverage job passes.
 
 ## Cleanup and CI refinement
 

@@ -183,6 +183,11 @@ jobs:
           for version in 15 26 27; do
             apfs-ci-runner --suite metadata-transport/filesystem/producer-$version --timeout 2m -- go run scripts/capture-metadata-filesystem.go -major "$version" -verify "artifacts/filesystem-producers/filesystem-metadata-macos$version/native.json"
           done
+      - name: Replay fresh native FAT observations through the Go filesystem view
+        env:
+          APFS_METADATA_FILESYSTEM_PRODUCERS: ${{ github.workspace }}/artifacts/filesystem-producers
+        run: |
+          apfs-ci-runner --suite metadata-transport/filesystem/fresh-readback --timeout 3m -- go test -timeout 2m -json -count=1 -run '^TestFilesystemMetadataNativeFATReadback$' ./pkg/hostdata
       - name: Reject missing cases and corrupted oracle evidence
         run: |
           apfs-ci-runner --suite metadata-transport/filesystem/negative-controls --timeout 2m -- go test -timeout 90s -json -count=1 scripts/capture-metadata-filesystem.go scripts/capture-metadata-filesystem_test.go

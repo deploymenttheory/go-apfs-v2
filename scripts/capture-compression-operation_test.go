@@ -146,3 +146,36 @@ func TestNativeOperationCompleteProfiles(t *testing.T) {
 		})
 	}
 }
+
+func TestNativeSuccessfulQueueErrnoIsNotFailure(t *testing.T) {
+	for _, accepted := range []bool{false, true} {
+		makeTrial := func(errno int) trial {
+			b, err := json.Marshal(map[string]any{"volume_flags": 0, "accepted": accepted, "errno": errno})
+			if err != nil {
+				t.Fatal(err)
+			}
+			return trial{Observation: b}
+		}
+		a, b := makeTrial(2), makeTrial(1)
+		original := bytes.Clone(b.Observation)
+		x, err := comparison(a)
+		if err != nil {
+			t.Fatal(err)
+		}
+		y, err := comparison(b)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if bytes.Equal(x, y) != accepted {
+			t.Fatal("queue rejection errno lost or successful errno compared", accepted)
+		}
+		if !bytes.Equal(b.Observation, original) {
+			t.Fatal("raw native evidence modified")
+		}
+		b.Trace = `{"thread":"worker","operation":"fsync","result":-1,"errno":1}`
+		z, err := comparison(b)
+		if err != nil || bytes.Equal(y, z) {
+			t.Fatal("worker failure lost", err)
+		}
+	}
+}

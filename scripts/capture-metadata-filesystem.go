@@ -19,12 +19,14 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/captureprovenance"
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/diskimage"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/osversion"
 )
 
@@ -46,6 +48,7 @@ type metadataEntry struct {
 type metadataCapture struct {
 	Schema       int               `json:"schema"`
 	Complete     bool              `json:"complete"`
+	GoReadCases  int               `json:"go_read_cases"`
 	Host         string            `json:"host"`
 	Compiler     string            `json:"compiler"`
 	SDK          string            `json:"sdk"`
@@ -190,6 +193,17 @@ func captureMetadataFilesystem(out string) (result error) {
 		data, err := os.ReadFile(path)
 		if err != nil {
 			return err
+		}
+		capture.Sources[path] = hash(data)
+	}
+	implementations, err := filepath.Glob("pkg/hostdata/filesystem_metadata*.go")
+	if err != nil {
+		return err
+	}
+	for _, path := range implementations {
+		data, e := os.ReadFile(path)
+		if e != nil {
+			return e
 		}
 		capture.Sources[path] = hash(data)
 	}
@@ -351,6 +365,10 @@ func captureMetadataFilesystem(out string) (result error) {
 							return err
 						}
 						capture.Cases = append(capture.Cases, metadataCase{id, before, b, after})
+						if err = qualifyMetadataFilesystemRead(root, b); err != nil {
+							return fmt.Errorf("Go/native readback %s: %w", id, err)
+						}
+						capture.GoReadCases++
 						fmt.Printf("CASE %s (%d)\n", id, len(capture.Cases))
 						if err = os.RemoveAll(root); err != nil {
 							return err
@@ -485,6 +503,9 @@ func validateMetadataCapture(c metadataCapture) error {
 			}
 		}
 	}
+	if c.GoReadCases != 0 && c.GoReadCases != len(expected) {
+		return errors.New("incomplete Go/native readback")
+	}
 	if len(c.Cases) != len(expected) {
 		return fmt.Errorf("metadata case count %d, require %d", len(c.Cases), len(expected))
 	}
@@ -588,6 +609,68 @@ func readMetadataCapture(path string) (metadataCapture, error) {
 	}
 	err = json.Unmarshal(b, &result)
 	return result, err
+}
+
+// The C observation is already captured independently; this verifies the live
+// public Go view against its complete visible attribute names and values.
+func qualifyMetadataFilesystemRead(path string, raw json.RawMessage) (err error) {
+	var o struct {
+		After struct {
+			Attributes []struct {
+				Name      string
+				ReadErrno int `json:"read_errno"`
+				Bytes     string
+			}
+			ListBytes string `json:"list_bytes"`
+			ListErrno int    `json:"list_errno"`
+		} `json:"after_held"`
+	}
+	if err = json.Unmarshal(raw, &o); err != nil {
+		return err
+	}
+	root, err := os.OpenRoot(path)
+	if err != nil {
+		return err
+	}
+	defer func() { err = errors.Join(err, root.Close()) }()
+	view, err := hostdata.OpenFilesystemMetadata(context.Background(), root, "input")
+	if err != nil {
+		return err
+	}
+	defer func() { err = errors.Join(err, view.Close()) }()
+	names, listErr := view.List(context.Background(), hostdata.MaxXattrListSize)
+	if o.After.ListErrno == 93 {
+		if !errors.Is(listErr, hostdata.ErrXattrNotFound) {
+			return fmt.Errorf("Go/native list ENOATTR mismatch: %v", listErr)
+		}
+	} else if listErr != nil || o.After.ListErrno != 0 {
+		return fmt.Errorf("Go/native list error mismatch: native=%d Go=%v", o.After.ListErrno, listErr)
+	}
+	var listed strings.Builder
+	for _, name := range names {
+		listed.WriteString(name)
+		listed.WriteByte(0)
+	}
+	if hex.EncodeToString([]byte(listed.String())) != o.After.ListBytes {
+		return errors.New("Go/native name list mismatch")
+	}
+	for _, attr := range o.After.Attributes {
+		value, present, e := view.Read(context.Background(), attr.Name, 65536)
+		if attr.ReadErrno != 0 && attr.ReadErrno != 93 {
+			var errno syscall.Errno
+			if present || !errors.As(e, &errno) || int(errno) != attr.ReadErrno {
+				return fmt.Errorf("Go/native read errno mismatch %s: native=%d Go=%v", attr.Name, attr.ReadErrno, e)
+			}
+			continue
+		}
+		if e != nil {
+			return fmt.Errorf("%s: %w", attr.Name, e)
+		}
+		if present != (attr.ReadErrno == 0) || hex.EncodeToString(value) != attr.Bytes {
+			return fmt.Errorf("Go/native value mismatch: %s", attr.Name)
+		}
+	}
+	return nil
 }
 
 func main() {

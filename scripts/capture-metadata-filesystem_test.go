@@ -32,15 +32,22 @@ func metadataFixtureForTest(t *testing.T) metadataCapture {
 }
 
 func TestMetadataFilesystemNativeInventory(t *testing.T) {
-	c := metadataFixtureForTest(t)
-	if err := validateMetadataCapture(c); err != nil {
-		t.Fatal(err)
-	}
-	if err := captureprovenance.Verify(os.DirFS("."), c.Sources); err != nil {
-		t.Fatal(err)
-	}
-	if len(c.Cases) != 960 {
-		t.Fatal("lost filesystem cases", len(c.Cases))
+	for _, major := range []int{15, 26, 27} {
+		t.Run(fmt.Sprint(major), func(t *testing.T) {
+			c, err := readMetadataCapture(fmt.Sprintf("testdata/appledouble/native/metadata-filesystem-macos%d.json.gz", major))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := validateMetadataCapture(c); err != nil {
+				t.Fatal(err)
+			}
+			if err := captureprovenance.Verify(os.DirFS("."), c.Sources); err != nil {
+				t.Fatal(err)
+			}
+			if len(c.Cases) != 960 {
+				t.Fatal("lost filesystem cases", len(c.Cases))
+			}
+		})
 	}
 }
 
@@ -51,6 +58,7 @@ func TestMetadataFilesystemRejectsIncompleteEvidence(t *testing.T) {
 	}{
 		{"schema", func(c *metadataCapture) { c.Schema++ }},
 		{"partial", func(c *metadataCapture) { c.Complete = false }},
+		{"partial-go-readback", func(c *metadataCapture) { c.GoReadCases = 959 }},
 		{"host", func(c *metadataCapture) { c.Host = "invalid" }},
 		{"future-profile", func(c *metadataCapture) { c.Host = "ProductVersion:\t28.0\n" }},
 		{"compiler", func(c *metadataCapture) { c.Compiler = "" }},
