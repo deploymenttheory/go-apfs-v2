@@ -18,9 +18,8 @@ func prepareReplacementAtContext(ctx context.Context, source *os.File, stage *os
 		return nil, fmt.Errorf("%w: protected source", ErrUnsupportedReplacement)
 	}
 	return replacementWithHandle(ctx, func() (*os.File, error) { return stage.Open(".") }, func(dir *os.File) (*os.File, error) {
-		// Setattrlist has no descriptor variant in x/sys. Darwin's fdescfs path
-		// names this held directory descriptor, not any caller-controlled pathname.
-		if err := clearReplacementACL(fmt.Sprintf("/dev/fd/%d", dir.Fd())); err != nil {
+		// Query and clear security on the held staging directory.
+		if err := clearReplacementHeldACL(dir); err != nil {
 			return nil, err
 		}
 		return prepareReplacementUsingContext(ctx,

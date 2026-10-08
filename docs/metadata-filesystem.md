@@ -52,7 +52,7 @@ claim that a published source revision matches the installed macOS binary.
 ## Reading filesystem-selected metadata
 
 `hostdata.OpenFilesystemMetadata(ctx, root, name)` opens a contained entry and
-retains its parent association. `List` returns visible attribute names, `Read`
+retains its parent association. `List` returns visible attribute names, `Size` queries without allocating the value, `Read`
 returns an owned value with a caller-supplied allocation bound, and `OpenValue`
 returns a sized `ReaderAt` that owns its backing handle. Close both the view and
 each returned value; a value remains readable after the view closes. The context
@@ -84,11 +84,47 @@ different inode from the data vnode. The AppleDouble length field bounds that
 route to `uint32`; it does not limit native APFS/HFS forks. Ordinary native
 attributes still use the existing bounded snapshot API (8 MiB maximum).
 
+## Held objects and attribute removal
+
+`FilesystemMetadataForFile(ctx, file)` borrows an already-held object. Closing
+its view leaves the caller's file open. Native storage never reopens its name.
+Foreign FAT storage resolves the descriptor's current path through the OS and
+verifies that the entry still identifies the held object. Descriptor labels are
+not used as paths; the existing typed Windows final-path and Darwin held-path
+wrappers are reused, and Linux resolves its process-owned `/proc/self/fd` link. A missing or substituted name is an error;
+callers must keep the descriptor open and exclude concurrent namespace changes.
+`UsesAppleDouble` and `CaseInsensitiveNames` report the selected storage's
+properties; they do not change the selection.
+
+`Remove(ctx, name)` preserves the data fork and deletes the selected attribute.
+Missing attributes return `false, nil`. Native storage uses the existing held
+attribute-removal API. Foreign FAT storage checks the carrier's identity before
+opening a writer and before unlinking an empty carrier. Successful earlier writes
+remain visible after a later failure; this is not a transaction or rollback API.
+
+`appledouble.RemoveFilesystemAttribute` implements the bounded byte operation
+separately from filesystem association. It retains record order, allocation slack
+and unrelated bytes, shifts large values in 64 KiB chunks, and truncates a trailing
+fork when appropriate. An empty result asks the filesystem owner to unlink the
+carrier. Snapshot decoding accepts layouts that are unsafe to mutate in place;
+overlapping descriptors, inconsistent summary ranges and non-VFS zero-offset
+empty values are rejected before mutation. They remain readable by the snapshot
+codec. This qualification does not establish native results for every malformed
+layout.
+
+The retained producers supply 360 FAT removal cases across files, directories,
+missing/malformed storage and each of the three removed attribute kinds. Portable
+API tests compare whole entry sets and file bytes; 180 decodable-carrier cases
+also compare the codec output byte for byte. The macOS 15/26/27 captures permit
+directory fork removal in these cases, so the older published XNU rejection
+branch is not used as the current runtime contract. Structural large-value tests,
+cancellation and IO fault injection are distinct from these native observations.
+
 ## Qualification and remaining deliverables
 
 Each retained macOS 15/26/27 fixture comes from its actual producer. Portable
 readback checks both before and after snapshots of the 480 FAT cases per producer:
-2,880 snapshots in total. The independent CI read job requires every compiled new
+2,880 snapshots in total. The independent CI metadata job requires every compiled new
 production file to exceed 95% coverage and rejects skipped tests. It retains the
 raw profile, test transcript, source hashes and exact revision. The final evidence
 auditor imports that host's report from the same workflow run instead of executing
@@ -101,13 +137,15 @@ format-boundary test checks reads around 2 GiB and at the maximum 32-bit fork
 length without allocating or writing a dense multi-gigabyte fixture. That test is
 a storage/format boundary check, not a native large-fork capture.
 
-This implements discovery and reads, not the complete filesystem operation layer.
+Discovery, reads and the captured removal cases are implemented. The complete
+filesystem operation layer still requires the following qualification.
 The following deliverables remain required:
 
-- Version-qualified create, replace, set and remove operations, including the
+- Version-qualified create, replace and set operations, including the
   macOS 15 versus 26/27 FAT resource-fork write differences.
-- Native byte layout and partial effects for sidecar updates; copyfile packing's
-  layout is not interchangeable with the VFS writer's layout.
+- Native byte layout and partial effects for creation/assignment, broader empty-value
+  and large-removal captures, and foreign-produced removal readback; copyfile
+  packing is not interchangeable with the VFS writer.
 - Authorization, readonly storage, ownership, links, root paths, rename/unlink
   association, concurrent substitution, cancellation and cleanup qualification.
 - Foreign-produced output readback on native macOS, genuine large-fork acceptance,
@@ -116,7 +154,7 @@ The following deliverables remain required:
 - Codesign consumption, removal/replacement of obsolete CLI routing scenarios,
   and complete Phase 2 lifecycle and resource-budget acceptance.
 
-These gaps keep the prerequisite open even when the read coverage job passes.
+These gaps keep the prerequisite open even when the metadata coverage job passes.
 
 ## Cleanup and CI refinement
 
@@ -139,3 +177,25 @@ Consolidation must retain unique cases and raw per-host coverage, including
 stricter per-file gates, while removing duplicate execution. Distinct race modes,
 macOS producers and foreign-image readbacks are not interchangeable. Separate
 queue time from execution time when evaluating improvements.
+
+### Replacement on volumes without ACLs
+
+Darwin replacement queries `ATTR_VOL_CAPABILITIES` through the held file before
+clearing staging ACLs or restoring source ACLs. The value and validity bit for
+`VOL_CAP_INT_EXTENDED_SECURITY` must both be understood. FAT32 and exFAT report
+that extended security is unsupported; no ACL operation is needed there. APFS
+and HFS+ keep the existing ACL capture, temporary write access and restoration
+checks. Query failures and unknown capabilities are errors, never permission to
+discard metadata. See Apple's [volume capability contract](https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man2/getattrlist.2.html).
+
+`TestReplacementVolumeDarwinNative` exercises both path and rooted preparation on
+fresh APFS, HFS+, FAT32 and exFAT images. The independent Clang-built
+`replacement-volume.c` observer checks capability results and creation-time setter
+precision; exFAT setters can round a source creation timestamp. The test compares
+against the actual native result and verifies ownership, mode, flags, unrelated
+attributes, unchanged source data and removal of private staging objects.
+`scripts/verify-replacement-volume.go` retains both architecture ASTs, source
+hashes, native observations and coverage. The replacement workflow runs it on
+macOS 15, 26 and 27. This Darwin qualification does not establish foreign-host
+replacement of associated AppleDouble files; that remains a separate prerequisite
+for complete transparent signing on Linux and Windows.

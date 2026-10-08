@@ -32,28 +32,37 @@ func verify() error {
 	}
 	// Bind every instrumented package source, not just the files this focused
 	// suite qualifies. Existing whole-package coverage gates remain mandatory.
-	hashes, err := evidenceaudit.HarnessSourceHashes(os.DirFS("."), []string{"pkg/hostdata/*.go", "scripts/verify-filesystem-metadata.go", "testdata/appledouble/native/metadata-filesystem*.json.gz", "go.mod", "go.sum"})
+	hashes, err := evidenceaudit.HarnessSourceHashes(os.DirFS("."), []string{"pkg/hostdata/*.go", "pkg/appledouble/*.go", "pkg/appledouble/testdata/fuzz/FuzzFilesystemRemoval/*", "scripts/verify-filesystem-metadata.go", "testdata/appledouble/native/metadata-filesystem*.json.gz", "go.mod", "go.sum"})
 	if err != nil {
 		return err
 	}
-	packageJSON, err := cirunner.Command("go", "list", "-json", "./pkg/hostdata").Output()
+	packageJSON, err := cirunner.Command("go", "list", "-json", "./pkg/hostdata", "./pkg/appledouble").Output()
 	if err != nil {
-		return err
-	}
-	var pkg struct{ GoFiles []string }
-	if err = json.Unmarshal(packageJSON, &pkg); err != nil {
 		return err
 	}
 	all := map[string][2]int{}
 	focused := map[string][2]int{}
-	for _, base := range pkg.GoFiles {
-		name := "pkg/hostdata/" + base
-		if _, ok := hashes[name]; !ok {
-			return fmt.Errorf("untracked package source: %s", name)
+	decoder := json.NewDecoder(bytes.NewReader(packageJSON))
+	for {
+		var pkg struct {
+			ImportPath string
+			GoFiles    []string
 		}
-		all[name] = [2]int{}
-		if strings.HasPrefix(base, "filesystem_metadata") {
-			focused[name] = [2]int{}
+		if err = decoder.Decode(&pkg); errors.Is(err, io.EOF) {
+			break
+		} else if err != nil {
+			return err
+		}
+		prefix := strings.TrimPrefix(pkg.ImportPath, "github.com/deploymenttheory/go-apfs-v2/")
+		for _, base := range pkg.GoFiles {
+			name := prefix + "/" + base
+			if _, ok := hashes[name]; !ok {
+				return fmt.Errorf("untracked package source: %s", name)
+			}
+			all[name] = [2]int{}
+			if strings.HasPrefix(base, "filesystem_metadata") || base == "filesystem_remove.go" {
+				focused[name] = [2]int{}
+			}
 		}
 	}
 	if len(focused) < 3 {
@@ -65,13 +74,13 @@ func verify() error {
 	}
 	var transcript bytes.Buffer
 	profile := filepath.Join(dir, "coverage.out")
-	cmd := cirunner.Command("go", "test", "-timeout", "3m", "-count=1", "-json", "-run", "^(TestFilesystemMetadata|TestMetadataValue)", "-covermode=atomic", "-coverprofile="+profile, "./pkg/hostdata")
+	cmd := cirunner.Command("go", "test", "-timeout", "3m", "-count=1", "-json", "-run", "^(TestFilesystemMetadata|TestMetadataValue|TestFilesystemRemoval|FuzzFilesystemRemoval)", "-covermode=atomic", "-coverprofile="+profile, "./pkg/hostdata", "./pkg/appledouble")
 	cmd.Stdout = io.MultiWriter(os.Stdout, log, &transcript)
 	cmd.Stderr = os.Stderr
 	if err = errors.Join(cmd.Run(), log.Close()); err != nil {
 		return err
 	}
-	required := map[string]bool{"TestFilesystemMetadataNativeFATReadback": true, "TestFilesystemMetadataLargeFork": true, "TestFilesystemMetadataScope": true, "TestFilesystemMetadataIdentityAndSelection": true, "TestFilesystemMetadataNativeProviderFailures": true, "TestFilesystemMetadataSidecarFailures": true, "TestFilesystemMetadataBlankForkBoundaries": true, "TestFilesystemMetadataAcquisitionBoundaries": true, "TestMetadataValueCancellation": true}
+	required := map[string]bool{"TestFilesystemRemovalNativeBytes": true, "TestFilesystemRemovalStreaming": true, "TestFilesystemRemovalFailures": true, "TestFilesystemMetadataNativeFATRemoval": true, "TestFilesystemMetadataBorrowedLifetime": true, "TestFilesystemMetadataHeldFailures": true, "TestFilesystemMetadataRemovalFailures": true, "TestFilesystemMetadataRemovalLastAttribute": true, "TestFilesystemMetadataNativeRemoval": true, "TestFilesystemMetadataNativeFATReadback": true, "TestFilesystemMetadataLargeFork": true, "TestFilesystemMetadataScope": true, "TestFilesystemMetadataIdentityAndSelection": true, "TestFilesystemMetadataNativeProviderFailures": true, "TestFilesystemMetadataSidecarFailures": true, "TestFilesystemMetadataBlankForkBoundaries": true, "TestFilesystemMetadataAcquisitionBoundaries": true, "TestMetadataValueCancellation": true}
 	if runtime.GOOS == "darwin" {
 		required["TestFilesystemMetadataNativeForkStreaming"] = true
 		required["TestFilesystemMetadataForkWrapperFailures"] = true
@@ -162,6 +171,6 @@ func verify() error {
 	if err = evidenceaudit.Coverage(os.DirFS("."), os.DirFS("artifacts"), "filesystem-metadata-coverage", strings.TrimSpace(string(revision)), runtime.GOOS); err != nil {
 		return err
 	}
-	fmt.Printf("Filesystem metadata reads: %d/%d statements; %d passing records on %s/%s\n", covered, total, passed, runtime.GOOS, runtime.GOARCH)
+	fmt.Printf("Filesystem metadata reads and removals: %d/%d statements; %d passing records on %s/%s\n", covered, total, passed, runtime.GOOS, runtime.GOARCH)
 	return nil
 }

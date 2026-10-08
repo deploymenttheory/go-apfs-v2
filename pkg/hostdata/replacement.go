@@ -25,8 +25,9 @@ type Replacement struct {
 // must write the complete replacement and truncate to its intended length.
 //
 // On Darwin this uses cloning when available and otherwise copies metadata. It
-// preserves extended attributes and creation time, and restores the source ACL
-// after content writes. Protected files are unsupported. Compressed sources
+// preserves extended attributes and creation time at native filesystem setter
+// precision, and restores the source ACL
+// after content writes when the held volume supports ACLs. Protected files are unsupported. Compressed sources
 // use a fresh uncompressed stage: the old compression attribute and its owned
 // storage fork are excluded; an independent fork on inline-compressed sources
 // is preserved. RestoreMetadata keeps the target's own compression state.

@@ -220,3 +220,12 @@ for the real 4 GiB + 17 byte qualification and foreign-image checks.
 
 New implementation PRs remain draft through complete CI qualification. The
 maintainer controls the batch release and downstream phase-closure decision.
+
+### Filesystem attribute removal
+
+`RemoveFilesystemAttribute` mutates an already-authorized VFS-layout carrier
+without canonical repacking. It preserves unrelated bytes and uses bounded
+streaming shifts for large values. The filesystem owner handles association,
+permissions, unlink and cleanup; `hostdata.FilesystemMetadata.Remove` provides
+that integration. See [filesystem-selected metadata](../../docs/metadata-filesystem.md)
+for native evidence, rejected mutation layouts and remaining qualification.

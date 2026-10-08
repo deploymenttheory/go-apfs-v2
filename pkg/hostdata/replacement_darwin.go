@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"github.com/deploymenttheory/go-apfs-v2/internal/darwinabi"
 	"os"
 	"path/filepath"
 	"syscall"
+	"unsafe"
 
 	hostflags "github.com/deploymenttheory/go-apfs-v2/pkg/hostdata/bsdflags"
 	"golang.org/x/sys/unix"
@@ -53,13 +55,30 @@ func prepareReplacementContext(ctx context.Context, source *os.File, path string
 }
 
 func clearReplacementACL(path string) error {
+	file, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	return clearReplacementHeldACL(file)
+}
+
+func clearReplacementHeldACL(file *os.File) error {
+	supported, err := replacementVolumeACL(file)
+	if err != nil || !supported {
+		return err
+	}
 	acl := make([]byte, 52)
 	binary.LittleEndian.PutUint32(acl, 8)
 	binary.LittleEndian.PutUint32(acl[4:], 44)
 	binary.LittleEndian.PutUint32(acl[8:], 0x012cc16d)
 	binary.LittleEndian.PutUint32(acl[44:], 0xffffffff)
 	list := unix.Attrlist{Bitmapcount: 5, Commonattr: unix.ATTR_CMN_EXTENDED_SECURITY}
-	return unix.Setattrlist(path, &list, acl, unix.FSOPT_NOFOLLOW)
+	m := nativeHeldMetadata{file: file}
+	return m.control(func(fd int32) error {
+		_, err := darwinabi.Fsetattrlist(fd, &list, unsafe.Pointer(&acl[0]), uintptr(len(acl)), 0)
+		return err
+	})
 }
 
 func restoreReplacementMetadataContext(ctx context.Context, source *os.File, target *os.File, info os.FileInfo) error {
@@ -89,6 +108,10 @@ func restoreReplacementMetadataContext(ctx context.Context, source *os.File, tar
 }
 
 func restoreReplacementACL(source, target *os.File) error {
+	supported, err := replacementVolumeACL(source)
+	if err != nil || !supported {
+		return err
+	}
 	from, err := NewHeldMetadata(source)
 	if err != nil {
 		return err
