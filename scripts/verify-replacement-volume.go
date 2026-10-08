@@ -47,7 +47,7 @@ func verifyVolume() error {
 		sources[path] = hex.EncodeToString(sum[:])
 		return nil
 	}
-	for _, path := range []string{source, "scripts/verify-replacement-volume.go", "scripts/generate-darwin-wrappers.go", "internal/darwinabi/zsyscall_darwin_arm64.go", "internal/darwinabi/zsyscall_darwin_arm64.s", "internal/darwinabi/zsyscall_darwin_amd64.go", "internal/darwinabi/zsyscall_darwin_amd64.s", "pkg/hostdata/replacement_volume_darwin.go", "pkg/hostdata/replacement_volume_darwin_test.go", "pkg/hostdata/replacement_darwin.go", "pkg/hostdata/replacement_root_darwin.go", "pkg/hostdata/replacement_copy_darwin.go", "go.mod", "go.sum"} {
+	for _, path := range []string{source, "scripts/verify-replacement-volume.go", "scripts/generate-darwin-wrappers.go", "internal/darwinabi/zsyscall_darwin_arm64.go", "internal/darwinabi/zsyscall_darwin_arm64.s", "internal/darwinabi/zsyscall_darwin_amd64.go", "internal/darwinabi/zsyscall_darwin_amd64.s", "pkg/hostdata/filesystem_metadata_storage.go", "pkg/hostdata/filesystem_metadata_storage_darwin.go", "pkg/hostdata/filesystem_metadata_storage_test.go", "pkg/hostdata/filesystem_metadata_storage_darwin_test.go", "pkg/hostdata/replacement_volume_darwin.go", "pkg/hostdata/replacement_volume_darwin_test.go", "pkg/hostdata/replacement_darwin.go", "pkg/hostdata/replacement_root_darwin.go", "pkg/hostdata/replacement_copy_darwin.go", "go.mod", "go.sum"} {
 		if err := bind(path); err != nil {
 			return err
 		}
@@ -97,7 +97,7 @@ func verifyVolume() error {
 		return err
 	}
 	profile := filepath.Join(dir, "coverage.out")
-	cmd := cirunner.Command("go", "test", "-count=1", "-json", "-run", "^TestReplacementVolume", "-coverprofile="+profile, "./pkg/hostdata")
+	cmd := cirunner.Command("go", "test", "-count=1", "-json", "-run", "^Test(ReplacementVolume|FilesystemMetadataStorage)", "-coverprofile="+profile, "./pkg/hostdata")
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0", "APFS_REPLACEMENT_VOLUME_ORACLE="+oracle)
 	var transcript bytes.Buffer
 	cmd.Stdout = io.MultiWriter(os.Stdout, log, &transcript)
@@ -160,7 +160,7 @@ func verifyVolume() error {
 	if total == 0 || covered*100 <= total*95 {
 		return fmt.Errorf("volume capability coverage must exceed 95%%: %d/%d", covered, total)
 	}
-	report := map[string]any{"schema": 1, "complete": true, "versions": versions, "sources": sources, "native_cases": 8, "covered": covered, "statements": total, "purpose": "held filesystem capability, ACL preservation and native creation-time precision"}
+	report := map[string]any{"schema": 1, "complete": true, "versions": versions, "sources": sources, "native_cases": 8, "covered": covered, "statements": total, "purpose": "held filesystem xattr storage and ACL capability, metadata preservation and native creation-time precision"}
 	data, err = json.MarshalIndent(report, "", "  ")
 	if err != nil {
 		return err

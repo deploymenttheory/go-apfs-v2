@@ -90,6 +90,11 @@ func TestReplacementVolumeDarwinNative(t *testing.T) {
 				if err != nil || supported != expected {
 					t.Fatal(supported, err)
 				}
+				xattrFiles, err := FilesystemUsesXattrFiles(t.Context(), source)
+				nativeXattrFiles := observation.Valid&0x4000 == 0 || observation.Capabilities&0x4000 == 0
+				if err != nil || xattrFiles != nativeXattrFiles || xattrFiles == expected {
+					t.Fatalf("xattr storage=%v native=%v filesystem=%s: %v", xattrFiles, nativeXattrFiles, filesystem, err)
+				}
 				before := replacementSnapshotOf(t, source)
 				target, err := prepare(source, mount)
 				if err != nil {

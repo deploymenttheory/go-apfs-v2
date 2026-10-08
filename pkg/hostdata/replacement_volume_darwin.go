@@ -12,18 +12,25 @@ import (
 // Volume attributes describe the filesystem of this held object, including
 // objects below its root. Query both the value and its validity: an unknown
 // capability is not evidence that security metadata can be discarded.
-func replacementVolumeACL(file *os.File) (bool, error) {
-	var result struct {
-		Length       uint32
-		Capabilities [4]uint32
-		Valid        [4]uint32
-	}
+type volumeCapabilities struct {
+	Length       uint32
+	Capabilities [4]uint32
+	Valid        [4]uint32
+}
+
+func heldVolumeCapabilities(file *os.File) (volumeCapabilities, error) {
+	var result volumeCapabilities
 	m := nativeHeldMetadata{file: file}
 	err := m.control(func(fd int32) error {
 		list := unix.Attrlist{Bitmapcount: 5, Volattr: unix.ATTR_VOL_INFO | unix.ATTR_VOL_CAPABILITIES}
 		_, err := darwinabi.Fgetattrlist(fd, &list, unsafe.Pointer(&result), unsafe.Sizeof(result), 0)
 		return err
 	})
+	return result, err
+}
+
+func replacementVolumeACL(file *os.File) (bool, error) {
+	result, err := heldVolumeCapabilities(file)
 	if err != nil {
 		return false, err
 	}
