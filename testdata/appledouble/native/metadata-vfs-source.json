@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "revision": "f6217f891ac0bb64f3d375211650a4c1ff8ca1ea",
+  "url": "https://raw.githubusercontent.com/apple-oss-distributions/xnu/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/bsd/vfs/vfs_xattr.c",
+  "sha256": "50f5854806f1e7ddcfdc2a9242512a620fcd40189d8d82e877f0bc4a2e5dbe41",
+  "bodies": [
+    "vn_getxattr",
+    "vn_setxattr",
+    "vn_removexattr",
+    "vn_listxattr"
+  ],
+  "shims": "metadata-vfs-ast.c declares kernel helpers without implementations; vnode layout and private constants are symbolic. Both MACF/named-stream and DUAL_EAS branches are compiled. This is static source evidence, not an implementation of kernel policy or proof that this source matches an installed kernel."
+}

@@ -106,3 +106,91 @@ jobs:
           path: artifacts/ci-observability/
           compression-level: 9
           if-no-files-found: error
+
+  filesystem-capture:
+    name: Native metadata filesystem (${{ matrix.major }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-15, major: 15 }
+          - { os: macos-latest, major: 26 }
+          - { os: xcode-27, major: 27 }
+    env:
+      CGO_ENABLED: "0"
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
+      - name: Capture filesystem-selected metadata and both Apple dispatch ASTs
+        run: |
+          apfs-ci-runner --suite metadata-transport/filesystem/capture --timeout 10m -- go run scripts/capture-metadata-filesystem.go -major ${{ matrix.major }} -out artifacts/metadata-filesystem/native.json
+      - name: Independently validate complete native inventory
+        run: |
+          apfs-ci-runner --suite metadata-transport/filesystem/validate --timeout 2m -- go run scripts/capture-metadata-filesystem.go -verify artifacts/metadata-filesystem/native.json -major ${{ matrix.major }}
+      - name: Retain every native result and compiler input
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: filesystem-metadata-macos${{ matrix.major }}
+          path: artifacts/metadata-filesystem/
+          include-hidden-files: true
+          if-no-files-found: error
+      - name: Retain complete CI command diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-observability-metadata-filesystem-${{ matrix.major }}-${{ github.run_attempt }}
+          path: artifacts/ci-observability/
+          include-hidden-files: true
+          if-no-files-found: error
+
+  filesystem-evidence:
+    name: Filesystem metadata evidence (${{ matrix.os }})
+    needs: filesystem-capture
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    env:
+      CGO_ENABLED: "0"
+      GOTOOLCHAIN: local
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
+      - uses: actions/download-artifact@v8.0.1
+        with:
+          pattern: filesystem-metadata-macos*
+          path: artifacts/filesystem-producers
+      - name: Require all three complete producer corpora
+        run: |
+          set -euo pipefail
+          for version in 15 26 27; do
+            apfs-ci-runner --suite metadata-transport/filesystem/producer-$version --timeout 2m -- go run scripts/capture-metadata-filesystem.go -major "$version" -verify "artifacts/filesystem-producers/filesystem-metadata-macos$version/native.json"
+          done
+      - name: Reject missing cases and corrupted oracle evidence
+        run: |
+          apfs-ci-runner --suite metadata-transport/filesystem/negative-controls --timeout 2m -- go test -timeout 90s -json -count=1 scripts/capture-metadata-filesystem.go scripts/capture-metadata-filesystem_test.go
+      - name: Retain complete CI command diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-observability-metadata-filesystem-evidence-${{ strategy.job-index }}-${{ github.run_attempt }}
+          path: artifacts/ci-observability/
+          include-hidden-files: true
+          if-no-files-found: error
