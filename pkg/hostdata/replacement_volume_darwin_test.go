@@ -147,7 +147,13 @@ func replacementTestVolume(t *testing.T, filesystem string) string {
 		return data
 	}
 	run("create", "-size", "128m", "-fs", filesystem, "-volname", "METADATA", image)
-	attached := run("attach", "-plist", "-nobrowse", "-owners", "on", "-mountpoint", mount, image)
+	// Match capture-metadata-filesystem.go: FAT has no stored Unix owners.
+	// Forcing ownership ties fixture access to the headless mount service.
+	owners := "on"
+	if filesystem == "MS-DOS FAT32" || filesystem == "ExFAT" {
+		owners = "off"
+	}
+	attached := run("attach", "-plist", "-nobrowse", "-owners", owners, "-mountpoint", mount, image)
 	device := mount
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
