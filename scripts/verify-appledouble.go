@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 
 	"path/filepath"
@@ -97,11 +98,8 @@ func verify() error {
 	if copyTotal == 0 || copyCovered*100 <= copyTotal*95 {
 		return fmt.Errorf("ACL copy coverage must exceed 95%%: %d/%d", copyCovered, copyTotal)
 	}
-	files, err := filepath.Glob("pkg/appledouble/*")
-	if err != nil {
-		return err
-	}
-	files = append(files, "testdata/cli/component-links.probe.json", "scripts/verify-appledouble.go", "go.mod", "go.sum")
+	files := []string{"pkg/appledouble"}
+	files = append(files, "testdata/cli/component-links.probe.json", "scripts/verify-appledouble.go", "scripts/verify-appledouble_test.go", "go.mod", "go.sum")
 	files = append(files, "testdata/appledouble/native/large.ad.gz", "testdata/appledouble/native/probe.c", "scripts/verify-appledouble-native.go")
 	files = append(files, "testdata/appledouble/native/names.json")
 	files = append(files, "testdata/appledouble/native/records.json", "testdata/appledouble/native/list.c")
@@ -110,18 +108,13 @@ func verify() error {
 	files = append(files, "testdata/appledouble/native/quarantine-contexts-macos26.json.gz", "testdata/appledouble/native/quarantine-process-capture.h", "testdata/appledouble/native/quarantine-contexts-macos27.json.gz", "testdata/appledouble/native/quarantine-runtime-macos27-no-creation.json.gz", "testdata/appledouble/native/quarantine-processes-macos26.json.gz", "testdata/appledouble/native/quarantine-processes-macos27.json.gz", "testdata/appledouble/native/quarantine-normalization-macos27.json.gz", "testdata/appledouble/native/quarantine-normalization-macos26.json.gz")
 	files = append(files, "testdata/appledouble/native/filesec.c", "testdata/appledouble/native/filesec.json.gz", "scripts/verify-appledouble-filesec.go")
 	files = append(files, "testdata/appledouble/native/acl-copy.c", "testdata/appledouble/native/acl-copy.json.gz", "scripts/verify-appledouble-acl-copy.go")
-	sources := map[string]string{}
 	files = append(files, "testdata/appledouble/native/acl-identity.c", "testdata/appledouble/native/acl-identities.json.gz")
 	files = append(files, "testdata/appledouble/native/acl-inherit.c", "testdata/appledouble/native/acl-inherit.json.gz", "scripts/verify-appledouble-acl-inherit.go")
 	files = append(files, "testdata/appledouble/native/quarantine-destination-capture.h", "testdata/appledouble/native/quarantine-destinations-macos26.json.gz", "testdata/appledouble/native/quarantine-destinations-macos27.json.gz")
 	files = append(files, "testdata/appledouble/native/quarantine-existing-capture.h", "testdata/appledouble/native/quarantine-existing-macos26.json.gz", "testdata/appledouble/native/quarantine-existing-macos27.json.gz")
-	for _, name := range files {
-		b, err := os.ReadFile(name)
-		if err != nil {
-			return err
-		}
-		sum := sha256.Sum256(b)
-		sources[filepath.ToSlash(name)] = hex.EncodeToString(sum[:])
+	sources, err := sourceHashes(files)
+	if err != nil {
+		return err
 	}
 	if sources["testdata/cli/component-links.probe.json"] != "450b5a23661072a6de625c55e37de0af2602253f1ab71b063e889fbb71985865" {
 		return fmt.Errorf("native pkgbuild fixture provenance mismatch")
@@ -143,4 +136,33 @@ func verify() error {
 		return fmt.Errorf("AppleDouble unit coverage must exceed 95%% without skipped tests")
 	}
 	return nil
+}
+
+// sourceHashes includes nested testdata, especially retained fuzz regressions.
+// Directories organize evidence; only regular files contribute byte hashes.
+func sourceHashes(paths []string) (map[string]string, error) {
+	sources := map[string]string{}
+	for _, root := range paths {
+		if err := filepath.WalkDir(root, func(name string, entry fs.DirEntry, walkErr error) error {
+			if walkErr != nil {
+				return walkErr
+			}
+			if entry.IsDir() {
+				return nil
+			}
+			if !entry.Type().IsRegular() {
+				return fmt.Errorf("non-regular evidence source: %s", name)
+			}
+			b, err := os.ReadFile(name)
+			if err != nil {
+				return err
+			}
+			sum := sha256.Sum256(b)
+			sources[filepath.ToSlash(name)] = hex.EncodeToString(sum[:])
+			return nil
+		}); err != nil {
+			return nil, err
+		}
+	}
+	return sources, nil
 }
