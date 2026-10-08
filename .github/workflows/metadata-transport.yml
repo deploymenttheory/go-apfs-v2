@@ -131,6 +131,10 @@ jobs:
       - name: Capture filesystem-selected metadata and both Apple dispatch ASTs
         run: |
           apfs-ci-runner --suite metadata-transport/filesystem/capture --timeout 10m -- go run scripts/capture-metadata-filesystem.go -major ${{ matrix.major }} -out artifacts/metadata-filesystem/native.json
+      - name: Capture COPYFILE_PACK empty attributes on all native filesystems
+        run: |
+          apfs-ci-runner --suite metadata-transport/filesystem/packed-empty-capture --timeout 3m -- go run scripts/capture-metadata-filesystem.go -profile packed-empty -major ${{ matrix.major }} -out artifacts/metadata-filesystem/packed/native.json
+          apfs-ci-runner --suite metadata-transport/filesystem/packed-empty-validate --timeout 2m -- go run scripts/capture-metadata-filesystem.go -profile packed-empty -verify artifacts/metadata-filesystem/packed/native.json -major ${{ matrix.major }}
       - name: Independently validate complete native inventory
         run: |
           apfs-ci-runner --suite metadata-transport/filesystem/validate --timeout 2m -- go run scripts/capture-metadata-filesystem.go -verify artifacts/metadata-filesystem/native.json -major ${{ matrix.major }}
@@ -182,6 +186,7 @@ jobs:
           set -euo pipefail
           for version in 15 26 27; do
             apfs-ci-runner --suite metadata-transport/filesystem/producer-$version --timeout 2m -- go run scripts/capture-metadata-filesystem.go -major "$version" -verify "artifacts/filesystem-producers/filesystem-metadata-macos$version/native.json"
+            apfs-ci-runner --suite metadata-transport/filesystem/packed-empty-producer-$version --timeout 2m -- go run scripts/capture-metadata-filesystem.go -profile packed-empty -major "$version" -verify "artifacts/filesystem-producers/filesystem-metadata-macos$version/packed/native.json"
           done
       - name: Replay fresh native FAT observations through the Go filesystem view
         env:

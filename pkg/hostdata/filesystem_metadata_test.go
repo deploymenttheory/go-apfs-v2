@@ -8,7 +8,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"math"
 	"os"
@@ -32,13 +31,10 @@ func TestFilesystemMetadataNativeFATReadback(t *testing.T) {
 		ListBytes string `json:"list_bytes"`
 		ListErrno int    `json:"list_errno"`
 	}
-	for _, major := range []int{15, 26, 27} {
-		t.Run(fmt.Sprint(major), func(t *testing.T) {
-			path := fmt.Sprintf("../../testdata/appledouble/native/metadata-filesystem-macos%d.json.gz", major)
+	for _, profile := range filesystemMetadataCorpora() {
+		t.Run(profile.Name, func(t *testing.T) {
+			path := profile.Path
 			fresh := os.Getenv("APFS_METADATA_FILESYSTEM_PRODUCERS")
-			if fresh != "" {
-				path = filepath.Join(fresh, fmt.Sprintf("filesystem-metadata-macos%d", major), "native.json")
-			}
 			f, err := os.Open(path)
 			if err != nil {
 				t.Fatal(err)
@@ -55,6 +51,7 @@ func TestFilesystemMetadataNativeFATReadback(t *testing.T) {
 			}
 			var c struct {
 				Complete bool
+				Profile  string
 				Cases    []struct {
 					ID            string
 					Before, After map[string]entry
@@ -67,7 +64,7 @@ func TestFilesystemMetadataNativeFATReadback(t *testing.T) {
 			if err = json.NewDecoder(reader).Decode(&c); err != nil {
 				t.Fatal(err)
 			}
-			if !c.Complete || len(c.Cases) != 960 {
+			if !c.Complete || len(c.Cases) != profile.Cases || c.Profile != profile.Profile {
 				t.Fatal("incomplete native producer")
 			}
 			tested := 0
@@ -131,7 +128,7 @@ func TestFilesystemMetadataNativeFATReadback(t *testing.T) {
 					tested++
 				}
 			}
-			if tested != 960 {
+			if tested != profile.Cases {
 				t.Fatalf("lost FAT snapshots: %d", tested)
 			}
 		})

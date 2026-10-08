@@ -6,7 +6,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
 	"io"
 	"os"
@@ -16,13 +15,10 @@ import (
 )
 
 func TestFilesystemMetadataNativeFATRemoval(t *testing.T) {
-	for _, major := range []int{15, 26, 27} {
-		t.Run(fmt.Sprint(major), func(t *testing.T) {
-			path := fmt.Sprintf("../../testdata/appledouble/native/metadata-filesystem-macos%d.json.gz", major)
+	for _, profile := range filesystemMetadataCorpora() {
+		t.Run(profile.Name, func(t *testing.T) {
+			path := profile.Path
 			fresh := os.Getenv("APFS_METADATA_FILESYSTEM_PRODUCERS")
-			if fresh != "" {
-				path = filepath.Join(fresh, fmt.Sprintf("filesystem-metadata-macos%d", major), "native.json")
-			}
 			f, err := os.Open(path)
 			if err != nil {
 				t.Fatal(err)
@@ -43,6 +39,7 @@ func TestFilesystemMetadataNativeFATRemoval(t *testing.T) {
 			}
 			var corpus struct {
 				Complete bool
+				Profile  string
 				Cases    []struct {
 					ID            string
 					Before, After map[string]entry
@@ -52,7 +49,7 @@ func TestFilesystemMetadataNativeFATRemoval(t *testing.T) {
 			if err = json.NewDecoder(reader).Decode(&corpus); err != nil {
 				t.Fatal(err)
 			}
-			if !corpus.Complete || len(corpus.Cases) != 960 {
+			if !corpus.Complete || len(corpus.Cases) != profile.Cases || corpus.Profile != profile.Profile {
 				t.Fatal("incomplete native producer")
 			}
 			tested := 0
@@ -121,8 +118,8 @@ func TestFilesystemMetadataNativeFATRemoval(t *testing.T) {
 					}
 				})
 			}
-			if tested != 120 {
-				t.Fatalf("lost removal cases: got %d want 120", tested)
+			if tested != profile.Cases/8 {
+				t.Fatalf("lost removal cases: got %d want %d", tested, profile.Cases/8)
 			}
 		})
 	}

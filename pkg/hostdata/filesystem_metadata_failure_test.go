@@ -110,7 +110,9 @@ func TestFilesystemMetadataSidecarFailures(t *testing.T) {
 	if _, err = v.List(ctx, 100); err == nil {
 		t.Fatal("invalid ATTR header accepted")
 	}
-	duplicate := &appledouble.StreamFile{Attrs: []appledouble.StreamAttr{{Name: "duplicate"}, {Name: "duplicate"}}}
+	// Nonempty values isolate duplicate-name validation from the earlier
+	// native rejection of COPYFILE_PACK zero-offset empty values.
+	duplicate := &appledouble.StreamFile{Attrs: []appledouble.StreamAttr{{Name: "duplicate", Value: bytes.NewReader([]byte("one"))}, {Name: "duplicate", Value: bytes.NewReader([]byte("two"))}}}
 	var buf bytes.Buffer
 	if _, err = duplicate.EncodeTo(ctx, &buf, appledouble.DefaultStreamLimits()); err != nil {
 		t.Fatal(err)

@@ -46,6 +46,7 @@ type metadataEntry struct {
 	Target string `json:"target,omitempty"`
 }
 type metadataCapture struct {
+	Profile      string            `json:"profile,omitempty"`
 	Schema       int               `json:"schema"`
 	Complete     bool              `json:"complete"`
 	GoReadCases  int               `json:"go_read_cases"`
@@ -160,7 +161,11 @@ func metadataMountOwnership(filesystem string) string {
 	return "on"
 }
 
-func captureMetadataFilesystem(out string) (result error) {
+func captureMetadataFilesystem(out, profile string) (result error) {
+	states, err := metadataProfileStates(profile)
+	if err != nil {
+		return err
+	}
 	if runtime.GOOS != "darwin" {
 		return fmt.Errorf("native metadata capture requires macOS")
 	}
@@ -176,7 +181,7 @@ func captureMetadataFilesystem(out string) (result error) {
 		return err
 	}
 	defer func() { result = errors.Join(result, os.RemoveAll(work)) }()
-	capture := metadataCapture{Schema: 1, Sources: map[string]string{}}
+	capture := metadataCapture{Schema: 1, Profile: profile, Sources: map[string]string{}}
 	defer func() {
 		encoded, err := json.MarshalIndent(capture, "", "  ")
 		if err == nil {
@@ -264,7 +269,11 @@ func captureMetadataFilesystem(out string) (result error) {
 	if err = os.WriteFile(seedPath, []byte("payload"), 0644); err != nil {
 		return err
 	}
-	installed, err := metadataCommand(oracle, seedPath, "seed")
+	seedAction := "seed"
+	if profile == "packed-empty" {
+		seedAction = "seed-empty"
+	}
+	installed, err := metadataCommand(oracle, seedPath, seedAction)
 	if err != nil {
 		return err
 	}
@@ -283,7 +292,7 @@ func captureMetadataFilesystem(out string) (result error) {
 	}
 	capture.Sources["seed.appledouble"] = hash(seed)
 	capture.Seed = bytes.Clone(seed)
-	if err = validateMetadataSeed(seed); err != nil {
+	if err = validateMetadataProfileSeed(seed, profile); err != nil {
 		return err
 	}
 	for fi, filesystem := range metadataFilesystems {
@@ -339,7 +348,7 @@ func captureMetadataFilesystem(out string) (result error) {
 			capture.Sources[name] = hash(diagnostic)
 			fmt.Printf("MOUNT %s owners=%s %s", filesystem, metadataMountOwnership(filesystem), diagnostic)
 			for _, kind := range []string{"file", "directory"} {
-				for _, state := range metadataStates {
+				for _, state := range states {
 					for _, action := range metadataActions {
 						id := fmt.Sprintf("%s/%s/%s/%s", filesystem, kind, state, action)
 						root := filepath.Join(mount, "case")
@@ -391,14 +400,30 @@ func captureMetadataFilesystem(out string) (result error) {
 }
 
 // This validates evidence membership and native input controls, not Go parity.
-func validateMetadataSeed(seed []byte) error {
+func metadataProfileStates(profile string) ([]string, error) {
+	switch profile {
+	case "":
+		return metadataStates, nil
+	case "packed-empty":
+		return []string{"sidecar"}, nil
+	default:
+		return nil, fmt.Errorf("unknown filesystem metadata profile %q", profile)
+	}
+}
+
+func validateMetadataProfileSeed(seed []byte, profile string) error {
 	f, err := appledouble.Decode(seed)
 	if err != nil {
 		return err
 	}
 	attrs := f.Xattrs()
 	for _, name := range []string{"com.example.phase2", appledouble.ResourceForkName} {
-		if !bytes.Equal(attrs[name], []byte("native-value")) {
+		expected := []byte("native-value")
+		if profile == "packed-empty" && name == "com.example.phase2" {
+			expected = nil
+		}
+		actual, present := attrs[name]
+		if !present || !bytes.Equal(actual, expected) {
 			return fmt.Errorf("native seed missing %s", name)
 		}
 	}
@@ -467,6 +492,10 @@ func metadataVFSAST(out string, sources map[string]string) error {
 }
 
 func validateMetadataCapture(c metadataCapture) error {
+	states, err := metadataProfileStates(c.Profile)
+	if err != nil {
+		return err
+	}
 	if c.Schema != 1 || !c.Complete || c.Compiler == "" || c.SDK == "" || c.Architecture == "" || c.GoVersion == "" {
 		return errors.New("incomplete native metadata capture")
 	}
@@ -490,13 +519,13 @@ func validateMetadataCapture(c metadataCapture) error {
 	if c.Sources["seed.appledouble"] != hex.EncodeToString(seedHash[:]) {
 		return errors.New("seed provenance mismatch")
 	}
-	if err = validateMetadataSeed(c.Seed); err != nil {
+	if err = validateMetadataProfileSeed(c.Seed, c.Profile); err != nil {
 		return err
 	}
 	expected := map[string]bool{}
 	for _, fs := range metadataFilesystems {
 		for _, kind := range []string{"file", "directory"} {
-			for _, state := range metadataStates {
+			for _, state := range states {
 				for _, action := range metadataActions {
 					expected[fs+"/"+kind+"/"+state+"/"+action] = true
 				}
@@ -674,6 +703,7 @@ func qualifyMetadataFilesystemRead(path string, raw json.RawMessage) (err error)
 }
 
 func main() {
+	profile := flag.String("profile", "", "native input profile: default or packed-empty")
 	out := flag.String("out", "artifacts/metadata-filesystem/native.json", "native capture path")
 	verify := flag.String("verify", "", "validate a complete native capture without executing native commands")
 	major := flag.Uint("major", 0, "require the native producer's macOS major version")
@@ -684,6 +714,9 @@ func main() {
 		capture, err = readMetadataCapture(*verify)
 		if err == nil {
 			err = validateMetadataCapture(capture)
+		}
+		if err == nil && *profile != "" && capture.Profile != *profile {
+			err = errors.New("wrong native input profile")
 		}
 		if err == nil && *major != 0 {
 			var v osversion.Version
@@ -701,7 +734,7 @@ func main() {
 			}
 		}
 		if err == nil {
-			err = captureMetadataFilesystem(*out)
+			err = captureMetadataFilesystem(*out, *profile)
 		}
 	}
 	if err != nil {
