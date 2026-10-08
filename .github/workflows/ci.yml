@@ -310,6 +310,11 @@ jobs:
           path: artifacts/held-xattr-list/
           if-no-files-found: error
 
+      - name: AppleDouble evidence collection regressions
+        env:
+          CGO_ENABLED: "0"
+        run: |
+          apfs-ci-runner --suite ci/test/appledouble-evidence --timeout 5m -- go test -json -count=1 scripts/verify-appledouble.go scripts/verify-appledouble_test.go
       - name: AppleDouble unit tests and coverage above 95%
         env:
           CGO_ENABLED: "0"
