@@ -185,7 +185,7 @@ jobs:
           if-no-files-found: error
   test:
     name: Test (${{ matrix.os }})
-    needs: name-comparison
+    needs: [name-comparison, filesystem-unit]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -932,6 +932,11 @@ jobs:
         with:
           name: name-comparison-${{ matrix.os }}
           path: artifacts/name-comparison-coverage
+      - name: Download same-revision filesystem metadata evidence
+        uses: actions/download-artifact@v8
+        with:
+          name: filesystem-metadata-coverage-${{ matrix.os }}
+          path: artifacts/filesystem-metadata-coverage
       - name: Audit portable AppleDouble qualification evidence
         env:
           CGO_ENABLED: "0"
@@ -1460,4 +1465,42 @@ jobs:
           name: ci-observability-ci-test-${{ strategy.job-index || 0 }}-${{ github.run_attempt }}
           path: artifacts/ci-observability/
           compression-level: 9
+          if-no-files-found: error
+
+  filesystem-unit:
+    name: Filesystem metadata reads (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    env:
+      CGO_ENABLED: "0"
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
+      - name: Replay all retained producers and require over 95 percent coverage
+        run: |
+          apfs-ci-runner --suite ci/filesystem/reads --timeout 5m -- go run scripts/verify-filesystem-metadata.go
+      - name: Retain focused coverage
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: filesystem-metadata-coverage-${{ matrix.os }}
+          path: artifacts/filesystem-metadata-coverage/
+          include-hidden-files: true
+          if-no-files-found: error
+      - name: Retain complete CI command diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-observability-filesystem-metadata-${{ matrix.os }}-${{ github.run_attempt }}
+          path: artifacts/ci-observability/
+          include-hidden-files: true
           if-no-files-found: error

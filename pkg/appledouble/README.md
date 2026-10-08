@@ -186,6 +186,7 @@ The remaining work serving codesign is in the surrounding operation packages:
 
 | Area | Remaining work |
 | --- | --- |
+| Filesystem-selected metadata | Complete version-qualified mutations, association/lifecycle handling and codesign integration after the [shared filesystem reader](../../docs/metadata-filesystem.md); retain genuine macOS 15/26/27 captures and foreign readback |
 | Foreign recompression | Qualify [the recompression package](../recompression) on every host, including genuine macOS 15/26/27 acquisition and permission captures, partial publication and native readback of foreign-produced images |
 | Operation integration | Consume the qualified shared APIs in codesign, preserving native compression applicability, admission failures and post-commit outcomes |
 | Scale and lifecycle | Complete downstream shared memory/storage/handle accounting, populated large-file acceptance and operation failure/cancellation matrices |

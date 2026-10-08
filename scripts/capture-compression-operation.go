@@ -417,6 +417,13 @@ func comparison(c trial) ([]byte, error) {
 		return nil, errors.New("missing volume context")
 	}
 	observation["volume_flags"] = uint32(flags) & 0x80
+	// CompressFile returning true reports queue acceptance. errno is not an
+	// error result on that path: successful calls can leave a prior errno in
+	// the caller thread. Keep the raw observation, all worker errors and final
+	// state intact; compare errno only when queue acquisition was rejected.
+	if accepted, ok := observation["accepted"].(bool); ok && accepted {
+		observation["errno"] = 0
+	}
 	b, e := json.Marshal(observation)
 	if e != nil {
 		return nil, e

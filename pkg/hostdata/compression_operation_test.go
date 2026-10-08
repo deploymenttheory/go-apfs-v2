@@ -241,7 +241,7 @@ func TestRecompressNativeStorage(t *testing.T) {
 	testRecompressNativeStorage(t, compressionLifecycleTrials(t))
 }
 func TestRecompressNativeOperationProfiles(t *testing.T) {
-	for _, name := range []string{"compression-operation", "compression-operation-macos26", "compression-operation-macos15"} {
+	for _, name := range []string{"compression-operation", "compression-operation-macos26", "compression-operation-macos15", "allocation-observations/macos27-first", "allocation-observations/macos27-second"} {
 		t.Run(name, func(t *testing.T) { testRecompressNativeStorage(t, compressionTrials(t, name, 330)) })
 	}
 }

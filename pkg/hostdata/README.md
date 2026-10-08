@@ -34,6 +34,7 @@ formats remain in `pkg/appledouble`; portable persistence remains in
 | Discover only a contained entry's type, independently of data, ACL and EA reads | `ReadEntryType(root, name)`; final links are inspected and basic-attribute authorization remains effective. See [rooted entry types](../../docs/rooted-entry-type.md). |
 | Discover a contained entry without reading its data or EAs | `StatMetadata(root, name)`; final symlinks are not followed and host metadata permissions remain effective. See [rooted metadata discovery](../../docs/rooted-metadata-stat.md). |
 | Read a contained regular file without requesting ACL or EA read rights | `OpenContentFileRead(root, name)`; read-only held identity, final links rejected. See [rooted content reads](../../docs/rooted-content-reader.md). |
+| Discover filesystem-selected attributes without a sidecar flag | `OpenFilesystemMetadata(ctx, root, name)` with `List`, bounded `Read` and owned `OpenValue`; see [filesystem metadata reads and outstanding writes](../../docs/metadata-filesystem.md). |
 | Inspect or assign one native host attribute | Strict held xattr APIs below; inspect actual errors and readback normalization. |
 | Preserve complete logical metadata between hosts/images | `pkg/metatransport` plus APFS/HFS streaming readers/writers; unsupported local native storage does not discard a logical value. |
 | Restore a validated complete AppleDouble snapshot | `RestoreAppleDouble`; validate first, then perform ordered destination effects. |
