@@ -77,8 +77,7 @@ func verify() error {
 	cmd := cirunner.Command("go", "test", "-count=1", "-json", "-run", "^Test(Typed|Darwin|Held|Path|Quarantine|ACLIdentity|LibSystem|SandboxCapture|CaptureXattrs|XattrCapture|XattrValues|Metadata|OpenMetadata|EntryType)", "-covermode=atomic", "-coverprofile="+profile, "-coverpkg=./internal/darwinabi", "./pkg/hostdata", "./pkg/hostdata/acl", "./pkg/hostdata/sandbox", "./internal/darwinabi")
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0", "APFS_DARWIN_WRAPPERS_ORACLE="+oracle)
 	cmd.Stdout = io.MultiWriter(os.Stdout, log, &transcript)
-	cmd.Stderr = io.MultiWriter(os.Stderr, log)
-	if e := cmd.Run(); e != nil {
+	if e := cmd.RunWithDiagnostics(log.Name() + ".stderr.log"); e != nil {
 		return e
 	}
 	functions, err := cirunner.Command("go", "tool", "cover", "-func="+profile).CombinedOutput()

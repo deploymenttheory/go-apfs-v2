@@ -67,6 +67,9 @@ func main() {
 }
 
 func runReportingGate(ctx context.Context) error {
+	if err := evidenceaudit.StructuredStreams(os.DirFS("."), []string{"scripts"}); err != nil {
+		return err
+	}
 	if err := evidenceaudit.QualificationGraph(os.DirFS("."), ".github/workflows/ci.yml", "qualification-complete", qualificationFamilies); err != nil {
 		return err
 	}

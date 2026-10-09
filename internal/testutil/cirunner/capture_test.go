@@ -3,6 +3,7 @@ package cirunner
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"os"
@@ -129,5 +130,62 @@ func TestCaptureJoinsCloseFailuresAndPreservesCancellation(t *testing.T) {
 		if err := os.Remove(name); err != nil {
 			t.Fatal(err)
 		}
+	}
+}
+
+func TestRunWithDiagnostics(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := filepath.Join(t.TempDir(), "command.stderr.log")
+	reporter, _ := testReporter(t)
+	command := helper(t, "json-diagnostics", reporter)
+	command.Stdout = stdout
+	if err := command.RunWithDiagnostics(stderr); err != nil {
+		t.Fatal(err)
+	}
+	if !json.Valid(bytes.TrimSpace(stdout.Bytes())) {
+		t.Fatal("structured stdout corrupted", stdout.String())
+	}
+	diagnostic, err := os.ReadFile(stderr)
+	if err != nil || !bytes.Contains(diagnostic, []byte("go: downloading")) {
+		t.Fatal("diagnostic lost", err)
+	}
+	if err := os.Remove(stderr); err != nil {
+		t.Fatal("diagnostic handle retained", err)
+	}
+}
+
+func TestRunWithDiagnosticsFailureLifecycle(t *testing.T) {
+	reporter, _ := testReporter(t)
+	existing := filepath.Join(t.TempDir(), "prior.stderr.log")
+	if err := os.WriteFile(existing, []byte("prior"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	command := helper(t, "bytes", reporter)
+	if err := command.RunWithDiagnostics(existing); !errors.Is(err, os.ErrExist) || command.Process != nil {
+		t.Fatal("prior diagnostics reused", err)
+	}
+	command = helper(t, "bytes", reporter)
+	command.Stderr = io.Discard
+	if err := command.RunWithDiagnostics(existing); err == nil || command.Process != nil {
+		t.Fatal("configured diagnostics replaced", err)
+	}
+	diagnostic := &captureCloser{err: io.ErrClosedPipe}
+	command = helper(t, "exit", reporter)
+	command.Stdout = io.Discard
+	err := command.runWithDiagnostics("diagnostics", func(string) (io.WriteCloser, error) { return diagnostic, nil })
+	var status *exec.ExitError
+	if !diagnostic.closed || !errors.Is(err, io.ErrClosedPipe) || !errors.As(err, &status) || status.ExitCode() != 7 || diagnostic.Len() != 160000 {
+		t.Fatal("original exit or failed-close evidence lost", err)
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	command = CommandContext(ctx, os.Args[0], "-test.run=^TestCommandHelper$")
+	command.Options.Reporter = reporter
+	path := filepath.Join(t.TempDir(), "canceled.stderr.log")
+	if err := command.RunWithDiagnostics(path); !errors.Is(err, context.Canceled) || command.Process != nil {
+		t.Fatal("cancellation lost", err)
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal("canceled command retained diagnostics handle", err)
 	}
 }

@@ -220,8 +220,8 @@ func verify(capture bool) error {
 		cmd := cirunner.Command("go", "test", "-json", "-count=1", "./pkg/hostdata", "-run", "^TestPathCapturedMutationNativeObservations$")
 		cmd.Env = append(os.Environ(), "CGO_ENABLED=0", "APPLEDOUBLE_MUTATION_FIXTURE="+current)
 		var transcript bytes.Buffer
-		cmd.Stdout, cmd.Stderr = io.MultiWriter(os.Stdout, log, &transcript), io.MultiWriter(os.Stderr, log)
-		runErr, closeErr := cmd.Run(), log.Close()
+		cmd.Stdout = io.MultiWriter(os.Stdout, log, &transcript)
+		runErr, closeErr := cmd.RunWithDiagnostics(log.Name()+".stderr.log"), log.Close()
 		if runErr != nil || closeErr != nil {
 			return fmt.Errorf("current provider replay: command=%v close=%v", runErr, closeErr)
 		}

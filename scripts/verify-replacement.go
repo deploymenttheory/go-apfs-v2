@@ -44,8 +44,7 @@ func verify() error {
 	full := cirunner.CommandContext(ctx, "go", "test", "-count=1", "-json", "-covermode=atomic", "-coverprofile="+fullProfile, "./pkg/hostdata")
 	full.Env = append(os.Environ(), "CGO_ENABLED=0")
 	full.Stdout = io.MultiWriter(os.Stdout, fullLog)
-	full.Stderr = io.MultiWriter(os.Stderr, fullLog)
-	if e = errors.Join(full.Run(), fullLog.Close()); e != nil {
+	if e = errors.Join(full.RunWithDiagnostics(fullLog.Name()+".stderr.log"), fullLog.Close()); e != nil {
 		return e
 	}
 	packageCovered, packageTotal, e := completeHostdataCoverage(fullProfile)
@@ -65,8 +64,7 @@ func verify() error {
 	cmd := cirunner.CommandContext(ctx, "go", "test", "-count=1", "-json", "-run", "^Test(Replacement|RootReplacement)", "-covermode=atomic", "-coverprofile="+profile, "-coverpkg=./pkg/hostdata/...", "./pkg/hostdata")
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 	cmd.Stdout = io.MultiWriter(os.Stdout, log, &transcript)
-	cmd.Stderr = io.MultiWriter(os.Stderr, log)
-	if e := cmd.Run(); e != nil {
+	if e := cmd.RunWithDiagnostics(log.Name() + ".stderr.log"); e != nil {
 		return e
 	}
 	passed := 0

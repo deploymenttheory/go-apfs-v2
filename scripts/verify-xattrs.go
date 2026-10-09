@@ -42,8 +42,7 @@ func verify() error {
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 	var transcript bytes.Buffer
 	cmd.Stdout = io.MultiWriter(os.Stdout, log, &transcript)
-	cmd.Stderr = io.MultiWriter(os.Stderr, log)
-	if err := cmd.Run(); err != nil {
+	if err := cmd.RunWithDiagnostics(log.Name() + ".stderr.log"); err != nil {
 		return err
 	}
 	passed, listed, written := 0, 0, 0

@@ -42,8 +42,7 @@ func verify() error {
 	cmd := cirunner.Command("go", "test", "-count=1", "-json", "-covermode=atomic", "-coverprofile="+profile, "./pkg/appledouble")
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 	cmd.Stdout = io.MultiWriter(os.Stdout, log, &transcript)
-	cmd.Stderr = io.MultiWriter(os.Stderr, log)
-	if err := cmd.Run(); err != nil {
+	if err := cmd.RunWithDiagnostics(log.Name() + ".stderr.log"); err != nil {
 		return err
 	}
 	passed := 0
