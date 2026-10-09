@@ -1,9 +1,7 @@
 name: Compression storage state
 
 on:
-  push:
-    branches: [main]
-  pull_request:
+  workflow_call:
   workflow_dispatch:
 
 concurrency:

@@ -15,6 +15,42 @@ permissions:
   contents: read
 
 jobs:
+  carrier-recompression:
+    uses: ./.github/workflows/carrier-recompression.yml
+
+  compression-native:
+    uses: ./.github/workflows/compression-native.yml
+
+  compression-owned:
+    uses: ./.github/workflows/compression-owned.yml
+
+  compression-state:
+    uses: ./.github/workflows/compression-state.yml
+
+  hfs-special-names:
+    uses: ./.github/workflows/hfs-special-names.yml
+
+  large-resource-fork:
+    uses: ./.github/workflows/large-resource-fork.yml
+
+  metadata-transport:
+    uses: ./.github/workflows/metadata-transport.yml
+
+  name-admission:
+    uses: ./.github/workflows/name-admission.yml
+
+  name-cache-ast:
+    uses: ./.github/workflows/name-cache-ast.yml
+
+  name-collation:
+    uses: ./.github/workflows/name-collation.yml
+
+  replacement:
+    uses: ./.github/workflows/replacement.yml
+
+  fuzz:
+    uses: ./.github/workflows/fuzz.yml
+
   ci-reporting:
     uses: ./.github/workflows/ci-reporting.yml
 
@@ -773,49 +809,8 @@ jobs:
           name: compression-lifecycle-coverage-${{ matrix.os }}
           path: artifacts/compression-lifecycle-coverage/
           if-no-files-found: error
-      # Match the dedicated owned-compression workflow: ext4's combined xattr
-      # block cannot reliably hold the complete existing 4 KB-plus-companions
-      # fixture. Keep that fixture and the no-skip gate; scope tmpfs to this gate.
-      - name: Provide native Linux storage for the complete attribute fixture
-        if: runner.os == 'Linux'
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p artifacts/compression-owned-coverage "$RUNNER_TEMP/owned-compression"
-          sudo -n mount -t tmpfs -o size=2G,mode=1777 tmpfs "$RUNNER_TEMP/owned-compression"
-          findmnt --target "$RUNNER_TEMP/owned-compression" > artifacts/compression-owned-coverage/test-filesystem.txt
-      - name: Owned native bindings and complete hostdata above 95 percent coverage (Linux tmpfs)
-        if: runner.os == 'Linux'
-        env:
-          CGO_ENABLED: "0"
-          TMPDIR: ${{ runner.temp }}/owned-compression
-        run: |
-          apfs-ci-runner --suite ci/test/step89 --timeout 60m -- go run scripts/verify-compression-owned.go
-      # Not Git bash on Windows: its MSYS runtime enables backup and restore
-      # privileges in the token it hands to children, which lets every open with
-      # backup semantics bypass the DACL denials the hostdata suite asserts.
-      - name: Owned native bindings and complete hostdata above 95 percent coverage
-        if: runner.os != 'Linux'
-        env:
-          CGO_ENABLED: "0"
-        run: |
-          apfs-ci-runner --suite ci/test/step89 --timeout 60m -- go run scripts/verify-compression-owned.go
-      - name: Release Linux owned-binding qualification filesystem
-        if: always() && runner.os == 'Linux'
-        shell: bash
-        run: |
-          set -euo pipefail
-          if mountpoint -q "$RUNNER_TEMP/owned-compression"; then
-            sudo -n umount "$RUNNER_TEMP/owned-compression"
-          fi
-      - name: Upload owned compression coverage and exact evidence
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          include-hidden-files: true
-          name: compression-owned-coverage-${{ matrix.os }}
-          path: artifacts/compression-owned-coverage/
-          if-no-files-found: error
+      # The compression-owned reusable workflow retains this exact coverage,
+      # focused no-skip suite, Linux tmpfs setup and complete diagnostics.
       - name: Active and inactive compression storage above 95 percent coverage
         env:
           CGO_ENABLED: "0"
@@ -1509,3 +1504,15 @@ jobs:
           path: artifacts/ci-observability/
           include-hidden-files: true
           if-no-files-found: error
+
+  qualification-complete:
+    name: Complete repository qualification
+    if: always()
+    needs: [carrier-recompression, compression-native, compression-owned, compression-state, hfs-special-names, large-resource-fork, metadata-transport, name-admission, name-cache-ast, name-collation, replacement, fuzz, ci-reporting, name-comparison, name-writer, pathname-authorization, pathname-limits, name-lookup, build, lint, native-boundary, govulncheck, race, test, filesystem-unit]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every qualification gate to finish successfully
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          printf '%s\n' "$RESULTS" | jq -e 'all(.[]; .result == "success")'

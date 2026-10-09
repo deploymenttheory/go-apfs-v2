@@ -1,8 +1,6 @@
 name: HFS native special names
 on:
-  push:
-    branches: [main]
-  pull_request:
+  workflow_call:
   workflow_dispatch:
 concurrency:
   group: hfs-special-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}

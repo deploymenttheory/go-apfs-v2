@@ -32,6 +32,29 @@ const reportingModule = "github.com/deploymenttheory/go-apfs-v2/"
 
 var reportingPackages = []string{"internal/testutil/cirunner", "internal/testutil/captureprovenance", "internal/testutil/nativeevidence", "internal/evidenceaudit"}
 
+// Keep this reviewed obligation inventory separate from the workflow itself.
+// A deleted YAML call must fail qualification rather than shrink its scope.
+var qualificationFamilies = []string{
+	".github/workflows/carrier-recompression.yml",
+	".github/workflows/compression-native.yml",
+	".github/workflows/compression-owned.yml",
+	".github/workflows/compression-state.yml",
+	".github/workflows/hfs-special-names.yml",
+	".github/workflows/large-resource-fork.yml",
+	".github/workflows/metadata-transport.yml",
+	".github/workflows/name-admission.yml",
+	".github/workflows/name-cache-ast.yml",
+	".github/workflows/name-collation.yml",
+	".github/workflows/replacement.yml",
+	".github/workflows/fuzz.yml",
+	".github/workflows/ci-reporting.yml",
+	".github/workflows/name-comparison.yml",
+	".github/workflows/name-writer.yml",
+	".github/workflows/pathname-authorization.yml",
+	".github/workflows/pathname-limits.yml",
+	".github/workflows/name-lookup.yml",
+}
+
 type reportingCount struct{ Covered, Statements int64 }
 
 func main() {
@@ -44,6 +67,9 @@ func main() {
 }
 
 func runReportingGate(ctx context.Context) error {
+	if err := evidenceaudit.QualificationGraph(os.DirFS("."), ".github/workflows/ci.yml", "qualification-complete", qualificationFamilies); err != nil {
+		return err
+	}
 	const out = "artifacts/ci-reporting-coverage"
 	if err := os.MkdirAll(out, 0755); err != nil {
 		return err
