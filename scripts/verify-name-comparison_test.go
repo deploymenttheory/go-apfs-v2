@@ -50,8 +50,17 @@ func readComparisonCapture(t *testing.T, path string, expected ...int) capture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := captureprovenance.Verify(os.DirFS("."), c.Sources); err != nil {
-		t.Fatal(err)
+	if len(expected) > 0 {
+		if err := captureprovenance.VerifyExecution(t.Context(), filepath.Dir(path)); err != nil {
+			t.Fatal(err)
+		}
+		if err := captureprovenance.Verify(os.DirFS("."), c.Sources); err != nil {
+			t.Fatal(err)
+		}
+	} else {
+		if err := captureprovenance.VerifyReference(os.DirFS("."), c.Sources); err != nil {
+			t.Fatal(err)
+		}
 	}
 	major := 0
 	for _, supported := range []int{15, 26, 27} {

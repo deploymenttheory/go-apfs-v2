@@ -1,9 +1,7 @@
 name: Held replacement qualification
 
 on:
-  push:
-    branches: [main]
-  pull_request:
+  workflow_call:
   workflow_dispatch:
 
 concurrency:
@@ -72,7 +70,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-15, macos-latest, xcode-27]
+        include:
+          - { os: macos-15, major: 15 }
+          - { os: macos-latest, major: 26 }
+          - { os: xcode-27, major: 27 }
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
@@ -91,5 +92,171 @@ jobs:
           path: |
             artifacts/replacement-volume/
             artifacts/ci-observability/
+          if-no-files-found: error
+          compression-level: 9
+
+  filesystem-replay:
+    name: Replay all native replacement metadata (${{ matrix.os }})
+    needs: native-filesystem-producers
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-2022, windows-2025, macos-15, macos-latest, xcode-27]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: replacement-filesystem-macos-*
+          path: artifacts/native-replacement/
+      - uses: actions/download-artifact@v8
+        with:
+          name: replacement-filesystem-xcode-27
+          path: artifacts/native-replacement/replacement-filesystem-xcode-27/
+      - name: Require native inventory and completion failure controls
+        run: apfs-ci-runner --suite replacement/filesystem-contract-controls --timeout 90s -- go test -timeout 60s -json -count=1 scripts/verify-replacement-filesystem.go scripts/verify-replacement-filesystem_test.go
+      - name: Verify source bindings and replay every producer
+        env:
+          GOMODCACHE: ${{ runner.temp }}/replacement-receiver-module-cache
+        shell: bash
+        run: |
+          set -euo pipefail
+          for entry in macos-15:15 macos-latest:26 xcode-27:27; do
+            producer="${entry%:*}"
+            major="${entry#*:}"
+            apfs-ci-runner --suite "replacement/filesystem-replay/$producer" --timeout 2m -- go run scripts/verify-replacement-filesystem.go -replay -major "$major" -dir "artifacts/native-replacement/replacement-filesystem-$producer"
+          done
+      - name: Retain replay results and diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: replacement-filesystem-replay-${{ matrix.os }}
+          path: |
+            artifacts/replacement-filesystem-replay/
+            artifacts/ci-observability/
+          if-no-files-found: error
+          compression-level: 9
+
+  filesystem-native-live:
+    name: Native replacement metadata parity (${{ matrix.os }})
+    needs: native-filesystem-producers
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-15, major: 15 }
+          - { os: macos-latest, major: 26 }
+          - { os: xcode-27, major: 27 }
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
+      - uses: actions/download-artifact@v8
+        with:
+          name: replacement-filesystem-${{ matrix.os }}
+          path: artifacts/native-replacement/
+      - name: Require every native success, failure and partial carrier
+        env:
+          GOMODCACHE: ${{ runner.temp }}/replacement-native-module-cache
+        run: apfs-ci-runner --suite replacement/filesystem-native-live --timeout 3m -- go run scripts/verify-replacement-filesystem.go -replay -live -major ${{ matrix.major }} -dir artifacts/native-replacement -out artifacts/replacement-filesystem-live
+      - name: Retain complete native implementation qualification
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: replacement-filesystem-live-${{ matrix.os }}
+          path: |
+            artifacts/replacement-filesystem-live/
+            artifacts/ci-observability/
+          if-no-files-found: error
+          compression-level: 9
+
+  native-filesystem-producers:
+    name: Independent native replacement producer (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-15, major: 15 }
+          - { os: macos-latest, major: 26 }
+          - { os: xcode-27, major: 27 }
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
+      - name: Capture complete native replacement metadata matrix
+        run: apfs-ci-runner --suite replacement/filesystem-capture --timeout 3m -- go run scripts/verify-replacement-filesystem.go -major ${{ matrix.major }}
+      - name: Retain native replacement metadata evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: replacement-filesystem-${{ matrix.os }}
+          path: artifacts/replacement-filesystem/
+          if-no-files-found: error
+          compression-level: 9
+      - name: Retain native producer command diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: ci-observability-replacement-native-producer-${{ matrix.major }}-${{ github.run_attempt }}
+          path: artifacts/ci-observability/
+          if-no-files-found: error
+          compression-level: 9
+
+  filesystem-baseline:
+    name: Native replacement behavioral baselines
+    needs: native-filesystem-producers
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: replacement-filesystem-macos-*
+          path: artifacts/native-replacement/
+      - uses: actions/download-artifact@v8
+        with:
+          name: replacement-filesystem-xcode-27
+          path: artifacts/native-replacement/replacement-filesystem-xcode-27/
+      - name: Check all independent native policy observations
+        shell: bash
+        run: |
+          set -euo pipefail
+          for entry in macos-15:15 macos-latest:26 xcode-27:27; do
+            producer="${entry%:*}"
+            major="${entry#*:}"
+            apfs-ci-runner --suite "replacement/filesystem-baseline/$producer" --timeout 2m -- go run scripts/verify-replacement-filesystem.go -replay -baseline -major "$major" -dir "artifacts/native-replacement/replacement-filesystem-$producer"
+          done
+      - name: Retain baseline diagnostics without modifying native evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: ci-observability-replacement-baseline-${{ github.run_attempt }}
+          path: artifacts/ci-observability/
           if-no-files-found: error
           compression-level: 9

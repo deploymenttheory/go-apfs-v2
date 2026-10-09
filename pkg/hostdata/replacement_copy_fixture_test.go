@@ -39,10 +39,14 @@ func TestReplacementCopyNativeFixture(t *testing.T) {
 	if fixture.Schema != 1 || len(fixture.Cases) != 8 {
 		t.Fatalf("incomplete native fixture: schema %d cases %d", fixture.Schema, len(fixture.Cases))
 	}
-	if err := captureprovenance.Verify(os.DirFS("../.."), fixture.Hashes); err != nil {
+	referenceSources, referenceErr := captureprovenance.Reference(os.DirFS("../.."), fixture.Hashes)
+	if referenceErr != nil {
+		t.Fatal(referenceErr)
+	}
+	if err := captureprovenance.Verify(referenceSources, fixture.Hashes); err != nil {
 		t.Fatal(err)
 	}
-	source, err := os.ReadFile("../../testdata/appledouble/native/replacement-copy.c")
+	source, err := captureprovenance.ReadSource(referenceSources, fixture.Hashes, "testdata/appledouble/native/replacement-copy.c")
 	if err != nil {
 		t.Fatal(err)
 	}

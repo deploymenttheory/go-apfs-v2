@@ -4,9 +4,7 @@ name: Fuzz
 # failure uploads the crashing input; commit it under the package's
 # testdata/fuzz/<Target>/ so `go test` replays it as a regression test.
 on:
-  push:
-    branches: [main]
-  pull_request:
+  workflow_call:
   schedule:
     - cron: "17 3 * * 1"
   workflow_dispatch:

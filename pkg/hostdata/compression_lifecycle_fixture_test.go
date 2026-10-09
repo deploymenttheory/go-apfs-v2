@@ -77,11 +77,15 @@ func testCompressionProvenanceFrom(t *testing.T, fixture, name string, count int
 			t.Fatal("native operation profile mismatch", fixture, version, err)
 		}
 	}
-	if err := captureprovenance.Verify(os.DirFS("../.."), corpus.Sources); err != nil {
+	referenceSources, referenceErr := captureprovenance.Reference(os.DirFS("../.."), corpus.Sources)
+	if referenceErr != nil {
+		t.Fatal(referenceErr)
+	}
+	if err := captureprovenance.Verify(referenceSources, corpus.Sources); err != nil {
 		t.Fatal(err)
 	}
 	for _, path := range append(additional, "scripts/capture-"+name+".go", "testdata/appledouble/native/"+name+".c", "testdata/appledouble/native/"+name+"-interpose.c", "testdata/appledouble/native/compression-policy.c", "go.mod", "go.sum") {
-		data, e := os.ReadFile("../../" + path)
+		data, e := captureprovenance.ReadSource(referenceSources, corpus.Sources, path)
 		if e != nil {
 			t.Fatal(e)
 		}

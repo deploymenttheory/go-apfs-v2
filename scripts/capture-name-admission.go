@@ -356,7 +356,7 @@ func validate(c capture) error {
 }
 func compare(a, b capture) error {
 	for _, sources := range []map[string]string{a.Sources, b.Sources} {
-		if err := captureprovenance.Verify(os.DirFS("."), sources); err != nil {
+		if err := captureprovenance.VerifyReference(os.DirFS("."), sources, bound...); err != nil {
 			return err
 		}
 	}
@@ -366,11 +366,7 @@ func compare(a, b capture) error {
 	if e := validate(b); e != nil {
 		return e
 	}
-	for _, p := range bound {
-		if a.Sources[p] != b.Sources[p] {
-			return fmt.Errorf("stale admission source %s", p)
-		}
-	}
+
 	for i, v := range a.Volumes {
 		if !bytes.Equal(v.Results, b.Volumes[i].Results) {
 			return fmt.Errorf("native scalar admission changed on%s", v.Kind)

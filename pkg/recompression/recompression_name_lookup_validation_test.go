@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/captureprovenance"
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 )
 
@@ -42,6 +43,10 @@ func TestNativeNameLookupRejectsTampering(t *testing.T) {
 	firstVolume := func(c map[string]any) map[string]any { return c["volumes"].([]any)[0].(map[string]any) }
 	native := func(c map[string]any) map[string]any { return firstVolume(c)["native"].(map[string]any) }
 	firstCase := func(c map[string]any) map[string]any { return native(c)["cases"].([]any)[0].(map[string]any) }
+	currentHarness, err := captureprovenance.Inventory(os.DirFS("../.."))
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, tc := range []struct {
 		name, want string
 		edit       func(map[string]any)
@@ -49,7 +54,16 @@ func TestNativeNameLookupRejectsTampering(t *testing.T) {
 		{"missing-volume", "incomplete native lookup capture", func(c map[string]any) { c["volumes"] = c["volumes"].([]any)[1:] }},
 		{"unknown-volume", "unexpected/duplicate native volume", func(c map[string]any) { firstVolume(c)["volume"] = "foreign" }},
 		{"duplicate-volume", "unexpected/duplicate native volume", func(c map[string]any) { c["volumes"].([]any)[1] = firstVolume(c) }},
-		{"source-hash", "stale native source capture", func(c map[string]any) { c["source_sha256"].(map[string]any)["probe.c"] = strings.Repeat("0", 64) }},
+		{"source-hash", "stale native source capture", func(c map[string]any) {
+			// A modified source set cannot claim a retained archive. Supply the
+			// current harness for this deliberately invalid fresh input so it
+			// reaches the probe digest gate, not an unrelated historical runner.
+			sources := c["source_sha256"].(map[string]any)
+			for name, digest := range currentHarness {
+				sources[name] = digest
+			}
+			sources["probe.c"] = strings.Repeat("0", 64)
+		}},
 		{"missing-case", "uncaptured native lookup context", func(c map[string]any) { n := native(c); n["cases"] = n["cases"].([]any)[1:] }},
 		{"unknown-case", "duplicate/unexpected native lookup case", func(c map[string]any) { firstCase(c)["id"] = "invented" }},
 		{"duplicate-case", "duplicate/unexpected native lookup case", func(c map[string]any) { native(c)["cases"].([]any)[1] = firstCase(c) }},

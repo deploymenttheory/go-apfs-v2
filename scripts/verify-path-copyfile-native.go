@@ -154,8 +154,8 @@ func verify(capture bool) error {
 		}
 		cmd := cirunner.Command("go", "test", "-json", "-count=1", "./pkg/hostdata", "-run", "^TestAppleDoublePathNativeReplay$")
 		cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
-		cmd.Stdout, cmd.Stderr = io.MultiWriter(os.Stdout, log), io.MultiWriter(os.Stderr, log)
-		err = cmd.Run()
+		cmd.Stdout = io.MultiWriter(os.Stdout, log)
+		err = cmd.RunWithDiagnostics(log.Name() + ".stderr.log")
 		closeErr := log.Close()
 		if err != nil || closeErr != nil {
 			return fmt.Errorf("current-context native replay: command=%v close=%v", err, closeErr)

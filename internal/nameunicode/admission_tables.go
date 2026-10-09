@@ -2,7 +2,7 @@
 // Every interval derives from actual native O_CREAT results, not Unicode age.
 package nameunicode
 
-// testdata/appledouble/native/name-admission-macos15.json.gz SHA256 750481404a02f95b43d1eeebfa8d749cbfb45eb0fe967fbb42a8e4bffe294de1
+// testdata/appledouble/native/name-admission-macos15.json.gz native scalar SHA256 f985d9ab1ae2638932f4631f3f5c557ca1dc419ee31c5229a51e828849cabde4
 var apfsCreate15 = [...]scalarRange{
 	{0x1, 0x2E},
 	{0x30, 0x377},
@@ -738,7 +738,7 @@ var apfsCreate15 = [...]scalarRange{
 	{0x100000, 0x10FFFD},
 }
 
-// testdata/appledouble/native/name-admission-macos26.json.gz SHA256 3dcc74cfac342483230d7eecb6f62a88dd4f4610e90aae5e1d3d3def0f7b8ff9
+// testdata/appledouble/native/name-admission-macos26.json.gz native scalar SHA256 d1277be4219ce046f2f690f6d1b26f45eb23de3496f4d4dc3c27b18d9a6a4c47
 var apfsCreate26 = [...]scalarRange{
 	{0x1, 0x2E},
 	{0x30, 0x377},
@@ -1478,7 +1478,7 @@ var apfsCreate26 = [...]scalarRange{
 	{0x100000, 0x10FFFD},
 }
 
-// testdata/appledouble/native/name-admission-macos27.json.gz SHA256 cb4006745b91d963cd84e2cfa241a0bd52357babf7568b965b5b396951b531ee
+// testdata/appledouble/native/name-admission-macos27.json.gz native scalar SHA256 0cc5360a7443ff9496636313df717030b37e3ecc018d1e04bc4f13641b143bb0
 var apfsCreate27 = [...]scalarRange{
 	{0x1, 0x2E},
 	{0x30, 0x377},

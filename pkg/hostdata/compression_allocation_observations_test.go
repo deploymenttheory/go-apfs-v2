@@ -49,7 +49,11 @@ func TestCompressionAllocationObservations(t *testing.T) {
 		if c.Schema != 1 || len(c.Cases) != 330 || c.Host == "" {
 			t.Fatal("incomplete native allocation observation")
 		}
-		if err = captureprovenance.Verify(os.DirFS("../.."), c.Sources); err != nil {
+		referenceSources, referenceErr := captureprovenance.Reference(os.DirFS("../.."), c.Sources)
+		if referenceErr != nil {
+			t.Fatal(referenceErr)
+		}
+		if err = captureprovenance.Verify(referenceSources, c.Sources); err != nil {
 			t.Fatal(err)
 		}
 		version, err := osversion.ParseProductVersion(c.Host)
@@ -57,7 +61,21 @@ func TestCompressionAllocationObservations(t *testing.T) {
 			t.Fatal("unqualified allocation producer", version, err)
 		}
 		for _, path := range []string{"scripts/capture-compression-operation.go", "scripts/capture-compression-operation_test.go", "testdata/appledouble/native/compression-operation.c", "testdata/appledouble/native/compression-operation-interpose.c", "testdata/appledouble/native/compression-lifecycle-interpose.c", "testdata/appledouble/native/compression-policy.c", "pkg/osversion/version.go", "pkg/osversion/macos.go", "pkg/osversion/host.go", "pkg/osversion/host_darwin.go", "pkg/osversion/host_other.go", "go.mod", "go.sum"} {
-			data, err := os.ReadFile("../../" + path)
+			source := "../../" + path
+			// These immutable counterexamples were captured before the toolchain
+			// update. Verify their original module inputs against their recorded
+			// hashes. Fresh qualification records its own current module provenance.
+			if path == "go.mod" || path == "go.sum" {
+				source = "../../testdata/appledouble/native/allocation-observations/capture-" + path + ".txt"
+			}
+			data, err := captureprovenance.ReadSource(referenceSources, c.Sources, path)
+			if path == "go.mod" || path == "go.sum" {
+				originalModule, moduleErr := os.ReadFile(source)
+				if moduleErr != nil || fmt.Sprintf("%x", sha256.Sum256(originalModule)) != c.Sources[path] {
+					t.Fatal("original allocation module bytes", path, moduleErr)
+				}
+			}
+
 			if err != nil {
 				t.Fatal(err)
 			}

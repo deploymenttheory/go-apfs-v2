@@ -723,3 +723,50 @@ all three hosts. The macOS 15/26/27 jobs compile both Clang targets and compare
 query bytes, errors, canaries and unchanged metadata with Apple's framework
 under ordinary, deny-read, deny-read/write and deny-extended-attribute ACLs.
 Artifacts retain the C source hashes, SDK/compiler/host identity and both ASTs.
+
+## Publishing file replacements
+
+Use `PrepareReplacementContext` or `PrepareReplacementAtContext` to stage a
+replacement privately. Write and truncate its data, call `RestoreMetadataContext`,
+sync and close `File`, and call `PublishContext` over the original source entry.
+Always call `Close`, including after publication. Keep the source open and
+unchanged through metadata restoration; exclude concurrent changes to the source,
+its metadata and parent namespace through publication.
+
+On Linux and Windows FAT/exFAT volumes, preparation reads the filesystem-selected
+AppleDouble metadata and constructs fresh storage matching native macOS metadata
+copy. `PublishContext` validates the source, staged file and carrier identities,
+then publishes the data and its paired carrier. Plain `os.Rename` or `root.Rename`
+cannot perform that paired operation. Other filesystems retain their native
+rename behavior; neighboring `._` files do not select this route by themselves.
+
+Two foreign filesystem entries cannot be renamed atomically. Cancellation before
+publication leaves the original intact. After the data rename, the metadata
+operation is attempted even if cancellation arrives. A
+`ReplacementPublicationError` reports that data was published but its metadata
+operation failed; it does not imply rollback. Inspect the error and retain caller
+recovery state. Publication does not promise crash durability.
+
+The fresh carrier encoder retains native attribute order, allocation increments,
+alignment and resource-fork storage bytes. Forks stream through 64 KiB buffers.
+The qualified macOS 26/27 attribute-file writer rejects nonempty forks shorter
+than the 286-byte resource header; macOS 15 accepts them. Portable preparation
+defaults to macOS 27. Use `PrepareReplacementWithOptionsContext` or
+`PrepareReplacementAtWithOptionsContext` with
+`ReplacementOptions{MacOSProfile: osversion.MacOS15}` when targeting the qualified
+macOS 15 filesystem behavior. Unsupported profiles fail before staging. These
+SDK options do not add codesign CLI flags or select neighboring files as metadata.
+macOS uses its actual native VFS operations. The raw AppleDouble codec represents
+both accepted and rejected inputs; a failed preparation never publishes a partial
+replacement.
+
+`verify-replacement-filesystem.go` captures 220 real FAT/exFAT cases on each of
+macOS 15, 26 and 27, including successful copies and partial native failure output.
+Collection records the C oracle independently of Go parity and completes native
+cleanup before sealing the producer. CI verifies capture sources, both Clang
+architecture ASTs, exact profile and current-run integrity, then replays every
+producer on Linux, Windows 2022/2025 and macOS 15/26/27. Separate native jobs
+compare Go held-copy errors and partial carrier bytes against Apple. Behavioral
+baseline checks do not block consumers from receiving complete native evidence.
+JSON transcripts and tool diagnostics are separate artifacts. Coverage and the
+existing native APFS/HFS+ replacement controls remain required.

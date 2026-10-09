@@ -194,7 +194,7 @@ func captureMetadataFilesystem(out, profile string) (result error) {
 	}
 	hash := func(data []byte) string { sum := sha256.Sum256(data); return hex.EncodeToString(sum[:]) }
 	const source = "testdata/appledouble/native/metadata-filesystem.c"
-	for _, path := range []string{source, "scripts/capture-metadata-filesystem.go", "internal/testutil/diskimage/attachment.go", "internal/testutil/diskimage/detach.go", "go.mod", "go.sum", "testdata/appledouble/native/metadata-vfs-ast.c", "testdata/appledouble/native/metadata-vfs-bodies.inc", "testdata/appledouble/native/metadata-vfs-xnu.c.gz", "testdata/appledouble/native/metadata-vfs-source.json"} {
+	for _, path := range []string{source, "scripts/capture-metadata-filesystem.go", "internal/testutil/diskimage/attachment.go", "internal/testutil/diskimage/detach.go", "internal/testutil/diskimage/create.go", "go.mod", "go.sum", "testdata/appledouble/native/metadata-vfs-ast.c", "testdata/appledouble/native/metadata-vfs-bodies.inc", "testdata/appledouble/native/metadata-vfs-xnu.c.gz", "testdata/appledouble/native/metadata-vfs-source.json"} {
 		data, err := os.ReadFile(path)
 		if err != nil {
 			return err
@@ -302,8 +302,11 @@ func captureMetadataFilesystem(out, profile string) (result error) {
 			if err := os.Mkdir(mount, 0700); err != nil {
 				return err
 			}
-			if _, err := metadataCommand("hdiutil", "create", "-size", "128m", "-fs", filesystem, "-volname", "METADATA", image); err != nil {
-				return err
+			createContext, cancelCreate := context.WithTimeout(context.Background(), 2*time.Minute)
+			createError := diskimage.Create(createContext, image, filesystem, "METADATA")
+			cancelCreate()
+			if createError != nil {
+				return createError
 			}
 			attached, err := metadataCommand("hdiutil", "attach", "-plist", "-nobrowse", "-owners", metadataMountOwnership(filesystem), "-mountpoint", mount, image)
 			if err != nil {

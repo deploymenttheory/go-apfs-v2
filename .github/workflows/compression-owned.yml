@@ -1,9 +1,7 @@
 name: Owned native compression bindings
 
 on:
-  push:
-    branches: [main]
-  pull_request:
+  workflow_call:
   workflow_dispatch:
 
 concurrency:
@@ -74,7 +72,166 @@ jobs:
           path: artifacts/ci-observability/
           compression-level: 9
           if-no-files-found: error
+  capture:
+    name: Independent owned compression producer (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, macos-latest, xcode-27]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
+      - name: Collect all Apple observations independently of the Go implementation
+        run: apfs-ci-runner --suite compression-owned/producer/capture --timeout 18m -- go run scripts/capture-compression-owned.go -out artifacts/compression-owned/native.json.gz
+      - name: Require strict native bundle and consumer failure regressions
+        run: apfs-ci-runner --suite compression-owned/producer/contracts --timeout 2m -- go test -json -count=1 scripts/capture-compression-owned.go scripts/capture-compression-owned_test.go
+      - name: Retain complete native producer evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: compression-owned-capture-${{ matrix.os }}-${{ github.run_attempt }}
+          path: artifacts/compression-owned/
+          if-no-files-found: error
+      - name: Retain producer diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: ci-observability-compression-owned-capture-${{ matrix.os }}-${{ github.run_attempt }}
+          path: artifacts/ci-observability/
+          if-no-files-found: error
+
+  baseline:
+    name: Owned compression native baseline (${{ matrix.os }})
+    needs: capture
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, macos-latest, xcode-27]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
+      - uses: actions/download-artifact@v8
+        with:
+          name: compression-owned-capture-${{ matrix.os }}-${{ github.run_attempt }}
+          path: artifacts/compression-owned/
+      - name: Compare native behavior separately from execution provenance
+        run: apfs-ci-runner --suite compression-owned/baseline/compare --timeout 8m -- go run scripts/capture-compression-owned.go -compare artifacts/compression-owned/native.json.gz
+      - name: Retain native baseline comparison diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: ci-observability-compression-owned-baseline-${{ matrix.os }}-${{ github.run_attempt }}
+          path: artifacts/ci-observability/
+          if-no-files-found: error
+
+  foreign-evidence:
+    name: Fresh owned evidence (${{ matrix.os }})
+    needs: capture
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {os: ubuntu-latest, consumer: linux}
+          - {os: windows-2022, consumer: windows2022}
+          - {os: windows-2025, consumer: windows2025}
+          - {os: macos-15, consumer: macos15}
+          - {os: macos-latest, consumer: macos26}
+          - {os: xcode-27, consumer: macos27}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: compression-owned-capture-*-${{ github.run_attempt }}
+          path: artifacts/owned-producers/
+      - name: Require every current native producer and replay its complete evidence
+        shell: bash
+        env:
+          GOMODCACHE: ${{ runner.temp }}/owned-consumer-module-cache
+        run: |
+          set -euo pipefail
+          for producer in 'macos-15:macos15' 'macos-latest:macos26' 'xcode-27:macos27'; do
+            runner="${producer%%:*}"
+            profile="${producer#*:}"
+            capture="$GITHUB_WORKSPACE/artifacts/owned-producers/compression-owned-capture-$runner-${{ github.run_attempt }}"
+            apfs-ci-runner --suite "compression-owned/consumer/$profile" --timeout 3m -- go run scripts/capture-compression-owned.go -qualify "$capture" -profile "$profile" -consumer '${{ matrix.consumer }}' -receipts artifacts/owned-qualification
+          done
+      - name: Retain complete Go qualification receipts and raw transcripts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: compression-owned-receipt-${{ matrix.consumer }}-${{ github.run_attempt }}
+          path: artifacts/owned-qualification/
+          if-no-files-found: error
+      - name: Retain foreign consumer diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: ci-observability-compression-owned-foreign-${{ matrix.os }}-${{ github.run_attempt }}
+          path: artifacts/ci-observability/
+          if-no-files-found: error
+
+  complete:
+    name: Owned compression complete qualification
+    if: always()
+    needs: [capture, baseline, native, foreign-evidence, portable]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
+      - name: Require every producer consumer baseline and coverage gate
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          printf '%s\n' "$RESULTS" | jq -e 'all(.[]; .result == "success")'
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: compression-owned-capture-*-${{ github.run_attempt }}
+          path: artifacts/owned-complete/
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: compression-owned-receipt-*-${{ github.run_attempt }}
+          path: artifacts/owned-complete/
+      - name: Require all three native profiles and every consumer receipt
+        run: apfs-ci-runner --suite compression-owned/complete/contracts --timeout 5m -- go run scripts/capture-compression-owned.go -aggregate artifacts/owned-complete
+      - name: Retain complete aggregation diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: ci-observability-compression-owned-complete-${{ github.run_attempt }}
+          path: artifacts/ci-observability/
+          if-no-files-found: error
+
   native:
+    needs: capture
     name: Native owned compression (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
@@ -89,9 +246,16 @@ jobs:
           go-version-file: go.mod
       - name: Set up shared CI reporting
         uses: ./.github/actions/setup-ci-runner
-      - name: Capture both Clang targets and replay all 72 native cases on host APFS and HFS+
+      - name: Download this attempt's independent Apple observations
+        uses: actions/download-artifact@v8
+        with:
+          name: compression-owned-capture-${{ matrix.os }}-${{ github.run_attempt }}
+          path: artifacts/compression-owned/
+      - name: Replay all 72 native cases on recreated host APFS and HFS+ volumes
+        env:
+          GOMODCACHE: ${{ runner.temp }}/owned-live-module-cache
         run: |
-          apfs-ci-runner --suite compression-owned/native/step3 --timeout 29m -- go run scripts/capture-compression-owned.go -out artifacts/compression-owned/native.json.gz -check
+          apfs-ci-runner --suite compression-owned/native/live-replay --timeout 29m -- go run scripts/capture-compression-owned.go -replay artifacts/compression-owned/native.json.gz
       - name: Validate complete fresh native evidence independently
         if: always()
         shell: bash
@@ -99,21 +263,33 @@ jobs:
           APFS_COMPRESSION_OWNED_EVIDENCE: ${{ github.workspace }}/artifacts/compression-owned/native.json.gz
         run: |
           set -euo pipefail
-          mkdir -p artifacts/compression-owned
-          apfs-ci-runner --suite compression-owned/native/step4 --timeout 29m -- go test -count=1 -json ./pkg/hostdata -run '^TestCompressionOwnedNativeEvidence$' > artifacts/compression-owned/evidence-replay.jsonl
+          mkdir -p artifacts/compression-owned-replay
+          apfs-ci-runner --suite compression-owned/native/receipt --timeout 2m -- go run scripts/verify-native-execution.go -dir artifacts/compression-owned
+          apfs-ci-runner --suite compression-owned/native/step4 --timeout 29m -- go test -count=1 -json ./pkg/hostdata -run '^TestCompressionOwnedNativeEvidence$' > artifacts/compression-owned-replay/evidence-replay.jsonl
       - name: Qualify pathname compression queries with denied content access
         if: ${{ !cancelled() }}
         env:
-          APFS_COMPRESSION_PATH_EVIDENCE: ${{ github.workspace }}/artifacts/compression-owned/path-query
+          APFS_COMPRESSION_PATH_EVIDENCE: ${{ github.workspace }}/artifacts/compression-owned-replay/path-query
         run: |
-          apfs-ci-runner --suite compression-owned/native/path-query --timeout 29m -- go test -count=1 -json ./pkg/hostdata -run '^TestCompressionPath' > artifacts/compression-owned/path-query-tests.jsonl
+          apfs-ci-runner --suite compression-owned/native/path-query --timeout 29m -- go test -count=1 -json ./pkg/hostdata -run '^TestCompressionPath' > artifacts/compression-owned-replay/path-query-tests.jsonl
       - name: Retain native bytes source provenance both ASTs and mount cleanup
         if: always()
         uses: actions/upload-artifact@v7
         with:
           include-hidden-files: true
           name: compression-owned-native-${{ matrix.os }}
-          path: artifacts/compression-owned/
+          path: |
+            artifacts/compression-owned/
+            artifacts/compression-owned-replay/
+          if-no-files-found: error
+
+      - name: Retain independently verified live Go qualification
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: compression-owned-receipt-native-live-${{ matrix.os }}-${{ github.run_attempt }}
+          path: artifacts/compression-owned-replay/
           if-no-files-found: error
 
       - name: Retain complete CI command diagnostics

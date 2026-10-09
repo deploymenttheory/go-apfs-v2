@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/captureprovenance"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfswrite"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/compression/decmpfs"
@@ -81,19 +82,21 @@ func carrierRecompressionLoad(t *testing.T, profile string) (carrierRecompressio
 	if c.Schema != 1 || len(c.Cases) != 330 || c.Host == "" || !strings.Contains(c.Compiler, "clang") || c.SDK == "" || !strings.Contains(c.Library, "-uuid:") {
 		t.Fatal("incomplete native operation corpus")
 	}
-	// Every repository source in the native provenance is checked, not only the
-	// fixture itself. Absolute SDK paths and retained AST/disassembly hashes are
-	// independently qualified by the existing native capture jobs.
-	for source, want := range c.Sources {
+	// Retained observations bind their original archived sources. The current
+	// implementation is exercised below without relabeling historical captures.
+	reference, e := captureprovenance.Reference(os.DirFS(".."), c.Sources)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if e = captureprovenance.Verify(reference, c.Sources); e != nil {
+		t.Fatal(e)
+	}
+	for source := range c.Sources {
 		if !strings.HasPrefix(source, "scripts/") && !strings.HasPrefix(source, "testdata/") && !strings.HasPrefix(source, "pkg/") && source != "go.mod" && source != "go.sum" {
 			continue
 		}
-		b, e := os.ReadFile("../" + source)
-		if e != nil {
+		if _, e := captureprovenance.ReadSource(reference, c.Sources, source); e != nil {
 			t.Fatal(e)
-		}
-		if fmt.Sprintf("%x", sha256.Sum256(b)) != want {
-			t.Fatal("stale native source", source)
 		}
 	}
 	for _, arch := range []string{"arm64", "x86_64"} {

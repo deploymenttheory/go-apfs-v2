@@ -1,9 +1,7 @@
 name: Native compression profiles
 
 on:
-  push:
-    branches: [main]
-  pull_request:
+  workflow_call:
   workflow_dispatch:
     inputs:
       capture_phase:

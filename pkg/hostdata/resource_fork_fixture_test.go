@@ -70,11 +70,15 @@ func TestCompressionResourceForkProvenance(t *testing.T) {
 	for _, profile := range []osversion.MacOSProfile{osversion.MacOS15, osversion.MacOS26, osversion.MacOS27} {
 		t.Run(fmt.Sprint(profile), func(t *testing.T) {
 			corpus := loadNativeForkCorpus(t, profile)
-			if err := captureprovenance.Verify(os.DirFS("../.."), corpus.Sources); err != nil {
+			referenceSources, referenceErr := captureprovenance.Reference(os.DirFS("../.."), corpus.Sources)
+			if referenceErr != nil {
+				t.Fatal(referenceErr)
+			}
+			if err := captureprovenance.Verify(referenceSources, corpus.Sources); err != nil {
 				t.Fatal(err)
 			}
 			for _, name := range []string{"testdata/appledouble/native/resource-fork-open.c", "scripts/capture-resource-fork-open.go", "pkg/osversion/version.go", "pkg/osversion/macos.go", "go.mod", "go.sum"} {
-				b, err := os.ReadFile("../../" + name)
+				b, err := captureprovenance.ReadSource(referenceSources, corpus.Sources, name)
 				if err != nil {
 					t.Fatal(err)
 				}

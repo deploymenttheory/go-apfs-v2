@@ -243,12 +243,16 @@ func accessRun(out string, check bool) (err error) {
 		if old.Schema != 1 || len(old.Cases) != len(capture.Cases) || len(old.OpenCases) != 2 {
 			return errors.New("native access inventory differs")
 		}
-		if err := captureprovenance.Verify(os.DirFS("."), old.Sources); err != nil {
+		reference, err := captureprovenance.Reference(os.DirFS("."), old.Sources)
+		if err != nil {
+			return err
+		}
+		if err := captureprovenance.Verify(reference, old.Sources); err != nil {
 			return err
 		}
 		for _, name := range []string{source, "scripts/capture-recompression-access.go", "testdata/appledouble/native/recompression-open.c", "testdata/appledouble/native/compression-lz4.json.gz", "testdata/appledouble/native/recompression-access-source/sources.json", "testdata/appledouble/native/recompression-access-source/vfs_subr.c.gz", "testdata/appledouble/native/recompression-access-source/vfs_syscalls.c.gz", "testdata/appledouble/native/recompression-access-source/kern_authorization.c.gz", "testdata/appledouble/native/recompression-access-source/kern_credential.c.gz"} {
-			if old.Sources[name] != capture.Sources[name] {
-				return fmt.Errorf("stale access source %s", name)
+			if _, err := captureprovenance.ReadSource(reference, old.Sources, name); err != nil {
+				return err
 			}
 		}
 		for i, data := range capture.Cases {

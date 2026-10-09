@@ -5,3 +5,4 @@
 * text=auto eol=lf
 
 *.json text eol=lf
+*.zip.part binary

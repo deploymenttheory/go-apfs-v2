@@ -41,8 +41,7 @@ func verify() error {
 	cmd := cirunner.Command("go", "test", "-count=1", "-json", "-run", "^(TestImageTimes|TestInodeTimes)", "-covermode=atomic", "-coverprofile="+profile, "-coverpkg=./internal/inodetime,./pkg/apfs,./pkg/apfswrite,./pkg/hfsplus", "./internal/inodetime", "./internal/testutil/imagesecurity", "./internal/cli", "./pkg/hfsplus")
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 	cmd.Stdout = io.MultiWriter(os.Stdout, log, &transcript)
-	cmd.Stderr = io.MultiWriter(os.Stderr, log)
-	if e := cmd.Run(); e != nil {
+	if e := cmd.RunWithDiagnostics(log.Name() + ".stderr.log"); e != nil {
 		return e
 	}
 	passed := 0

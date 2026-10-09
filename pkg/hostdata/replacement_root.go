@@ -11,7 +11,7 @@ import (
 
 // RootReplacement is a writable replacement staged beneath an opened root.
 // Path is relative to the root supplied to PrepareReplacementAt, suitable for
-// root.Rename after writing, RestoreMetadata, syncing and closing File.
+// PublishContext after writing, RestoreMetadata, syncing and closing File.
 // Preparation and cleanup never rename or modify the source.
 //
 // The caller owns source and root: keep source open and unchanged through
@@ -27,6 +27,7 @@ type RootReplacement struct {
 	root, staging *os.Root
 	dir           string
 	closed        bool
+	filesystem    *replacementFilesystem
 }
 
 // PrepareReplacementAt prepares a regular source file in a private directory
@@ -42,7 +43,7 @@ type RootReplacement struct {
 // handles, and the private Windows directory has its DACL installed at creation. Sparse source replacements retain the sparse attribute; the
 // caller supplies all new main data and controls its physical allocation.
 // Concurrent modification of the source or staging tree is unsupported. The
-// caller must validate destination identity before committing its own rename.
+// caller must exclude concurrent namespace changes through PublishContext.
 func PrepareReplacementAt(source *os.File, root *os.Root, parent string) (*RootReplacement, error) {
 	return PrepareReplacementAtContext(context.Background(), source, root, parent)
 }
@@ -51,7 +52,17 @@ func PrepareReplacementAt(source *os.File, root *os.Root, parent string) (*RootR
 // Root containment and caller ownership match PrepareReplacementAt. Cleanup is
 // never canceled; individual native calls need not be interruptible.
 func PrepareReplacementAtContext(ctx context.Context, source *os.File, root *os.Root, parent string) (*RootReplacement, error) {
+	return PrepareReplacementAtWithOptionsContext(ctx, source, root, parent, ReplacementOptions{})
+}
+
+// PrepareReplacementAtWithOptionsContext selects portable metadata compatibility;
+// containment, cancellation and cleanup match PrepareReplacementAtContext.
+func PrepareReplacementAtWithOptionsContext(ctx context.Context, source *os.File, root *os.Root, parent string, options ReplacementOptions) (*RootReplacement, error) {
 	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	profile, err := options.filesystemProfile()
+	if err != nil {
 		return nil, err
 	}
 	info, err := replacementValue(ctx, source.Stat)
@@ -81,6 +92,9 @@ func PrepareReplacementAtContext(ctx context.Context, source *os.File, root *os.
 	r.File, err = prepareReplacementAtContext(ctx, source, stage, info)
 	if err == nil {
 		r.cleanup, err = replacementCleanupCapability(r.File)
+	}
+	if err == nil {
+		r.filesystem, err = prepareReplacementFilesystemForProfile(ctx, source, r.File, profile)
 	}
 	err = errors.Join(err, ctx.Err(), release())
 	if err != nil {
@@ -142,5 +156,12 @@ func (r *RootReplacement) Close() error {
 	if os.IsNotExist(removeErr) {
 		removeErr = nil
 	}
-	return errors.Join(closeErr, chmodErr, removeErr, r.staging.Close(), r.root.Remove(r.dir))
+	var carrierErr error
+	if r.filesystem != nil {
+		carrierErr = r.staging.Remove("._replacement")
+		if os.IsNotExist(carrierErr) {
+			carrierErr = nil
+		}
+	}
+	return errors.Join(closeErr, chmodErr, removeErr, carrierErr, r.staging.Close(), r.root.Remove(r.dir))
 }

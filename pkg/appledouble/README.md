@@ -235,3 +235,19 @@ streaming shifts for large values. The filesystem owner handles association,
 permissions, unlink and cleanup; `hostdata.FilesystemMetadata.Remove` provides
 that integration. See [filesystem-selected metadata](../../docs/metadata-filesystem.md)
 for native evidence, rejected mutation layouts and remaining qualification.
+
+### Fresh filesystem attribute storage
+
+`StreamFile.EncodeFilesystemTo` constructs a fresh macOS filesystem attribute
+file from visible FinderInfo, ordered ordinary attributes and a resource fork.
+Use it when creating a replacement carrier. `EncodeTo` continues to produce
+`COPYFILE_PACK` transport output; the two layouts have different allocation and
+padding rules. Existing carriers should continue through the mutation APIs when
+the operation changes existing storage rather than creating a replacement.
+
+Filesystem encoding streams values with bounded working memory, retains native
+allocation slack and installs the blank resource-fork marker when appropriate.
+Empty visible metadata produces no carrier bytes. Association, authorization,
+publication and cleanup belong to the filesystem layer (`hostdata`); encoding
+alone does not safely replace a neighboring `._` file. The native replacement
+matrix exercises allocation boundaries and forks around 286 bytes and 64 KiB.

@@ -75,6 +75,10 @@ func TestTypedHeldErrors(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if n, err := Fsetxattr(-1, name, nil, 0, 0, 0); n != -1 || !errors.Is(err, syscall.EBADF) {
+		t.Fatal(n, err)
+	}
+
 	if n, err := Fgetxattr(-1, name, nil, 0, 0, 0); n != 0 || !errors.Is(err, syscall.EBADF) {
 		t.Fatalf("fgetxattr: size=%d err=%v", n, err)
 	}

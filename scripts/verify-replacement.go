@@ -44,8 +44,7 @@ func verify() error {
 	full := cirunner.CommandContext(ctx, "go", "test", "-count=1", "-json", "-covermode=atomic", "-coverprofile="+fullProfile, "./pkg/hostdata")
 	full.Env = append(os.Environ(), "CGO_ENABLED=0")
 	full.Stdout = io.MultiWriter(os.Stdout, fullLog)
-	full.Stderr = io.MultiWriter(os.Stderr, fullLog)
-	if e = errors.Join(full.Run(), fullLog.Close()); e != nil {
+	if e = errors.Join(full.RunWithDiagnostics(fullLog.Name()+".stderr.log"), fullLog.Close()); e != nil {
 		return e
 	}
 	packageCovered, packageTotal, e := completeHostdataCoverage(fullProfile)
@@ -65,8 +64,7 @@ func verify() error {
 	cmd := cirunner.CommandContext(ctx, "go", "test", "-count=1", "-json", "-run", "^Test(Replacement|RootReplacement)", "-covermode=atomic", "-coverprofile="+profile, "-coverpkg=./pkg/hostdata/...", "./pkg/hostdata")
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 	cmd.Stdout = io.MultiWriter(os.Stdout, log, &transcript)
-	cmd.Stderr = io.MultiWriter(os.Stderr, log)
-	if e := cmd.Run(); e != nil {
+	if e := cmd.RunWithDiagnostics(log.Name() + ".stderr.log"); e != nil {
 		return e
 	}
 	passed := 0
@@ -87,7 +85,7 @@ func verify() error {
 			passedNames[event.Test] = true
 		}
 	}
-	for _, name := range []string{"TestReplacementBorrowedAttributes", "TestReplacementBorrowedAttributeFailures", "TestReplacementNativeTimestampOracle", "TestReplacementCompressedMetadata", "TestReplacementCompressedMetadataFailures", "TestReplacementCompressedNativeFixture", "TestReplacementCopyStrategy", "TestReplacementCopyMetadata", "TestReplacementCopyNativeFixture", "TestReplacementCopyLargeFork", "TestReplacementBackupSparseStreams", "TestReplacementBackupMalformed", "TestReplacementBackupWriteFailures", "TestReplacementContextCancellation", "TestReplacementCleanupErrors", "TestReplacementContextSteps", "TestReplacementBackupBeyondLegacyLimits"} {
+	for _, name := range []string{"TestReplacementOptions", "TestReplacementFilesystemMacOSProfiles", "TestReplacementBorrowedAttributes", "TestReplacementBorrowedAttributeFailures", "TestReplacementNativeTimestampOracle", "TestReplacementCompressedMetadata", "TestReplacementCompressedMetadataFailures", "TestReplacementCompressedNativeFixture", "TestReplacementCopyStrategy", "TestReplacementCopyMetadata", "TestReplacementCopyNativeFixture", "TestReplacementCopyLargeFork", "TestReplacementBackupSparseStreams", "TestReplacementBackupMalformed", "TestReplacementBackupWriteFailures", "TestReplacementContextCancellation", "TestReplacementCleanupErrors", "TestReplacementContextSteps", "TestReplacementBackupBeyondLegacyLimits"} {
 		if !passedNames[name] {
 			return fmt.Errorf("required replacement suite missing: %s", name)
 		}
@@ -124,7 +122,7 @@ func verify() error {
 	}
 	covered, total := 0, 0
 	coverageFiles := map[string][2]int{"pkg/hostdata/replacement_copy.go": {}, "pkg/hostdata/replacement_backup.go": {}}
-	for _, name := range []string{"replacement.go", "replacement_root.go", "replacement_context.go", "replacement_values.go"} {
+	for _, name := range []string{"replacement.go", "replacement_options.go", "replacement_root.go", "replacement_context.go", "replacement_values.go", "replacement_filesystem.go"} {
 		coverageFiles["pkg/hostdata/"+name] = [2]int{}
 	}
 	if runtime.GOOS == "windows" {
@@ -147,6 +145,7 @@ func verify() error {
 	}
 	if runtime.GOOS == "darwin" {
 		coverageFiles["pkg/hostdata/replacement_copy_darwin.go"] = [2]int{}
+		coverageFiles["pkg/hostdata/replacement_filesystem_darwin.go"] = [2]int{}
 		coverageFiles["pkg/hostdata/replacement_volume_darwin.go"] = [2]int{}
 	}
 	blocks := map[string][2]int{}

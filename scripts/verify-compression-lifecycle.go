@@ -41,8 +41,7 @@ func verify() error {
 	cmd := cirunner.Command("go", "test", "-count=1", "-json", "-run=^(TestRecompress|TestCompressionResourceFork|TestCarrierNativeResourceFork|TestResourceFork|TestPathResourceForkNative|TestNativeCompressionAcquisition|TestNativeCompressionOwned|TestCompressionOperation|TestInstallHeldCompression|TestInstallCompression|TestCommitHeldCompression|TestCommitCompression|TestActivateCompression|TestCaptureCompressionMetadata|TestCompressionMetadata|TestCompressionLifecycle|TestQueryCompressionHeldNativeCorpus|TestCompressionNativeMetadata)", "-covermode=atomic", "-coverprofile="+profile, "./pkg/hostdata")
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 	cmd.Stdout = io.MultiWriter(os.Stdout, log, &transcript)
-	cmd.Stderr = io.MultiWriter(os.Stderr, log)
-	if e = cmd.Run(); e != nil {
+	if e = cmd.RunWithDiagnostics(log.Name() + ".stderr.log"); e != nil {
 		return e
 	}
 	required := map[string]bool{"TestResourceForkContextOwnership": true, "TestNativeCompressionOwnedValidation": true}

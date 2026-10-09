@@ -161,8 +161,7 @@ func qualify(root, filesystem string) (counts map[string]int, result error) {
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0", "APFS_COMPRESSION_MOUNT="+mount, "APFS_COMPRESSION_FILESYSTEM="+filesystem)
 	var transcript bytes.Buffer
 	cmd.Stdout = io.MultiWriter(log, &transcript)
-	cmd.Stderr = io.MultiWriter(os.Stderr, log)
-	runErr := cmd.Run()
+	runErr := cmd.RunWithDiagnostics(log.Name() + ".stderr.log")
 	if e = errors.Join(runErr, log.Close(), ctx.Err()); e != nil {
 		return nil, e
 	}

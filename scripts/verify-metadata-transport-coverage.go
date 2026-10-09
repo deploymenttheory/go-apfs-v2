@@ -41,8 +41,7 @@ func verify() error {
 	cmd := cirunner.Command("go", "test", "-count=1", "-json", "-run", "^(TestCompressionResourceFork|TestResourceFork|TestCarrier|TestCopyAccessTime(Invalid|Darwin)|TestRecordReadAccess(Invalid|Darwin)|TestCaptureXattrs|TestLibSystem|TestRecordAttribute|TestNativeBaseline|TestOpenWalk|TestLazyCarrier|TestNodeAndValue|TestValue|TestXattrValue|TestVolumeXattrValues|TestStreamedValues|TestOpenEntryTree|TestHFSValues|TestProjection|TestQuarantineCapture|TestQuarantineFile|TestACLIdentityCapture|TestAppleDoubleObject|TestPathCapturedRemoval|TestPathCapturedWrite|TestXattrIntent|TestSandboxCapture)", "-covermode=atomic", "-coverprofile="+profile, "-coverpkg=./internal/hosttime,./pkg/metatransport,./pkg/hostdata/...,./internal/hostwalk,./internal/tools,./pkg/apfs,./pkg/apfswrite,./pkg/hfsplus,./internal/decmpfs,./internal/testutil/largefork", "./pkg/metatransport", "./pkg/hostdata", "./pkg/hostdata/acl", "./pkg/hostdata/accesstime", "./pkg/hostdata/sandbox", "./pkg/hostdata/xattrintent", "./internal/hosttime", "./internal/hostwalk", "./internal/tools", "./pkg/apfs", "./pkg/apfswrite", "./pkg/hfsplus", "./internal/decmpfs", "./internal/testutil/largefork")
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 	cmd.Stdout = io.MultiWriter(os.Stdout, log, &transcript)
-	cmd.Stderr = io.MultiWriter(os.Stderr, log)
-	if e := cmd.Run(); e != nil {
+	if e := cmd.RunWithDiagnostics(log.Name() + ".stderr.log"); e != nil {
 		return e
 	}
 	passed := 0

@@ -41,8 +41,7 @@ func verify() error {
 	cmd := cirunner.Command("go", "test", "-count=1", "-json", "-run", "^TestRootMetadata", "-covermode=atomic", "-coverprofile="+profile, "./pkg/apfswrite")
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 	cmd.Stdout = io.MultiWriter(os.Stdout, log, &transcript)
-	cmd.Stderr = io.MultiWriter(os.Stderr, log)
-	if e := cmd.Run(); e != nil {
+	if e := cmd.RunWithDiagnostics(log.Name() + ".stderr.log"); e != nil {
 		return e
 	}
 	passed := 0

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"flag"
 	"io"
 	"os"
 	"os/exec"
@@ -167,19 +168,50 @@ func TestReporterWriteErrorsAndBoundedClose(t *testing.T) {
 }
 
 func TestDefaultReporterOwnsIndependentJSONLJournal(t *testing.T) {
+	if os.Getenv("CIRUNNER_DEFAULT_REPORTER_HELPER") == "1" {
+		// The default reporter is process-owned. Test its lifetime in a fresh
+		// process so other tests cannot initialize it first or reuse it closed.
+		r := DefaultReporter()
+		defer func() {
+			ctx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), 3*time.Second)
+			defer cancel()
+			if err := r.Close(ctx); err != nil {
+				t.Error(err)
+			}
+		}()
+		if r != DefaultReporter() {
+			t.Fatal("default reporter not shared")
+		}
+		c := CommandContext(t.Context(), os.Args[0], "-test.run=^TestCommandHelper$")
+		c.Env = append(withoutHelper(os.Environ()), "CIRUNNER_HELPER=bytes")
+		raw, err := c.Output()
+		if err != nil || !bytes.Equal(raw, []byte("out\x00\xff\n")) {
+			t.Fatal(err)
+		}
+		flush(t, r)
+		return
+	}
 	dir := t.TempDir()
 	t.Setenv("APFS_CI_REPORT_DIR", dir)
-	r := DefaultReporter()
-	if r != DefaultReporter() {
-		t.Fatal("default reporter not shared")
+	r := NewReporter(io.Discard, 256)
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), 3*time.Second)
+		defer cancel()
+		if err := r.Close(ctx); err != nil {
+			t.Error(err)
+		}
+	}()
+	args := []string{"-test.run=^TestDefaultReporterOwnsIndependentJSONLJournal$"}
+	// Keep the real child-process coverage in the parent's coverage run.
+	if coverage := flag.Lookup("test.gocoverdir"); coverage != nil && coverage.Value.String() != "" {
+		args = append(args, "-test.gocoverdir="+coverage.Value.String())
 	}
-	c := CommandContext(t.Context(), os.Args[0], "-test.run=^TestCommandHelper$")
-	c.Env = append(withoutHelper(os.Environ()), "CIRUNNER_HELPER=bytes")
-	raw, err := c.Output()
-	if err != nil || !bytes.Equal(raw, []byte("out\x00\xff\n")) {
-		t.Fatal(err)
+	c := CommandContext(t.Context(), os.Args[0], args...)
+	c.Options.Reporter = r
+	c.Env = append(withoutHelper(os.Environ()), "CIRUNNER_DEFAULT_REPORTER_HELPER=1")
+	if raw, err := c.CombinedOutput(); err != nil {
+		t.Fatalf("default reporter process: %v\n%s", err, raw)
 	}
-	flush(t, r)
 	paths, err := filepath.Glob(filepath.Join(dir, "commands-*.jsonl"))
 	if err != nil || len(paths) != 1 {
 		t.Fatal(paths, err)
@@ -201,7 +233,9 @@ func TestDefaultReporterOwnsIndependentJSONLJournal(t *testing.T) {
 			t.Fatal("invalid journal", string(line), err)
 		}
 	}
-	if err = r.Close(t.Context()); err != nil {
+	// Windows rejects deletion of an open journal. Require actual release after
+	// the owning process completes, rather than depending on TempDir cleanup.
+	if err = os.Remove(paths[0]); err != nil {
 		t.Fatal(err)
 	}
 }

@@ -20,6 +20,16 @@ func copyReplacementMetadata(source, target *os.File, info os.FileInfo) error {
 }
 func copyReplacementMetadataContext(ctx context.Context, source, target *os.File, info os.FileInfo) error {
 	birth := info.Sys().(*syscall.Stat_t).Birthtimespec
+	stored, err := FilesystemUsesXattrFiles(ctx, source)
+	if err != nil {
+		return err
+	}
+	if stored {
+		if err = copyReplacementFilesystemMetadataContext(ctx, source, target); err != nil {
+			return err
+		}
+		return SetCreationTime(target, time.Unix(birth.Sec, birth.Nsec))
+	}
 	return copyReplacementMetadataUsingContext(ctx, replacementCopyOps{
 		compressed: info.Sys().(*syscall.Stat_t).Flags&UFCompressed != 0,
 		list:       func() ([]string, error) { return ListXattrNames(source, MaxXattrListSize) },

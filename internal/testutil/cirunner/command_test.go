@@ -22,6 +22,9 @@ func TestCommandHelper(t *testing.T) {
 		return
 	}
 	switch mode {
+	case "json-diagnostics":
+		fmt.Fprintln(os.Stdout, `{"Action":"pass"}`)
+		fmt.Fprintln(os.Stderr, "go: downloading fixture.invalid/module v1.0.0")
 	case "bytes":
 		fmt.Fprint(os.Stdout, "out\x00\xff\n")
 		fmt.Fprint(os.Stderr, "err\x00\xfe\n")

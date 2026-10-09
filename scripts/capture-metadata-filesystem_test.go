@@ -41,7 +41,7 @@ func TestMetadataFilesystemNativeInventory(t *testing.T) {
 			if err := validateMetadataCapture(c); err != nil {
 				t.Fatal(err)
 			}
-			if err := captureprovenance.Verify(os.DirFS("."), c.Sources); err != nil {
+			if err := captureprovenance.VerifyReference(os.DirFS("."), c.Sources); err != nil {
 				t.Fatal(err)
 			}
 			if len(c.Cases) != 960 {
@@ -62,7 +62,7 @@ func TestMetadataFilesystemAttributeTargetInventory(t *testing.T) {
 	if c.Profile != "attribute-target" || len(c.Cases) != 192 || c.GoReadCases != 192 {
 		t.Fatal("incomplete attribute-target capture")
 	}
-	if err := captureprovenance.Verify(os.DirFS("."), c.Sources); err != nil {
+	if err := captureprovenance.VerifyReference(os.DirFS("."), c.Sources); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -186,7 +186,7 @@ func TestMetadataFilesystemPackedInventory(t *testing.T) {
 	if err := validateMetadataCapture(c); err != nil {
 		t.Fatal(err)
 	}
-	if err := captureprovenance.Verify(os.DirFS("."), c.Sources); err != nil {
+	if err := captureprovenance.VerifyReference(os.DirFS("."), c.Sources); err != nil {
 		t.Fatal(err)
 	}
 	c.Profile = ""

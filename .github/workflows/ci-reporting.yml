@@ -42,7 +42,7 @@ jobs:
         env:
           CGO_ENABLED: "1"
         run: |
-          apfs-ci-runner --suite ci-reporting/race --timeout 4m -- go test -json -race -count=1 ./internal/testutil/cirunner ./internal/testutil/captureprovenance ./internal/evidenceaudit
+          apfs-ci-runner --suite ci-reporting/race --timeout 4m -- go test -json -race -count=1 ./internal/testutil/cirunner ./internal/testutil/captureprovenance ./internal/testutil/nativeevidence ./internal/evidenceaudit
       - name: Retain complete CI command diagnostics
         if: always()
         uses: actions/upload-artifact@v7

@@ -58,16 +58,15 @@ func main() {
 		if c.Schema != 1 || len(c.Volumes) != 2 {
 			panic("native inventory")
 		}
-		if err := captureprovenance.Verify(os.DirFS("."), c.Sources); err != nil {
+		reference, err := captureprovenance.Reference(os.DirFS("."), c.Sources)
+		must(err)
+		if err := captureprovenance.Verify(reference, c.Sources); err != nil {
 			panic(err)
 		}
-		for p, want := range c.Sources {
+		for p := range c.Sources {
 			if strings.HasPrefix(p, "testdata/") || strings.HasPrefix(p, "scripts/") || strings.HasPrefix(p, ".github/") || p == "go.mod" || p == "go.sum" {
-				b, e := os.ReadFile(p)
+				_, e := captureprovenance.ReadSource(reference, c.Sources, p)
 				must(e)
-				if hash(b) != want {
-					panic("stale source " + p)
-				}
 			}
 		}
 		a := c.Volumes[0]
@@ -94,7 +93,11 @@ func main() {
 				panic("native counts")
 			}
 		}
-		fmt.Fprintf(&out, "// %s SHA256 %s\nvar apfsCreate%d = [...]scalarRange{\n", p, hash(raw), major)
+		// The table consumes the complete scalar result domain for this native
+		// profile. Compiler, driver and module provenance stays in the immutable
+		// capture ledger; it cannot change a table with identical native results.
+		input := append([]byte(fmt.Sprintf("apfs-create-scalars-v1/macos%d\n", major)), a.Results...)
+		fmt.Fprintf(&out, "// %s native scalar SHA256 %s\nvar apfsCreate%d = [...]scalarRange{\n", p, hash(input), major)
 		for r := 0; r < len(a.Results); r++ {
 			if a.Results[r] != 0 {
 				continue

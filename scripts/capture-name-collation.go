@@ -87,11 +87,60 @@ func sum(b []byte) string { s := sha256.Sum256(b); return hex.EncodeToString(s[:
 func main() {
 	out := flag.String("out", "artifacts/name-collation", "new native corpus directory")
 	check := flag.Bool("check", false, "require complete retained native version baseline")
+	comparison := flag.String("compare", "", "compare an independently sealed native name corpus")
 	flag.Parse()
-	if e := run(*out, *check); e != nil {
+	var err error
+	if *comparison != "" {
+		err = compareNameCapture(*comparison)
+	} else {
+		err = run(*out, *check)
+		if err == nil {
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+			err = captureprovenance.SealExecution(ctx, *out)
+			cancel()
+		}
+	}
+	if e := err; e != nil {
 		fmt.Fprintln(os.Stderr, e)
 		os.Exit(1)
 	}
+}
+
+func compareNameCapture(dir string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	if err := captureprovenance.VerifyExecution(ctx, dir); err != nil {
+		return err
+	}
+	read := func(path string) (capture, error) {
+		var result capture
+		f, err := os.Open(path)
+		if err != nil {
+			return result, err
+		}
+		z, err := gzip.NewReader(f)
+		if err != nil {
+			return result, errors.Join(err, f.Close())
+		}
+		err = json.NewDecoder(z).Decode(&result)
+		return result, errors.Join(err, z.Close(), f.Close())
+	}
+	fresh, err := read(filepath.Join(dir, "native.json.gz"))
+	if err != nil {
+		return err
+	}
+	profile, err := osversion.ParseProductVersion(fresh.Host)
+	if err != nil {
+		return err
+	}
+	if _, err = osversion.ProfileForMacOS(profile); err != nil {
+		return err
+	}
+	previous, err := read(fmt.Sprintf("testdata/appledouble/native/name-collation-macos%d.json.gz", profile.Major))
+	if err != nil {
+		return err
+	}
+	return compareStable(previous, fresh)
 }
 func run(out string, check bool) error {
 	if runtime.GOOS != "darwin" {
@@ -649,7 +698,7 @@ func validateRecords(v volumeCapture) error {
 }
 func compareStable(a, b capture) error {
 	for _, sources := range []map[string]string{a.Sources, b.Sources} {
-		if err := captureprovenance.Verify(os.DirFS("."), sources); err != nil {
+		if err := captureprovenance.VerifyReference(os.DirFS("."), sources); err != nil {
 			return err
 		}
 	}
@@ -676,13 +725,6 @@ func compareStable(a, b capture) error {
 		}
 	}
 
-	for key, want := range b.Sources {
-		if strings.HasPrefix(key, "testdata/") || strings.HasPrefix(key, "scripts/") || strings.HasPrefix(key, ".github/") || key == "go.mod" || key == "go.sum" {
-			if a.Sources[key] != want {
-				return fmt.Errorf("stale native source %s", key)
-			}
-		}
-	}
 	for i, prior := range a.Volumes {
 		fresh := b.Volumes[i]
 		if prior.Kind != fresh.Kind || prior.Native.Filesystem != fresh.Native.Filesystem || prior.Native.Sensitive != fresh.Native.Sensitive || len(prior.Native.Cases) != casesPerVolume || len(prior.Records) != len(fresh.Records) {

@@ -216,7 +216,7 @@ func main() {
 	} else {
 		var old report
 		must(json.Unmarshal(read(filepath.Join(fixture, "manifest.json")), &old))
-		must(captureprovenance.Verify(os.DirFS("."), old.Sources))
+		must(captureprovenance.VerifyReference(os.DirFS("."), old.Sources))
 		if !reflect.DeepEqual(old.Cases, r.Cases) {
 			panic("native large-compression observations changed; fresh evidence retained")
 		}

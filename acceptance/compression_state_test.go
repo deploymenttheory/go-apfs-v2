@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/captureprovenance"
 	"github.com/deploymenttheory/go-apfs-v2/internal/tools"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfswrite"
@@ -59,14 +60,12 @@ func compressionStateLoad(t *testing.T) compressionStateCorpus {
 	if c.Schema != 1 || len(c.Cases) != 160 || c.Host == "" || c.Compiler == "" || c.SDK == "" {
 		t.Fatal("incomplete native corpus")
 	}
-	for _, path := range []string{"scripts/capture-compression-state.go", "testdata/appledouble/native/compression-state.c", "testdata/appledouble/native/compression-lifecycle.json.gz", "go.mod", "go.sum"} {
-		b, e := os.ReadFile("../" + path)
-		if e != nil {
-			t.Fatal(e)
-		}
-		if fmt.Sprintf("%x", sha256.Sum256(b)) != c.Sources[path] {
-			t.Fatal("stale native provenance", path)
-		}
+	// Verify the original source bytes, including the parent lifecycle capture;
+	// today's toolchain and harness must not invalidate a native observation.
+	if e = captureprovenance.VerifyReference(os.DirFS(".."), c.Sources,
+		"scripts/capture-compression-state.go", "testdata/appledouble/native/compression-state.c",
+		"testdata/appledouble/native/compression-lifecycle.json.gz", "go.mod", "go.sum"); e != nil {
+		t.Fatal(e)
 	}
 	for _, arch := range []string{"arm64", "x86_64"} {
 		if len(c.Sources[arch+"-compression-state.ast.json"]) != 64 {

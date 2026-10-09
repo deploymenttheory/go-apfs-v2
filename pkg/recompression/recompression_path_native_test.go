@@ -265,11 +265,15 @@ func replayNativePathLimitCase(t *testing.T, n nativePathLimits, c nativePathLim
 func verifyNativePathSources(t *testing.T, name string, sources map[string]string, oracle, script string) {
 	t.Helper()
 	currentFiles := map[string]string{"probe.c": filepath.Join("..", "..", "testdata", "appledouble", "native", oracle), "capture.go": filepath.Join("..", "..", "scripts", script)}
-	harness, err := captureprovenance.Inventory(os.DirFS("../.."))
+	referenceSources, referenceErr := captureprovenance.Reference(os.DirFS("../.."), sources)
+	if referenceErr != nil {
+		t.Fatal(referenceErr)
+	}
+	harness, err := captureprovenance.Inventory(referenceSources)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = captureprovenance.Verify(os.DirFS("../.."), sources); err != nil {
+	if err = captureprovenance.Verify(referenceSources, sources); err != nil {
 		t.Fatal(err)
 	}
 	expectedSourceCount := 15 + len(harness)

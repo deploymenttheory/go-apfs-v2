@@ -68,7 +68,11 @@ func TestRecompressionAccessNativeEvidence(t *testing.T) {
 				t.Fatal("incomplete independent access evidence", len(capture.Cases), len(capture.OpenCases))
 			}
 			version, err := osversion.Parse(capture.Host)
-			if err := captureprovenance.Verify(os.DirFS("../.."), capture.Sources); err != nil {
+			referenceSources, referenceErr := captureprovenance.Reference(os.DirFS("../.."), capture.Sources)
+			if referenceErr != nil {
+				t.Fatal(referenceErr)
+			}
+			if err := captureprovenance.Verify(referenceSources, capture.Sources); err != nil {
 				t.Fatal(err)
 			}
 			if err != nil {
@@ -79,7 +83,7 @@ func TestRecompressionAccessNativeEvidence(t *testing.T) {
 				t.Fatal(err)
 			}
 			for _, source := range []string{"scripts/capture-recompression-access.go", "testdata/appledouble/native/recompression-access.c", "testdata/appledouble/native/recompression-open.c", "testdata/appledouble/native/compression-lz4.json.gz", "testdata/appledouble/native/recompression-access-source/sources.json", "testdata/appledouble/native/recompression-access-source/vfs_subr.c.gz", "testdata/appledouble/native/recompression-access-source/vfs_syscalls.c.gz", "testdata/appledouble/native/recompression-access-source/kern_authorization.c.gz", "testdata/appledouble/native/recompression-access-source/kern_credential.c.gz"} {
-				body, err := os.ReadFile(filepath.Join("../..", source))
+				body, err := captureprovenance.ReadSource(referenceSources, capture.Sources, source)
 				if err != nil {
 					t.Fatal(err)
 				}

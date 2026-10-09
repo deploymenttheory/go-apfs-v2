@@ -118,9 +118,6 @@ func main() {
 	driver := "testdata/appledouble/native/compression-zlib-source.c"
 	for _, path := range []string{driver, "scripts/verify-compression-zlib-source.go"} {
 		r.Sources[path] = hash(read(path))
-		if !*capture && old.Sources[path] != r.Sources[path] {
-			panic("stale driver provenance: " + path)
-		}
 	}
 	helper := filepath.Join(*out, "reference")
 	args := []string{"clang", "-DNO_GZIP", "-Wno-deprecated-non-prototype", "-I", *out, driver}
@@ -178,7 +175,7 @@ func main() {
 		}
 	}
 	if !*capture {
-		must(captureprovenance.Verify(os.DirFS("."), old.Sources))
+		must(captureprovenance.VerifyReference(os.DirFS("."), old.Sources, driver, "scripts/verify-compression-zlib-source.go"))
 	}
 	if len(r.Cases) != 366 {
 		panic("incomplete source qualification")

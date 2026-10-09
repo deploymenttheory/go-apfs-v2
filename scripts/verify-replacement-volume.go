@@ -101,8 +101,7 @@ func verifyVolume() error {
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0", "APFS_REPLACEMENT_VOLUME_ORACLE="+oracle)
 	var transcript bytes.Buffer
 	cmd.Stdout = io.MultiWriter(os.Stdout, log, &transcript)
-	cmd.Stderr = io.MultiWriter(os.Stderr, log)
-	if err := errors.Join(cmd.Run(), log.Close()); err != nil {
+	if err := errors.Join(cmd.RunWithDiagnostics(log.Name()+".stderr.log"), log.Close()); err != nil {
 		return err
 	}
 	passed := map[string]bool{}

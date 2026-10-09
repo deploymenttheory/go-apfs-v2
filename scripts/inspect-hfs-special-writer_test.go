@@ -67,11 +67,15 @@ func TestInspectWriterHFSSpecial(t *testing.T) {
 		if err != nil || uint64(target.Major) != major {
 			t.Fatal("mismatched native target", err)
 		}
-		harness, err := captureprovenance.Inventory(os.DirFS("."))
+		reference, err := captureprovenance.Reference(os.DirFS("."), capture.Sources)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err = captureprovenance.Verify(os.DirFS("."), capture.Sources); err != nil {
+		harness, err := captureprovenance.Inventory(reference)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = captureprovenance.Verify(reference, capture.Sources); err != nil {
 			t.Fatal(err)
 		}
 		if capture.Schema != 1 || len(capture.Volumes) != 2 || len(capture.Sources) != 16+len(harness) || capture.Compiler == "" || capture.SDK == "" {
@@ -90,8 +94,8 @@ func TestInspectWriterHFSSpecial(t *testing.T) {
 				t.Fatal("unknown native provenance", name)
 			}
 			if strings.HasPrefix(name, "testdata/") || strings.HasPrefix(name, "scripts/") || name == "go.mod" || name == "go.sum" {
-				body, err := os.ReadFile(name)
-				if err != nil || specialHash(body) != digest {
+				_, err := captureprovenance.ReadSource(reference, capture.Sources, name)
+				if err != nil {
 					t.Fatal("stale native provenance", name, err)
 				}
 			}
