@@ -351,7 +351,9 @@ func captureMetadataFilesystem(out, profile string) (result error) {
 				for _, state := range states {
 					for _, action := range metadataActions {
 						id := fmt.Sprintf("%s/%s/%s/%s", filesystem, kind, state, action)
-						root := filepath.Join(mount, "case")
+						// Keep cases independent until the volume is detached. Removing
+						// an attribute-file target on mounted ExFAT can stall on macOS 15.
+						root := filepath.Join(mount, fmt.Sprintf("case-%04d", len(capture.Cases)))
 						if err = os.Mkdir(root, 0755); err != nil {
 							return fmt.Errorf("create case directory %s: %w", id, err)
 						}
@@ -391,9 +393,6 @@ func captureMetadataFilesystem(out, profile string) (result error) {
 						}
 						capture.GoReadCases++
 						fmt.Printf("CASE %s (%d)\n", id, len(capture.Cases))
-						if err = os.RemoveAll(root); err != nil {
-							return err
-						}
 					}
 				}
 			}
