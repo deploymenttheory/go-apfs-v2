@@ -30,7 +30,7 @@ import (
 
 const reportingModule = "github.com/deploymenttheory/go-apfs-v2/"
 
-var reportingPackages = []string{"internal/testutil/cirunner", "internal/testutil/captureprovenance", "internal/evidenceaudit"}
+var reportingPackages = []string{"internal/testutil/cirunner", "internal/testutil/captureprovenance", "internal/testutil/nativeevidence", "internal/evidenceaudit"}
 
 type reportingCount struct{ Covered, Statements int64 }
 

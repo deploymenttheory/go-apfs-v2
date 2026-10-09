@@ -80,6 +80,7 @@ type Receipt struct {
 	Consumer    string            `json:"consumer"`
 	Execution   Execution         `json:"execution"`
 	Cases       map[string]string `json:"cases"`
+	Artifacts   map[string]string `json:"artifacts"`
 	Complete    bool              `json:"complete"`
 }
 
@@ -187,6 +188,11 @@ func sameExecution(actual, expected Execution) error {
 	if actual.Repository == "" || actual.Revision == "" || actual.Run == "" || actual.Attempt == "" || actual.Job == "" || actual.Go == "" || len(actual.Sources) == 0 {
 		return fmt.Errorf("incomplete execution provenance")
 	}
+	for name, hash := range actual.Sources {
+		if !fs.ValidPath(name) || !validDigest(hash) {
+			return fmt.Errorf("invalid execution source %q", name)
+		}
+	}
 	if actual.Repository != expected.Repository || actual.Revision != expected.Revision || actual.Run != expected.Run || actual.Attempt != expected.Attempt {
 		return fmt.Errorf("mixed repository, revision, run or attempt")
 	}
@@ -290,7 +296,10 @@ func VerifyBundle(ctx context.Context, store fs.FS, c Contract, b Bundle, expect
 		inputs[item.ID+"/input"] = item.Input
 		inputs[item.ID+"/result"] = item.Result
 	}
-	for _, group := range []map[string]string{inputs, b.Capture.Sources, b.Capture.Artifacts, b.Execution.Sources} {
+	// Execution source hashes are checked against the receiving checkout above.
+	// Only the independent native oracle's original inputs belong to its blob
+	// archive; current Go verification inputs do not become oracle prerequisites.
+	for _, group := range []map[string]string{inputs, b.Capture.Sources, b.Capture.Artifacts} {
 		if err = verifyBlobs(ctx, store, group); err != nil {
 			return err
 		}
@@ -319,6 +328,14 @@ func VerifyReceipt(c Contract, b Bundle, r Receipt, expected Execution) error {
 	}
 	if err = sameExecution(r.Execution, expected); err != nil {
 		return err
+	}
+	if len(r.Artifacts) == 0 {
+		return fmt.Errorf("missing Go verification artifacts")
+	}
+	for name, hash := range r.Artifacts {
+		if !fs.ValidPath(name) || !validDigest(hash) {
+			return fmt.Errorf("invalid Go verification artifact %q", name)
+		}
 	}
 	if len(r.Cases) != len(c.Cases) {
 		return fmt.Errorf("incomplete verification inventory")

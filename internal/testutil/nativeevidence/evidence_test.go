@@ -30,7 +30,7 @@ func fixture(t *testing.T) (Contract, Bundle, Receipt, fstest.MapFS) {
 	for _, id := range c.Cases {
 		b.Observation.Cases = append(b.Observation.Cases, Case{id, put(id + "/input"), put(id + "/native")})
 	}
-	r := Receipt{Schema: Schema, Contract: hash, Observation: ObservationDigest(b.Observation), Consumer: "linux", Execution: execution, Complete: true, Cases: map[string]string{}}
+	r := Receipt{Schema: Schema, Contract: hash, Observation: ObservationDigest(b.Observation), Consumer: "linux", Execution: execution, Complete: true, Cases: map[string]string{}, Artifacts: map[string]string{"tests.jsonl": Digest([]byte("current Go transcript"))}}
 	for _, id := range c.Cases {
 		r.Cases[id] = "pass"
 	}
@@ -58,6 +58,7 @@ func TestOriginalProvenanceAndCurrentExecutionAreIndependent(t *testing.T) {
 	old := clone(b)
 	old.Execution.Revision = "old checkout"
 	old.Execution.Go = "old go"
+	delete(store, "blobs/"+old.Execution.Sources["go.mod"])
 	if err := VerifyBundle(context.Background(), store, c, old, nil); err != nil {
 		t.Fatal("historical provenance invalidated", err)
 	}
@@ -124,6 +125,7 @@ func TestNativeBundleFailures(t *testing.T) {
 		func(b *Bundle) { delete(b.Capture.Environment, "sdk") }, func(b *Bundle) { b.Capture.Sources = nil }, func(b *Bundle) { b.Capture.Artifacts = nil },
 		func(b *Bundle) { b.Execution.Repository = "other" }, func(b *Bundle) { b.Execution.Revision = "other" }, func(b *Bundle) { b.Execution.Run = "other" }, func(b *Bundle) { b.Execution.Attempt = "other" },
 		func(b *Bundle) { b.Execution.Job = "" }, func(b *Bundle) { b.Execution.Go = "" }, func(b *Bundle) { b.Execution.Sources = nil },
+		func(b *Bundle) { b.Execution.Sources["../outside"] = Digest(nil) }, func(b *Bundle) { b.Execution.Sources["go.mod"] = "invalid" },
 		func(b *Bundle) { b.Observation.Prerequisites = map[string]string{"unexpected": Digest(nil)} },
 		func(b *Bundle) { b.Observation.Cases = b.Observation.Cases[:1] }, func(b *Bundle) { b.Observation.Cases[1] = b.Observation.Cases[0] }, func(b *Bundle) { b.Observation.Cases[1].ID = "unexpected" },
 		func(b *Bundle) { b.Observation.Cases[0].Input = "invalid" }, func(b *Bundle) { b.Observation.Cases[0].Result = Digest([]byte("missing")) }, func(b *Bundle) { b.Capture.Sources[""] = Digest(nil) },
@@ -254,6 +256,17 @@ func TestAllDeclaredConsumersAreRequired(t *testing.T) {
 
 func TestReceiptFailures(t *testing.T) {
 	c, b, r, _ := fixture(t)
+	for _, mutate := range []func(*Receipt){
+		func(r *Receipt) { r.Artifacts = nil },
+		func(r *Receipt) { r.Artifacts = map[string]string{"../outside": Digest(nil)} },
+		func(r *Receipt) { r.Artifacts = map[string]string{"tests.jsonl": "invalid"} },
+	} {
+		bad := clone(r)
+		mutate(&bad)
+		if err := VerifyReceipt(c, b, bad, r.Execution); err == nil {
+			t.Fatal("invalid verification artifact accepted")
+		}
+	}
 	for i, mutate := range []func(*Receipt){func(r *Receipt) { r.Schema++ }, func(r *Receipt) { r.Complete = false }, func(r *Receipt) { r.Contract = "wrong" }, func(r *Receipt) { r.Observation = "wrong" }, func(r *Receipt) { r.Execution.Run = "wrong" }, func(r *Receipt) { delete(r.Cases, c.Cases[0]) }, func(r *Receipt) { r.Cases[c.Cases[0]] = "skip" }, func(r *Receipt) { r.Cases[c.Cases[0]] = "fail" }} {
 		bad := clone(r)
 		mutate(&bad)
