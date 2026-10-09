@@ -64,6 +64,13 @@ func TestAdmissionEvidence(t *testing.T) {
 	for name, hash := range harness {
 		original.Sources[name] = hash
 	}
+	for _, name := range bound {
+		body, err := os.ReadFile(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		original.Sources[name] = sum(body)
+	}
 	if e := compare(original, clone(original)); e != nil {
 		t.Fatal(e)
 	}

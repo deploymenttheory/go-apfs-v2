@@ -186,12 +186,8 @@ func main() {
 		defer z.Close()
 		var old capture
 		must(json.NewDecoder(z).Decode(&old))
-		must(captureprovenance.Verify(os.DirFS("."), old.Sources))
-		for _, path := range []string{source, "scripts/capture-compression-writer.go"} {
-			if old.Sources[path] != c.Sources[path] {
-				panic("stale capture provenance: " + path)
-			}
-		}
+		must(captureprovenance.VerifyReference(os.DirFS("."), old.Sources, source, "scripts/capture-compression-writer.go"))
+
 		if !reflect.DeepEqual(c.Cases, old.Cases) || !reflect.DeepEqual(c.Selections, old.Selections) {
 			panic("native compression writer corpus changed")
 		}

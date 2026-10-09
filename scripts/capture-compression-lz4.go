@@ -428,7 +428,7 @@ func run(out string, check bool) (result error) {
 		if e = json.NewDecoder(z).Decode(&old); e != nil {
 			return e
 		}
-		if err := captureprovenance.Verify(os.DirFS("."), old.Sources); err != nil {
+		if err := captureprovenance.VerifyReference(os.DirFS("."), old.Sources); err != nil {
 			return err
 		}
 		if old.Schema != c.Schema || !reflect.DeepEqual(old.Buffers, c.Buffers) || !reflect.DeepEqual(old.Kernel, c.Kernel) || !reflect.DeepEqual(old.Decoders, c.Decoders) {

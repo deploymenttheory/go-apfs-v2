@@ -184,7 +184,7 @@ func captureFork(out string, check bool) (result error) {
 		if e = json.NewDecoder(z).Decode(&prior); e != nil {
 			return e
 		}
-		if err := captureprovenance.Verify(os.DirFS("."), prior.Sources); err != nil {
+		if err := captureprovenance.VerifyReference(os.DirFS("."), prior.Sources); err != nil {
 			return err
 		}
 		version, e := osversion.ParseProductVersion(prior.Host)

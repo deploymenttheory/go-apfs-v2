@@ -353,7 +353,7 @@ func run(out string, check bool) (result error) {
 		if e = json.NewDecoder(z).Decode(&prior); e != nil {
 			return e
 		}
-		if err := captureprovenance.Verify(os.DirFS("."), prior.Sources); err != nil {
+		if err := captureprovenance.VerifyReference(os.DirFS("."), prior.Sources); err != nil {
 			return err
 		}
 		if prior.Schema != capture.Schema || len(prior.Cases) != len(capture.Cases) {

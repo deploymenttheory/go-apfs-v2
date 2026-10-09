@@ -384,7 +384,7 @@ func run(out string, check bool) (result error) {
 		if e = json.NewDecoder(reader).Decode(&expected); e != nil {
 			return e
 		}
-		if err := captureprovenance.Verify(os.DirFS("."), expected.Sources); err != nil {
+		if err := captureprovenance.VerifyReference(os.DirFS("."), expected.Sources); err != nil {
 			return err
 		}
 		if expected.Schema != c.Schema || !reflect.DeepEqual(expected.Cases, c.Cases) {

@@ -261,12 +261,8 @@ func main() {
 		defer z.Close()
 		var old capture
 		must(json.NewDecoder(z).Decode(&old))
-		must(captureprovenance.Verify(os.DirFS("."), old.Sources))
-		for _, path := range []string{source, "scripts/capture-compression-blocks.go"} {
-			if old.Sources[path] != c.Sources[path] {
-				panic("stale retained source provenance: " + path)
-			}
-		}
+		must(captureprovenance.VerifyReference(os.DirFS("."), old.Sources, source, "scripts/capture-compression-blocks.go"))
+
 		if !reflect.DeepEqual(old.Cases, c.Cases) || !reflect.DeepEqual(old.Bounded, c.Bounded) || !bytes.Equal(old.LegacyV1, c.LegacyV1) || !bytes.Equal(old.LegacyV1Plain, c.LegacyV1Plain) {
 			panic("native codec observations changed; fresh evidence is retained in " + *out)
 		}

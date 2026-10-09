@@ -649,7 +649,7 @@ func validateRecords(v volumeCapture) error {
 }
 func compareStable(a, b capture) error {
 	for _, sources := range []map[string]string{a.Sources, b.Sources} {
-		if err := captureprovenance.Verify(os.DirFS("."), sources); err != nil {
+		if err := captureprovenance.VerifyReference(os.DirFS("."), sources); err != nil {
 			return err
 		}
 	}
@@ -676,13 +676,6 @@ func compareStable(a, b capture) error {
 		}
 	}
 
-	for key, want := range b.Sources {
-		if strings.HasPrefix(key, "testdata/") || strings.HasPrefix(key, "scripts/") || strings.HasPrefix(key, ".github/") || key == "go.mod" || key == "go.sum" {
-			if a.Sources[key] != want {
-				return fmt.Errorf("stale native source %s", key)
-			}
-		}
-	}
 	for i, prior := range a.Volumes {
 		fresh := b.Volumes[i]
 		if prior.Kind != fresh.Kind || prior.Native.Filesystem != fresh.Native.Filesystem || prior.Native.Sensitive != fresh.Native.Sensitive || len(prior.Native.Cases) != casesPerVolume || len(prior.Records) != len(fresh.Records) {

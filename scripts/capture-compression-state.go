@@ -289,7 +289,7 @@ func run(out string, check bool, foreign string) (result error) {
 		if e = load(fixture, &retained); e != nil {
 			return e
 		}
-		if err := captureprovenance.Verify(os.DirFS("."), retained.Sources); err != nil {
+		if err := captureprovenance.VerifyReference(os.DirFS("."), retained.Sources); err != nil {
 			return err
 		}
 		if !reflect.DeepEqual(c.Cases, retained.Cases) {

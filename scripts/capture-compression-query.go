@@ -322,7 +322,7 @@ func run(out string, check bool) (result error) {
 		if e = json.NewDecoder(reader).Decode(&expected); e != nil {
 			return e
 		}
-		if err := captureprovenance.Verify(os.DirFS("."), expected.Sources); err != nil {
+		if err := captureprovenance.VerifyReference(os.DirFS("."), expected.Sources); err != nil {
 			return err
 		}
 		// Marshal both inventories to compare every raw observation field while
