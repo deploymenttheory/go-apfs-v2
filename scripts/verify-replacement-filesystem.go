@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/captureprovenance"
@@ -149,7 +150,15 @@ func captureEvidence(dir string) error {
 			return e
 		}
 	}
+	if err := archiveSources(dir, report.Sources); err != nil {
+		return err
+	}
+	report.Artifacts["sources.json.gz"], e = digest(filepath.Join(dir, "sources.json.gz"))
+	if e != nil {
+		return e
+	}
 	return saveJSON(filepath.Join(dir, "report.json"), report)
+
 }
 func validateCases(b []byte) error {
 	var cases []struct {
@@ -210,21 +219,32 @@ func replayEvidence(dir string) error {
 			return fmt.Errorf("missing native source %s", name)
 		}
 	}
+	archived, err := readArchivedSources(filepath.Join(dir, "sources.json.gz"))
+	if err != nil {
+		return err
+	}
+	if len(archived) != len(report.Sources) {
+		return errors.New("incomplete archived source inventory")
+	}
 	for name, want := range report.Sources {
 		if !filepath.IsLocal(name) {
 			return errors.New("nonlocal evidence source")
 		}
-		for _, path := range []string{name, filepath.Join(dir, name)} {
-			sum, e := digest(path)
-			if e != nil {
-				return e
-			}
-			if sum != want {
-				return fmt.Errorf("source mismatch %s", path)
-			}
+		sum, e := digest(name)
+		if e != nil {
+			return e
+		}
+		if sum != want {
+			return fmt.Errorf("current source mismatch %s", name)
+		}
+		b, ok := archived[name]
+		h := sha256.Sum256(b)
+		if !ok || hex.EncodeToString(h[:]) != want {
+			return fmt.Errorf("archived source mismatch %s", name)
 		}
 	}
-	for _, name := range []string{"arm64.ast.json.gz", "x86_64.ast.json.gz", "cases.json.gz", "native.jsonl"} {
+
+	for _, name := range []string{"arm64.ast.json.gz", "x86_64.ast.json.gz", "cases.json.gz", "native.jsonl", "sources.json.gz"} {
 		want := report.Artifacts[name]
 		sum, e := digest(filepath.Join(dir, name))
 		if e != nil {
@@ -323,4 +343,58 @@ func nativeInputs() []string {
 		"scripts/generate-darwin-wrappers.go", "internal/darwinabi/zsyscall_darwin_arm64.go", "internal/darwinabi/zsyscall_darwin_arm64.s",
 		"internal/darwinabi/zsyscall_darwin_amd64.go", "internal/darwinabi/zsyscall_darwin_amd64.s", "go.mod", "go.sum",
 	}
+}
+
+// Frozen source bytes are evidence data, not runnable copies of the CI harness.
+// Preserve and verify every byte in an archive; never exempt live source paths
+// from the repository's process reporting audit.
+func archiveSources(dir string, hashes map[string]string) error {
+	sources := map[string][]byte{}
+	for name, want := range hashes {
+		path := filepath.Join(dir, name)
+		b, e := os.ReadFile(path)
+		if e != nil {
+			return e
+		}
+		sum := sha256.Sum256(b)
+		if hex.EncodeToString(sum[:]) != want {
+			return fmt.Errorf("capture source changed: %s", name)
+		}
+		sources[name] = b
+	}
+	b, e := json.Marshal(sources)
+	if e != nil {
+		return e
+	}
+	if e = gzipFile(filepath.Join(dir, "sources.json.gz"), b); e != nil {
+		return e
+	}
+	names := make([]string, 0, len(sources))
+	for name := range sources {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		if e = os.Remove(filepath.Join(dir, name)); e != nil {
+			return e
+		}
+	}
+	return nil
+}
+func readArchivedSources(path string) (map[string][]byte, error) {
+	f, e := os.Open(path)
+	if e != nil {
+		return nil, e
+	}
+	defer f.Close()
+	z, e := gzip.NewReader(f)
+	if e != nil {
+		return nil, e
+	}
+	defer z.Close()
+	var sources map[string][]byte
+	if e = json.NewDecoder(z).Decode(&sources); e != nil {
+		return nil, e
+	}
+	return sources, nil
 }

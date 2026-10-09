@@ -9,7 +9,7 @@
   "sources": {
     ".github/actions/setup-ci-runner/action.yml": "228d422c9c21968f47e283e5d203a233b7909c9187685b5a47b288585af27672",
     ".github/workflows/replacement.yml": "96d346c21a249e44f37d06c2a0f4133e3eab936b99c9c8f493b2e7d656890507",
-    "go.mod": "76795672275ac3d60ba3de19ee78905412c498d1986f1cdf90822fe17f7ef6a7",
+    "go.mod": "b4cde0c08485ec13f736e78530651dc2adadd921e70091085add12ab1a3e7421",
     "go.sum": "778f6ac1c0bde003e457fd2ff00399b33d054338c64b3bae6cc65f42ce027c1a",
     "internal/darwinabi/zsyscall_darwin_amd64.go": "7e098b56bcee2a8d5bced7cbc623e5b16e688cc7ee49e892dc46f611a42bb228",
     "internal/darwinabi/zsyscall_darwin_amd64.s": "898d443194d680663efa2a5c5ca7772950644f4ce8f9cd53473f8ea3ff4e6421",
@@ -41,13 +41,14 @@
     "pkg/hostdata/replacement_volume_darwin_test.go": "bfa917af4f9200e5b3eeb9839c4d353baae22a6a6d8498441014be53a769b88c",
     "scripts/ci-run.go": "6cb03c24b3b0e821f7ab5ef74db3084267efc0978b43feba98e4bc0bd01060f7",
     "scripts/generate-darwin-wrappers.go": "dec26007fd21ecda0af82f7ed9785ad5a068401d8b032300737d9ed0d87d53a8",
-    "scripts/verify-replacement-filesystem.go": "096b593537c43bd53876ec7fd8b957c504ad63aa57660ee56a9b0fe401479c56",
+    "scripts/verify-replacement-filesystem.go": "40f21f6f0454f2c79cb5124ae31e1a3a0ac0f17a08d00b731135883c86b0a9a5",
     "testdata/appledouble/native/replacement-filesystem.c": "edd7145a8cb3c99b411f30d891e79c9ff99f598785ed9198296962bba028172e"
   },
   "artifacts": {
-    "arm64.ast.json.gz": "7d44b5669a570b598683ea6cd595e1a9d932d41d6f6f4dc90da17a189dd58816",
+    "arm64.ast.json.gz": "ed8b5366f3c42d1f41f92bb047923aa37a235908b3adef6d66024158e1adfe1d",
     "cases.json.gz": "2568421215ce19e95985b34f9193d789e18b20adc6f662345a4ec56fbc7c43ee",
-    "native.jsonl": "b973396a7832eb68a43745f39c999eb24ce38c9cd36f39631eae0a65257e40d2",
-    "x86_64.ast.json.gz": "e4005a7ad70c663feceb1d14efffee7853db6b7b7f8afda030270ec9a5eba720"
+    "native.jsonl": "c0c16453c73950ac47c99cfe7e293e0f68b354e900677a1a2bb9e1ca26589675",
+    "sources.json.gz": "2624a25f340b5fc6cafaac8981a03b7c34c62ddb16f33f7748985e3e6228bbf9",
+    "x86_64.ast.json.gz": "ea835f3d1433dd5f3a488c48a30bfee74a28405997af4ee00bdd94fc4b474da7"
   }
 }
