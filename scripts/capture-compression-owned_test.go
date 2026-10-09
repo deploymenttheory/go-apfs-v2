@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -66,6 +67,66 @@ func TestOwnedQualificationUsesEveryIndependentNativeCase(t *testing.T) {
 		if _, err := ownedObservation(changed, writer); err == nil {
 			t.Fatal("invalid native bundle accepted", failure)
 		}
+	}
+}
+
+func TestOwnedLiveReceiptRequiresAllFilesystemCases(t *testing.T) {
+	const suite = "TestNativeCompressionOwnedMounted"
+	event := func(action, test string) string {
+		b, _ := json.Marshal(map[string]string{"Action": action, "Package": "github.com/deploymenttheory/go-apfs-v2/pkg/hostdata", "Test": test})
+		return string(b) + "\n"
+	}
+	dir := t.TempDir()
+	artifacts := map[string]string{}
+	for _, filesystem := range []string{"host", "APFS", "HFS+"} {
+		var cases string
+		first := ""
+		for compressed := 0; compressed <= 2; compressed++ {
+			for _, route := range []string{"direct", "root"} {
+				for _, mutation := range []string{"none", "root-before", "root-after", "leaf-after"} {
+					name := suite + "/" + filesystem + "/" + string(rune('0'+compressed)) + "/" + route + "/" + mutation
+					line := event("pass", name)
+					cases += line
+					if first == "" {
+						first = line
+					}
+				}
+			}
+		}
+		start := event("run", suite)
+		end := event("pass", suite) + event("pass", "")
+		valid := start + cases + end
+		if err := ownedLiveTranscriptPassed([]byte(valid), filesystem); err != nil {
+			t.Fatal(err)
+		}
+		for _, invalid := range []string{start + end, start + strings.Replace(cases, first, "", 1) + end, start + cases + first + end, strings.Replace(valid, filesystem, "other", 1), strings.Replace(valid, "\"pass\"", "\"skip\"", 1)} {
+			if err := ownedLiveTranscriptPassed([]byte(invalid), filesystem); err == nil {
+				t.Fatal("incomplete live qualification accepted")
+			}
+		}
+		name := strings.ReplaceAll(filesystem, "+", "plus") + "-replay.jsonl"
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(valid), 0600); err != nil {
+			t.Fatal(err)
+		}
+		artifacts[name] = nativeevidence.Digest([]byte(valid))
+	}
+	if err := verifyOwnedLiveArtifacts(dir, artifacts); err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyOwnedLiveArtifacts(dir, map[string]string{}); err == nil {
+		t.Fatal("missing live artifacts accepted")
+	}
+	if err := os.WriteFile(filepath.Join(dir, "host-replay.jsonl"), []byte("changed"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyOwnedLiveArtifacts(dir, artifacts); err == nil {
+		t.Fatal("changed live artifact accepted")
+	}
+	if err := os.Remove(filepath.Join(dir, "host-replay.jsonl")); err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyOwnedLiveArtifacts(dir, artifacts); err == nil {
+		t.Fatal("missing live transcript accepted")
 	}
 }
 

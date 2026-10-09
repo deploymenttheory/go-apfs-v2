@@ -281,6 +281,15 @@ jobs:
             artifacts/compression-owned-replay/
           if-no-files-found: error
 
+      - name: Retain independently verified live Go qualification
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: compression-owned-receipt-native-live-${{ matrix.os }}-${{ github.run_attempt }}
+          path: artifacts/compression-owned-replay/
+          if-no-files-found: error
+
       - name: Retain complete CI command diagnostics
         if: always()
         uses: actions/upload-artifact@v7

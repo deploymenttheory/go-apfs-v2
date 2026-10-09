@@ -72,6 +72,9 @@ func main() {
 		err = errors.New("replay and compare are separate operations")
 	case *replay != "":
 		err = replayCapture(*replay)
+		if err == nil {
+			err = recordOwnedLiveReceipt(*replay)
+		}
 	case *comparison != "":
 		err = compareCapture(*comparison)
 	case *qualify != "":
@@ -432,6 +435,9 @@ func replayCapture(path string) (result error) {
 	if producer.Major != receiver.Major {
 		return errors.New("live replay requires the qualified native OS profile")
 	}
+	if _, err = verifyOwnedBundle(ctx, filepath.Dir(path), fmt.Sprintf("macos%d", producer.Major)); err != nil {
+		return err
+	}
 	reference, err := captureprovenance.Reference(os.DirFS("."), report.Sources)
 	if err != nil {
 		return err
@@ -500,7 +506,7 @@ func replayCapture(path string) (result error) {
 // The contract records the complete family before publication. Portable readers
 // of every native profile are separate from the matching-profile live replay.
 func ownedContract() nativeevidence.Contract {
-	c := nativeevidence.Contract{Schema: 1, ID: "owned-compression", Profiles: []string{"macos15", "macos26", "macos27"}, Consumers: []string{"linux", "windows2022", "windows2025", "macos15", "macos26", "macos27"}, Comparator: "owned-state-v1"}
+	c := nativeevidence.Contract{Schema: 1, ID: "owned-compression", Profiles: []string{"macos15", "macos26", "macos27"}, Consumers: []string{"linux", "windows2022", "windows2025", "macos15", "macos26", "macos27", "native-live"}, Comparator: "owned-state-v1"}
 	for _, filesystem := range []string{"host", "APFS", "HFS+"} {
 		for compressed := 0; compressed <= 2; compressed++ {
 			for _, route := range []string{"direct", "root"} {
@@ -678,6 +684,10 @@ func verifyOwnedBundle(ctx context.Context, dir, profile string) (nativeevidence
 }
 
 func ownedTranscriptPassed(raw []byte) error {
+	return ownedTestCompleted(raw, "TestCompressionOwnedNativeEvidence")
+}
+
+func ownedTestCompleted(raw []byte, suite string) error {
 	var started, passed, packagePassed bool
 	scanner := bufio.NewScanner(bytes.NewReader(raw))
 	scanner.Buffer(make([]byte, 4096), 16<<20)
@@ -692,7 +702,10 @@ func ownedTranscriptPassed(raw []byte) error {
 		if event.Action == "fail" || event.Action == "skip" {
 			return errors.New("failed or skipped owned verification")
 		}
-		if event.Test == "TestCompressionOwnedNativeEvidence" {
+		if event.Test != "" && event.Test != suite && !strings.HasPrefix(event.Test, suite+"/") {
+			return errors.New("unexpected owned verification test")
+		}
+		if event.Test == suite {
 			switch event.Action {
 			case "run":
 				if started {
@@ -727,7 +740,7 @@ func qualifyOwnedCapture(dir, profile, consumer, output string) error {
 	defer cancel()
 	declared := false
 	for _, allowed := range ownedContract().Consumers {
-		if consumer == allowed {
+		if consumer == allowed && consumer != "native-live" {
 			declared = true
 		}
 	}
@@ -802,7 +815,11 @@ func aggregateOwnedCapture(dir string) error {
 		}
 		bundles = append(bundles, bundle)
 		for _, consumer := range ownedContract().Consumers {
-			path := filepath.Join(dir, "compression-owned-receipt-"+consumer+"-"+os.Getenv("GITHUB_RUN_ATTEMPT"), producer.Profile+"-receipt.json")
+			name := consumer
+			if consumer == "native-live" {
+				name += "-" + producer.Runner
+			}
+			path := filepath.Join(dir, "compression-owned-receipt-"+name+"-"+os.Getenv("GITHUB_RUN_ATTEMPT"), producer.Profile+"-receipt.json")
 			data, err := os.ReadFile(path)
 			if err != nil {
 				return err
@@ -813,6 +830,13 @@ func aggregateOwnedCapture(dir string) error {
 			}
 			if receipt.Consumer != consumer {
 				return errors.New("mixed owned consumer receipt path")
+			}
+			if consumer == "native-live" {
+				if err := verifyOwnedLiveArtifacts(filepath.Dir(path), receipt.Artifacts); err != nil {
+					return err
+				}
+				receipts = append(receipts, receipt)
+				continue
 			}
 			if len(receipt.Artifacts) != 1 || receipt.Artifacts[producer.Profile+"-tests.jsonl"] == "" {
 				return errors.New("incomplete owned consumer artifact inventory")
@@ -831,4 +855,109 @@ func aggregateOwnedCapture(dir string) error {
 		}
 	}
 	return nativeevidence.Aggregate([]nativeevidence.Contract{ownedContract()}, bundles, receipts, execution)
+}
+
+func ownedLiveTranscriptPassed(raw []byte, filesystem string) error {
+	const suite = "TestNativeCompressionOwnedMounted"
+	if err := ownedTestCompleted(raw, suite); err != nil {
+		return err
+	}
+	wanted := map[string]bool{}
+	for compressed := 0; compressed <= 2; compressed++ {
+		for _, route := range []string{"direct", "root"} {
+			for _, mutation := range []string{"none", "root-before", "root-after", "leaf-after"} {
+				wanted[fmt.Sprintf("%s/%s/%d/%s/%s", suite, filesystem, compressed, route, mutation)] = true
+			}
+		}
+	}
+	scanner := bufio.NewScanner(bytes.NewReader(raw))
+	scanner.Buffer(make([]byte, 4096), 16<<20)
+	for scanner.Scan() {
+		var event struct{ Action, Test string }
+		if err := json.Unmarshal(scanner.Bytes(), &event); err != nil {
+			return err
+		}
+		if event.Action != "pass" || event.Test == "" || event.Test == suite {
+			continue
+		}
+		if !wanted[event.Test] {
+			return fmt.Errorf("unexpected or duplicate live owned case %s", event.Test)
+		}
+		delete(wanted, event.Test)
+	}
+	if err := scanner.Err(); err != nil {
+		return err
+	}
+	if len(wanted) != 0 {
+		return fmt.Errorf("missing live owned cases: %d", len(wanted))
+	}
+	return nil
+}
+
+func verifyOwnedLiveArtifacts(dir string, artifacts map[string]string) error {
+	if len(artifacts) != 3 {
+		return errors.New("incomplete live owned verification artifacts")
+	}
+	for _, filesystem := range []string{"host", "APFS", "HFS+"} {
+		name := strings.ReplaceAll(filesystem, "+", "plus") + "-replay.jsonl"
+		data, err := os.ReadFile(filepath.Join(dir, name))
+		if err != nil {
+			return err
+		}
+		if nativeevidence.Digest(data) != artifacts[name] {
+			return errors.New("changed live owned verification transcript")
+		}
+		if err = ownedLiveTranscriptPassed(data, filesystem); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Publish only after live replay and every mount/temp cleanup have succeeded.
+func recordOwnedLiveReceipt(path string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	report, err := readCapture(path)
+	if err != nil {
+		return err
+	}
+	version, err := osversion.ParseProductVersion(report.Host)
+	if err != nil {
+		return err
+	}
+	profile := fmt.Sprintf("macos%d", version.Major)
+	bundle, err := verifyOwnedBundle(ctx, filepath.Dir(path), profile)
+	if err != nil {
+		return err
+	}
+	const output = "artifacts/compression-owned-replay"
+	artifacts := map[string]string{}
+	for _, filesystem := range []string{"host", "APFS", "HFS+"} {
+		name := strings.ReplaceAll(filesystem, "+", "plus") + "-replay.jsonl"
+		data, err := os.ReadFile(filepath.Join(output, name))
+		if err != nil {
+			return err
+		}
+		artifacts[name] = nativeevidence.Digest(data)
+	}
+	if err = verifyOwnedLiveArtifacts(output, artifacts); err != nil {
+		return err
+	}
+	execution, err := captureprovenance.CurrentExecution(ctx)
+	if err != nil {
+		return err
+	}
+	receipt := nativeevidence.Receipt{Schema: 1, Contract: bundle.Observation.Contract, Observation: nativeevidence.ObservationDigest(bundle.Observation), Consumer: "native-live", Execution: execution, Complete: true, Cases: map[string]string{}, Artifacts: artifacts}
+	for _, id := range ownedContract().Cases {
+		receipt.Cases[id] = "pass"
+	}
+	if err = nativeevidence.VerifyReceipt(ownedContract(), bundle, receipt, execution); err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(receipt, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(output, profile+"-receipt.json"), append(data, '\n'), 0644)
 }
