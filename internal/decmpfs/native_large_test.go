@@ -47,11 +47,15 @@ func TestLargeCompressionNativeRanges(t *testing.T) {
 	if err = json.Unmarshal(manifest, &corpus); err != nil {
 		t.Fatal(err)
 	}
-	if err := captureprovenance.Verify(os.DirFS("../.."), corpus.Sources); err != nil {
+	referenceSources, referenceErr := captureprovenance.Reference(os.DirFS("../.."), corpus.Sources)
+	if referenceErr != nil {
+		t.Fatal(referenceErr)
+	}
+	if err := captureprovenance.Verify(referenceSources, corpus.Sources); err != nil {
 		t.Fatal(err)
 	}
 	for _, path := range []string{"scripts/verify-large-compression.go", "testdata/appledouble/native/decmpfs-large.c", "testdata/appledouble/native/decmpfs-expand.c"} {
-		b, err := os.ReadFile(filepath.Join("../..", path))
+		b, err := captureprovenance.ReadSource(referenceSources, corpus.Sources, path)
 		if err != nil {
 			t.Fatal(err)
 		}

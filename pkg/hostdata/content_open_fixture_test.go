@@ -31,18 +31,22 @@ func TestContentOpenFixtureProvenance(t *testing.T) {
 	if err := json.Unmarshal(data, &fixture); err != nil {
 		t.Fatal(err)
 	}
-	harness, err := captureprovenance.Inventory(os.DirFS(base))
+	referenceSources, referenceErr := captureprovenance.Reference(os.DirFS(base), fixture.Hashes)
+	if referenceErr != nil {
+		t.Fatal(referenceErr)
+	}
+	harness, err := captureprovenance.Inventory(referenceSources)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = captureprovenance.Verify(os.DirFS(base), fixture.Hashes); err != nil {
+	if err = captureprovenance.Verify(referenceSources, fixture.Hashes); err != nil {
 		t.Fatal(err)
 	}
 	if fixture.Schema != 1 || fixture.MacOS == "" || fixture.Compiler == "" || len(fixture.Cases) != 12 || len(fixture.Hashes) != 2+len(harness) {
 		t.Fatal("incomplete native fixture")
 	}
 	for _, name := range []string{"scripts/capture-content-open.go", "testdata/appledouble/native/content-open.c"} {
-		source, err := os.ReadFile(filepath.Join(base, name))
+		source, err := captureprovenance.ReadSource(referenceSources, fixture.Hashes, name)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -75,18 +75,22 @@ func TestHFSSpecialNativeEvidence(t *testing.T) {
 			if err = json.Unmarshal(plain, &capture); err != nil {
 				t.Fatal(err)
 			}
-			harness, err := captureprovenance.Inventory(os.DirFS("../.."))
+			referenceSources, referenceErr := captureprovenance.Reference(os.DirFS("../.."), capture.Sources)
+			if referenceErr != nil {
+				t.Fatal(referenceErr)
+			}
+			harness, err := captureprovenance.Inventory(referenceSources)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err = captureprovenance.Verify(os.DirFS("../.."), capture.Sources); err != nil {
+			if err = captureprovenance.Verify(referenceSources, capture.Sources); err != nil {
 				t.Fatal(err)
 			}
 			if capture.Schema != 1 || len(capture.Volumes) != 2 || len(capture.Sources) != 16+len(harness) {
 				t.Fatal("native inventory", len(capture.Sources))
 			}
 			for _, source := range []string{"testdata/appledouble/native/hfs-special-names.c", "scripts/capture-hfs-special-names.go", "testdata/appledouble/native/name-comparison-source/vfs_utfconv.c.gz", "testdata/appledouble/native/name-comparison-source/sources.json", "go.mod", "go.sum"} {
-				b, err := os.ReadFile(filepath.Join("../..", source))
+				b, err := captureprovenance.ReadSource(referenceSources, capture.Sources, source)
 				if err != nil {
 					t.Fatal(err)
 				}

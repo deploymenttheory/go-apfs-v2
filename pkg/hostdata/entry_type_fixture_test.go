@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/captureprovenance"
@@ -29,18 +28,22 @@ func TestEntryTypeFixtureProvenance(t *testing.T) {
 	if err := json.Unmarshal(data, &corpus); err != nil {
 		t.Fatal(err)
 	}
-	harness, err := captureprovenance.Inventory(os.DirFS("../.."))
+	referenceSources, referenceErr := captureprovenance.Reference(os.DirFS("../.."), corpus.Hashes)
+	if referenceErr != nil {
+		t.Fatal(referenceErr)
+	}
+	harness, err := captureprovenance.Inventory(referenceSources)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = captureprovenance.Verify(os.DirFS("../.."), corpus.Hashes); err != nil {
+	if err = captureprovenance.Verify(referenceSources, corpus.Hashes); err != nil {
 		t.Fatal(err)
 	}
 	if corpus.Schema != 1 || corpus.MacOS == "" || corpus.Compiler == "" || len(corpus.Hashes) != 3+len(harness) || len(corpus.Cases) != 17 {
 		t.Fatal("incomplete native record")
 	}
 	for _, p := range []string{"scripts/capture-entry-type.go", "testdata/appledouble/native/entry-type.c", "internal/testutil/entrytype/fixture_darwin.go"} {
-		b, err := os.ReadFile(filepath.Join("../..", p))
+		b, err := captureprovenance.ReadSource(referenceSources, corpus.Hashes, p)
 		if err != nil {
 			t.Fatal(err)
 		}

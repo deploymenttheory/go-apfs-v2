@@ -52,11 +52,15 @@ func TestNativeEncoderProvenance(t *testing.T) {
 			if record.Host == "" || record.Compiler == "" || record.SDK == "" {
 				t.Fatal("missing native host/compiler/SDK evidence")
 			}
-			if err := captureprovenance.Verify(os.DirFS("../.."), record.Sources); err != nil {
+			referenceSources, referenceErr := captureprovenance.Reference(os.DirFS("../.."), record.Sources)
+			if referenceErr != nil {
+				t.Fatal(referenceErr)
+			}
+			if err := captureprovenance.Verify(referenceSources, record.Sources); err != nil {
 				t.Fatal(err)
 			}
 			for _, path := range c.sources {
-				b, err := os.ReadFile(filepath.Join("../..", path))
+				b, err := captureprovenance.ReadSource(referenceSources, record.Sources, path)
 				if err != nil {
 					t.Fatal(err)
 				}

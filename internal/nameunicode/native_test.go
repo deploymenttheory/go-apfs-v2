@@ -3,11 +3,11 @@ package nameunicode_test
 import (
 	"bytes"
 	"compress/gzip"
-	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"github.com/deploymenttheory/go-apfs-v2/internal/nameunicode"
+	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/captureprovenance"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/apfs"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/hfsplus"
 	"os"
@@ -61,15 +61,17 @@ func TestNameCollationNativeEvidence(t *testing.T) {
 			if c.Schema != 1 || len(c.Cases) != 3753 || len(c.Volumes) != 4 {
 				t.Fatal("incomplete native corpus")
 			}
-			for p, want := range c.Sources {
+			reference, err := captureprovenance.Reference(os.DirFS(root), c.Sources)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err = captureprovenance.Verify(reference, c.Sources); err != nil {
+				t.Fatal(err)
+			}
+			for p := range c.Sources {
 				if len(p) > 8 && (p[:8] == "testdata" || p[:8] == "scripts/" || p[:8] == ".github/") {
-					b, e := os.ReadFile(filepath.Join(root, p))
-					if e != nil {
-						t.Fatal(e)
-					}
-					h := sha256.Sum256(b)
-					if hex.EncodeToString(h[:]) != want {
-						t.Fatalf("source changed:%s", p)
+					if _, err := captureprovenance.ReadSource(reference, c.Sources, p); err != nil {
+						t.Fatal(err)
 					}
 				}
 			}

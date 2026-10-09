@@ -45,11 +45,15 @@ func corpus(t testing.TB) ([]nativeBuffer, []nativeDecoder) {
 	if c.Schema != 1 || len(c.Buffers) != 140 || len(c.Decoders) != 900 {
 		t.Fatal("incomplete native LZ4 corpus")
 	}
-	if err := captureprovenance.Verify(os.DirFS("../../.."), c.Sources); err != nil {
+	referenceSources, referenceErr := captureprovenance.Reference(os.DirFS("../../.."), c.Sources)
+	if referenceErr != nil {
+		t.Fatal(referenceErr)
+	}
+	if err := captureprovenance.Verify(referenceSources, c.Sources); err != nil {
 		t.Fatal(err)
 	}
 	for _, p := range []string{"scripts/capture-compression-lz4.go", "testdata/appledouble/native/compression-lz4.c", "testdata/appledouble/native/decmpfs-formats.c", "go.mod", "go.sum"} {
-		b, e := os.ReadFile("../../../" + p)
+		b, e := captureprovenance.ReadSource(referenceSources, c.Sources, p)
 		if e != nil {
 			t.Fatal(e)
 		}

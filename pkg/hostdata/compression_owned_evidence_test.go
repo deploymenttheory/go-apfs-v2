@@ -45,18 +45,22 @@ func TestCompressionOwnedNativeEvidence(t *testing.T) {
 			if err = json.NewDecoder(z).Decode(&raw); err != nil {
 				t.Fatal(err)
 			}
-			harness, err := captureprovenance.Inventory(os.DirFS("../.."))
+			referenceSources, referenceErr := captureprovenance.Reference(os.DirFS("../.."), raw.Sources)
+			if referenceErr != nil {
+				t.Fatal(referenceErr)
+			}
+			harness, err := captureprovenance.Inventory(referenceSources)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err = captureprovenance.Verify(os.DirFS("../.."), raw.Sources); err != nil {
+			if err = captureprovenance.Verify(referenceSources, raw.Sources); err != nil {
 				t.Fatal(err)
 			}
 			if raw.Schema != 1 || raw.Host == "" || raw.Compiler == "" || raw.SDK == "" || len(raw.Cases) != 72 || len(raw.Sources) != 15+len(harness) {
 				t.Fatal("incomplete provenance", len(raw.Cases), len(raw.Sources))
 			}
 			for _, name := range []string{"testdata/appledouble/native/compression-owned.c", "scripts/capture-compression-owned.go", "pkg/osversion/version.go", "pkg/osversion/macos.go", "go.mod", "go.sum"} {
-				b, e := os.ReadFile(filepath.Join("../..", name))
+				b, e := captureprovenance.ReadSource(referenceSources, raw.Sources, name)
 				if e != nil {
 					t.Fatal(e)
 				}

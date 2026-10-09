@@ -49,7 +49,11 @@ func TestCompressionAllocationObservations(t *testing.T) {
 		if c.Schema != 1 || len(c.Cases) != 330 || c.Host == "" {
 			t.Fatal("incomplete native allocation observation")
 		}
-		if err = captureprovenance.Verify(os.DirFS("../.."), c.Sources); err != nil {
+		referenceSources, referenceErr := captureprovenance.Reference(os.DirFS("../.."), c.Sources)
+		if referenceErr != nil {
+			t.Fatal(referenceErr)
+		}
+		if err = captureprovenance.Verify(referenceSources, c.Sources); err != nil {
 			t.Fatal(err)
 		}
 		version, err := osversion.ParseProductVersion(c.Host)
@@ -60,11 +64,17 @@ func TestCompressionAllocationObservations(t *testing.T) {
 			source := "../../" + path
 			// These immutable counterexamples were captured before the toolchain
 			// update. Verify their original module inputs against their recorded
-			// hashes; current operation profiles still require current go.mod.
+			// hashes. Fresh qualification records its own current module provenance.
 			if path == "go.mod" || path == "go.sum" {
 				source = "../../testdata/appledouble/native/allocation-observations/capture-" + path + ".txt"
 			}
-			data, err := os.ReadFile(source)
+			data, err := captureprovenance.ReadSource(referenceSources, c.Sources, path)
+			if path == "go.mod" || path == "go.sum" {
+				originalModule, moduleErr := os.ReadFile(source)
+				if moduleErr != nil || fmt.Sprintf("%x", sha256.Sum256(originalModule)) != c.Sources[path] {
+					t.Fatal("original allocation module bytes", path, moduleErr)
+				}
+			}
 
 			if err != nil {
 				t.Fatal(err)
