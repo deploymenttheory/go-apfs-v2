@@ -30,7 +30,7 @@ import (
 
 const reportingModule = "github.com/deploymenttheory/go-apfs-v2/"
 
-var reportingPackages = []string{"internal/testutil/cirunner", "internal/testutil/captureprovenance", "internal/testutil/nativeevidence", "internal/evidenceaudit"}
+var reportingPackages = []string{"internal/testutil/cirunner", "internal/testutil/diskimage", "internal/testutil/captureprovenance", "internal/testutil/nativeevidence", "internal/evidenceaudit"}
 
 // Keep this reviewed obligation inventory separate from the workflow itself.
 // A deleted YAML call must fail qualification rather than shrink its scope.
