@@ -71,3 +71,9 @@ func closePrivateReplacement(r *Replacement) error {
 	return errors.Join(err, cleanupReplacement(
 		func() error { return os.Chmod(filepath.Join(r.dir, "replacement"), 0600) }, func() error { return os.RemoveAll(r.dir) }))
 }
+
+func preparePrivateFilesystemReplacement(ctx context.Context, r *Replacement, source *os.File) error {
+	var err error
+	r.filesystem, err = prepareReplacementFilesystem(ctx, source, r.File)
+	return err
+}

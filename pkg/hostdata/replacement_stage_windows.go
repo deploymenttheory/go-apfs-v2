@@ -126,3 +126,8 @@ func closePrivateReplacement(r *Replacement) error {
 	}
 	return err
 }
+
+func preparePrivateFilesystemReplacement(ctx context.Context, r *Replacement, _ *os.File) error {
+	r.filesystem = r.rooted.filesystem
+	return ctx.Err()
+}

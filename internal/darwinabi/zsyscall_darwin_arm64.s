@@ -36,6 +36,11 @@ TEXT trampolineFgetxattr<>(SB),NOSPLIT,$0-0
 GLOBL ·addrFgetxattr(SB), RODATA, $8
 DATA ·addrFgetxattr(SB)/8, $trampolineFgetxattr<>(SB)
 
+TEXT trampolineFsetxattr<>(SB),NOSPLIT,$0-0
+	JMP importedFsetxattr(SB)
+GLOBL ·addrFsetxattr(SB), RODATA, $8
+DATA ·addrFsetxattr(SB)/8, $trampolineFsetxattr<>(SB)
+
 TEXT trampolineFilesecInit<>(SB),NOSPLIT,$0-0
 	JMP importedFilesecInit(SB)
 GLOBL ·addrFilesecInit(SB), RODATA, $8

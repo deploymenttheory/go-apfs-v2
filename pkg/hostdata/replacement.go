@@ -9,14 +9,15 @@ import (
 
 // Replacement is a private, writable file prepared from an existing regular
 // file. Write and truncate File, then call RestoreMetadata before closing and
-// renaming it. Call Close to discard the staging directory on every path.
+// calling PublishContext. Call Close to discard the staging directory on every path.
 // The source must remain open and unchanged until RestoreMetadata returns.
 //
-// This API never changes the source or commits a rename. It deliberately fails
+// Preparation never changes the source or commits a rename. It deliberately fails
 // if it cannot preserve the supported metadata; unlike ListXattrs/SetXattrs,
 // missing metadata is not treated as a recoverable fidelity loss.
 type Replacement struct {
-	File *os.File
+	File       *os.File
+	filesystem *replacementFilesystem
 	replacementPlatformState
 }
 
@@ -64,7 +65,14 @@ func PrepareReplacementContext(ctx context.Context, source *os.File, parent stri
 	if !info.Mode().IsRegular() {
 		return nil, fmt.Errorf("prepare replacement: %w: non-regular source", ErrUnsupportedReplacement)
 	}
-	return prepareReplacementPrivateContext(ctx, source, parent, info)
+	r, err := prepareReplacementPrivateContext(ctx, source, parent, info)
+	if err != nil {
+		return nil, err
+	}
+	if err = preparePrivateFilesystemReplacement(ctx, r, source); err != nil {
+		return nil, errors.Join(err, r.Close())
+	}
+	return r, nil
 }
 
 // RestoreMetadata restores metadata after all replacement content has been

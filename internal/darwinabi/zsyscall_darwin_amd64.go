@@ -114,6 +114,21 @@ var addrFgetxattr uintptr
 
 //go:cgo_import_dynamic importedFgetxattr fgetxattr "/usr/lib/libSystem.B.dylib"
 
+// Fsetxattr is the typed fsetxattr wrapper.
+//
+//go:uintptrescapes
+func Fsetxattr(fd int32, name, data *byte, size uintptr, position uint32, options int32) (int32, error) {
+	r, _, e := syscall6(addrFsetxattr, uintptr(fd), uintptr(unsafe.Pointer(name)), uintptr(unsafe.Pointer(data)), size, uintptr(position), uintptr(options))
+	if e != 0 {
+		return int32(r), e
+	}
+	return int32(r), nil
+}
+
+var addrFsetxattr uintptr
+
+//go:cgo_import_dynamic importedFsetxattr fsetxattr "/usr/lib/libSystem.B.dylib"
+
 // FilesecInit is the typed filesec_init wrapper.
 //
 //go:uintptrescapes

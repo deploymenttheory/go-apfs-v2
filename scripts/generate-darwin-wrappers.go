@@ -34,6 +34,7 @@ func main() {
 		{name: "Getxattr", symbol: "getxattr", params: "path, name, data *byte, size uintptr, position uint32, options int32", args: "uintptr(unsafe.Pointer(path)), uintptr(unsafe.Pointer(name)), uintptr(unsafe.Pointer(data)), size, uintptr(position), uintptr(options)", result: "size"},
 		{name: "Flistxattr", symbol: "flistxattr", params: "fd int32, data *byte, size uintptr, options int32", args: "uintptr(fd), uintptr(unsafe.Pointer(data)), size, uintptr(options)", result: "size"},
 		{name: "Fgetxattr", symbol: "fgetxattr", params: "fd int32, name, data *byte, size uintptr, position uint32, options int32", args: "uintptr(fd), uintptr(unsafe.Pointer(name)), uintptr(unsafe.Pointer(data)), size, uintptr(position), uintptr(options)", result: "size"},
+		{name: "Fsetxattr", symbol: "fsetxattr", params: "fd int32, name, data *byte, size uintptr, position uint32, options int32", args: "uintptr(fd), uintptr(unsafe.Pointer(name)), uintptr(unsafe.Pointer(data)), size, uintptr(position), uintptr(options)", result: "int"},
 		{name: "FilesecInit", symbol: "filesec_init", result: "pointer"},
 		{name: "FilesecFree", symbol: "filesec_free", params: "security uintptr", args: "security", result: "void"},
 		{name: "FilesecGetProperty", symbol: "filesec_get_property", params: "security uintptr, property int32, output unsafe.Pointer", args: "security, uintptr(property), uintptr(output)", result: "int"},
