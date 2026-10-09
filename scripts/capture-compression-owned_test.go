@@ -109,12 +109,26 @@ func TestOwnedLiveReceiptRequiresAllFilesystemCases(t *testing.T) {
 			t.Fatal(err)
 		}
 		artifacts[name] = nativeevidence.Digest([]byte(valid))
+		name = strings.ReplaceAll(filesystem, "+", "plus") + "-replay.stderr.log"
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("go: downloading fixture\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		artifacts[name] = nativeevidence.Digest([]byte("go: downloading fixture\n"))
 	}
 	if err := verifyOwnedLiveArtifacts(dir, artifacts); err != nil {
 		t.Fatal(err)
 	}
 	if err := verifyOwnedLiveArtifacts(dir, map[string]string{}); err == nil {
 		t.Fatal("missing live artifacts accepted")
+	}
+	if err := os.WriteFile(filepath.Join(dir, "host-replay.stderr.log"), []byte("changed"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyOwnedLiveArtifacts(dir, artifacts); err == nil {
+		t.Fatal("changed diagnostic evidence accepted")
+	}
+	if err := os.WriteFile(filepath.Join(dir, "host-replay.stderr.log"), []byte("go: downloading fixture\n"), 0600); err != nil {
+		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(dir, "host-replay.jsonl"), []byte("changed"), 0600); err != nil {
 		t.Fatal(err)

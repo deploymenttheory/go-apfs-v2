@@ -167,6 +167,8 @@ jobs:
           path: artifacts/owned-producers/
       - name: Require every current native producer and replay its complete evidence
         shell: bash
+        env:
+          GOMODCACHE: ${{ runner.temp }}/owned-consumer-module-cache
         run: |
           set -euo pipefail
           for producer in 'macos-15:macos15' 'macos-latest:macos26' 'xcode-27:macos27'; do
@@ -250,6 +252,8 @@ jobs:
           name: compression-owned-capture-${{ matrix.os }}-${{ github.run_attempt }}
           path: artifacts/compression-owned/
       - name: Replay all 72 native cases on recreated host APFS and HFS+ volumes
+        env:
+          GOMODCACHE: ${{ runner.temp }}/owned-live-module-cache
         run: |
           apfs-ci-runner --suite compression-owned/native/live-replay --timeout 29m -- go run scripts/capture-compression-owned.go -replay artifacts/compression-owned/native.json.gz
       - name: Validate complete fresh native evidence independently

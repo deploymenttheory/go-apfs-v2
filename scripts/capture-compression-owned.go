@@ -492,9 +492,8 @@ func replayCapture(path string) (result error) {
 			}
 			replay := cirunner.CommandContext(ctx, "go", "test", "-count=1", "-json", "./pkg/hostdata", "-run", "^TestNativeCompressionOwnedMounted$")
 			replay.Env = append(os.Environ(), "APFS_COMPRESSION_OWNED_MOUNT="+base, "APFS_COMPRESSION_OWNED_CAPTURE="+capturedPath)
-			transcript, replayErr := replay.CombinedOutput()
-			writeErr := os.WriteFile(filepath.Join(artifact, strings.ReplaceAll(filesystem, "+", "plus")+"-replay.jsonl"), transcript, 0644)
-			return errors.Join(replayErr, writeErr)
+			name := strings.ReplaceAll(filesystem, "+", "plus") + "-replay"
+			return replay.Capture(filepath.Join(artifact, name+".jsonl"), filepath.Join(artifact, name+".stderr.log"))
 		}()
 		if err != nil {
 			return err
@@ -773,9 +772,12 @@ func qualifyOwnedCapture(dir, profile, consumer, output string) error {
 	}
 	cmd := cirunner.CommandContext(ctx, "go", "test", "-count=1", "-json", "./pkg/hostdata", "-run", "^TestCompressionOwnedNativeEvidence$")
 	cmd.Env = append(os.Environ(), "APFS_COMPRESSION_OWNED_EVIDENCE="+path)
-	transcript, runErr := cmd.CombinedOutput()
-	writeErr := os.WriteFile(filepath.Join(output, profile+"-tests.jsonl"), transcript, 0644)
-	if err = errors.Join(runErr, writeErr); err != nil {
+	stdout, stderr := profile+"-tests.jsonl", profile+"-tests.stderr.log"
+	if err = cmd.Capture(filepath.Join(output, stdout), filepath.Join(output, stderr)); err != nil {
+		return err
+	}
+	transcript, err := os.ReadFile(filepath.Join(output, stdout))
+	if err != nil {
 		return err
 	}
 	if err = ownedTranscriptPassed(transcript); err != nil {
@@ -785,7 +787,11 @@ func qualifyOwnedCapture(dir, profile, consumer, output string) error {
 	if err != nil {
 		return err
 	}
-	receipt := nativeevidence.Receipt{Schema: 1, Contract: bundle.Observation.Contract, Observation: nativeevidence.ObservationDigest(bundle.Observation), Consumer: consumer, Execution: execution, Complete: true, Cases: map[string]string{}, Artifacts: map[string]string{profile + "-tests.jsonl": nativeevidence.Digest(transcript)}}
+	diagnostics, err := os.ReadFile(filepath.Join(output, stderr))
+	if err != nil {
+		return err
+	}
+	receipt := nativeevidence.Receipt{Schema: 1, Contract: bundle.Observation.Contract, Observation: nativeevidence.ObservationDigest(bundle.Observation), Consumer: consumer, Execution: execution, Complete: true, Cases: map[string]string{}, Artifacts: map[string]string{stdout: nativeevidence.Digest(transcript), stderr: nativeevidence.Digest(diagnostics)}}
 	for _, id := range ownedContract().Cases {
 		receipt.Cases[id] = "pass"
 	}
@@ -838,8 +844,17 @@ func aggregateOwnedCapture(dir string) error {
 				receipts = append(receipts, receipt)
 				continue
 			}
-			if len(receipt.Artifacts) != 1 || receipt.Artifacts[producer.Profile+"-tests.jsonl"] == "" {
+			if len(receipt.Artifacts) != 2 || receipt.Artifacts[producer.Profile+"-tests.jsonl"] == "" || receipt.Artifacts[producer.Profile+"-tests.stderr.log"] == "" {
 				return errors.New("incomplete owned consumer artifact inventory")
+			}
+			for name, digest := range receipt.Artifacts {
+				data, err := os.ReadFile(filepath.Join(filepath.Dir(path), name))
+				if err != nil {
+					return err
+				}
+				if nativeevidence.Digest(data) != digest {
+					return errors.New("changed owned Go verification stream")
+				}
 			}
 			transcript, err := os.ReadFile(filepath.Join(filepath.Dir(path), producer.Profile+"-tests.jsonl"))
 			if err != nil {
@@ -895,11 +910,19 @@ func ownedLiveTranscriptPassed(raw []byte, filesystem string) error {
 }
 
 func verifyOwnedLiveArtifacts(dir string, artifacts map[string]string) error {
-	if len(artifacts) != 3 {
+	if len(artifacts) != 6 {
 		return errors.New("incomplete live owned verification artifacts")
 	}
 	for _, filesystem := range []string{"host", "APFS", "HFS+"} {
 		name := strings.ReplaceAll(filesystem, "+", "plus") + "-replay.jsonl"
+		diagnostic := strings.ReplaceAll(filesystem, "+", "plus") + "-replay.stderr.log"
+		stderr, err := os.ReadFile(filepath.Join(dir, diagnostic))
+		if err != nil {
+			return err
+		}
+		if nativeevidence.Digest(stderr) != artifacts[diagnostic] {
+			return errors.New("changed live owned verification diagnostics")
+		}
 		data, err := os.ReadFile(filepath.Join(dir, name))
 		if err != nil {
 			return err
@@ -934,12 +957,14 @@ func recordOwnedLiveReceipt(path string) error {
 	const output = "artifacts/compression-owned-replay"
 	artifacts := map[string]string{}
 	for _, filesystem := range []string{"host", "APFS", "HFS+"} {
-		name := strings.ReplaceAll(filesystem, "+", "plus") + "-replay.jsonl"
-		data, err := os.ReadFile(filepath.Join(output, name))
-		if err != nil {
-			return err
+		for _, suffix := range []string{".jsonl", ".stderr.log"} {
+			name := strings.ReplaceAll(filesystem, "+", "plus") + "-replay" + suffix
+			data, err := os.ReadFile(filepath.Join(output, name))
+			if err != nil {
+				return err
+			}
+			artifacts[name] = nativeevidence.Digest(data)
 		}
-		artifacts[name] = nativeevidence.Digest(data)
 	}
 	if err = verifyOwnedLiveArtifacts(output, artifacts); err != nil {
 		return err
