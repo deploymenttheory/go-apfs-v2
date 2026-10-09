@@ -26,3 +26,14 @@ Before closing the native lifecycle qualification, determine whether allocation
 changes during inspection, deferred filesystem work or another captured context,
 and implement a native-observed measurement/acceptance contract. Keep failure
 states, stored bytes, logical readback and metadata comparisons strict.
+
+## Original module inputs
+
+`capture-go.mod.txt` and `capture-go.sum.txt` contain the exact original module
+inputs, verified against the hashes recorded in both unchanged captures. These
+allocation counterexamples are immutable historical observations, not the current
+operation baseline. Their recorded counts, stored bytes, logical data and oracle
+source checks remain required. The active macOS 15/26/27 operation profiles are
+recaptured with the current `go.mod` and retain their strict current-source checks.
+A Go upgrade must not relabel these earlier physical-allocation observations as a
+new capture or discard the counterexample.

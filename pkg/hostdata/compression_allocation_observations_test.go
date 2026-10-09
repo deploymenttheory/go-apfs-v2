@@ -57,7 +57,15 @@ func TestCompressionAllocationObservations(t *testing.T) {
 			t.Fatal("unqualified allocation producer", version, err)
 		}
 		for _, path := range []string{"scripts/capture-compression-operation.go", "scripts/capture-compression-operation_test.go", "testdata/appledouble/native/compression-operation.c", "testdata/appledouble/native/compression-operation-interpose.c", "testdata/appledouble/native/compression-lifecycle-interpose.c", "testdata/appledouble/native/compression-policy.c", "pkg/osversion/version.go", "pkg/osversion/macos.go", "pkg/osversion/host.go", "pkg/osversion/host_darwin.go", "pkg/osversion/host_other.go", "go.mod", "go.sum"} {
-			data, err := os.ReadFile("../../" + path)
+			source := "../../" + path
+			// These immutable counterexamples were captured before the toolchain
+			// update. Verify their original module inputs against their recorded
+			// hashes; current operation profiles still require current go.mod.
+			if path == "go.mod" || path == "go.sum" {
+				source = "../../testdata/appledouble/native/allocation-observations/capture-" + path + ".txt"
+			}
+			data, err := os.ReadFile(source)
+
 			if err != nil {
 				t.Fatal(err)
 			}
