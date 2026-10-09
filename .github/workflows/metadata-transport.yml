@@ -140,6 +140,9 @@ jobs:
         run: |
           apfs-ci-runner --suite metadata-transport/filesystem/attribute-target-capture --timeout 3m -- go run scripts/capture-metadata-filesystem.go -profile attribute-target -major ${{ matrix.major }} -out artifacts/metadata-filesystem/attribute-target/native.json
           apfs-ci-runner --suite metadata-transport/filesystem/attribute-target-validate --timeout 2m -- go run scripts/capture-metadata-filesystem.go -profile attribute-target -verify artifacts/metadata-filesystem/attribute-target/native.json -major ${{ matrix.major }}
+      - name: Seal all native profiles after image cleanup
+        run: |
+          apfs-ci-runner --suite metadata-transport/filesystem/seal --timeout 2m -- go run scripts/capture-metadata-filesystem.go -major ${{ matrix.major }} -seal artifacts/metadata-filesystem
       - name: Retain every native result and compiler input
         if: always()
         uses: actions/upload-artifact@v7
@@ -157,6 +160,51 @@ jobs:
           include-hidden-files: true
           if-no-files-found: error
 
+  filesystem-native-live:
+    name: Live filesystem metadata (${{ matrix.major }})
+    needs: filesystem-capture
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-15, major: 15 }
+          - { os: macos-latest, major: 26 }
+          - { os: xcode-27, major: 27 }
+    env:
+      CGO_ENABLED: "0"
+      GOTOOLCHAIN: local
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
+      - uses: actions/download-artifact@v8.0.1
+        with:
+          name: filesystem-metadata-macos${{ matrix.major }}
+          path: artifacts/filesystem-producer
+      - name: Qualify all 1248 cases against the sealed native producer
+        run: |
+          apfs-ci-runner --suite metadata-transport/filesystem/live --timeout 10m -- go run scripts/capture-metadata-filesystem.go -major ${{ matrix.major }} -execution artifacts/filesystem-producer -live artifacts/filesystem-producer/native.json -out artifacts/filesystem-live/native.json
+          apfs-ci-runner --suite metadata-transport/filesystem/live-packed --timeout 3m -- go run scripts/capture-metadata-filesystem.go -major ${{ matrix.major }} -execution artifacts/filesystem-producer -profile packed-empty -live artifacts/filesystem-producer/packed/native.json -out artifacts/filesystem-live/packed/native.json
+          apfs-ci-runner --suite metadata-transport/filesystem/live-attribute-target --timeout 3m -- go run scripts/capture-metadata-filesystem.go -major ${{ matrix.major }} -execution artifacts/filesystem-producer -profile attribute-target -live artifacts/filesystem-producer/attribute-target/native.json -out artifacts/filesystem-live/attribute-target/native.json
+      - name: Retain native and Go live qualification diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: filesystem-metadata-live-macos${{ matrix.major }}
+          path: |
+            artifacts/filesystem-live/
+            artifacts/ci-observability/
+          include-hidden-files: true
+          if-no-files-found: error
+
   filesystem-evidence:
     name: Filesystem metadata evidence (${{ matrix.os }})
     needs: filesystem-capture
@@ -165,7 +213,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest, windows-2022, windows-2025, macos-15, macos-latest, xcode-27]
     env:
       CGO_ENABLED: "0"
       GOTOOLCHAIN: local
@@ -187,7 +235,7 @@ jobs:
         run: |
           set -euo pipefail
           for version in 15 26 27; do
-            apfs-ci-runner --suite metadata-transport/filesystem/producer-$version --timeout 2m -- go run scripts/capture-metadata-filesystem.go -major "$version" -verify "artifacts/filesystem-producers/filesystem-metadata-macos$version/native.json"
+            apfs-ci-runner --suite metadata-transport/filesystem/producer-$version --timeout 2m -- go run scripts/capture-metadata-filesystem.go -major "$version" -execution "artifacts/filesystem-producers/filesystem-metadata-macos$version" -verify "artifacts/filesystem-producers/filesystem-metadata-macos$version/native.json"
             apfs-ci-runner --suite metadata-transport/filesystem/packed-empty-producer-$version --timeout 2m -- go run scripts/capture-metadata-filesystem.go -profile packed-empty -major "$version" -verify "artifacts/filesystem-producers/filesystem-metadata-macos$version/packed/native.json"
             apfs-ci-runner --suite metadata-transport/filesystem/attribute-target-producer-$version --timeout 2m -- go run scripts/capture-metadata-filesystem.go -profile attribute-target -major "$version" -verify "artifacts/filesystem-producers/filesystem-metadata-macos$version/attribute-target/native.json"
           done
