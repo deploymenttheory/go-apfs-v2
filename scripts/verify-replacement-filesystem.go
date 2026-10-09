@@ -6,6 +6,7 @@ package main
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -18,28 +19,35 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/captureprovenance"
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/osversion"
 )
 
 type evidence struct {
-	Schema    int               `json:"schema"`
-	Cases     int               `json:"cases"`
-	Versions  map[string]string `json:"versions"`
-	Sources   map[string]string `json:"sources"`
-	Artifacts map[string]string `json:"artifacts"`
+	Profile   osversion.MacOSProfile `json:"native_profile"`
+	Schema    int                    `json:"schema"`
+	Cases     int                    `json:"cases"`
+	Versions  map[string]string      `json:"versions"`
+	Sources   map[string]string      `json:"sources"`
+	Artifacts map[string]string      `json:"artifacts"`
 }
 
 func main() {
 	replay := flag.Bool("replay", false, "verify and replay a native evidence directory")
+	baseline := flag.Bool("baseline", false, "check native policy separately from collection and Go parity")
+	live := flag.Bool("live", false, "qualify held native Go copies against the C oracle")
+	major := flag.Uint("major", 0, "required native macOS profile")
+	output := flag.String("out", "artifacts/replacement-filesystem-replay", "consumer evidence directory")
 	dir := flag.String("dir", "artifacts/replacement-filesystem", "evidence directory")
 	flag.Parse()
 	var err error
 	if *replay {
-		err = replayEvidence(*dir)
+		err = replayEvidence(*dir, osversion.MacOSProfile(*major), *live, *output, *baseline)
 	} else {
-		err = captureEvidence(*dir)
+		err = captureEvidence(*dir, osversion.MacOSProfile(*major))
 	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -70,7 +78,7 @@ func gzipFile(path string, b []byte) error {
 	_, e = z.Write(b)
 	return errors.Join(e, z.Close(), f.Close())
 }
-func captureEvidence(dir string) error {
+func captureEvidence(dir string, expected osversion.MacOSProfile) error {
 	if runtime.GOOS != "darwin" {
 		return errors.New("capture requires macOS native filesystems")
 	}
@@ -84,6 +92,17 @@ func captureEvidence(dir string) error {
 			return e
 		}
 		report.Versions[name] = string(b)
+	}
+	version, err := osversion.ParseProductVersion(report.Versions["host"])
+	if err != nil {
+		return err
+	}
+	report.Profile, err = osversion.ProfileForMacOS(version)
+	if err != nil {
+		return err
+	}
+	if expected != 0 && report.Profile != expected {
+		return errors.New("native producer profile mismatch")
 	}
 	const source = "testdata/appledouble/native/replacement-filesystem.c"
 	for _, name := range nativeInputs() {
@@ -128,14 +147,14 @@ func captureEvidence(dir string) error {
 	if err != nil {
 		return err
 	}
-	if e := runTests(dir, "native", []string{"./pkg/hostdata"}, "^TestReplacementFilesystemNativeEncoding$", "APFS_REPLACEMENT_FILESYSTEM_CAPTURE="+corpus); e != nil {
+	if e := runTests(dir, "native", []string{"./pkg/hostdata"}, "^TestReplacementFilesystemNativeCapture$", "APFS_REPLACEMENT_FILESYSTEM_CAPTURE="+corpus); e != nil {
 		return e
 	}
 	b, e := os.ReadFile(corpus)
 	if e != nil {
 		return e
 	}
-	if e = validateCases(b); e != nil {
+	if e = validateCases(b, report.Profile); e != nil {
 		return e
 	}
 	if e = gzipFile(filepath.Join(dir, "cases.json.gz"), b); e != nil {
@@ -144,7 +163,7 @@ func captureEvidence(dir string) error {
 	if e = os.Remove(corpus); e != nil {
 		return e
 	}
-	for _, name := range []string{"cases.json.gz", "native.jsonl"} {
+	for _, name := range []string{"cases.json.gz", "native.jsonl", "native.stderr.log"} {
 		report.Artifacts[name], e = digest(filepath.Join(dir, name))
 		if e != nil {
 			return e
@@ -157,10 +176,16 @@ func captureEvidence(dir string) error {
 	if e != nil {
 		return e
 	}
-	return saveJSON(filepath.Join(dir, "report.json"), report)
+	if err := saveJSON(filepath.Join(dir, "report.json"), report); err != nil {
+		return err
+	}
+	return captureprovenance.SealExecution(context.Background(), dir)
 
 }
-func validateCases(b []byte) error {
+func validateCases(b []byte, profile osversion.MacOSProfile) error {
+	if profile != osversion.MacOS15 && profile != osversion.MacOS26 && profile != osversion.MacOS27 {
+		return osversion.ErrMacOSProfile
+	}
 	var cases []struct {
 		Filesystem, Profile string
 		Input, Native       []byte
@@ -170,18 +195,14 @@ func validateCases(b []byte) error {
 		return e
 	}
 	seen := map[string]bool{}
-	failed := 0
 	for _, c := range cases {
 		key := c.Filesystem + "/" + c.Profile
 		if seen[key] || len(c.Input) == 0 || len(c.Native) == 0 {
 			return fmt.Errorf("invalid duplicate/empty case %s", key)
 		}
 		seen[key] = true
-		if c.Errno != 0 {
-			if c.Errno != 22 {
-				return fmt.Errorf("unexpected native errno %d", c.Errno)
-			}
-			failed++
+		if c.Errno < 0 {
+			return fmt.Errorf("invalid native errno %d", c.Errno)
 		}
 	}
 	for _, fs := range []string{"MS-DOS FAT32", "ExFAT"} {
@@ -194,12 +215,44 @@ func validateCases(b []byte) error {
 			}
 		}
 	}
-	if len(cases) != 220 || failed != 100 {
-		return fmt.Errorf("incomplete native corpus: %d cases %d failures", len(cases), failed)
+	if len(cases) != 220 {
+		return fmt.Errorf("incomplete native corpus: %d cases", len(cases))
 	}
 	return nil
 }
-func replayEvidence(dir string) error {
+
+// Behavioral baseline checking is separate from independent collection.
+func validateNativePolicy(b []byte, profile osversion.MacOSProfile) error {
+	if err := validateCases(b, profile); err != nil {
+		return err
+	}
+	var records []struct {
+		Profile string
+		Errno   int
+	}
+	if err := json.Unmarshal(b, &records); err != nil {
+		return err
+	}
+	for _, record := range records {
+		var size, fork int
+		if _, err := fmt.Sscanf(record.Profile, "value-%d-fork-%d", &size, &fork); err != nil {
+			return err
+		}
+		expectedErrno := 0
+		if profile != osversion.MacOS15 && fork > 0 && fork < 286 {
+			expectedErrno = 22
+		}
+		if record.Errno != expectedErrno {
+			return fmt.Errorf("native baseline changed for macOS %d/%s: errno %d expected %d", profile, record.Profile, record.Errno, expectedErrno)
+		}
+	}
+	return nil
+}
+
+func replayEvidence(dir string, expected osversion.MacOSProfile, live bool, output string, baseline bool) error {
+	if err := captureprovenance.VerifyExecution(context.Background(), dir); err != nil {
+		return err
+	}
 	b, e := os.ReadFile(filepath.Join(dir, "report.json"))
 	if e != nil {
 		return e
@@ -207,6 +260,17 @@ func replayEvidence(dir string) error {
 	var report evidence
 	if e = json.Unmarshal(b, &report); e != nil {
 		return e
+	}
+	version, err := osversion.ParseProductVersion(report.Versions["host"])
+	if err != nil {
+		return err
+	}
+	profile, err := osversion.ProfileForMacOS(version)
+	if err != nil {
+		return err
+	}
+	if expected == 0 || profile != expected || report.Profile != expected {
+		return errors.New("native consumer profile mismatch")
 	}
 	if report.Schema != 1 || report.Cases != 220 || len(report.Versions) != 3 {
 		return errors.New("incomplete evidence report")
@@ -244,7 +308,7 @@ func replayEvidence(dir string) error {
 		}
 	}
 
-	for _, name := range []string{"arm64.ast.json.gz", "x86_64.ast.json.gz", "cases.json.gz", "native.jsonl", "sources.json.gz"} {
+	for _, name := range []string{"arm64.ast.json.gz", "x86_64.ast.json.gz", "cases.json.gz", "native.jsonl", "native.stderr.log", "sources.json.gz"} {
 		want := report.Artifacts[name]
 		sum, e := digest(filepath.Join(dir, name))
 		if e != nil {
@@ -267,54 +331,128 @@ func replayEvidence(dir string) error {
 	if e = errors.Join(e, z.Close()); e != nil {
 		return e
 	}
-	if e = validateCases(b); e != nil {
+	if e = validateCases(b, report.Profile); e != nil {
 		return e
+	}
+	if baseline {
+		return validateNativePolicy(b, report.Profile)
 	}
 	absolute, e := filepath.Abs(filepath.Join(dir, "cases.json.gz"))
 	if e != nil {
 		return e
 	}
-	return runTests(dir, "replay", []string{"./pkg/appledouble", "./pkg/hostdata"}, "^Test(FilesystemEncodingNativeCopy|ReplacementFilesystemNativeCorpus)$", "APFS_REPLACEMENT_FILESYSTEM_CORPUS="+absolute)
+	consumer := filepath.Join(output, fmt.Sprintf("macos%d", report.Profile))
+	if err := os.MkdirAll(consumer, 0700); err != nil {
+		return err
+	}
+	if live {
+		current, err := osversion.Detect(context.Background())
+		if err != nil {
+			return err
+		}
+		actual, err := osversion.ProfileForMacOS(current)
+		if err != nil || actual != expected {
+			return errors.New("live native receiver profile mismatch")
+		}
+		return runTests(consumer, "live", []string{"./pkg/hostdata"}, "^TestReplacementFilesystemNativeEncoding$")
+	}
+	return runTests(consumer, "replay", []string{"./pkg/appledouble", "./pkg/hostdata"}, "^Test(FilesystemEncodingNativeCopy|ReplacementFilesystemNativeCorpus)$", "APFS_REPLACEMENT_FILESYSTEM_CORPUS="+absolute, fmt.Sprintf("APFS_REPLACEMENT_FILESYSTEM_PROFILE=%d", report.Profile))
 }
-func runTests(dir, label string, packages []string, pattern, env string) error {
+func runTests(dir, label string, packages []string, pattern string, env ...string) error {
 	args := append([]string{"test", "-count=1", "-json", "-run", pattern}, packages...)
-	cmd := cirunner.Command("go", args...)
-	cmd.Env = append(os.Environ(), "CGO_ENABLED=0", env)
-	log, e := os.Create(filepath.Join(dir, label+".jsonl"))
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	cmd := cirunner.CommandContext(ctx, "go", args...)
+	cmd.Env = append(append(os.Environ(), "CGO_ENABLED=0"), env...)
+	transcriptPath := filepath.Join(dir, label+".jsonl")
+	diagnosticPath := filepath.Join(dir, label+".stderr.log")
+	if err := cmd.Capture(transcriptPath, diagnosticPath); err != nil {
+		return fmt.Errorf("%s qualification failed; stdout %s stderr %s: %w", label, transcriptPath, diagnosticPath, err)
+	}
+	transcript, e := os.ReadFile(transcriptPath)
 	if e != nil {
 		return e
 	}
-	var transcript bytes.Buffer
-	cmd.Stdout = io.MultiWriter(os.Stdout, log, &transcript)
-	cmd.Stderr = io.MultiWriter(os.Stderr, log)
-	if e = errors.Join(cmd.Run(), log.Close()); e != nil {
-		return e
-	}
-	decoder := json.NewDecoder(&transcript)
+	return validateTestTranscript(transcript, packages, label)
+}
+
+func validateTestTranscript(transcript []byte, packages []string, label string) error {
+	decoder := json.NewDecoder(bytes.NewReader(transcript))
 	passed := map[string]bool{}
+	started, completed := map[string]bool{}, map[string]bool{}
+	running := map[string]bool{}
+	allowedPackages := map[string]bool{}
+	for _, pkg := range packages {
+		allowedPackages["github.com/deploymenttheory/go-apfs-v2/"+strings.TrimPrefix(pkg, "./")] = true
+	}
 	for {
 		var event struct{ Action, Test, Package string }
-		e = decoder.Decode(&event)
+		e := decoder.Decode(&event)
 		if errors.Is(e, io.EOF) {
 			break
 		}
 		if e != nil {
 			return e
 		}
+		if !allowedPackages[event.Package] {
+			return fmt.Errorf("unexpected test package %s", event.Package)
+		}
+		key := event.Package + "/" + event.Test
+		switch event.Action {
+		case "start":
+			if event.Test != "" || started[event.Package] {
+				return errors.New("invalid package start")
+			}
+			started[event.Package] = true
+		case "run":
+			if event.Test == "" || !started[event.Package] || completed[event.Package] || running[key] || passed[key] {
+				return errors.New("invalid test start")
+			}
+			running[key] = true
+		case "pass":
+			if !started[event.Package] || completed[event.Package] {
+				return errors.New("invalid package completion")
+			}
+			if event.Test == "" {
+				for name := range running {
+					if strings.HasPrefix(name, event.Package+"/") {
+						return errors.New("package closed with unfinished tests")
+					}
+				}
+				completed[event.Package] = true
+			} else {
+				if !running[key] {
+					return errors.New("test completed without start")
+				}
+				delete(running, key)
+			}
+		case "output", "pause", "cont":
+		case "fail", "skip":
+		default:
+			return fmt.Errorf("invalid test event %q", event.Action)
+		}
 		if event.Action == "fail" || event.Action == "skip" {
 			return fmt.Errorf("incomplete %s test: %+v", label, event)
 		}
 		if event.Action == "pass" {
+			if passed[event.Package+"/"+event.Test] {
+				return errors.New("duplicate completion event")
+			}
 			passed[event.Package+"/"+event.Test] = true
 		}
 	}
+	known := map[string]bool{}
 	for _, pkg := range packages {
 		name := "github.com/deploymenttheory/go-apfs-v2/" + strings.TrimPrefix(pkg, "./")
+		known[name+"/"] = true
 		if !passed[name+"/"] {
 			return fmt.Errorf("missing package pass %s", name)
 		}
 	}
-	expected := []string{"TestReplacementFilesystemNativeEncoding"}
+	expected := []string{"TestReplacementFilesystemNativeCapture"}
+	if label == "live" {
+		expected = []string{"TestReplacementFilesystemNativeEncoding"}
+	}
 	if label == "replay" {
 		expected = []string{"TestFilesystemEncodingNativeCopy", "TestReplacementFilesystemNativeCorpus"}
 	}
@@ -329,15 +467,49 @@ func runTests(dir, label string, packages []string, pattern, env string) error {
 			return fmt.Errorf("missing required suite %s", test)
 		}
 	}
+	for _, test := range expected {
+		packageName := "github.com/deploymenttheory/go-apfs-v2/pkg/hostdata"
+		if test == "TestFilesystemEncodingNativeCopy" {
+			packageName = "github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
+		}
+		known[packageName+"/"+test] = true
+		if !passed[packageName+"/"+test] {
+			return fmt.Errorf("missing required suite %s", test)
+		}
+		for _, filesystem := range []string{"MS-DOS FAT32", "ExFAT"} {
+			filesystemTest := strings.ReplaceAll(filesystem, " ", "_")
+			if test != "TestFilesystemEncodingNativeCopy" && test != "TestReplacementFilesystemNativeCorpus" {
+				known[packageName+"/"+test+"/"+filesystemTest] = true
+			}
+			if test != "TestFilesystemEncodingNativeCopy" && test != "TestReplacementFilesystemNativeCorpus" && !passed[packageName+"/"+test+"/"+filesystemTest] {
+				return fmt.Errorf("missing filesystem completion %s", filesystem)
+			}
+			for _, size := range []int{0, 1, 3650, 3651, 3652, 4096, 65100, 65400, 65536, 131072} {
+				for _, fork := range []int{0, 1, 4, 255, 256, 285, 286, 287, 65535, 65536, 65537} {
+					key := fmt.Sprintf("%s/%s/%s/value-%d-fork-%d", packageName, test, filesystemTest, size, fork)
+					known[key] = true
+					if !passed[key] {
+						return fmt.Errorf("missing native case completion %s", key)
+					}
+				}
+			}
+		}
+	}
+	for key := range passed {
+		if !known[key] {
+			return fmt.Errorf("unexpected completion %s", key)
+		}
+	}
 	return nil
 }
 
 func nativeInputs() []string {
 	return []string{
 		"testdata/appledouble/native/replacement-filesystem.c",
-		"scripts/verify-replacement-filesystem.go", ".github/workflows/replacement.yml",
+		"scripts/verify-replacement-filesystem.go", "scripts/verify-replacement-filesystem_test.go", ".github/workflows/replacement.yml",
 		"pkg/hostdata/replacement_filesystem_darwin_test.go", "pkg/hostdata/replacement_volume_darwin_test.go",
 		"pkg/hostdata/replacement_filesystem_test.go", "pkg/appledouble/filesystem_encode_test.go",
+		"pkg/hostdata/replacement_options.go", "pkg/osversion/macos.go", "pkg/osversion/version.go",
 		"pkg/hostdata/replacement_filesystem.go", "pkg/hostdata/replacement_filesystem_darwin.go",
 		"pkg/hostdata/replacement_copy_darwin.go", "pkg/appledouble/filesystem_encode.go",
 		"scripts/generate-darwin-wrappers.go", "internal/darwinabi/zsyscall_darwin_arm64.go", "internal/darwinabi/zsyscall_darwin_arm64.s",

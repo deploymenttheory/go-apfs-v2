@@ -55,7 +55,16 @@ func PrepareReplacement(source *os.File, parent string) (*Replacement, error) {
 // Cleanup always completes independently of cancellation. A single native call
 // need not be interruptible. The caller retains ownership of source.
 func PrepareReplacementContext(ctx context.Context, source *os.File, parent string) (*Replacement, error) {
+	return PrepareReplacementWithOptionsContext(ctx, source, parent, ReplacementOptions{})
+}
+
+// PrepareReplacementWithOptionsContext selects portable metadata compatibility;
+// cancellation, native metadata, source ownership and cleanup match PrepareReplacementContext.
+func PrepareReplacementWithOptionsContext(ctx context.Context, source *os.File, parent string, options ReplacementOptions) (*Replacement, error) {
 	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if _, err := options.filesystemProfile(); err != nil {
 		return nil, err
 	}
 	info, err := replacementValue(ctx, source.Stat)
@@ -65,11 +74,11 @@ func PrepareReplacementContext(ctx context.Context, source *os.File, parent stri
 	if !info.Mode().IsRegular() {
 		return nil, fmt.Errorf("prepare replacement: %w: non-regular source", ErrUnsupportedReplacement)
 	}
-	r, err := prepareReplacementPrivateContext(ctx, source, parent, info)
+	r, err := prepareReplacementPrivateContext(ctx, source, parent, info, options)
 	if err != nil {
 		return nil, err
 	}
-	if err = preparePrivateFilesystemReplacement(ctx, r, source); err != nil {
+	if err = preparePrivateFilesystemReplacement(ctx, r, source, options); err != nil {
 		return nil, errors.Join(err, r.Close())
 	}
 	return r, nil

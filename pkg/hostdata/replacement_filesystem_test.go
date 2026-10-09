@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/osversion"
 )
 
 // Controlled backend selection tests the portable implementation on every CI
@@ -23,6 +24,17 @@ func replacementTestFilesystemView(ctx context.Context, file *os.File) (*Filesys
 }
 
 func TestReplacementFilesystemNativeCorpus(t *testing.T) {
+	profile := osversion.MacOS27
+	if raw := os.Getenv("APFS_REPLACEMENT_FILESYSTEM_PROFILE"); raw != "" {
+		version, err := osversion.Parse(raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		profile, err = osversion.ProfileForMacOS(version)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
 	path := os.Getenv("APFS_REPLACEMENT_FILESYSTEM_CORPUS")
 	if path == "" {
 		path = "../../testdata/appledouble/native/replacement-filesystem-macos27/cases.json.gz"
@@ -78,7 +90,7 @@ func TestReplacementFilesystemNativeCorpus(t *testing.T) {
 					t.Error(e)
 				}
 			}()
-			state, err := prepareReplacementFilesystemUsing(t.Context(), input, r.File, replacementTestFilesystemView)
+			state, err := prepareReplacementFilesystemUsingForProfile(t.Context(), input, r.File, replacementTestFilesystemView, profile)
 			r.filesystem = state
 			if c.Errno != 0 {
 				failures++
@@ -140,7 +152,11 @@ func TestReplacementFilesystemNativeCorpus(t *testing.T) {
 			}
 		})
 	}
-	if successes != 120 || failures != 100 {
+	expectedFailures := 100
+	if profile == osversion.MacOS15 {
+		expectedFailures = 0
+	}
+	if successes != 220-expectedFailures || failures != expectedFailures {
 		t.Fatal("native case membership changed", successes, failures)
 	}
 }

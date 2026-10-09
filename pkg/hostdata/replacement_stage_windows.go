@@ -69,7 +69,7 @@ func makeReplacementDirectoryAt(ctx context.Context, root *os.Root, name string)
 	return release, nil
 }
 
-func prepareReplacementPrivateContext(ctx context.Context, source *os.File, parent string, _ os.FileInfo) (*Replacement, error) {
+func prepareReplacementPrivateContext(ctx context.Context, source *os.File, parent string, _ os.FileInfo, options ReplacementOptions) (*Replacement, error) {
 	if parent == "" {
 		parent = os.TempDir()
 	}
@@ -77,7 +77,7 @@ func prepareReplacementPrivateContext(ctx context.Context, source *os.File, pare
 	if err != nil {
 		return nil, err
 	}
-	staged, err := PrepareReplacementAtContext(ctx, source, root, ".")
+	staged, err := PrepareReplacementAtWithOptionsContext(ctx, source, root, ".", options)
 	if err != nil {
 		return nil, errors.Join(err, root.Close())
 	}
@@ -127,7 +127,7 @@ func closePrivateReplacement(r *Replacement) error {
 	return err
 }
 
-func preparePrivateFilesystemReplacement(ctx context.Context, r *Replacement, _ *os.File) error {
+func preparePrivateFilesystemReplacement(ctx context.Context, r *Replacement, _ *os.File, _ ReplacementOptions) error {
 	r.filesystem = r.rooted.filesystem
 	return ctx.Err()
 }

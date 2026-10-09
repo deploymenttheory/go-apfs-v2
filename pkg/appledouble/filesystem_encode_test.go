@@ -9,6 +9,7 @@ import (
 	"io"
 	"math"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -63,7 +64,17 @@ func TestFilesystemEncodingNativeCopy(t *testing.T) {
 			}
 		})
 	}
-	if negative != 100 {
+	expectedFailures := 100
+	if raw := os.Getenv("APFS_REPLACEMENT_FILESYSTEM_PROFILE"); raw != "" {
+		profile, err := strconv.Atoi(raw)
+		if err != nil || (profile != 15 && profile != 26 && profile != 27) {
+			t.Fatal("invalid native profile", raw, err)
+		}
+		if profile == 15 {
+			expectedFailures = 0
+		}
+	}
+	if negative != expectedFailures {
 		t.Fatal("lost native failure outcomes", negative)
 	}
 }

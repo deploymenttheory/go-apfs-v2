@@ -749,12 +749,24 @@ recovery state. Publication does not promise crash durability.
 
 The fresh carrier encoder retains native attribute order, allocation increments,
 alignment and resource-fork storage bytes. Forks stream through 64 KiB buffers.
-Native attribute-file replacement rejects nonempty forks shorter than the
-286-byte resource header; preparation preserves that error instead of publishing
-a partial replacement. The raw AppleDouble codec can still decode those inputs.
+The qualified macOS 26/27 attribute-file writer rejects nonempty forks shorter
+than the 286-byte resource header; macOS 15 accepts them. Portable preparation
+defaults to macOS 27. Use `PrepareReplacementWithOptionsContext` or
+`PrepareReplacementAtWithOptionsContext` with
+`ReplacementOptions{MacOSProfile: osversion.MacOS15}` when targeting the qualified
+macOS 15 filesystem behavior. Unsupported profiles fail before staging. These
+SDK options do not add codesign CLI flags or select neighboring files as metadata.
+macOS uses its actual native VFS operations. The raw AppleDouble codec represents
+both accepted and rejected inputs; a failed preparation never publishes a partial
+replacement.
 
 `verify-replacement-filesystem.go` captures 220 real FAT/exFAT cases on each of
 macOS 15, 26 and 27, including successful copies and partial native failure output.
-CI verifies capture source hashes and both Clang architecture ASTs, then replays
-all three producers on Linux and Windows. Coverage and the existing native
-APFS/HFS+ replacement controls remain required.
+Collection records the C oracle independently of Go parity and completes native
+cleanup before sealing the producer. CI verifies capture sources, both Clang
+architecture ASTs, exact profile and current-run integrity, then replays every
+producer on Linux, Windows 2022/2025 and macOS 15/26/27. Separate native jobs
+compare Go held-copy errors and partial carrier bytes against Apple. Behavioral
+baseline checks do not block consumers from receiving complete native evidence.
+JSON transcripts and tool diagnostics are separate artifacts. Coverage and the
+existing native APFS/HFS+ replacement controls remain required.

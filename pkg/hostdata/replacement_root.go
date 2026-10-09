@@ -52,7 +52,17 @@ func PrepareReplacementAt(source *os.File, root *os.Root, parent string) (*RootR
 // Root containment and caller ownership match PrepareReplacementAt. Cleanup is
 // never canceled; individual native calls need not be interruptible.
 func PrepareReplacementAtContext(ctx context.Context, source *os.File, root *os.Root, parent string) (*RootReplacement, error) {
+	return PrepareReplacementAtWithOptionsContext(ctx, source, root, parent, ReplacementOptions{})
+}
+
+// PrepareReplacementAtWithOptionsContext selects portable metadata compatibility;
+// containment, cancellation and cleanup match PrepareReplacementAtContext.
+func PrepareReplacementAtWithOptionsContext(ctx context.Context, source *os.File, root *os.Root, parent string, options ReplacementOptions) (*RootReplacement, error) {
 	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	profile, err := options.filesystemProfile()
+	if err != nil {
 		return nil, err
 	}
 	info, err := replacementValue(ctx, source.Stat)
@@ -84,7 +94,7 @@ func PrepareReplacementAtContext(ctx context.Context, source *os.File, root *os.
 		r.cleanup, err = replacementCleanupCapability(r.File)
 	}
 	if err == nil {
-		r.filesystem, err = prepareReplacementFilesystem(ctx, source, r.File)
+		r.filesystem, err = prepareReplacementFilesystemForProfile(ctx, source, r.File, profile)
 	}
 	err = errors.Join(err, ctx.Err(), release())
 	if err != nil {

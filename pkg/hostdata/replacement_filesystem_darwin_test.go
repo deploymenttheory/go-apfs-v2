@@ -15,9 +15,27 @@ import (
 
 	"github.com/deploymenttheory/go-apfs-v2/internal/testutil/cirunner"
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/osversion"
 )
 
+func TestReplacementFilesystemNativeCapture(t *testing.T) {
+	testReplacementFilesystemNative(t, false)
+}
+
 func TestReplacementFilesystemNativeEncoding(t *testing.T) {
+	testReplacementFilesystemNative(t, true)
+}
+
+// Native-only collection must finish independently of current Go parity.
+func testReplacementFilesystemNative(t *testing.T, qualify bool) {
+	version, err := osversion.Detect(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	nativeProfile, err := osversion.ProfileForMacOS(version)
+	if err != nil {
+		t.Fatal(err)
+	}
 	oracle := filepath.Join(t.TempDir(), "oracle")
 	source := "../../testdata/appledouble/native/replacement-filesystem.c"
 	if output, err := cirunner.Command("xcrun", "clang", "-std=c11", "-Wall", "-Wextra", "-Werror", source, "-o", oracle).CombinedOutput(); err != nil {
@@ -95,12 +113,8 @@ func TestReplacementFilesystemNativeEncoding(t *testing.T) {
 						if nativeErr != nil {
 							t.Fatalf("native oracle invocation: %v %s", nativeErr, output)
 						}
-						wantResult, wantErrno := 0, 0
-						if forkSize > 0 && forkSize < 286 {
-							wantResult, wantErrno = -1, 22
-						}
-						if outcome.Result != wantResult || outcome.Errno != wantErrno || outcome.FreeResult != 0 || outcome.CloseResult != 0 {
-							t.Fatalf("native copy outcome: %+v; want result=%d errno=%d with successful cleanup", outcome, wantResult, wantErrno)
+						if outcome.FreeResult != 0 || outcome.CloseResult != 0 || !((outcome.Result == 0 && outcome.Errno == 0) || (outcome.Result == -1 && outcome.Errno > 0)) {
+							t.Fatalf("invalid native outcome or cleanup: %+v", outcome)
 						}
 						native, err := os.ReadFile(filepath.Join(dir, "._target"))
 
@@ -108,6 +122,16 @@ func TestReplacementFilesystemNativeEncoding(t *testing.T) {
 							t.Fatal(err)
 						}
 						observed = append(observed, observation{Filesystem: filesystem, Profile: profile, Input: bytes.Clone(wire), Native: native, Errno: outcome.Errno})
+						if !qualify {
+							return
+						}
+						wantResult, wantErrno := 0, 0
+						if nativeProfile != osversion.MacOS15 && forkSize > 0 && forkSize < 286 {
+							wantResult, wantErrno = -1, 22
+						}
+						if outcome.Result != wantResult || outcome.Errno != wantErrno {
+							t.Fatalf("native profile %d changed: %+v; expected result=%d errno=%d", nativeProfile, outcome, wantResult, wantErrno)
+						}
 						// Compare the held Go copy on every success and failure,
 						// including bytes left in the failed private carrier.
 						from, e := os.Open(input)

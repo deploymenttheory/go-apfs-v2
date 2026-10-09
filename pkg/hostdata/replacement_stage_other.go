@@ -16,7 +16,7 @@ type replacementPlatformState struct {
 	dir    string
 }
 
-func prepareReplacementPrivateContext(ctx context.Context, source *os.File, parent string, info os.FileInfo) (*Replacement, error) {
+func prepareReplacementPrivateContext(ctx context.Context, source *os.File, parent string, info os.FileInfo, _ ReplacementOptions) (*Replacement, error) {
 	dir, err := os.MkdirTemp(parent, ".apfs-replacement-")
 	if err != nil {
 		return nil, err
@@ -72,8 +72,11 @@ func closePrivateReplacement(r *Replacement) error {
 		func() error { return os.Chmod(filepath.Join(r.dir, "replacement"), 0600) }, func() error { return os.RemoveAll(r.dir) }))
 }
 
-func preparePrivateFilesystemReplacement(ctx context.Context, r *Replacement, source *os.File) error {
-	var err error
-	r.filesystem, err = prepareReplacementFilesystem(ctx, source, r.File)
+func preparePrivateFilesystemReplacement(ctx context.Context, r *Replacement, source *os.File, options ReplacementOptions) error {
+	profile, err := options.filesystemProfile()
+	if err != nil {
+		return err
+	}
+	r.filesystem, err = prepareReplacementFilesystemForProfile(ctx, source, r.File, profile)
 	return err
 }

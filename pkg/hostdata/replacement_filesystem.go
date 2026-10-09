@@ -10,6 +10,7 @@ import (
 	"syscall"
 
 	"github.com/deploymenttheory/go-apfs-v2/pkg/appledouble"
+	"github.com/deploymenttheory/go-apfs-v2/pkg/osversion"
 )
 
 // Metadata is prepared privately before any destination mutation. Carrier
@@ -21,7 +22,7 @@ type replacementFilesystem struct {
 	published                    bool
 }
 
-func prepareReplacementFilesystem(ctx context.Context, source, target *os.File) (state *replacementFilesystem, result error) {
+func prepareReplacementFilesystemForProfile(ctx context.Context, source, target *os.File, profile osversion.MacOSProfile) (state *replacementFilesystem, result error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -29,7 +30,7 @@ func prepareReplacementFilesystem(ctx context.Context, source, target *os.File) 
 	if err != nil || !selected {
 		return nil, err
 	}
-	return prepareReplacementFilesystemUsing(ctx, source, target, FilesystemMetadataForFile)
+	return prepareReplacementFilesystemUsingForProfile(ctx, source, target, FilesystemMetadataForFile, profile)
 }
 
 type replacementFilesystemWriter interface {
@@ -39,12 +40,20 @@ type replacementFilesystemWriter interface {
 }
 
 func prepareReplacementFilesystemUsing(ctx context.Context, source, target *os.File, open func(context.Context, *os.File) (*FilesystemMetadata, error)) (*replacementFilesystem, error) {
-	return prepareReplacementFilesystemWith(ctx, source, target, open, func(staging *FilesystemMetadata) (replacementFilesystemWriter, error) {
+	return prepareReplacementFilesystemUsingForProfile(ctx, source, target, open, osversion.MacOS27)
+}
+
+func prepareReplacementFilesystemUsingForProfile(ctx context.Context, source, target *os.File, open func(context.Context, *os.File) (*FilesystemMetadata, error), profile osversion.MacOSProfile) (*replacementFilesystem, error) {
+	return prepareReplacementFilesystemWithProfile(ctx, source, target, open, profile, func(staging *FilesystemMetadata) (replacementFilesystemWriter, error) {
 		return staging.parent.OpenFile("._"+staging.name, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
 	})
 }
 
 func prepareReplacementFilesystemWith(ctx context.Context, source, target *os.File, open func(context.Context, *os.File) (*FilesystemMetadata, error), create func(*FilesystemMetadata) (replacementFilesystemWriter, error)) (state *replacementFilesystem, result error) {
+	return prepareReplacementFilesystemWithProfile(ctx, source, target, open, osversion.MacOS27, create)
+}
+
+func prepareReplacementFilesystemWithProfile(ctx context.Context, source, target *os.File, open func(context.Context, *os.File) (*FilesystemMetadata, error), profile osversion.MacOSProfile, create func(*FilesystemMetadata) (replacementFilesystemWriter, error)) (state *replacementFilesystem, result error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -85,10 +94,12 @@ func prepareReplacementFilesystemWith(ctx context.Context, source, target *os.Fi
 				return nil, errors.Join(io.ErrUnexpectedEOF, e)
 			}
 		case ResourceForkName:
-			// The current native attribute-file writer rejects a nonempty
+			// macOS 26/27 reject a nonempty short resource fork; macOS 15
+			// accepts it. The independent 220-case native matrix qualifies
+			// both outcomes on every receiver. The newer writer rejects a nonempty
 			// fork shorter than its 286-byte resource header. The raw codec
 			// still represents such input; replacement preserves native failure.
-			if entry.Value.Size() > 0 && entry.Value.Size() < 286 {
+			if profile != osversion.MacOS15 && entry.Value.Size() > 0 && entry.Value.Size() < 286 {
 				return nil, syscall.EINVAL
 			}
 			metadata.ResourceFork = entry.Value
