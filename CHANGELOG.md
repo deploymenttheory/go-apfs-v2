@@ -43,6 +43,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   preserving supported metadata using opened roots and handles. Tests cover both
   preparation APIs, containment, renamed roots, Windows streams and cleanup.
 
+## [0.19.0](https://github.com/deploymenttheory/go-apfs-v2/compare/v0.18.0...v0.19.0) (2026-10-09)
+
+
+### Features
+
+* add filesystem-selected metadata and native qualification ([#214](https://github.com/deploymenttheory/go-apfs-v2/issues/214)) ([34a6b58](https://github.com/deploymenttheory/go-apfs-v2/commit/34a6b58c7ce34d99319cae224e3e5a9171967b20))
+* add held filesystem metadata queries and attribute removal ([#216](https://github.com/deploymenttheory/go-apfs-v2/issues/216)) ([2594713](https://github.com/deploymenttheory/go-apfs-v2/commit/25947132e8e80f8d2f5fda127338e03d13c95551))
+* expose held filesystem attribute storage capabilities ([#218](https://github.com/deploymenttheory/go-apfs-v2/issues/218)) ([cc85565](https://github.com/deploymenttheory/go-apfs-v2/commit/cc855653389fb6da79afcdf29b14dbc40f6c903f))
+
+
+### Bug Fixes
+
+* avoid mounted ExFAT cleanup in metadata captures ([#221](https://github.com/deploymenttheory/go-apfs-v2/issues/221)) ([5c7222e](https://github.com/deploymenttheory/go-apfs-v2/commit/5c7222ef9172645c600f87779ad375c4349e285d))
+* include nested AppleDouble fixtures in coverage provenance ([#217](https://github.com/deploymenttheory/go-apfs-v2/issues/217)) ([7420428](https://github.com/deploymenttheory/go-apfs-v2/commit/74204281a3ecc9615b3499bb5b324c19a571c420))
+* match native rejection of packed empty attributes ([#219](https://github.com/deploymenttheory/go-apfs-v2/issues/219)) ([18d0189](https://github.com/deploymenttheory/go-apfs-v2/commit/18d01893f15709bd1eb37180989a1ebe5a53e62e))
+* preserve native attribute-file permission errors ([#220](https://github.com/deploymenttheory/go-apfs-v2/issues/220)) ([571c1dc](https://github.com/deploymenttheory/go-apfs-v2/commit/571c1dca84d82630c6582a9ae495afe2146a3759))
+* preserve native filesystem metadata during replacement ([#222](https://github.com/deploymenttheory/go-apfs-v2/issues/222)) ([2bd8a20](https://github.com/deploymenttheory/go-apfs-v2/commit/2bd8a20b6bd2a4b6db2857d3f1d3412ca82ce036))
+
 ## [0.18.0](https://github.com/deploymenttheory/go-apfs-v2/compare/v0.17.2...v0.18.0) (2026-10-07)
 
 
