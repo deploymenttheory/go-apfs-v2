@@ -88,7 +88,64 @@ genuine old bytes and producing fully archived fresh evidence are distinct tasks
 - Qualify both repositories in published CI before closing this migration or
   declaring Phase 02 complete.
 
-The shared validator and the APFS owned-compression producer–consumer migration
-are implemented locally. The remaining families, workflow consolidation and
-codesign consumer migration are still outstanding; this document is not a claim
-that Phase 02 is complete.
+The shared validator, retained-original catalog, root workflow consolidation,
+owned-compression producer–consumer graph and replacement producer separation
+are published in the draft implementation PR. The inventory below records the
+remaining migrations. This document does not claim that Phase 02 is complete.
+
+## Shared execution requirements
+
+Every APFS JSON coverage driver now writes tool diagnostics to a separate
+`.stderr.log` through `cirunner.RunWithDiagnostics`. Drivers with exclusively
+owned stdout/stderr files use `cirunner.Capture`, which closes both files before
+returning. Neither operation drops diagnostic lines or changes a failed command
+into success. The reporting gate audits every Go driver with an AST check for a
+shared stdout/stderr sink, including drivers whose CI jobs were already green.
+Cold module caches are exercised in owned-compression and replacement consumers.
+
+Native image creation and detach operations have bounded busy retries. A failed
+create first inspects the exact image's attachments, ordinarily detaches its
+backing device and removes only a regular partial image. Existing files,
+ambiguous attachments, other command errors and failed cleanup remain failures.
+No force ejection or skipped filesystem is used.
+
+## Family migration inventory
+
+The root workflow requires all eighteen families below. Shared reporting and
+original-source verification do not imply that a family's independent producer
+and consumer migration is complete.
+
+| Workflow family | Acceptance obligations retained | Remaining separation |
+| --- | --- | --- |
+| `carrier-recompression` | Portable coverage, native carrier readback and authority, access qualification | Independent producer receipts and baseline scheduling |
+| `compression-native` | Native codecs, query, lifecycle, operation and resource-fork profiles | Independent producer receipts and baseline scheduling |
+| `compression-owned` | 72 native cases, all six receiving hosts, native live copies, coverage and baselines | Complete archive/input review; matrix CI qualification |
+| `compression-state` | Portable state and native profile replay | Independent producer receipts and baseline scheduling |
+| `hfs-special-names` | Native special-name observations and HFS replay | Independent producer receipts |
+| `large-resource-fork` | Native and portable large-fork boundaries | Independent producer receipts |
+| `metadata-transport` | Image journeys, foreign image readback and three filesystem metadata profiles | Separate the remaining collector Go readbacks from native-only production |
+| `name-admission` | Native admission and retained table qualification | Separate baseline checks from native production |
+| `name-cache-ast` | Complete Apple cache bodies and compiled AST qualification | Complete original-source review |
+| `name-collation` | Native collation captures and retained tables | Independent consumer receipts |
+| `replacement` | Complete package/per-file coverage, native volumes, 220 C-only filesystem cases per profile, six receivers and separate native live/baseline jobs | Shared typed receipt aggregation and complete original-source review |
+| `fuzz` | Every reviewed fuzz target and retained regressions | No native producer; preserve execution and regression inventories |
+| `ci-reporting` | Runner/provenance/validator/audit/disk-image coverage, race and failure controls | Keep the common gate extended as families migrate |
+| `name-comparison` | All producer/receiver filesystem combinations, exact lookup inventory and coverage | Finish receipt and baseline separation review |
+| `name-writer` | Every foreign writer, native readback and corruption controls | Complete independent receipt review |
+| `pathname-authorization` | Native authority bodies, mounted cases and every foreign profile replay | Independent producer receipts |
+| `pathname-limits` | Fresh native limits and foreign replay | Independent producer receipts |
+| `name-lookup` | Fresh native lookup and foreign replay | Independent producer receipts |
+
+The replacement producer runs independently of Go volume qualification. Its
+completion seal binds the actual OS profile, current run/attempt, sources and
+all retained native artifacts after cleanup. A baseline failure leaves the
+native producer available to the six Go receivers. Each receiver requires every
+nested case and package completion and stores its output outside the immutable
+producer directory. The portable writer exposes the qualified macOS 15 versus
+26/27 behavior through SDK compatibility options; no codesign CLI option is added.
+
+Codesign keeps its five reviewed shards, exact nested outcomes, instrumented
+package inventory and foreign exports. The native-evidence package is included
+in both its unit and coverage inventories. Its execution helper also retains
+stdout and diagnostics separately and rejects stale output files. Its remaining
+research-capture and native producer/consumer migration remains outstanding.
