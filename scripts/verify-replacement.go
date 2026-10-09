@@ -124,7 +124,7 @@ func verify() error {
 	}
 	covered, total := 0, 0
 	coverageFiles := map[string][2]int{"pkg/hostdata/replacement_copy.go": {}, "pkg/hostdata/replacement_backup.go": {}}
-	for _, name := range []string{"replacement.go", "replacement_root.go", "replacement_context.go", "replacement_values.go"} {
+	for _, name := range []string{"replacement.go", "replacement_root.go", "replacement_context.go", "replacement_values.go", "replacement_filesystem.go"} {
 		coverageFiles["pkg/hostdata/"+name] = [2]int{}
 	}
 	if runtime.GOOS == "windows" {
@@ -147,6 +147,7 @@ func verify() error {
 	}
 	if runtime.GOOS == "darwin" {
 		coverageFiles["pkg/hostdata/replacement_copy_darwin.go"] = [2]int{}
+		coverageFiles["pkg/hostdata/replacement_filesystem_darwin.go"] = [2]int{}
 		coverageFiles["pkg/hostdata/replacement_volume_darwin.go"] = [2]int{}
 	}
 	blocks := map[string][2]int{}

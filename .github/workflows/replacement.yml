@@ -82,6 +82,17 @@ jobs:
         uses: ./.github/actions/setup-ci-runner
       - name: Qualify native APFS, HFS+, FAT32 and exFAT replacement
         run: apfs-ci-runner --suite replacement/volume-capabilities --timeout 12m -- go run scripts/verify-replacement-volume.go
+      - name: Capture complete native replacement metadata matrix
+        run: apfs-ci-runner --suite replacement/filesystem-capture --timeout 3m -- go run scripts/verify-replacement-filesystem.go
+      - name: Retain native replacement metadata evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: replacement-filesystem-${{ matrix.os }}
+          path: artifacts/replacement-filesystem/
+          if-no-files-found: error
+          compression-level: 9
       - name: Retain native observations, ASTs and complete command diagnostics
         if: always()
         uses: actions/upload-artifact@v7
@@ -90,6 +101,45 @@ jobs:
           name: replacement-volume-${{ matrix.os }}
           path: |
             artifacts/replacement-volume/
+            artifacts/ci-observability/
+          if-no-files-found: error
+          compression-level: 9
+
+  filesystem-replay:
+    name: Replay all native replacement metadata (${{ matrix.os }})
+    needs: native-volumes
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-2022, windows-2025]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: replacement-filesystem-*
+          path: artifacts/native-replacement/
+      - name: Verify source bindings and replay every producer
+        shell: bash
+        run: |
+          set -euo pipefail
+          for producer in macos-15 macos-latest xcode-27; do
+            apfs-ci-runner --suite "replacement/filesystem-replay/$producer" --timeout 2m -- go run scripts/verify-replacement-filesystem.go -replay -dir "artifacts/native-replacement/replacement-filesystem-$producer"
+          done
+      - name: Retain replay results and diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: replacement-filesystem-replay-${{ matrix.os }}
+          path: |
+            artifacts/native-replacement/
             artifacts/ci-observability/
           if-no-files-found: error
           compression-level: 9
