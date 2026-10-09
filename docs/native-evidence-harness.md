@@ -123,7 +123,7 @@ and consumer migration is complete.
 | `compression-state` | Portable state and native profile replay | Independent producer receipts and baseline scheduling |
 | `hfs-special-names` | Native special-name observations and HFS replay | Independent producer receipts |
 | `large-resource-fork` | Native and portable large-fork boundaries | Independent producer receipts |
-| `metadata-transport` | Image journeys, foreign image readback and three filesystem metadata profiles | Separate the remaining collector Go readbacks from native-only production |
+| `metadata-transport` | Image journeys, foreign image readback, three independent filesystem metadata profiles per producer, six receivers and native live comparisons | Shared typed receipt aggregation; separate the older image-journey producer and baseline checks |
 | `name-admission` | Native admission and retained table qualification | Separate baseline checks from native production |
 | `name-cache-ast` | Complete Apple cache bodies and compiled AST qualification | Complete original-source review |
 | `name-collation` | Native collation captures and retained tables | Independent consumer receipts |
@@ -143,6 +143,24 @@ native producer available to the six Go receivers. Each receiver requires every
 nested case and package completion and stores its output outside the immutable
 producer directory. The portable writer exposes the qualified macOS 15 versus
 26/27 behavior through SDK compatibility options; no codesign CLI option is added.
+
+The filesystem-metadata collector produces native-only observations for all
+1,248 cases per OS: 960 ordinary cases, 96 packed-empty cases and 192 attribute
+target cases. It archives the declared probe, SDK headers, compiler ASTs, oracle
+binary and original source bytes. After all three profiles finish and mounted
+images are detached, a completion receipt binds the entire artifact directory.
+Linux, both Windows releases and all three macOS releases verify each producer's
+current-run seal before replay. A separate live receiver for each native release
+uses the exact producer seed, compares complete native inputs, trees and results,
+then qualifies the public Go read view. A Go mismatch fails that receiver without
+preventing independent consumers from receiving the native observations.
+
+Historical captures may retain their original `go_read_cases` field. It is not
+rewritten. Fresh producers require that field to be zero; live receiver reports
+require all comparisons to finish. Zero-length file contents compare by bytes
+because JSON omits empty byte slices; names, modes, link targets and every native
+result remain exact. Partial collection, failed cleanup, missing profiles,
+changed original sources and incorrect execution receipts remain failures.
 
 Codesign keeps its five reviewed shards, exact nested outcomes, instrumented
 package inventory and foreign exports. The native-evidence package is included
