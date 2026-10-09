@@ -14,8 +14,10 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"slices"
 	"strings"
@@ -161,7 +163,7 @@ func metadataMountOwnership(filesystem string) string {
 	return "on"
 }
 
-func captureMetadataFilesystem(out, profile string) (result error) {
+func captureMetadataFilesystem(out, profile string, reference *metadataCapture) (result error) {
 	states, err := metadataProfileStates(profile)
 	if err != nil {
 		return err
@@ -200,6 +202,9 @@ func captureMetadataFilesystem(out, profile string) (result error) {
 			return err
 		}
 		capture.Sources[path] = hash(data)
+		if err = writeMetadataSource(artifact, path, data); err != nil {
+			return err
+		}
 	}
 	implementations, err := filepath.Glob("pkg/hostdata/filesystem_metadata*.go")
 	if err != nil {
@@ -211,6 +216,9 @@ func captureMetadataFilesystem(out, profile string) (result error) {
 			return e
 		}
 		capture.Sources[path] = hash(data)
+		if err = writeMetadataSource(artifact, path, data); err != nil {
+			return err
+		}
 	}
 	host, err := metadataCommand("sw_vers")
 	if err != nil {
@@ -235,6 +243,9 @@ func captureMetadataFilesystem(out, profile string) (result error) {
 			return e
 		}
 		capture.Sources["sdk/"+name] = hash(b)
+		if err = writeMetadataSource(artifact, "sdk/"+name, b); err != nil {
+			return err
+		}
 	}
 	oracle := filepath.Join(work, "oracle")
 	if _, err = metadataCommand("xcrun", "clang", "-std=c11", "-Wall", "-Wextra", "-Werror", source, "-o", oracle); err != nil {
@@ -291,6 +302,13 @@ func captureMetadataFilesystem(out, profile string) (result error) {
 		return err
 	}
 	capture.Sources["seed.appledouble"] = hash(seed)
+	if reference != nil {
+		seed = bytes.Clone(reference.Seed)
+		if err = os.WriteFile(filepath.Join(artifact, "seed.appledouble"), seed, 0644); err != nil {
+			return err
+		}
+		capture.Sources["seed.appledouble"] = hash(seed)
+	}
 	capture.Seed = bytes.Clone(seed)
 	if err = validateMetadataProfileSeed(seed, profile); err != nil {
 		return err
@@ -390,11 +408,17 @@ func captureMetadataFilesystem(out, profile string) (result error) {
 						if err != nil {
 							return err
 						}
-						capture.Cases = append(capture.Cases, metadataCase{id, before, b, after})
-						if err = qualifyMetadataFilesystemRead(root, target, b); err != nil {
-							return fmt.Errorf("Go/native readback %s: %w", id, err)
+						record := metadataCase{id, before, b, after}
+						capture.Cases = append(capture.Cases, record)
+						if reference != nil {
+							if err = compareMetadataCase(reference.Cases[len(capture.Cases)-1], record); err != nil {
+								return err
+							}
+							if err = qualifyMetadataFilesystemRead(root, target, b); err != nil {
+								return fmt.Errorf("Go/native readback %s: %w", id, err)
+							}
+							capture.GoReadCases++
 						}
-						capture.GoReadCases++
 						fmt.Printf("CASE %s (%d)\n", id, len(capture.Cases))
 					}
 				}
@@ -409,6 +433,124 @@ func captureMetadataFilesystem(out, profile string) (result error) {
 	if err = validateMetadataCapture(capture); err != nil {
 		capture.Complete = false
 		return err
+	}
+	return nil
+}
+
+func writeMetadataSource(dir, name string, body []byte) error {
+	if !fs.ValidPath(name) {
+		return errors.New("unsafe native source path")
+	}
+	path := filepath.Join(dir, filepath.FromSlash(name))
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return err
+	}
+	return os.WriteFile(path, body, 0600)
+}
+
+func metadataProfilePath(profile string) (string, error) {
+	switch profile {
+	case "":
+		return "native.json", nil
+	case "packed-empty":
+		return "packed/native.json", nil
+	case "attribute-target":
+		return "attribute-target/native.json", nil
+	default:
+		return "", errors.New("unknown native profile")
+	}
+}
+
+func validateMetadataReference(dir, path, profile string, major uint) (metadataCapture, error) {
+	var capture metadataCapture
+	name, err := metadataProfilePath(profile)
+	if err != nil {
+		return capture, err
+	}
+	want, err := filepath.Abs(filepath.Join(dir, name))
+	if err != nil {
+		return capture, err
+	}
+	actual, err := filepath.Abs(path)
+	if err != nil || actual != want {
+		return capture, errors.New("native profile is outside its sealed producer")
+	}
+	capture, err = readMetadataCapture(path)
+	if err != nil {
+		return capture, err
+	}
+	if err = validateMetadataCapture(capture); err != nil {
+		return capture, err
+	}
+	version, err := osversion.ParseProductVersion(capture.Host)
+	if err != nil {
+		return capture, err
+	}
+	if capture.Profile != profile || uint(version.Major) != major || capture.GoReadCases != 0 {
+		return capture, errors.New("wrong profile or mixed Go/native producer")
+	}
+	for name, expected := range capture.Sources {
+		if !fs.ValidPath(name) {
+			return capture, errors.New("unsafe native source provenance")
+		}
+		body, err := os.ReadFile(filepath.Join(filepath.Dir(path), filepath.FromSlash(name)))
+		if err != nil {
+			return capture, err
+		}
+		sum := sha256.Sum256(body)
+		if hex.EncodeToString(sum[:]) != expected {
+			return capture, fmt.Errorf("changed original native source %s", name)
+		}
+	}
+	return capture, nil
+}
+
+// A live receiver uses the exact producer seed, complete case order and native
+// results before comparing Go with its independently mounted native filesystem.
+// Baseline changes cannot make a Go mismatch disappear.
+func compareMetadataCase(expected, actual metadataCase) error {
+	if expected.ID != actual.ID || !equalMetadataTree(expected.Before, actual.Before) || !equalMetadataTree(expected.After, actual.After) {
+		return fmt.Errorf("native live input/tree mismatch %s", actual.ID)
+	}
+	var want, got any
+	if err := json.Unmarshal(expected.Observation, &want); err != nil {
+		return err
+	}
+	if err := json.Unmarshal(actual.Observation, &got); err != nil {
+		return err
+	}
+	if !reflect.DeepEqual(want, got) {
+		return fmt.Errorf("native live observation mismatch %s", actual.ID)
+	}
+	return nil
+}
+
+// JSON omits empty byte slices. Equal zero-byte files must therefore compare
+// by their byte contents, independent of nil versus allocated empty storage.
+func equalMetadataTree(expected, actual map[string]metadataEntry) bool {
+	if len(expected) != len(actual) {
+		return false
+	}
+	for name, want := range expected {
+		got, ok := actual[name]
+		if !ok || want.Mode != got.Mode || want.Target != got.Target || !bytes.Equal(want.Bytes, got.Bytes) {
+			return false
+		}
+	}
+	return true
+}
+
+// All three profiles must be complete and native-only before a producer can
+// publish its run-bound completion receipt. A Go failure belongs to a receiver.
+func validateMetadataProducer(dir string, major uint) error {
+	for _, profile := range []string{"", "packed-empty", "attribute-target"} {
+		name, err := metadataProfilePath(profile)
+		if err != nil {
+			return err
+		}
+		if _, err = validateMetadataReference(dir, filepath.Join(dir, name), profile, major); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -727,8 +869,44 @@ func main() {
 	out := flag.String("out", "artifacts/metadata-filesystem/native.json", "native capture path")
 	verify := flag.String("verify", "", "validate a complete native capture without executing native commands")
 	major := flag.Uint("major", 0, "require the native producer's macOS major version")
+	live := flag.String("live", "", "qualify Go against this fresh native producer profile on a live filesystem")
+	execution := flag.String("execution", "", "verify the complete producer directory before replay")
+	seal := flag.String("seal", "", "seal all three complete native profiles after cleanup")
 	flag.Parse()
 	var err error
+	var reference *metadataCapture
+	if *seal != "" {
+		err = validateMetadataProducer(*seal, *major)
+		if err == nil {
+			err = captureprovenance.SealExecution(context.Background(), *seal)
+		}
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
+	if *execution != "" {
+		err = captureprovenance.VerifyExecution(context.Background(), *execution)
+		if err == nil {
+			err = validateMetadataProducer(*execution, *major)
+		}
+	}
+	if err == nil && *live != "" {
+		if *execution == "" {
+			err = errors.New("live qualification requires a sealed native-only producer")
+		} else {
+			var capture metadataCapture
+			capture, err = validateMetadataReference(*execution, *live, *profile, *major)
+			if err == nil {
+				reference = &capture
+			}
+		}
+	}
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 	if *verify != "" {
 		var capture metadataCapture
 		capture, err = readMetadataCapture(*verify)
@@ -754,7 +932,7 @@ func main() {
 			}
 		}
 		if err == nil {
-			err = captureMetadataFilesystem(*out, *profile)
+			err = captureMetadataFilesystem(*out, *profile, reference)
 		}
 	}
 	if err != nil {

@@ -194,3 +194,170 @@ func TestMetadataFilesystemPackedInventory(t *testing.T) {
 		t.Fatal("packed profile accepted as ordinary corpus")
 	}
 }
+
+// These controls reuse retained Apple observations. The small source archive is
+// an integrity-protocol fixture, not a new native baseline or capture provenance.
+func TestMetadataNativeOnlyProducerAndArchiveControls(t *testing.T) {
+	fixtures := []struct{ profile, source string }{
+		{"", metadataFixture},
+		{"packed-empty", "testdata/appledouble/native/metadata-filesystem-packed-empty-macos27.json.gz"},
+		{"attribute-target", "testdata/appledouble/native/metadata-filesystem-attribute-target-macos27.json.gz"},
+	}
+	for _, mutation := range []string{"valid", "missing-profile", "wrong-profile", "wrong-host", "mixed-go", "partial", "missing-source", "changed-source", "unsafe-source"} {
+		t.Run(mutation, func(t *testing.T) {
+			dir := t.TempDir()
+			for _, fixture := range fixtures {
+				capture, err := readMetadataCapture(fixture.source)
+				if err != nil {
+					t.Fatal(err)
+				}
+				capture.GoReadCases = 0
+				capture.Sources = map[string]string{"seed.appledouble": capture.Sources["seed.appledouble"]}
+				name, err := metadataProfilePath(fixture.profile)
+				if err != nil {
+					t.Fatal(err)
+				}
+				path := filepath.Join(dir, name)
+				if fixture.profile == "packed-empty" {
+					switch mutation {
+					case "missing-profile":
+						continue
+					case "wrong-profile":
+						capture.Profile = "attribute-target"
+					case "wrong-host":
+						capture.Host = "ProductVersion:\t15.7\n"
+					case "mixed-go":
+						capture.GoReadCases = len(capture.Cases)
+					case "partial":
+						capture.Complete = false
+					case "unsafe-source":
+						capture.Sources["../escape"] = capture.Sources["seed.appledouble"]
+					}
+				}
+				if err = os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+					t.Fatal(err)
+				}
+				if err = writeMetadataSource(filepath.Dir(path), "seed.appledouble", capture.Seed); err != nil {
+					t.Fatal(err)
+				}
+				if fixture.profile == "packed-empty" {
+					switch mutation {
+					case "missing-source":
+						if err = os.Remove(filepath.Join(filepath.Dir(path), "seed.appledouble")); err != nil {
+							t.Fatal(err)
+						}
+					case "changed-source":
+						if err = writeMetadataSource(filepath.Dir(path), "seed.appledouble", []byte("corrupt")); err != nil {
+							t.Fatal(err)
+						}
+					}
+				}
+				body, err := json.Marshal(capture)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err = os.WriteFile(path, body, 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			err := validateMetadataProducer(dir, 27)
+			if (err == nil) != (mutation == "valid") {
+				t.Fatalf("mutation=%s error=%v", mutation, err)
+			}
+			if mutation == "valid" {
+				if _, err = validateMetadataReference(dir, filepath.Join(dir, "packed/native.json"), "packed-empty", 27); err != nil {
+					t.Fatal(err)
+				}
+				if _, err = validateMetadataReference(dir, filepath.Join(t.TempDir(), "native.json"), "", 27); err == nil {
+					t.Fatal("unsealed reference accepted")
+				}
+				if _, err = validateMetadataReference(dir, filepath.Join(dir, "native.json"), "invented", 27); err == nil {
+					t.Fatal("unknown profile accepted")
+				}
+				if validateMetadataProducer(dir, 0) == nil {
+					t.Fatal("unqualified OS accepted")
+				}
+			}
+		})
+	}
+}
+
+func TestMetadataLiveComparisonRejectsChangedNativeInputsAndOutcomes(t *testing.T) {
+	for _, mutation := range []string{"equal", "whitespace", "id", "before", "after", "errno", "invalid-expected", "invalid-actual"} {
+		t.Run(mutation, func(t *testing.T) {
+			expected := metadataFixtureForTest(t).Cases[0]
+			actual := metadataFixtureForTest(t).Cases[0]
+			switch mutation {
+			case "whitespace":
+				var pretty bytes.Buffer
+				if err := json.Indent(&pretty, actual.Observation, "", "  "); err != nil {
+					t.Fatal(err)
+				}
+				actual.Observation = pretty.Bytes()
+			case "id":
+				actual.ID = "wrong-case"
+			case "before":
+				actual.Before["input"] = metadataEntry{Bytes: []byte("changed input")}
+			case "after":
+				actual.After["input"] = metadataEntry{Bytes: []byte("changed output")}
+			case "errno":
+				var fields map[string]json.RawMessage
+				if err := json.Unmarshal(actual.Observation, &fields); err != nil {
+					t.Fatal(err)
+				}
+				fields["errno"] = json.RawMessage("22")
+				body, err := json.Marshal(fields)
+				if err != nil {
+					t.Fatal(err)
+				}
+				actual.Observation = body
+			case "invalid-expected":
+				expected.Observation = json.RawMessage("invalid")
+			case "invalid-actual":
+				actual.Observation = json.RawMessage("invalid")
+			}
+			err := compareMetadataCase(expected, actual)
+			valid := mutation == "equal" || mutation == "whitespace"
+			if (err == nil) != valid {
+				t.Fatalf("mutation=%s error=%v", mutation, err)
+			}
+		})
+	}
+}
+
+func TestMetadataSourceArchiveRejectsEscapesAndIOFailures(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{"", "../escape", "/absolute", "a/../escape"} {
+		if writeMetadataSource(dir, name, []byte("source")) == nil {
+			t.Fatal("unsafe source accepted", name)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(dir, "blocked"), nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if writeMetadataSource(dir, "blocked/source.c", nil) == nil {
+		t.Fatal("archive I/O failure accepted")
+	}
+}
+
+func TestMetadataTreeSerializationPreservesExactNativeBytes(t *testing.T) {
+	want := map[string]metadataEntry{"._input": {Mode: 0444, Bytes: nil}}
+	for _, tc := range []struct {
+		name  string
+		tree  map[string]metadataEntry
+		equal bool
+	}{
+		{"empty", map[string]metadataEntry{"._input": {Mode: 0444, Bytes: []byte{}}}, true},
+		{"mode", map[string]metadataEntry{"._input": {Mode: 0644}}, false},
+		{"bytes", map[string]metadataEntry{"._input": {Mode: 0444, Bytes: []byte{0}}}, false},
+		{"target", map[string]metadataEntry{"._input": {Mode: 0444, Target: "other"}}, false},
+		{"missing", map[string]metadataEntry{}, false},
+		{"name", map[string]metadataEntry{"input": {Mode: 0444}}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if equalMetadataTree(want, tc.tree) != tc.equal {
+				t.Fatal("wrong exact tree comparison")
+			}
+		})
+	}
+}
