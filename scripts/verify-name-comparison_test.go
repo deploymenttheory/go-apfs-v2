@@ -51,6 +51,9 @@ func readComparisonCapture(t *testing.T, path string, expected ...int) capture {
 		t.Fatal(err)
 	}
 	if len(expected) > 0 {
+		if err := captureprovenance.VerifyExecution(t.Context(), filepath.Dir(path)); err != nil {
+			t.Fatal(err)
+		}
 		if err := captureprovenance.Verify(os.DirFS("."), c.Sources); err != nil {
 			t.Fatal(err)
 		}

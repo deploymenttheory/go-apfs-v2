@@ -26,9 +26,11 @@ jobs:
           go-version-file: go.mod
       - name: Set up shared CI reporting
         uses: ./.github/actions/setup-ci-runner
-      - name: Capture all native names and validate exact retained profile
+      - name: Reject incomplete or changed native evidence before collection
+        run: apfs-ci-runner --suite name-comparison/native-images/contracts --timeout 3m -- go test -json -count=1 scripts/capture-name-collation.go scripts/capture-name-collation_test.go
+      - name: Capture and seal all native names independently of baseline comparison
         run: |
-          apfs-ci-runner --suite name-comparison/native-images/step3 --timeout 39m -- go run scripts/capture-name-collation.go -out artifacts/name-collation -check
+          apfs-ci-runner --suite name-comparison/native-images/step3 --timeout 39m -- go run scripts/capture-name-collation.go -out artifacts/name-collation
       - uses: actions/upload-artifact@v7
         if: always()
         with:
@@ -46,6 +48,37 @@ jobs:
           path: artifacts/ci-observability/
           compression-level: 9
           if-no-files-found: error
+  baseline:
+    name: Name native baseline (${{ matrix.os }})
+    needs: native-images
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, macos-latest, xcode-27]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Set up shared CI reporting
+        uses: ./.github/actions/setup-ci-runner
+      - uses: actions/download-artifact@v8
+        with:
+          name: name-collation-${{ matrix.os }}
+          path: artifacts/name-collation/
+      - name: Compare independently captured native names with the original profile
+        run: apfs-ci-runner --suite name-comparison/baseline/compare --timeout 8m -- go run scripts/capture-name-collation.go -compare artifacts/name-collation
+      - name: Retain complete baseline comparison diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          include-hidden-files: true
+          name: ci-observability-name-comparison-baseline-${{ matrix.os }}-${{ github.run_attempt }}
+          path: artifacts/ci-observability/
+          if-no-files-found: error
+
   readers:
     name: Name image readers (${{ matrix.os }})
     needs: native-images
@@ -54,7 +87,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-15, macos-latest, xcode-27]
+        os: [ubuntu-latest, windows-2022, windows-2025, macos-15, macos-latest, xcode-27]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
@@ -214,7 +247,7 @@ jobs:
   qualify-matrix:
     name: Qualify complete producer and receiver matrix
     if: always()
-    needs: [native-images, readers, native-readers]
+    needs: [native-images, baseline, readers, native-readers]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -227,6 +260,7 @@ jobs:
       - name: Require all producer and reader jobs to succeed
         env:
           PRODUCERS: ${{ needs.native-images.result }}
+          BASELINE: ${{ needs.baseline.result }}
           PORTABLE_READERS: ${{ needs.readers.result }}
           NATIVE_READERS: ${{ needs.native-readers.result }}
         run: |
@@ -234,6 +268,7 @@ jobs:
           set -euo pipefail
           printf 'producers=%s portable_readers=%s native_readers=%s\n' "$PRODUCERS" "$PORTABLE_READERS" "$NATIVE_READERS"
           test "$PRODUCERS" = success
+          test "$BASELINE" = success
           test "$PORTABLE_READERS" = success
           test "$NATIVE_READERS" = success
           CHECK
