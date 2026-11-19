@@ -131,9 +131,9 @@ type DMGReader struct {
 
 	// LRU cache of decompressed chunks, keyed by chunk index
 	cacheMu   sync.Mutex
-	cache     map[int][]byte
-	cacheLRU  *list.List // front = most recently used; values are chunk indices
-	cacheElem map[int]*list.Element
+	cache     map[dmgChunkKey][]byte
+	cacheLRU  *list.List // front = most recently used; values are partition/chunk keys
+	cacheElem map[dmgChunkKey]*list.Element
 	cacheSize int
 }
 
@@ -185,21 +185,53 @@ func OpenDMGWithLimits(filename string, limits DMGLimits) (*DMGReader, error) {
 // caller owns the source; closing the DMGReader does not close it. Reads
 // decompress chunks on demand.
 func NewDMGReader(source io.ReaderAt, size int64, limits DMGLimits) (*DMGReader, error) {
+	reader, err := NewDMGLayoutReader(source, size, limits)
+	if err != nil {
+		return nil, err
+	}
+	if err := reader.findAPFSPartition(); err != nil {
+		return nil, fmt.Errorf("unable to find filesystem partition: %w", err)
+	}
+	return reader, nil
+}
+
+// NewDMGLayoutReader parses the UDIF layout without choosing a filesystem.
+// Use PartitionReader to read any descriptor returned by Partitions.
+// The caller owns the source and must keep it open while reading partitions.
+func NewDMGLayoutReader(source io.ReaderAt, size int64, limits DMGLimits) (*DMGReader, error) {
 	if size < dmgFooterSize {
 		return nil, fmt.Errorf("invalid DMG size")
 	}
 	reader := &DMGReader{reader: source, size: size, limits: limits.defaults(), apfsPartitionIdx: -1,
-		cache: make(map[int][]byte), cacheLRU: list.New(), cacheElem: make(map[int]*list.Element)}
+		cache: make(map[dmgChunkKey][]byte), cacheLRU: list.New(), cacheElem: make(map[dmgChunkKey]*list.Element)}
 	if err := reader.readFooter(); err != nil {
 		return nil, fmt.Errorf("unable to read DMG footer: %w", err)
 	}
 	if err := reader.parsePlist(); err != nil {
 		return nil, fmt.Errorf("unable to parse DMG plist: %w", err)
 	}
-	if err := reader.findAPFSPartition(); err != nil {
-		return nil, fmt.Errorf("unable to find filesystem partition: %w", err)
-	}
 	return reader, nil
+}
+
+type dmgPartitionReader struct {
+	image *DMGReader
+	index int
+}
+
+func (p dmgPartitionReader) ReadAt(data []byte, offset int64) (int, error) {
+	part := p.image.partitions[p.index]
+	return p.image.readPartitionAt(p.index, part.StartSector*sectorSize, part.SectorCount*sectorSize, data, offset)
+}
+
+// PartitionReader returns a bounded reader for the partition at index in
+// Partitions. Offsets are relative to that partition. The returned reader
+// borrows the image source.
+func (r *DMGReader) PartitionReader(index int) (*io.SectionReader, error) {
+	if index < 0 || index >= len(r.partitions) {
+		return nil, fmt.Errorf("invalid DMG partition index %d", index)
+	}
+	size := int64(r.partitions[index].SectorCount * sectorSize)
+	return io.NewSectionReader(dmgPartitionReader{image: r, index: index}, 0, size), nil
 }
 
 // Partitions returns a copy of the partition metadata, with byte-based chunks.
@@ -492,20 +524,28 @@ func (r *DMGReader) parseGPT() error {
 }
 
 // ReadAt implements io.ReaderAt for decompressing DMG data on-the-fly
-func (r *DMGReader) ReadAt(buf []byte, off int64) (n int, err error) {
+func (r *DMGReader) ReadAt(buf []byte, off int64) (int, error) {
+	if r.apfsPartitionIdx < 0 {
+		return 0, io.EOF
+	}
+	return r.readPartitionAt(r.apfsPartitionIdx, r.apfsOffset, r.apfsSize, buf, off)
+}
+
+func (r *DMGReader) readPartitionAt(index int, start, length uint64, buf []byte, off int64) (int, error) {
 	if off < 0 {
 		return 0, fmt.Errorf("negative DMG offset")
 	}
 	if len(buf) == 0 {
 		return 0, nil
 	}
-	if off >= r.Size() {
+	size := int64(length)
+	if off >= size {
 		return 0, io.EOF
 	}
 	want := len(buf)
-	buf = buf[:min(int64(len(buf)), r.Size()-off)]
-	off += int64(r.apfsOffset)
-	chunks := r.partitions[r.apfsPartitionIdx].Chunks
+	buf = buf[:min(int64(len(buf)), size-off)]
+	off += int64(start)
+	chunks := r.partitions[index].Chunks
 	// Match reconstruction: gaps, ignored extents and zero-fill read as zero.
 	clear(buf)
 	i := sort.Search(len(chunks), func(i int) bool { return chunks[i].DiskOffset > uint64(off) }) - 1
@@ -529,7 +569,7 @@ func (r *DMGReader) ReadAt(buf []byte, off int64) (n int, err error) {
 				return int(from-off) + read, err
 			}
 		} else {
-			data, err := r.getChunk(i)
+			data, err := r.getChunk(dmgChunkKey{partition: index, chunk: i})
 			if err != nil {
 				return int(from - off), fmt.Errorf("unable to decompress chunk: %w", err)
 			}
@@ -542,14 +582,17 @@ func (r *DMGReader) ReadAt(buf []byte, off int64) (n int, err error) {
 	return len(buf), nil
 }
 
-// getChunk returns the decompressed data for the chunk at the given index in
-// the APFS partition, using an LRU cache bounded by chunkCacheMaxBytes.
-func (r *DMGReader) getChunk(chunkIdx int) ([]byte, error) {
-	chunk := &r.partitions[r.apfsPartitionIdx].Chunks[chunkIdx]
+type dmgChunkKey struct {
+	partition, chunk int
+}
+
+// getChunk returns decompressed data, using an LRU bounded across partitions.
+func (r *DMGReader) getChunk(key dmgChunkKey) ([]byte, error) {
+	chunk := &r.partitions[key.partition].Chunks[key.chunk]
 
 	r.cacheMu.Lock()
-	if data, ok := r.cache[chunkIdx]; ok {
-		r.cacheLRU.MoveToFront(r.cacheElem[chunkIdx])
+	if data, ok := r.cache[key]; ok {
+		r.cacheLRU.MoveToFront(r.cacheElem[key])
 		r.cacheMu.Unlock()
 		return data, nil
 	}
@@ -563,14 +606,14 @@ func (r *DMGReader) getChunk(chunkIdx int) ([]byte, error) {
 	r.cacheMu.Lock()
 	defer r.cacheMu.Unlock()
 
-	if _, ok := r.cache[chunkIdx]; !ok {
-		r.cache[chunkIdx] = data
-		r.cacheElem[chunkIdx] = r.cacheLRU.PushFront(chunkIdx)
+	if _, ok := r.cache[key]; !ok {
+		r.cache[key] = data
+		r.cacheElem[key] = r.cacheLRU.PushFront(key)
 		r.cacheSize += len(data)
 
 		for r.cacheSize > chunkCacheMaxBytes && r.cacheLRU.Len() > 1 {
 			oldest := r.cacheLRU.Back()
-			oldIdx := oldest.Value.(int)
+			oldIdx := oldest.Value.(dmgChunkKey)
 			r.cacheSize -= len(r.cache[oldIdx])
 			delete(r.cache, oldIdx)
 			delete(r.cacheElem, oldIdx)

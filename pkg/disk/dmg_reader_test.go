@@ -234,3 +234,34 @@ func TestDMGReaderRecoveryLayouts(t *testing.T) {
 		})
 	}
 }
+
+func TestDMGPartitionReaders(t *testing.T) {
+	const sectors = 8
+	a := bytes.Repeat([]byte("A"), sectors*sectorSize)
+	b := bytes.Repeat([]byte("B"), sectors*sectorSize)
+	var encoded bytes.Buffer
+	blocks := []SourceBlock{
+		{Name: "EFI", SectorCount: sectors, Data: a},
+		{Name: "HFS", StartSector: sectors, SectorCount: sectors, Data: b},
+	}
+	if err := EncodeUDIF(&encoded, blocks, &EncodeOptions{Compression: CompressionZlib, ChunkSectors: sectors}); err != nil {
+		t.Fatal(err)
+	}
+	r, err := NewDMGLayoutReader(bytes.NewReader(encoded.Bytes()), int64(encoded.Len()), DMGLimits{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, i := range []int{0, 1, 0} {
+		part, err := r.PartitionReader(i)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := io.ReadAll(part)
+		if err != nil || !bytes.Equal(got, blocks[i].Data) {
+			t.Fatalf("partition %d returned wrong contents: %v", i, err)
+		}
+	}
+	if _, err := r.PartitionReader(2); err == nil {
+		t.Fatal("accepted an out-of-range partition")
+	}
+}
