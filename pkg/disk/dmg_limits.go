@@ -15,6 +15,15 @@ type DMGLimits struct {
 	ImageBytes    uint64
 }
 
+// DMGLayoutOptions configures layout parsing without selecting a filesystem.
+type DMGLayoutOptions struct {
+	Limits DMGLimits
+
+	// Strict validates footer and descriptor headers, chunk termination,
+	// image and data fork bounds, and disjoint logical runs. Gaps are allowed.
+	Strict bool
+}
+
 func (l DMGLimits) defaults() DMGLimits {
 	if l.MetadataBytes == 0 {
 		l.MetadataBytes = 16 << 20

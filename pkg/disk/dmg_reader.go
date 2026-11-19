@@ -144,6 +144,7 @@ type DMGReader struct {
 	reader           io.ReaderAt
 	size             int64
 	limits           DMGLimits
+	strict           bool
 	footer           DMGFooter
 	partitions       []DMGPartition
 	apfsPartitionIdx int
@@ -206,7 +207,7 @@ func OpenDMGWithLimits(filename string, limits DMGLimits) (*DMGReader, error) {
 // caller owns the source; closing the DMGReader does not close it. Reads
 // decompress chunks on demand.
 func NewDMGReader(source io.ReaderAt, size int64, limits DMGLimits) (*DMGReader, error) {
-	reader, err := NewDMGLayoutReader(source, size, limits)
+	reader, err := NewDMGLayoutReader(source, size, DMGLayoutOptions{Limits: limits})
 	if err != nil {
 		return nil, err
 	}
@@ -219,11 +220,11 @@ func NewDMGReader(source io.ReaderAt, size int64, limits DMGLimits) (*DMGReader,
 // NewDMGLayoutReader parses the UDIF layout without choosing a filesystem.
 // Use PartitionReader to read any descriptor returned by Partitions.
 // The caller owns the source and must keep it open while reading partitions.
-func NewDMGLayoutReader(source io.ReaderAt, size int64, limits DMGLimits) (*DMGReader, error) {
+func NewDMGLayoutReader(source io.ReaderAt, size int64, options DMGLayoutOptions) (*DMGReader, error) {
 	if size < dmgFooterSize {
 		return nil, fmt.Errorf("invalid DMG size")
 	}
-	reader := &DMGReader{reader: source, size: size, limits: limits.defaults(), apfsPartitionIdx: -1,
+	reader := &DMGReader{reader: source, size: size, limits: options.Limits.defaults(), strict: options.Strict, apfsPartitionIdx: -1,
 		cache: make(map[dmgChunkKey][]byte), cacheLRU: list.New(), cacheElem: make(map[dmgChunkKey]*list.Element)}
 	if err := reader.readFooter(); err != nil {
 		return nil, fmt.Errorf("unable to read DMG footer: %w", err)
@@ -290,6 +291,9 @@ func (r *DMGReader) readFooter() error {
 		return fmt.Errorf("invalid DMG signature")
 	}
 	f := r.footer
+	if r.strict && (f.HeaderSize != dmgFooterSize || f.Version != udifVersion) {
+		return fmt.Errorf("invalid DMG footer version or header size")
+	}
 	end := uint64(r.size - dmgFooterSize)
 	if f.SectorCount > math.MaxInt64/sectorSize || !dmgRange(f.DataForkOffset, f.DataForkLength, end) || !dmgRange(f.PlistOffset, f.PlistLength, end) || f.PlistLength > math.MaxInt {
 		return fmt.Errorf("disk image footer exceeds source bounds")
@@ -332,6 +336,9 @@ func (r *DMGReader) parsePlist() error {
 	for _, block := range dmgPlistData.ResourceFork.Blkx {
 		partition, err := r.parsePartition(&block)
 		if err != nil {
+			if r.strict {
+				return fmt.Errorf("partition %q: %w", block.Name, err)
+			}
 			// Other resources and unusable partitions do not prevent recovery
 			// of a readable filesystem.
 			continue
@@ -377,18 +384,40 @@ func (r *DMGReader) parsePartition(block *blkxEntry) (*DMGPartition, error) {
 	partition.SectorCount = blockData.SectorCount
 	partition.DataOffset = blockData.DataOffset
 
-	if !dmgRange(blockData.StartSector, blockData.SectorCount, math.MaxInt64/sectorSize) || !dmgRange(r.footer.DataForkOffset, blockData.DataOffset, uint64(r.size)) || uint64(blockData.ChunkCount)*40 > uint64(buf.Len()) {
+	tableBytes := uint64(blockData.ChunkCount) * 40
+	if !dmgRange(blockData.StartSector, blockData.SectorCount, math.MaxInt64/sectorSize) || !dmgRange(r.footer.DataForkOffset, blockData.DataOffset, uint64(r.size)) || tableBytes > uint64(buf.Len()) {
 		return nil, fmt.Errorf("invalid partition bounds or chunk count")
 	}
 	if !dmgRange(blockData.StartSector, blockData.SectorCount, r.limits.ImageBytes/sectorSize) {
 		return nil, fmt.Errorf("partition exceeds decoded size limit")
 	}
+	if r.strict && (blockData.Version != 1 || blockData.ChunkCount == 0 ||
+		tableBytes != uint64(buf.Len())) {
+		return nil, fmt.Errorf("invalid partition version or chunk table size")
+	}
+	base := blockData.DataOffset + r.footer.DataForkOffset
+	end := uint64(r.size)
+	if r.strict {
+		if !dmgRange(blockData.StartSector, blockData.SectorCount, r.footer.SectorCount) {
+			return nil, fmt.Errorf("partition exceeds image bounds")
+		}
+		end = r.footer.DataForkOffset + r.footer.DataForkLength
+		if base > end {
+			return nil, fmt.Errorf("partition data offset exceeds data fork bounds")
+		}
+	}
+	var chunk DMGChunk
 	for i := uint32(0); i < blockData.ChunkCount; i++ {
-		var chunk DMGChunk
 		if err := binary.Read(buf, binary.BigEndian, &chunk); err != nil {
 			return nil, err
 		}
-		if chunk.Type == chunkTypeComment || chunk.Type == chunkTypeLastBlock {
+		if chunk.Type == chunkTypeLastBlock {
+			if r.strict && i != blockData.ChunkCount-1 {
+				return nil, fmt.Errorf("partition terminator before last chunk")
+			}
+			continue
+		}
+		if chunk.Type == chunkTypeComment {
 			continue
 		}
 		if !dmgRange(chunk.DiskOffset, chunk.DiskLength, blockData.SectorCount) {
@@ -397,15 +426,19 @@ func (r *DMGReader) parsePartition(block *blkxEntry) (*DMGPartition, error) {
 		// The limit bounds allocation, so it applies to chunks that must be
 		// decoded into memory. Raw extents are served straight from the source
 		// and zero fill is written without a buffer, whatever their size.
-		if chunk.Type != chunkTypeUncompressed && chunk.Type != chunkTypeZeroFill && chunk.Type != chunkTypeIgnored &&
+		sparse := chunk.Type == chunkTypeZeroFill || chunk.Type == chunkTypeIgnored
+		if chunk.Type != chunkTypeUncompressed && !sparse &&
 			(chunk.DiskLength > r.limits.ChunkBytes/sectorSize || chunk.CompressedLength > r.limits.ChunkBytes) {
 			return nil, fmt.Errorf("chunk exceeds allocation limit")
 		}
 		chunk.DiskOffset = (chunk.DiskOffset + blockData.StartSector) * sectorSize
 		chunk.DiskLength *= sectorSize
-		if chunk.Type != chunkTypeZeroFill && chunk.Type != chunkTypeIgnored {
-			base := blockData.DataOffset + r.footer.DataForkOffset
-			if !dmgRange(chunk.CompressedOffset, chunk.CompressedLength, uint64(r.size)-base) {
+		if sparse {
+			if r.strict && chunk.CompressedLength != 0 {
+				return nil, fmt.Errorf("stored bytes for sparse chunk")
+			}
+		} else {
+			if !dmgRange(chunk.CompressedOffset, chunk.CompressedLength, end-base) {
 				return nil, fmt.Errorf("chunk exceeds source bounds")
 			}
 			chunk.CompressedOffset += base
@@ -413,11 +446,26 @@ func (r *DMGReader) parsePartition(block *blkxEntry) (*DMGPartition, error) {
 		if chunk.Type == chunkTypeUncompressed && chunk.CompressedLength != chunk.DiskLength {
 			return nil, fmt.Errorf("uncompressed chunk length mismatch")
 		}
-		partition.Chunks = append(partition.Chunks, chunk)
+		if !r.strict || chunk.DiskLength != 0 {
+			partition.Chunks = append(partition.Chunks, chunk)
+		}
+	}
+	if r.strict && chunk.Type != chunkTypeLastBlock {
+		return nil, fmt.Errorf("missing partition terminator")
 	}
 	slices.SortStableFunc(partition.Chunks, func(a, b DMGChunk) int {
 		return cmp.Compare(a.DiskOffset, b.DiskOffset)
 	})
+
+	if r.strict {
+		var previousEnd uint64
+		for _, chunk := range partition.Chunks {
+			if chunk.DiskOffset < previousEnd {
+				return nil, fmt.Errorf("overlapping partition chunks")
+			}
+			previousEnd = chunk.DiskOffset + chunk.DiskLength
+		}
+	}
 
 	return partition, nil
 }
