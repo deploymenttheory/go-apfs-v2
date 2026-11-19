@@ -103,6 +103,27 @@ type DMGChunk struct {
 	CompressedLength uint64 // Compressed size in bytes
 }
 
+// CompressionName reports the codec for a compressed extent. Raw and sparse
+// extents return an empty string.
+func (c DMGChunk) CompressionName() string {
+	switch c.Type {
+	case chunkTypeZeroFill, chunkTypeUncompressed, chunkTypeIgnored, chunkTypeComment, chunkTypeLastBlock:
+		return ""
+	case chunkTypeCompressADC:
+		return "ADC"
+	case chunkTypeCompressZLIB:
+		return "zlib"
+	case chunkTypeCompressBZ2:
+		return "bzip2"
+	case chunkTypeCompressLZFSE:
+		return "LZFSE"
+	case chunkTypeCompressLZMA:
+		return "LZMA"
+	default:
+		return fmt.Sprintf("UDIF run %#x", c.Type)
+	}
+}
+
 // DMGPartition represents a partition within a DMG
 type DMGPartition struct {
 	Name        string
@@ -212,6 +233,9 @@ func NewDMGLayoutReader(source io.ReaderAt, size int64, limits DMGLimits) (*DMGR
 	}
 	return reader, nil
 }
+
+// Footer returns a copy of the parsed UDIF footer.
+func (r *DMGReader) Footer() DMGFooter { return r.footer }
 
 type dmgPartitionReader struct {
 	image *DMGReader
