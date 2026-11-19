@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"howett.net/plist"
@@ -230,6 +231,113 @@ func TestDMGReaderRecoveryLayouts(t *testing.T) {
 				if !bytes.Equal(reconstructed, data) {
 					t.Fatal("reader and reconstruction disagree about gap")
 				}
+			}
+		})
+	}
+}
+
+func TestDMGPartitionReaders(t *testing.T) {
+	const sectors = 8
+	a := bytes.Repeat([]byte("A"), sectors*sectorSize)
+	b := bytes.Repeat([]byte("B"), sectors*sectorSize)
+	var encoded bytes.Buffer
+	blocks := []SourceBlock{
+		{Name: "EFI", SectorCount: sectors, Data: a},
+		{Name: "HFS", StartSector: sectors, SectorCount: sectors, Data: b},
+	}
+	if err := EncodeUDIF(&encoded, blocks, &EncodeOptions{Compression: CompressionZlib, ChunkSectors: sectors}); err != nil {
+		t.Fatal(err)
+	}
+	r, err := NewDMGLayoutReader(bytes.NewReader(encoded.Bytes()), int64(encoded.Len()), DMGLayoutOptions{Strict: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, i := range []int{0, 1, 0} {
+		part, err := r.PartitionReader(i)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := io.ReadAll(part)
+		if err != nil || !bytes.Equal(got, blocks[i].Data) {
+			t.Fatalf("partition %d returned wrong contents: %v", i, err)
+		}
+	}
+	if _, err := r.PartitionReader(2); err == nil {
+		t.Fatal("accepted an out-of-range partition")
+	}
+}
+
+func TestDMGStrictFooter(t *testing.T) {
+	var encoded bytes.Buffer
+	blocks := []SourceBlock{{Name: "HFS", SectorCount: 1, Data: make([]byte, sectorSize)}}
+	if err := EncodeUDIF(&encoded, blocks, nil); err != nil {
+		t.Fatal(err)
+	}
+	invalid := bytes.Clone(encoded.Bytes())
+	invalid[len(invalid)-dmgFooterSize+7] = 3
+	if _, err := NewDMGLayoutReader(bytes.NewReader(invalid), int64(len(invalid)), DMGLayoutOptions{Strict: true}); err == nil {
+		t.Fatal("accepted an invalid footer version")
+	}
+}
+
+func TestDMGStrictDescriptor(t *testing.T) {
+	last := DMGChunk{Type: chunkTypeLastBlock}
+	run := DMGChunk{Type: chunkTypeUncompressed, DiskLength: 2, CompressedLength: 2 * sectorSize}
+	sparse := DMGChunk{Type: chunkTypeZeroFill, DiskOffset: 1, DiskLength: 1}
+	tests := []struct {
+		name   string
+		chunks []DMGChunk
+		change func(*dmgBlockData)
+		tail   bool
+		want   string
+	}{
+		{name: "gap", chunks: []DMGChunk{sparse, last}},
+		{name: "empty run", chunks: []DMGChunk{run, {Type: chunkTypeZeroFill, DiskOffset: 1}, last}},
+		{name: "overlap", chunks: []DMGChunk{sparse, run, last}, want: "overlapping partition chunks"},
+		{name: "image bounds", chunks: []DMGChunk{last}, change: func(h *dmgBlockData) { h.StartSector = 1 }, want: "partition exceeds image bounds"},
+		{name: "sparse data offset", chunks: []DMGChunk{sparse, last}, change: func(h *dmgBlockData) { h.DataOffset = 2*sectorSize + 1 }, want: "partition data offset exceeds data fork bounds"},
+		{name: "stored run bounds", chunks: []DMGChunk{run, last}, change: func(h *dmgBlockData) { h.DataOffset = 1 }, want: "chunk exceeds source bounds"},
+		{name: "missing terminator", chunks: []DMGChunk{run}, want: "missing partition terminator"},
+		{name: "early terminator", chunks: []DMGChunk{last, run}, want: "partition terminator before last chunk"},
+		{name: "stored sparse", chunks: []DMGChunk{{Type: chunkTypeZeroFill, DiskLength: 1, CompressedLength: 1}, last}, want: "stored bytes for sparse chunk"},
+		{name: "version", chunks: []DMGChunk{last}, change: func(h *dmgBlockData) { h.Version++ }, want: "invalid partition version or chunk table size"},
+		{name: "extra table bytes", chunks: []DMGChunk{last}, tail: true, want: "invalid partition version or chunk table size"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			header := dmgBlockData{Version: 1, SectorCount: 2, ChunkCount: uint32(len(tt.chunks))}
+			copy(header.Signature[:], mishSignature)
+			if tt.change != nil {
+				tt.change(&header)
+			}
+			var data bytes.Buffer
+			if err := binary.Write(&data, binary.BigEndian, header); err != nil {
+				t.Fatal(err)
+			}
+			if err := binary.Write(&data, binary.BigEndian, tt.chunks); err != nil {
+				t.Fatal(err)
+			}
+			if tt.tail {
+				data.WriteByte(0)
+			}
+			block := &blkxEntry{Data: data.Bytes()}
+			reader := &DMGReader{size: 4 * sectorSize, footer: DMGFooter{DataForkLength: 2 * sectorSize, SectorCount: 2}, limits: (DMGLimits{}).defaults()}
+			if _, err := reader.parsePartition(block); err != nil {
+				t.Fatalf("recovery reader rejected descriptor: %v", err)
+			}
+			reader.strict = true
+			part, err := reader.parsePartition(block)
+			if tt.want != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.want) {
+					t.Fatalf("got %v, want %q", err, tt.want)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(part.Chunks) != 1 {
+				t.Fatalf("got %d runs, want one", len(part.Chunks))
 			}
 		})
 	}
