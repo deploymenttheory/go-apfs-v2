@@ -11,7 +11,9 @@
 package cli
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -154,6 +156,24 @@ func resolveGlobalOptions(cmd *cobra.Command) error {
 		RecoveryPassword: v.GetString("recovery-password"),
 		Offset:           v.GetInt64("offset"),
 		TempDir:          v.GetString("temp-dir"),
+	}
+
+	// --password-stdin is the only way to pass a secret that does not put
+	// it in the process arguments (visible to any local reader of /proc).
+	// One trailing line break is trimmed, because a password stored in a
+	// file is stored as a line; every other byte is password material.
+	if opts.PasswordStdin {
+		if opts.Password != "" {
+			return fmt.Errorf("a password was given both as an argument and on standard input")
+		}
+		password, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			return fmt.Errorf("unable to read the password from standard input: %w", err)
+		}
+		password = bytes.TrimSuffix(password, []byte("\n"))
+		password = bytes.TrimSuffix(password, []byte("\r"))
+		opts.Password = string(password)
+		opts.PasswordStdin = false
 	}
 
 	// SOURCE_DATE_EPOCH deliberately departs from the flag > APFS_<FLAG> >
