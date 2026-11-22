@@ -21,6 +21,12 @@ type FileEntry struct {
 	// EncryptionContext is the encryption context
 	EncryptionContext *EncryptionContext
 
+	// PerFileContext resolves an extent's crypto identifier to the
+	// per-file key that encrypts it, for volumes with APFS_INCOMPAT_PFK.
+	// The volume that creates the entry sets it; when nil, the whole-
+	// volume key decrypts every extent (software ONEKEY volumes).
+	PerFileContext func(cryptoID uint64) (*EncryptionContext, error)
+
 	// FileSystemBTree is the file system B-tree
 	FileSystemBTree *FileSystemBTree
 
@@ -485,7 +491,7 @@ func (fe *FileEntry) ExtendedAttributeByIndex(index int) (*ExtendedAttribute, er
 	}
 
 	// Create extended attribute from attribute values
-	return NewExtendedAttribute(
+	ea, err := NewExtendedAttribute(
 		fe.IOHandle,
 		fe.FileHandle,
 		fe.EncryptionContext,
@@ -493,6 +499,11 @@ func (fe *FileEntry) ExtendedAttributeByIndex(index int) (*ExtendedAttribute, er
 		fe.ExtendedAttributes[index],
 		fe.XID,
 	)
+	if err != nil {
+		return nil, err
+	}
+	ea.PerFileContext = fe.PerFileContext
+	return ea, nil
 }
 
 // HasExtendedAttributeByName checks if an extended attribute exists by name
@@ -529,7 +540,7 @@ func (fe *FileEntry) ExtendedAttributeByName(name string) (*ExtendedAttribute, e
 	for _, attr := range fe.ExtendedAttributes {
 		if attr.NameString() == name {
 			// Create extended attribute from attribute values
-			return NewExtendedAttribute(
+			ea, err := NewExtendedAttribute(
 				fe.IOHandle,
 				fe.FileHandle,
 				fe.EncryptionContext,
@@ -537,6 +548,11 @@ func (fe *FileEntry) ExtendedAttributeByName(name string) (*ExtendedAttribute, e
 				attr,
 				fe.XID,
 			)
+			if err != nil {
+				return nil, err
+			}
+			ea.PerFileContext = fe.PerFileContext
+			return ea, nil
 		}
 	}
 
@@ -970,6 +986,11 @@ func (fe *FileEntry) getDataStream() error {
 	// Set the file handle for the data stream reader
 	if dbReader, ok := dataStream.readerAt.(*dataBlockReader); ok {
 		dbReader.SetFileHandle(fe.FileHandle)
+	}
+
+	// On a per-file-key volume each extent names its own key.
+	if fe.PerFileContext != nil {
+		dataStream.SetPerFileContext(fe.PerFileContext)
 	}
 
 	fe.DataStream = dataStream

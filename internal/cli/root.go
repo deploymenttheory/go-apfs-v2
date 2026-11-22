@@ -11,7 +11,9 @@
 package cli
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -156,6 +158,22 @@ func resolveGlobalOptions(cmd *cobra.Command) error {
 		TempDir:          v.GetString("temp-dir"),
 	}
 
+	// --password-stdin is the only way to pass a secret that does not put
+	// it in the process arguments (visible to any local reader of /proc).
+	// One trailing line break is trimmed, because a password stored in a
+	// file is stored as a line; every other byte is password material.
+	if opts.PasswordStdin {
+		if opts.Password != "" {
+			return fmt.Errorf("a password was given both as an argument and on standard input")
+		}
+		password, err := readPasswordStdin(os.Stdin)
+		if err != nil {
+			return fmt.Errorf("unable to read the password from standard input: %w", err)
+		}
+		opts.Password = password
+		opts.PasswordStdin = false
+	}
+
 	// SOURCE_DATE_EPOCH deliberately departs from the flag > APFS_<FLAG> >
 	// config order used by everything else: the bare, unprefixed variable is the
 	// ecosystem standard that build systems set, and a stale APFS_ value left in
@@ -228,4 +246,17 @@ func Execute() int {
 		return exitCodeFor(err)
 	}
 	return ExitOK
+}
+
+// readPasswordStdin reads a password from r and trims one trailing line
+// ending. A password stored in a file is stored as a line, but every other
+// byte, including embedded newlines, is password material.
+func readPasswordStdin(r io.Reader) (string, error) {
+	password, err := io.ReadAll(r)
+	if err != nil {
+		return "", err
+	}
+	password = bytes.TrimSuffix(password, []byte("\n"))
+	password = bytes.TrimSuffix(password, []byte("\r"))
+	return string(password), nil
 }

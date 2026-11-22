@@ -106,6 +106,11 @@ func (v *Volume) unlockWith(userPassword, recoveryPassword []byte) (bool, error)
 		return false, fmt.Errorf("unable to prepare decryption: %w", err)
 	}
 	v.EncryptionContext = context
+	// Keep the raw master key: on PFK volumes it unwraps the per-file
+	// keys held in the crypto state records. Record the feature bit at
+	// unlock time so the read path can ask for per-file contexts.
+	v.masterKey = masterKey
+	v.pfkEnabled = v.Superblock.IncompatibleFeaturesFlags&VolumeIncompatiblePerFileKeys != 0
 	v.isLocked = false
 	return true, nil
 }

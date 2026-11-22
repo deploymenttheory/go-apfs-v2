@@ -36,6 +36,11 @@ func (fe *FileEntry) attributeStream(value *AttributeValues) (*DataStream, error
 	if source == nil {
 		return nil, fmt.Errorf("invalid compressed storage flags: %w", fs.ErrInvalid)
 	}
+	// The compressed payload (an extent-backed attribute value stream)
+	// is encrypted with the file's own key on a per-file-key volume.
+	if fe.PerFileContext != nil {
+		source.SetPerFileContext(fe.PerFileContext)
+	}
 	return source, nil
 }
 

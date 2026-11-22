@@ -329,3 +329,50 @@ func AESKeyUnwrap(key []byte, keyBitSize int, wrappedData []byte) ([]byte, error
 
 	return unwrappedData, nil
 }
+
+// AESKeyWrap wraps data using AES Key Wrap (RFC 3394). It is the inverse
+// of AESKeyUnwrap; the APFS on-disk format stores wrapped keys, so the
+// writer side needs this, and the tests use it to build known vectors.
+func AESKeyWrap(key []byte, keyBitSize int, data []byte) ([]byte, error) {
+	if key == nil {
+		return nil, fmt.Errorf("invalid AES key")
+	}
+
+	if keyBitSize != 128 && keyBitSize != 192 && keyBitSize != 256 {
+		return nil, fmt.Errorf("invalid AES key length value out of bounds: %d", keyBitSize)
+	}
+
+	if len(data) == 0 || len(data)%8 != 0 {
+		return nil, fmt.Errorf("invalid data to wrap: size %d is not a positive multitude of 8", len(data))
+	}
+
+	aesContext, err := aes.NewCipher(key[:keyBitSize/8])
+	if err != nil {
+		return nil, fmt.Errorf("unable to initialize AES context: %w", err)
+	}
+
+	// RFC 3394: A = 0xA6A6A6A6A6A6A6A6 followed by the plaintext blocks.
+	numberOfBlocks := len(data)/8 + 1
+	blocks := make([]byte, numberOfBlocks*8)
+	copy(blocks[0:8], []byte{0xA6, 0xA6, 0xA6, 0xA6, 0xA6, 0xA6, 0xA6, 0xA6})
+	copy(blocks[8:], data)
+
+	blockData := make([]byte, 16)
+	for roundIndex := 0; roundIndex < 6; roundIndex++ {
+		for blockIndex := 1; blockIndex < numberOfBlocks; blockIndex++ {
+			t := uint64((numberOfBlocks-1)*roundIndex + blockIndex)
+
+			// RFC 3394: B = AES(K, A || R[i]); A = MSB(B) XOR t;
+			// R[i] = LSB(B). The counter XOR is on the output, which
+			// is what the unwrap (counter XOR on the decrypt input)
+			// inverts.
+			copy(blockData[0:8], blocks[0:8])
+			copy(blockData[8:16], blocks[blockIndex*8:blockIndex*8+8])
+			aesContext.Encrypt(blockData, blockData)
+			binary.BigEndian.PutUint64(blocks[0:8], binary.BigEndian.Uint64(blockData[0:8])^t)
+			copy(blocks[blockIndex*8:blockIndex*8+8], blockData[8:16])
+		}
+	}
+
+	return blocks, nil
+}

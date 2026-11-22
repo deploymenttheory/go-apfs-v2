@@ -17,6 +17,14 @@ type FileSystemDataHandle struct {
 
 	// The file extents
 	FileExtents []*FileExtent
+
+	// PerFileContext, when set, returns the encryption context for one
+	// crypto identifier — the per-file key named by a file extent on a
+	// volume with APFS_INCOMPAT_PFK. A nil returned context means the
+	// extent is stored unencrypted and is read in the clear. When unset,
+	// every extent is decrypted with the handle's own EncryptionContext
+	// (the whole-volume key).
+	PerFileContext func(cryptoID uint64) (*EncryptionContext, error)
 }
 
 // NewFileSystemDataHandle creates a new file system data handle
@@ -81,6 +89,7 @@ func (fsdh *FileSystemDataHandle) ReadDataBlock(
 
 		// Get file extent if available
 		var fileExtent *FileExtent
+		encryptionContext := fsdh.EncryptionContext
 		if len(fsdh.FileExtents) > 0 && elementDataFileIndex >= 0 && elementDataFileIndex < len(fsdh.FileExtents) {
 			fileExtent = fsdh.FileExtents[elementDataFileIndex]
 			if fileExtent == nil {
@@ -90,10 +99,21 @@ func (fsdh *FileSystemDataHandle) ReadDataBlock(
 			// Calculate file extent offset
 			fileExtentOffset := int64(encryptionIdentifier) - int64(fileExtent.PhysicalBlockNumber)
 			encryptionIdentifier = fileExtent.EncryptionIdentifier + uint64(fileExtentOffset)
+
+			// On a per-file-key volume the extent's crypto identifier
+			// names the key that encrypts this extent; the whole-volume
+			// context would garble it. The resolver also maps the
+			// unencrypted identifiers to a nil context (read in clear).
+			if fsdh.PerFileContext != nil {
+				encryptionContext, err = fsdh.PerFileContext(fileExtent.EncryptionIdentifier)
+				if err != nil {
+					return nil, fmt.Errorf("unable to resolve per-file key for extent %d: %w", elementDataFileIndex, err)
+				}
+			}
 		}
 
 		// Read the data block
-		err = dataBlock.Read(reader, fsdh.IOHandle, fsdh.EncryptionContext, elementDataOffset, encryptionIdentifier)
+		err = dataBlock.Read(reader, fsdh.IOHandle, encryptionContext, elementDataOffset, encryptionIdentifier)
 		if err != nil {
 			return nil, fmt.Errorf("unable to read data block: %w", err)
 		}

@@ -62,6 +62,22 @@ func NewDataBlockDataHandle(
 	}, nil
 }
 
+// SetPerFileContext binds a per-file key resolver to the underlying file
+// system data handle, so extents on a per-file-key volume decrypt with
+// their own keys. See FileSystemDataHandle.PerFileContext.
+func (dh *DataBlockDataHandle) SetPerFileContext(
+	contextFor func(cryptoID uint64) (*EncryptionContext, error),
+) error {
+	if dh == nil {
+		return fmt.Errorf("invalid data block data handle")
+	}
+	if dh.FileSystemDataHandle == nil {
+		return fmt.Errorf("invalid data block data handle - missing file system data handle")
+	}
+	dh.FileSystemDataHandle.PerFileContext = contextFor
+	return nil
+}
+
 // Close releases resources associated with the data block data handle
 func (dh *DataBlockDataHandle) Close() error {
 	if dh == nil {

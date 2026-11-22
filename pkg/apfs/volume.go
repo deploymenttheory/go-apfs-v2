@@ -4,6 +4,7 @@ package apfs
 import (
 	"fmt"
 	"io"
+	"sync"
 )
 
 // Volume represents an APFS volume
@@ -51,6 +52,21 @@ type Volume struct {
 
 	// The recovery password (for encrypted volumes)
 	RecoveryPassword []byte
+
+	// The unwrapped volume master key (the VEK), kept only while the
+	// volume is unlocked. On PFK volumes it is the unwrap key for the
+	// per-file keys in the crypto state records.
+	masterKey []byte
+
+	// True when the volume sets APFS_INCOMPAT_PFK: file extents then
+	// name a per-file key via their crypto identifier.
+	pfkEnabled bool
+
+	// Per-file key contexts, keyed by (file, crypto id). Lazily filled
+	// by PerFileKey; holds unwrapped XTS keys, so it is only ever
+	// populated for an unlocked volume.
+	cryptoMu    sync.Mutex
+	cryptoCache map[cryptoStateCacheKey]*EncryptionContext
 }
 
 // NewVolume creates a new volume
@@ -470,6 +486,14 @@ func (v *Volume) FileEntryByIdentifier(identifier uint64) (*FileEntry, error) {
 		return nil, fmt.Errorf("unable to create file entry: %w", err)
 	}
 
+	// On a per-file-key volume, every extent of this file names its own
+	// key; hand the entry a resolver bound to the file's identifier so
+	// its read path unwraps per-file keys instead of using the
+	// whole-volume key.
+	if v.pfkEnabled && v.masterKey != nil {
+		fileEntry.PerFileContext = v.PerFileContextFor(v.Reader, inode.Identifier)
+	}
+
 	return fileEntry, nil
 }
 
@@ -517,6 +541,14 @@ func (v *Volume) FileEntryByPath(path string) (*FileEntry, error) {
 	)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create file entry: %w", err)
+	}
+
+	// On a per-file-key volume, every extent of this file names its own
+	// key; hand the entry a resolver bound to the file's identifier so
+	// its read path unwraps per-file keys instead of using the
+	// whole-volume key.
+	if v.pfkEnabled && v.masterKey != nil {
+		fileEntry.PerFileContext = v.PerFileContextFor(v.Reader, inode.Identifier)
 	}
 
 	return fileEntry, nil

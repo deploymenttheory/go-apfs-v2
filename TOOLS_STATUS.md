@@ -43,8 +43,12 @@ from the volume superblock's `APFS_FS_UNENCRYPTED` flag whether or not a
 password is given, and one that cannot be unlocked is reported as locked rather
 than read as ciphertext. Both AES-128-XTS and AES-256-XTS volume keys are
 handled. The object map is not encrypted even on a FileVault volume; the
-file-system tree and file contents are. Writing an encrypted volume is not
-supported and is not planned.
+file-system tree and file contents are. Per-file-key (PFK) volumes are read
+by unwrapping each file's crypto state record with the volume master key;
+each extent's crypto identifier selects the key. Volumes whose keybag is
+hardware-wrapped (Apple Silicon or T2 SEP) cannot be unlocked and are
+reported as locked rather than as a wrong password. Writing an encrypted
+volume is not supported and is not planned.
 
 ² Roles read and written in full. Several volumes per container are written
 through `CreateOptions.Volumes`, one per 512 MiB as the format allows, and a
