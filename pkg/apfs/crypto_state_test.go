@@ -2,6 +2,7 @@ package apfs
 
 import (
 	"bytes"
+	"crypto/aes"
 	"encoding/binary"
 	"testing"
 )
@@ -219,5 +220,104 @@ func TestPerFileKeyWellKnownIdentifiers(t *testing.T) {
 	locked := &Volume{pfkEnabled: true}
 	if _, err := locked.PerFileKey(nil, 7, CryptoIDSoftwareCrypto); err == nil {
 		t.Fatalf("locked volume must refuse the software-crypto id")
+	}
+}
+
+// encryptXTSForTest mirrors EncryptionContext.cryptXTS's decryption,
+// sector by sector: T = E(tweakKey, LE64(sector)), then per 16-byte
+// block C = E(dataKey, P ^ T) ^ T with T multiplied by alpha.
+func encryptXTSForTest(t *testing.T, key, plaintext []byte, sector uint64, sectorSize int) []byte {
+	t.Helper()
+
+	half := len(key) / 2
+	dataCipher, err := aes.NewCipher(key[:half])
+	if err != nil {
+		t.Fatalf("data cipher: %v", err)
+	}
+	tweakCipher, err := aes.NewCipher(key[half:])
+	if err != nil {
+		t.Fatalf("tweak cipher: %v", err)
+	}
+
+	ciphertext := make([]byte, len(plaintext))
+	sectorNumber := sector
+	for offset := 0; offset+sectorSize <= len(plaintext); offset += sectorSize {
+		tweak := make([]byte, 16)
+		binary.LittleEndian.PutUint64(tweak[0:8], sectorNumber)
+		tweakCipher.Encrypt(tweak, tweak)
+		for blockOffset := offset; blockOffset < offset+sectorSize; blockOffset += 16 {
+			block := make([]byte, 16)
+			for i := range block {
+				block[i] = plaintext[blockOffset+i] ^ tweak[i]
+			}
+			dataCipher.Encrypt(block, block)
+			for i := range block {
+				ciphertext[blockOffset+i] = block[i] ^ tweak[i]
+			}
+			multiplyTweakByAlpha(tweak)
+		}
+		sectorNumber++
+	}
+	return ciphertext
+}
+
+// A per-file-key extent read through FileSystemDataHandle must decrypt
+// with the key the resolver returns, not with the volume key the handle
+// carries; without the resolver the same bytes must come out garbled.
+func TestReadDataBlockUsesPerFileKey(t *testing.T) {
+	volumeKey := bytes.Repeat([]byte{0x23}, 32)
+	perFileKey := bytes.Repeat([]byte{0x77}, 32)
+
+	volumeContext, err := NewEncryptionContextForKey(volumeKey)
+	if err != nil {
+		t.Fatalf("volume context: %v", err)
+	}
+	perFileContext, err := NewEncryptionContextForKey(perFileKey)
+	if err != nil {
+		t.Fatalf("per-file context: %v", err)
+	}
+
+	plaintext := make([]byte, 4096)
+	for i := range plaintext {
+		plaintext[i] = byte(i)
+	}
+
+	// One extent: physical block 0, crypto id 5. ReadDataBlock adjusts
+	// the identifier by the block's position (0) and DataBlock.Read
+	// turns it into the tweak sector (5 * 4096 / 512 = 40).
+	ciphertext := encryptXTSForTest(t, perFileKey, plaintext, 40, 512)
+	reader := bytes.NewReader(ciphertext)
+
+	handle := &FileSystemDataHandle{
+		IOHandle:          &IOHandle{BlockSize: 4096, BytesPerSector: 512},
+		EncryptionContext: volumeContext,
+		FileExtents: []*FileExtent{
+			{PhysicalBlockNumber: 0, EncryptionIdentifier: 5, DataSize: 4096},
+		},
+		PerFileContext: func(cryptoID uint64) (*EncryptionContext, error) {
+			if cryptoID != 5 {
+				t.Errorf("resolver asked for crypto id %d, want 5", cryptoID)
+			}
+			return perFileContext, nil
+		},
+	}
+
+	block, err := handle.ReadDataBlock(reader, 0, 0, 4096, 0)
+	if err != nil {
+		t.Fatalf("ReadDataBlock: %v", err)
+	}
+	if !bytes.Equal(block.Data, plaintext) {
+		t.Fatalf("per-file key not used: block does not match plaintext")
+	}
+
+	// Without the resolver the handle falls back to the volume key and
+	// the same ciphertext must not decrypt to the plaintext.
+	handle.PerFileContext = nil
+	block, err = handle.ReadDataBlock(reader, 0, 0, 4096, 0)
+	if err != nil {
+		t.Fatalf("ReadDataBlock without resolver: %v", err)
+	}
+	if bytes.Equal(block.Data, plaintext) {
+		t.Fatalf("volume key must not decrypt a per-file-key block")
 	}
 }

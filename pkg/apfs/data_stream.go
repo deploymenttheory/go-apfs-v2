@@ -110,6 +110,21 @@ func NewDataStreamFromCompressedDataStream(
 	}, nil
 }
 
+// SetPerFileContext binds a per-file key resolver to an extent-backed
+// data stream, so extents on a per-file-key volume decrypt with the key
+// named by their crypto identifier. It reports whether the stream is
+// extent-backed: embedded and inline-compressed streams have no extents
+// to resolve and keep the context they were built with.
+func (ds *DataStream) SetPerFileContext(contextFor func(cryptoID uint64) (*EncryptionContext, error)) bool {
+	if ds == nil {
+		return false
+	}
+	if dbReader, ok := ds.readerAt.(*dataBlockReader); ok && dbReader != nil {
+		return dbReader.dataHandle.SetPerFileContext(contextFor) == nil
+	}
+	return false
+}
+
 // Read implements io.Reader interface
 func (ds *DataStream) Read(p []byte) (n int, err error) {
 	if ds.reader == nil {

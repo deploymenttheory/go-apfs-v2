@@ -160,6 +160,16 @@ func (c *CryptoStateValue) UnwrapPerFileKey(masterKey []byte) ([]byte, error) {
 	}
 }
 
+// PerFileContextFor returns a resolver bound to one file: it maps the
+// crypto identifiers of that file's extents (and extent-backed extended
+// attributes) to the encryption contexts that decrypt them. Volumes
+// assign it to FileEntry.PerFileContext when handing out entries.
+func (v *Volume) PerFileContextFor(reader io.ReaderAt, fileID uint64) func(uint64) (*EncryptionContext, error) {
+	return func(cryptoID uint64) (*EncryptionContext, error) {
+		return v.PerFileKey(reader, fileID, cryptoID)
+	}
+}
+
 // cryptoStateCacheKey keys the per-file context cache. Per-file keys are
 // per (file, cryptoID): a file keeps its old key while its extents roll to
 // a new one, so both parts are needed.

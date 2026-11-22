@@ -18,6 +18,11 @@ type ExtendedAttribute struct {
 	// EncryptionContext is the encryption context
 	EncryptionContext *EncryptionContext
 
+	// PerFileContext resolves the attribute data stream's crypto
+	// identifier to the owning file's key on per-file-key volumes; see
+	// FileEntry.PerFileContext.
+	PerFileContext func(cryptoID uint64) (*EncryptionContext, error)
+
 	// FileSystemBTree is the file system B-tree
 	FileSystemBTree *FileSystemBTree
 
@@ -77,6 +82,12 @@ func (ea *ExtendedAttribute) getDataStream() error {
 	)
 	if err != nil {
 		return fmt.Errorf("unable to retrieve attribute value data stream: %w", err)
+	}
+
+	// On a per-file-key volume an extent-backed attribute value is
+	// encrypted with the owning file's key.
+	if ea.PerFileContext != nil {
+		dataStream.SetPerFileContext(ea.PerFileContext)
 	}
 
 	ea.DataStream = dataStream

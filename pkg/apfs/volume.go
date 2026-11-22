@@ -486,6 +486,14 @@ func (v *Volume) FileEntryByIdentifier(identifier uint64) (*FileEntry, error) {
 		return nil, fmt.Errorf("unable to create file entry: %w", err)
 	}
 
+	// On a per-file-key volume, every extent of this file names its own
+	// key; hand the entry a resolver bound to the file's identifier so
+	// its read path unwraps per-file keys instead of using the
+	// whole-volume key.
+	if v.pfkEnabled && v.masterKey != nil {
+		fileEntry.PerFileContext = v.PerFileContextFor(v.Reader, inode.Identifier)
+	}
+
 	return fileEntry, nil
 }
 
@@ -533,6 +541,14 @@ func (v *Volume) FileEntryByPath(path string) (*FileEntry, error) {
 	)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create file entry: %w", err)
+	}
+
+	// On a per-file-key volume, every extent of this file names its own
+	// key; hand the entry a resolver bound to the file's identifier so
+	// its read path unwraps per-file keys instead of using the
+	// whole-volume key.
+	if v.pfkEnabled && v.masterKey != nil {
+		fileEntry.PerFileContext = v.PerFileContextFor(v.Reader, inode.Identifier)
 	}
 
 	return fileEntry, nil
