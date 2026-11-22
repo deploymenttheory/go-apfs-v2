@@ -166,13 +166,11 @@ func resolveGlobalOptions(cmd *cobra.Command) error {
 		if opts.Password != "" {
 			return fmt.Errorf("a password was given both as an argument and on standard input")
 		}
-		password, err := io.ReadAll(os.Stdin)
+		password, err := readPasswordStdin(os.Stdin)
 		if err != nil {
 			return fmt.Errorf("unable to read the password from standard input: %w", err)
 		}
-		password = bytes.TrimSuffix(password, []byte("\n"))
-		password = bytes.TrimSuffix(password, []byte("\r"))
-		opts.Password = string(password)
+		opts.Password = password
 		opts.PasswordStdin = false
 	}
 
@@ -248,4 +246,17 @@ func Execute() int {
 		return exitCodeFor(err)
 	}
 	return ExitOK
+}
+
+// readPasswordStdin reads a password from r and trims one trailing line
+// ending. A password stored in a file is stored as a line, but every other
+// byte, including embedded newlines, is password material.
+func readPasswordStdin(r io.Reader) (string, error) {
+	password, err := io.ReadAll(r)
+	if err != nil {
+		return "", err
+	}
+	password = bytes.TrimSuffix(password, []byte("\n"))
+	password = bytes.TrimSuffix(password, []byte("\r"))
+	return string(password), nil
 }
