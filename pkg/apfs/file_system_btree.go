@@ -19,6 +19,10 @@ type FileSystemBTree struct {
 	// The object map B-tree (for transaction identifier mapping)
 	ObjectMapBTree *ObjectMapBTree
 
+	// The sealed-volume file extent tree, when the volume keeps file extents
+	// outside this tree (nil otherwise).
+	FileExtentTree *FileExtentTree
+
 	// The block number of B-tree root node (actually a virtual OID)
 	RootNodeOID uint64
 
@@ -133,10 +137,24 @@ func (bt *FileSystemBTree) SubNode(
 	return nil, fmt.Errorf("unable to read sub-node at block %d: %w", blockNumber, err)
 }
 
-// SubNodeOIDFromEntry extracts the sub-node block number from a branch entry
-// In branch nodes, the value data contains the block number of the child node
+// SubNodeOIDFromEntry extracts the child node's physical block number from a
+// branch entry. Without a parent node the stored child OID is treated as
+// absolute; callers that have the node must use subNodeOIDFromNode so hashed
+// B-trees, whose child OID is relative to the tree root OID, resolve correctly.
 func (bt *FileSystemBTree) SubNodeOIDFromEntry(
 	reader io.ReaderAt,
+	entry *BTreeEntry,
+) (uint64, error) {
+	return bt.subNodeOIDFromNode(reader, nil, entry)
+}
+
+// subNodeOIDFromNode resolves the child reference in a branch entry to a
+// physical block number. In a hashed B-tree the value is btn_index_node_val_t:
+// an 8-byte child OID relative to the tree's root OID, followed by the child
+// hash. Other trees store an absolute virtual OID.
+func (bt *FileSystemBTree) subNodeOIDFromNode(
+	reader io.ReaderAt,
+	node *BTreeNode,
 	entry *BTreeEntry,
 ) (uint64, error) {
 	if bt == nil {
@@ -147,8 +165,9 @@ func (bt *FileSystemBTree) SubNodeOIDFromEntry(
 		return 0, fmt.Errorf("invalid B-tree entry")
 	}
 
-	// In branch nodes, value data should be 8 bytes (uint64 block number)
-	if len(entry.ValueData) != 8 {
+	// Branch values start with an 8-byte child OID. Hashed B-trees append the
+	// child hash, so their values are longer than eight bytes.
+	if len(entry.ValueData) < 8 {
 		return 0, fmt.Errorf("invalid value data size for branch entry: %d", len(entry.ValueData))
 	}
 
@@ -157,6 +176,12 @@ func (bt *FileSystemBTree) SubNodeOIDFromEntry(
 	// are ALWAYS virtual OIDs that must be resolved through the volume's object map
 	// (unlike container object map B-trees which use bit 63 to indicate virtual vs physical)
 	virtualOID := binary.LittleEndian.Uint64(entry.ValueData[0:8])
+
+	// Hashed B-trees encode branch child OIDs relative to the tree root OID
+	// (apfs-fuse: oid = binv_child_oid + m_oid).
+	if node != nil && node.NodeHeader != nil && node.NodeHeader.IsHashed() {
+		virtualOID += bt.RootNodeOID
+	}
 
 	// Resolve through the volume's object map B-tree
 	if bt.ObjectMapBTree == nil {
@@ -289,7 +314,7 @@ func (bt *FileSystemBTree) AllRecordsForOID(
 					descPath[level] = idx
 				}
 
-				childOID, err := bt.SubNodeOIDFromEntry(reader, node.Entries[descPath[level]])
+				childOID, err := bt.subNodeOIDFromNode(reader, node, node.Entries[descPath[level]])
 				if err != nil {
 					return nil, err
 				}
@@ -306,7 +331,7 @@ func (bt *FileSystemBTree) AllRecordsForOID(
 		if !foundChild {
 			// Descend last entry
 			descPath[level] = len(node.Entries) - 1
-			childOID, err := bt.SubNodeOIDFromEntry(reader, node.Entries[descPath[level]])
+			childOID, err := bt.subNodeOIDFromNode(reader, node, node.Entries[descPath[level]])
 			if err != nil {
 				return nil, err
 			}
@@ -383,7 +408,7 @@ func (bt *FileSystemBTree) AllRecordsForOID(
 				continue
 			}
 
-			childOID, err := bt.SubNodeOIDFromEntry(reader, node.Entries[descPath[level]])
+			childOID, err := bt.subNodeOIDFromNode(reader, node, node.Entries[descPath[level]])
 			if err != nil {
 				return nil, err
 			}
@@ -659,7 +684,7 @@ func (bt *FileSystemBTree) EntryByIdentifier(
 		}
 
 		// Get child block number
-		childBlockNumber, err := bt.SubNodeOIDFromEntry(reader, entry)
+		childBlockNumber, err := bt.subNodeOIDFromNode(reader, node, entry)
 		if err != nil {
 			return nil, nil, fmt.Errorf("unable to get child block number: %w", err)
 		}

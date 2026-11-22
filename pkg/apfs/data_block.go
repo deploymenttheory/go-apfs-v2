@@ -159,6 +159,20 @@ func ReadBTreeNode(
 	encryptionContext *EncryptionContext,
 	blockNumber uint64,
 ) (*BTreeNode, error) {
+	return ReadBTreeNodeWithSizes(reader, ioHandle, encryptionContext, blockNumber, 0, 0)
+}
+
+// ReadBTreeNodeWithSizes reads a B-tree node whose tree uses fixed-size
+// entries, carrying the tree's key and value sizes into the parser. Sub-nodes
+// have no btree_info of their own, so the sizes must come from the root node.
+func ReadBTreeNodeWithSizes(
+	reader io.ReaderAt,
+	ioHandle *IOHandle,
+	encryptionContext *EncryptionContext,
+	blockNumber uint64,
+	keySize uint16,
+	valueSize uint16,
+) (*BTreeNode, error) {
 	if ioHandle == nil {
 		return nil, fmt.Errorf("invalid IO handle")
 	}
@@ -166,7 +180,8 @@ func ReadBTreeNode(
 	// Serve repeated reads of the same node from the cache. Traversals
 	// re-descend from the root constantly, so this avoids re-reading and
 	// re-parsing the same blocks from disk. Cached nodes are read-only.
-	if node := ioHandle.getCachedNode(blockNumber); node != nil {
+	// Nodes parsed without sizes are only reused when the caller needs none.
+	if node := ioHandle.getCachedNode(blockNumber); node != nil && (keySize == 0 || node.FixedKeySize == keySize) {
 		return node, nil
 	}
 
@@ -187,6 +202,8 @@ func ReadBTreeNode(
 
 	// Parse as B-tree node
 	node := NewBTreeNode()
+	node.FixedKeySize = keySize
+	node.FixedValueSize = valueSize
 	err = node.ReadData(dataBlock.Data)
 	if err != nil {
 		return nil, fmt.Errorf("unable to read B-tree node: %w", err)

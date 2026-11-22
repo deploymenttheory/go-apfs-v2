@@ -40,6 +40,7 @@ $ apfs extract Firefox.dmg -C ./out --verify
 | Read: info, list, cat, extract, inspect | ✅ | ✅ |
 | Mount read-only (FUSE, Linux/macOS) | ✅ | ✅ |
 | FileVault unlock (software keybags; AES-XTS, volume + per-file keys) | ✅ | — |
+| Sealed system volume reads (macOS 11+) | ✅ | — |
 | Transparent compression: read and write | ✅ | ✅ |
 | Repack a DMG losslessly (`pack`) | ✅ | ✅ |
 | Build a DMG from a directory (`pack <dir>`) | ✅ | ✅ |
