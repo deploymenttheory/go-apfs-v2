@@ -140,6 +140,12 @@ func openVolume(container *apfs.Container) (*apfs.Volume, error) {
 		if opts.Password == "" && opts.RecoveryPassword == "" {
 			return nil, withCode(ExitAuth, fmt.Errorf("volume is encrypted; supply --password or --recovery-password"))
 		}
+		// No keybag means no password could ever be checked: the wrap key is
+		// held outside the volume (the Secure Enclave on Apple Silicon), so
+		// report that instead of blaming the password.
+		if volume.VolumeKeybag == nil || volume.ContainerKeybag == nil {
+			return nil, withCode(ExitAuth, fmt.Errorf("unable to unlock volume: no software-readable keybag (the volume key is hardware-wrapped, likely by the Secure Enclave)"))
+		}
 		return nil, withCode(ExitAuth, fmt.Errorf("unable to unlock volume: wrong password"))
 	}
 
