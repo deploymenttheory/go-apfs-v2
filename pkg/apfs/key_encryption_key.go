@@ -28,8 +28,10 @@ type KeyEncryptionKey struct {
 	// The encryption method
 	EncryptionMethod uint32
 
-	// The wrapped key encryption key (KEK)
-	WrappedKEK [40]byte
+	// The wrapped key material.  A record wraps 16, 32 or 64 bytes of key
+	// data, so the wrapped form is 24, 40 or 72 bytes: a 64-byte value is
+	// the AES-XTS-256 volume key.
+	WrappedKEK []byte
 }
 
 // NewKeyEncryptionKey creates a new key encryption key
@@ -40,7 +42,7 @@ func NewKeyEncryptionKey() (*KeyEncryptionKey, error) {
 		NumberOfIterations: 0,
 		Salt:               [16]byte{},
 		EncryptionMethod:   0,
-		WrappedKEK:         [40]byte{},
+		WrappedKEK:         nil,
 	}, nil
 }
 
@@ -196,11 +198,11 @@ func (kek *KeyEncryptionKey) ReadData(data []byte) error {
 			kek.EncryptionMethod = binary.LittleEndian.Uint32(valueData[0:4])
 
 		case 0x83:
-			// Wrapped KEK (40 bytes)
-			if len(valueData) != 40 {
-				return fmt.Errorf("unsupported wrapped KEK attribute value data size: %d (expected 40)", len(valueData))
+			// Wrapped key: 16, 32 or 64 bytes plus the 8-byte IV.
+			if len(valueData) != 24 && len(valueData) != 40 && len(valueData) != 72 {
+				return fmt.Errorf("unsupported wrapped KEK attribute value data size: %d (expected 24, 40 or 72)", len(valueData))
 			}
-			copy(kek.WrappedKEK[:], valueData)
+			kek.WrappedKEK = append([]byte(nil), valueData...)
 
 		case 0x84:
 			// Number of iterations (1-8 bytes, big-endian)
@@ -238,22 +240,21 @@ func (kek *KeyEncryptionKey) UnlockWithKey(key []byte) ([]byte, error) {
 		return nil, fmt.Errorf("invalid key size: expected 32 bytes, got %d", len(key))
 	}
 
-	// Determine sizes based on encryption method
-	var usedKEKDataSize int
-	var usedKeySize int
-
-	if kek.EncryptionMethod == 0 {
-		usedKEKDataSize = 40
-		usedKeySize = 32
-	} else if kek.EncryptionMethod == 2 {
-		usedKEKDataSize = 24
-		usedKeySize = 16
-	} else {
+	// The wrapped length says how long the unwrapped key is; the method only
+	// says how the key doing the wrapping was selected.
+	if kek.EncryptionMethod != 0 && kek.EncryptionMethod != 2 && kek.EncryptionMethod != 16 {
 		return nil, fmt.Errorf("unsupported encryption method: %d", kek.EncryptionMethod)
 	}
+	if len(kek.WrappedKEK) != 24 && len(kek.WrappedKEK) != 40 && len(kek.WrappedKEK) != 72 {
+		return nil, fmt.Errorf("unsupported wrapped key size: %d", len(kek.WrappedKEK))
+	}
+	usedKeySize := len(kek.WrappedKEK) - 8
+	if kek.EncryptionMethod == 2 && usedKeySize != 16 {
+		return nil, fmt.Errorf("unsupported wrapped key size for method 2: %d", usedKeySize)
+	}
 
-	// Unwrap KEK with key using AES Key Wrap (RFC 3394)
-	unwrappedKEK, err := AESKeyUnwrap(key, usedKeySize*8, kek.WrappedKEK[:usedKEKDataSize])
+	// Unwrap with the key doing the wrapping (RFC 3394)
+	unwrappedKEK, err := AESKeyUnwrap(key, len(key)*8, kek.WrappedKEK)
 	if err != nil {
 		return nil, fmt.Errorf("unable to unwrap wrapped KEK with key: %w", err)
 	}
@@ -263,22 +264,19 @@ func (kek *KeyEncryptionKey) UnlockWithKey(key []byte) ([]byte, error) {
 		return nil, fmt.Errorf("invalid initialization vector (unlock failed)")
 	}
 
-	// Allocate unlocked key buffer
-	unlockedKey := make([]byte, 32)
-
 	// Copy unwrapped key data
-	copy(unlockedKey[0:usedKeySize], unwrappedKEK[8:8+usedKeySize])
+	unlockedKey := make([]byte, usedKeySize)
+	copy(unlockedKey, unwrappedKEK[8:8+usedKeySize])
 
-	// For encryption method 2, derive tweak key
+	// For encryption method 2 the wrapped record holds half of the key and
+	// the other half is a hash of the first half and the record UUID.
 	if kek.EncryptionMethod == 2 {
-		// Copy identifier to second half
-		copy(unlockedKey[16:32], kek.Identifier[:])
-
-		// Calculate SHA-256 hash
-		hash := sha256.Sum256(unlockedKey)
-
-		// Replace second half with first 16 bytes of hash
-		copy(unlockedKey[16:32], hash[0:16])
+		extended := make([]byte, 32)
+		copy(extended, unlockedKey[:16])
+		copy(extended[16:], kek.Identifier[:])
+		hash := sha256.Sum256(extended)
+		copy(extended[16:], hash[0:16])
+		unlockedKey = extended
 	}
 
 	// Clear sensitive data
@@ -296,19 +294,20 @@ func (kek *KeyEncryptionKey) UnlockWithPassword(password []byte) ([]byte, error)
 		return nil, fmt.Errorf("invalid key encryption key")
 	}
 
-	// Determine sizes based on encryption method
+	// The method selects the wrapping cipher and the password-key size; the
+	// wrapped length says how long the unwrapped key is.
 	var passwordKeySize int
-	var usedKEKDataSize int
-
 	if kek.EncryptionMethod == 0 || kek.EncryptionMethod == 16 {
 		passwordKeySize = 32
-		usedKEKDataSize = 40
 	} else if kek.EncryptionMethod == 2 {
 		passwordKeySize = 16
-		usedKEKDataSize = 24
 	} else {
 		return nil, fmt.Errorf("unsupported encryption method: %d", kek.EncryptionMethod)
 	}
+	if len(kek.WrappedKEK) != 24 && len(kek.WrappedKEK) != 40 && len(kek.WrappedKEK) != 72 {
+		return nil, fmt.Errorf("unsupported wrapped key size: %d", len(kek.WrappedKEK))
+	}
+	unwrappedKeySize := len(kek.WrappedKEK) - 8
 
 	// Derive password key using PBKDF2
 	passwordKey, err := PBKDF2(password, kek.Salt[:], uint32(kek.NumberOfIterations), passwordKeySize)
@@ -317,7 +316,7 @@ func (kek *KeyEncryptionKey) UnlockWithPassword(password []byte) ([]byte, error)
 	}
 
 	// Unwrap KEK with password key using AES Key Wrap (RFC 3394)
-	unwrappedKEK, err := AESKeyUnwrap(passwordKey, passwordKeySize*8, kek.WrappedKEK[:usedKEKDataSize])
+	unwrappedKEK, err := AESKeyUnwrap(passwordKey, passwordKeySize*8, kek.WrappedKEK)
 	if err != nil {
 		// Clear password key
 		for i := range passwordKey {
@@ -340,11 +339,13 @@ func (kek *KeyEncryptionKey) UnlockWithPassword(password []byte) ([]byte, error)
 		return nil, fmt.Errorf("invalid initialization vector (unlock failed - wrong password?)")
 	}
 
-	// Allocate unlocked key buffer
-	unlockedKey := make([]byte, 32)
-
-	// Copy unwrapped key data
-	copy(unlockedKey[0:passwordKeySize], unwrappedKEK[8:8+passwordKeySize])
+	// Allocate unlocked key buffer (method 2 keeps its 32-byte padded form)
+	keySize := 32
+	if unwrappedKeySize > keySize {
+		keySize = unwrappedKeySize
+	}
+	unlockedKey := make([]byte, keySize)
+	copy(unlockedKey[0:unwrappedKeySize], unwrappedKEK[8:8+unwrappedKeySize])
 
 	// Clear sensitive data
 	for i := range unwrappedKEK {
