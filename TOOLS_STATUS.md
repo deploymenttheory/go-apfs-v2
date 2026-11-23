@@ -17,6 +17,7 @@ Legend: ✅ implemented · 🟡 partial · ⬜ not yet
 | Snapshots (create, revert) | ✅¹ | — |
 | Several volumes per container | ✅² | — |
 | FileVault / encryption unlock | ✅¹⁰ | — |
+| Sealed system volume reads | ✅¹¹ | — |
 | `io/fs.FS` adapter | ✅ | ✅ |
 | Create empty volume | ✅ | ✅ |
 | Case-insensitive volumes (write) | ✅ | 🟡⁹ |
@@ -49,6 +50,8 @@ each extent's crypto identifier selects the key. Volumes whose keybag is
 hardware-wrapped (Apple Silicon or T2 SEP) cannot be unlocked and are
 reported as locked rather than as a wrong password. Writing an encrypted
 volume is not supported and is not planned.
+
+¹¹ macOS 11 and later system volumes seal their catalog. Their file-system tree is hashed (branch child OIDs are relative to the tree root), and file extents live in the separate `apfs_fext_tree_oid` B-tree instead of in the file-system tree. Both are read; writing a sealed volume is not supported. Verified against a macOS 27.0.1 system volume.
 
 ² Roles read and written in full. Several volumes per container are written
 through `CreateOptions.Volumes`, one per 512 MiB as the format allows, and a

@@ -29,6 +29,18 @@ func (av *AttributeValues) FileExtents(
 		return fmt.Errorf("unable to retrieve value data file extents from file system B-tree: %w", err)
 	}
 
+	// A sealed volume keeps even attribute data extents in the dedicated file
+	// extent tree, keyed by the attribute's data stream identifier.
+	if len(extents) == 0 && fileSystemBTree.FileExtentTree != nil {
+		extents, err = fileSystemBTree.FileExtentTree.ExtentsForPrivateID(
+			reader,
+			av.ValueDataStreamIdentifier,
+		)
+		if err != nil {
+			return fmt.Errorf("unable to retrieve value data file extents from the file extent tree: %w", err)
+		}
+	}
+
 	// Store the extents
 	av.ValueDataFileExtents = extents
 

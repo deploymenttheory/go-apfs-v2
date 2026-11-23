@@ -21,6 +21,9 @@ type Volume struct {
 	// The extentref tree (optional)
 	ExtentrefTree *ExtentrefTree
 
+	// The file extent tree (optional; sealed volumes only)
+	FileExtentTree *FileExtentTree
+
 	// The snapshot metadata tree (optional)
 	SnapshotMetadataTree *SnapshotMetadataTree
 
@@ -201,6 +204,28 @@ func (v *Volume) OpenRead(reader io.ReaderAt, fileOffset int64) error {
 		v.Superblock.IncompatibleFeaturesFlags&VolumeIncompatCaseInsensitive != 0,
 	)
 	v.FileSystemBTree = fileSystemBTree
+
+	// A sealed volume (macOS Big Sur and later system volumes) keeps all file
+	// data extents in a dedicated physical B-tree instead of per-file records
+	// in the file system tree. Without it every file looks empty.
+	if v.Superblock.FextTreeOID > 0 {
+		if DebugOutput {
+			fmt.Println("Reading file extent tree (sealed volume)")
+		}
+
+		fileExtentTree, err := NewFileExtentTree(
+			v.IOHandle,
+			encryptionContext,
+			v.Superblock.FextTreeOID,
+			v.Superblock.XID,
+		)
+		if err != nil {
+			return fmt.Errorf("unable to create file extent tree: %w", err)
+		}
+
+		v.FileExtentTree = fileExtentTree
+		fileSystemBTree.FileExtentTree = fileExtentTree
+	}
 
 	// Read extentref tree if present
 	if v.Superblock.ExtentrefTreeOID > 0 {

@@ -21,6 +21,12 @@ type BTreeNode struct {
 
 	// The B-tree entries
 	Entries []*BTreeEntry
+
+	// FixedKeySize and FixedValueSize carry the tree's fixed entry sizes from
+	// the root node's btree_info down to sub-nodes, which do not store a
+	// btree_info of their own. Zero means "derive from the object subtype".
+	FixedKeySize   uint16
+	FixedValueSize uint16
 }
 
 // NewBTreeNode creates a new B-tree node
@@ -159,9 +165,14 @@ func (n *BTreeNode) parseEntries(data []byte, dataOffset int, infoOffset int) er
 			keyDataOffset = binary.LittleEndian.Uint16(data[currentOffset : currentOffset+2])
 			valueDataOffset = binary.LittleEndian.Uint16(data[currentOffset+2 : currentOffset+4])
 
-			// For fixed size entries, size depends on object subtype
-			switch n.ObjectSubtype {
-			case 0x0000000b: // Object map B-tree
+			// For fixed size entries, size depends on the tree's declared
+			// key/value sizes (from the root's btree_info), falling back to
+			// the object subtype for trees whose sizes the caller did not set.
+			switch {
+			case n.FixedKeySize != 0 && n.FixedValueSize != 0:
+				keyDataSize = n.FixedKeySize
+				valueDataSize = n.FixedValueSize
+			case n.ObjectSubtype == 0x0000000b: // Object map B-tree
 				keyDataSize = 16   // sizeof(fsapfs_object_map_btree_key_t)
 				valueDataSize = 16 // sizeof(fsapfs_object_map_btree_value_t)
 			default:

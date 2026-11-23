@@ -884,6 +884,19 @@ func (fe *FileEntry) getFileExtents() error {
 		}
 	}
 
+	// A sealed volume stores file extents in a dedicated tree, keyed by the
+	// inode's private identifier (its data stream identifier). The file system
+	// tree has no extent records at all on such volumes.
+	if len(extents) == 0 && fe.FileSystemBTree.FileExtentTree != nil && fe.Inode.DataStreamIdentifier != 0 {
+		extents, err = fe.FileSystemBTree.FileExtentTree.ExtentsForPrivateID(
+			fe.FileHandle,
+			fe.Inode.DataStreamIdentifier,
+		)
+		if err != nil {
+			return fmt.Errorf("unable to retrieve file extents from the sealed volume's file extent tree: %w", err)
+		}
+	}
+
 	fe.FileExtents = extents
 	return nil
 }

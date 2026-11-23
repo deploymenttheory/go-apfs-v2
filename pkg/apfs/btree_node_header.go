@@ -72,7 +72,10 @@ func (h *BTreeNodeHeader) HasFixedSizeKeys() bool {
 	return (h.Flags & 0x0004) != 0
 }
 
-// HasFixedSizeValues returns true if values are fixed size
-func (h *BTreeNodeHeader) HasFixedSizeValues() bool {
+// IsHashed returns true if this node belongs to a hashed B-tree.
+// Corresponds to BTNODE_HASHED flag (0x0008). In a hashed tree, branch-node
+// values are btn_index_node_val_t records: a child OID followed by the child
+// node's hash, and the stored child OID is relative to the tree's root OID.
+func (h *BTreeNodeHeader) IsHashed() bool {
 	return (h.Flags & 0x0008) != 0
 }

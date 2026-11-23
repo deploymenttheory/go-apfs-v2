@@ -222,6 +222,13 @@ type VolumeSuperblock struct {
 	// Consists of 16 bytes
 	VolumeGroupID [16]byte
 
+	// The physical object identifier of the sealed-volume file extent tree
+	// (apfs_fext_tree_oid). Zero when the volume is not sealed.
+	FextTreeOID uint64
+
+	// The storage type of the file extent tree (apfs_fext_tree_type).
+	FextTreeType uint32
+
 	// Parsed volume name as string (not part of binary structure)
 	volumeName string
 }
@@ -390,9 +397,15 @@ func (vs *VolumeSuperblock) ReadData(data []byte, isSnapshot bool) error {
 	vs.SnapMetaExtOID = binary.LittleEndian.Uint64(data[1000:1008])
 
 	// The volume group identifier ends exactly at the 1024-byte minimum this
-	// function requires, so no size check is needed. The next field,
-	// apfs_integrity_meta_oid at offset 1024, would need that minimum raised.
+	// function requires. Fields past it are optional: only parse them when the
+	// caller supplied a full superblock block.
 	copy(vs.VolumeGroupID[:], data[1008:1024])
+
+	if len(data) >= 1044 {
+		// apfs_integrity_meta_oid (offset 1024) is not exposed here.
+		vs.FextTreeOID = binary.LittleEndian.Uint64(data[1032:1040])
+		vs.FextTreeType = binary.LittleEndian.Uint32(data[1040:1044])
+	}
 
 	return nil
 }
